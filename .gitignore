@@ -1,0 +1,50 @@
+# Sensitive files
+.env
+google_credentials.json
+gdrive_token.json
+cacert.pem
+# Google hands these out with a name like
+# client_secret_<id>.apps.googleusercontent.com.json — one was sitting in the
+# project root, untracked but unignored, one "git add -A" away from being public.
+client_secret*.json
+*.apps.googleusercontent.com.json
+
+# Build artefacts
+composer.phar
+
+# Uploads — students' own work, and their consent and copyright forms.
+# These patterns only matched a top-level uploads/ folder, but the files are
+# actually written to app/student/uploads/, so 119 of them were being tracked.
+# The leading ** matches the folder wherever it is.
+**/uploads/research/**
+**/uploads/supporting_docs/**
+**/uploads/drafts/**
+**/uploads/temp/**
+!**/uploads/.htaccess
+!**/uploads/index.php
+
+# Runtime files
+guest_ips.txt
+
+# Composer
+vendor/
+
+# Logs
+*.log
+notifications/notifications.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local .env backups (they contain live API keys)
+.env.bak-*
+
+# Local database backups
+backups/

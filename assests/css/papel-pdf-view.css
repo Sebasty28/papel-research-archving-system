@@ -1,0 +1,133 @@
+/**
+ * PAPEL PDF viewer — shared page, text-layer and cursor styling.
+ *
+ * Used by the upload page's preview panel and the full-window viewer so a
+ * document looks and behaves the same in both. The text-layer rules follow
+ * PDF.js's own: transparent absolutely-positioned spans laid exactly over the
+ * rendered canvas, which is what makes the text selectable and copyable.
+ */
+
+/* Each page is a wrapper sized in layout pixels; the canvas paints it and the
+   text layer sits invisibly on top. */
+.papel-pdf-page {
+    position: relative;
+    margin: 0 auto 0.75rem;
+    background: #fff;
+    box-shadow: 0 1px 6px rgba(51, 0, 0, 0.18);
+}
+.papel-pdf-page:last-child { margin-bottom: 0; }
+
+.papel-pdf-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* ----- Text layer ----- */
+.papel-pdf-textlayer {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    line-height: 1;
+    text-align: initial;
+    transform-origin: 0 0;
+    -webkit-text-size-adjust: none;
+    text-size-adjust: none;
+    forced-color-adjust: none;
+    /* Above the canvas so the pointer meets the text rather than the picture. */
+    z-index: 2;
+}
+.papel-pdf-textlayer span,
+.papel-pdf-textlayer br {
+    color: transparent;      /* the canvas already shows the words */
+    position: absolute;
+    white-space: pre;
+    cursor: text;
+    transform-origin: 0% 0%;
+}
+
+/* includes/accessibility.php applies `user-select: none` to <body> across the
+   whole site, which the text layer inherits — that is why a paper could be
+   selected in the standalone viewer (no footer, no such rule) but not in the
+   upload page's panel. An inherited value loses to a declared one, so asking
+   for selection here restores it without touching the site-wide rule. */
+.papel-pdf-scroll,
+.papel-pdf-textlayer,
+.papel-pdf-textlayer span,
+.papel-pdf-textlayer br {
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+    user-select: text;
+    -webkit-touch-callout: default;
+}
+/* PDF.js emits these structural spans; they must not occupy space. */
+.papel-pdf-textlayer span.markedContent {
+    top: 0;
+    height: 0;
+}
+.papel-pdf-textlayer .endOfContent {
+    display: block;
+    position: absolute;
+    inset: 100% 0 0;
+    z-index: -1;
+    cursor: default;
+    user-select: none;
+}
+.papel-pdf-textlayer .endOfContent.active { top: 0; }
+
+/* Selection has to be visible even though the text itself is transparent. */
+.papel-pdf-textlayer ::selection { background: rgba(130, 7, 7, 0.28); }
+.papel-pdf-textlayer ::-moz-selection { background: rgba(130, 7, 7, 0.28); }
+
+/* ----- Transient hint -----
+   Sits over the pages, out of the way at the bottom, and fades itself out.
+   `.papel-pdf-stage` is the positioned ancestor in both layouts, so the hint
+   stays put while the pages scroll underneath it. */
+.papel-pdf-stage { position: relative; }
+.papel-pdf-toast {
+    position: absolute;
+    left: 50%;
+    bottom: 1rem;
+    transform: translate(-50%, 0.5rem);
+    z-index: 6;
+    max-width: calc(100% - 2rem);
+    padding: 0.5rem 0.875rem;
+    border-radius: 999px;
+    background: rgba(51, 0, 0, 0.92);
+    color: #fff;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    text-align: center;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;   /* never blocks a click on the page beneath */
+    transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s;
+}
+.papel-pdf-toast.is-visible {
+    opacity: 1;
+    visibility: visible;
+    transform: translate(-50%, 0);
+}
+@media (prefers-reduced-motion: reduce) {
+    .papel-pdf-toast { transition: none; }
+}
+
+/* ----- Dragging -----
+   In pan mode the whole surface is a hand; the middle button pans in either
+   mode, so text selection never has to be given up to move around. */
+.papel-pdf-scroll.is-pan-mode { cursor: grab; }
+.papel-pdf-scroll.is-pan-mode .papel-pdf-textlayer span { cursor: grab; }
+.papel-pdf-scroll.is-panning,
+.papel-pdf-scroll.is-panning .papel-pdf-textlayer span { cursor: grabbing; }
+/* While dragging, nothing should be selected by accident. These carry an extra
+   class so they outweigh the selection rules above. */
+.papel-pdf-scroll.is-panning,
+.papel-pdf-scroll.is-panning .papel-pdf-textlayer,
+.papel-pdf-scroll.is-panning .papel-pdf-textlayer span,
+.papel-pdf-scroll.is-panning .papel-pdf-textlayer br {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}

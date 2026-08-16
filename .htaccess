@@ -1,0 +1,54 @@
+# Prevent public access to sensitive files
+<FilesMatch "^\.env|.*\.json|.*\.md|.*\.log$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+<IfModule mod_headers.c>
+    # Anti-clickjacking fallback (ID-003)
+    Header set X-Frame-Options "SAMEORIGIN"
+    
+    # MIME type sniffing prevention
+    Header set X-Content-Type-Options "nosniff"
+    
+    # Referrer policy
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+    
+    # Restrict sensitive browser features
+    Header set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+    
+    # Deny cross-origin reads — remove any permissive CORS headers (ID-005)
+    Header always unset Access-Control-Allow-Origin
+    Header always unset Access-Control-Allow-Methods
+    Header always unset Access-Control-Allow-Headers
+    Header always unset Access-Control-Allow-Credentials
+    
+    # HSTS - Strict Transport Security (ID-018)
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    
+    # Remove Server and X-Powered-By headers (ID-016, ID-017)
+    Header always unset X-Powered-By
+    Header unset X-Powered-By
+    Header always unset Server
+    Header unset Server
+
+    # Remove CSP Report-Only header if accidentally set (ID-021)
+    Header always unset Content-Security-Policy-Report-Only
+</IfModule>
+
+# Prevent caching of PHP responses containing sensitive/user data (ID-027, ID-028)
+<FilesMatch "\.php$">
+    <IfModule mod_headers.c>
+        Header always set Cache-Control "no-store, no-cache, must-revalidate, private"
+        Header always set Pragma "no-cache"
+        Header always set Expires "0"
+    </IfModule>
+</FilesMatch>
+
+# Disable Server Signature (ID-015)
+ServerSignature Off
+
+<IfModule mod_php.c>
+    # Try to disable expose_php via php_flag if permitted
+    php_flag expose_php Off
+</IfModule>

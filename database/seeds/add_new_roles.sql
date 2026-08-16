@@ -1,0 +1,2 @@
+-- Update user_role ENUM to include new admin categories
+ALTER TABLE users MODIFY COLUMN user_role ENUM('super_admin','admin','faculty','student','guest','head_academic','librarian') NOT NULL DEFAULT 'student';
