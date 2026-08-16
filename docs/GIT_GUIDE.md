@@ -284,6 +284,84 @@ are unsure, **stop before typing either of those** and ask.
 
 ---
 
+## Using GitHub Desktop instead of the command line
+
+GitHub Desktop does the same things with buttons. Everything above still
+applies — it is the same git underneath, only the pushing of buttons differs.
+
+### Opening this project
+
+The project is **already a git repository**, so do not clone it again — that
+would give you a second copy and you would edit the wrong one.
+
+1. Open GitHub Desktop
+2. **File → Add local repository…**
+3. Choose `C:\xampp\htdocs\capstone`
+4. Click **Add repository**
+
+It appears in the list at the top left. If Desktop says "this directory does not
+appear to be a git repository", you picked the wrong folder — it must be the one
+containing `.gitignore` and `README.md`.
+
+### Choosing what goes into a commit
+
+This is where Desktop is genuinely better than the command line.
+
+The **Changes** tab lists every file you have touched, each with a tick box.
+
+- **Untick a file** and it stays out of the commit — still changed on your disk,
+  just not included this time.
+- Click a file to see its changes. You can tick **individual lines** by clicking
+  the numbers in the margin, so half a file can go in and half can wait.
+
+Then write your message in the box at the bottom left and click
+**Commit to main**.
+
+> Committing does *not* send anything to GitHub. It only saves the checkpoint on
+> your computer. Nothing is shared until you push.
+
+### Pull and push
+
+The button at the top changes depending on what is needed:
+
+| Button | What it does | Command-line equivalent |
+|---|---|---|
+| **Fetch origin** | Checks whether the other person pushed anything | `git fetch` |
+| **Pull origin** | Brings their work down to you | `git pull` |
+| **Push origin** | Sends your commits up | `git push` |
+
+Click **Fetch origin** when you sit down. If it turns into **Pull origin**, click
+it before you start working.
+
+### Branches in Desktop
+
+- The branch name is the middle button at the top
+- Click it → **New branch** to start one
+- Switch branches by picking one from the same menu
+- After committing to a branch, the button says **Publish branch** — that pushes
+  it and offers to open a pull request
+
+### Undoing in Desktop
+
+- **Right-click a file → Discard changes** — throws away your edits to it
+- **Right-click the newest commit in History → Undo commit** — puts the changes
+  back as uncommitted edits (only works before pushing)
+- Already pushed? Right-click the commit → **Revert changes**, which adds a new
+  commit undoing it. This is the safe option.
+
+### One thing to be careful about
+
+Desktop shows **every branch**, including old ones, and **Publish branch** is a
+single click. Publishing an old branch pushes its whole history, not just its
+current files.
+
+That matters here: this project's original branch contained a live password and
+students' personal documents, which is why the repository was restarted with a
+clean history. **Do not publish a branch unless you know what is in it.** If in
+doubt, only ever work on `main`.
+
+---
+
 ## Quick reference
 
 ```bash
