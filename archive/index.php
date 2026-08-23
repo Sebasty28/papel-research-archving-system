@@ -21,6 +21,26 @@ if (isset($_GET['ajax_search'])) {
             $res = $stmt->get_result();
             while ($row = $res->fetch_assoc()) $suggestions[] = $row['title'];
         }
+        /* Author names, split out of the stored list so a suggestion is one
+           person rather than the whole "A, B and C" string the paper carries. */
+        if (count($suggestions) < 8) {
+            $stmtA = $conn->prepare("SELECT author_names FROM research_papers WHERE current_status = 'approved' AND author_names LIKE ? LIMIT 10");
+            if ($stmtA) {
+                $stmtA->bind_param('s', $term);
+                $stmtA->execute();
+                $resA = $stmtA->get_result();
+                while ($row = $resA->fetch_assoc()) {
+                    if (empty($row['author_names'])) continue;
+                    foreach (preg_split('/\s*(?:,|;|\band\b|&)\s*/i', $row['author_names']) as $name) {
+                        $name = trim($name);
+                        if ($name !== '' && stripos($name, $q) !== false
+                            && !in_array($name, $suggestions, true) && count($suggestions) < 8) {
+                            $suggestions[] = $name;
+                        }
+                    }
+                }
+            }
+        }
         if (count($suggestions) < 7) {
             $stmt2 = $conn->prepare("SELECT keywords FROM research_papers WHERE current_status = 'approved' AND keywords LIKE ? LIMIT 10");
             if ($stmt2) {
@@ -84,10 +104,14 @@ $params      = [];
 $types       = '';
 
 if ($search) {
+    /* Authors are searched alongside the text. Looking a paper up by the person
+       who wrote it is one of the first things anyone tries in a repository, and
+       until now it silently returned nothing unless the name also happened to
+       appear in the title or abstract. */
     $term = "%$search%";
-    $where_extra .= " AND (title LIKE ? OR keywords LIKE ? OR abstract LIKE ?)";
-    $params[] = $term; $params[] = $term; $params[] = $term;
-    $types .= 'sss';
+    $where_extra .= " AND (title LIKE ? OR keywords LIKE ? OR abstract LIKE ? OR author_names LIKE ?)";
+    $params[] = $term; $params[] = $term; $params[] = $term; $params[] = $term;
+    $types .= 'ssss';
 }
 if ($filter_year > 0) {
     $where_extra .= " AND COALESCE(YEAR(research_date), year) = ?";
@@ -400,7 +424,7 @@ ob_start();
                     </button>
                     <input class="search-input" type="search" name="q" id="searchInput"
                            data-suggest-url="index.php?ajax_search=1"
-                           value="<?= e($search) ?>" placeholder="Type word to search..." autocomplete="off">
+                           value="<?= e($search) ?>" placeholder="Search by title, author, or keyword..." autocomplete="off">
                 </div>
                 <div id="searchSuggestions" class="suggestions-dropdown"></div>
             </form>
@@ -537,7 +561,11 @@ ob_start();
                     <button class="card-tool card-chevron js-card-toggle" type="button" data-card="browseCard" aria-label="Collapse Browse"><span class="material-symbols-outlined">expand_more</span></button>
                 </span>
             </div>
-            <?php if ($is_member): ?>
+            <?php /* A guest is signed in but has nowhere else to go: this page
+                      is their home, so they get the visitor's link and its
+                      active state rather than a link back to here labelled as a
+                      dashboard. */ ?>
+            <?php if ($is_member && ($u['user_role'] ?? '') !== 'guest'): ?>
             <div class="sidebar-card-body">
                 <a href="<?= e(role_home($u['user_role'])) ?>" class="sidebar-link"><?= e(role_home_label($u['user_role'])) ?></a>
             </div>
@@ -613,10 +641,10 @@ ob_start();
                 <div class="filter-section">
                     <span class="filter-section-label">Order By</span>
                     <label class="filter-radio">
-                        <input type="radio" name="sort" value="asc" <?= $sort_param === 'asc' ? 'checked' : '' ?>> Ascending
+                        <input type="radio" name="sort" value="desc" <?= $sort_param === 'desc' ? 'checked' : '' ?>> Newest first
                     </label>
                     <label class="filter-radio">
-                        <input type="radio" name="sort" value="desc" <?= $sort_param === 'desc' ? 'checked' : '' ?>> Descending
+                        <input type="radio" name="sort" value="asc" <?= $sort_param === 'asc' ? 'checked' : '' ?>> Oldest first
                     </label>
                 </div>
 

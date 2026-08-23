@@ -116,8 +116,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         }
 
         // Insert into database
+        /* Relative, not a full URL — see the same change in
+           student_upload_ai.php. An absolute URL bakes this machine's address
+           into the row and cannot be turned back into a file. */
         $relPath = "uploads/research/$programFolder/$paperType/$y/$m/$submissionFolder/" . basename($destPath);
-        $fullUrlPath = rtrim(BASE_URL, '/') . '/app/student/' . $relPath;
+        $fullUrlPath = $relPath;
         $fileSize = filesize($destPath);
         
         $stmt = $conn->prepare("INSERT INTO research_papers 
@@ -136,7 +139,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         }
         
         $paper_id = $stmt->insert_id;
-        
+
+        /* Drive has the paper and the row recording it exists, so the staging
+           copy goes — same arrangement as student_upload_ai.php. */
+        if (is_file($destPath)) { @unlink($destPath); }
+
         // Save supporting documents
         $supDir = $destDir . "/supporting_documents";
         ensure_dir($supDir);
@@ -155,7 +162,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                 
                 if (move_uploaded_file($files['tmp_name'][$i], $dest)) {
                     $rel = "uploads/research/$programFolder/$paperType/$y/$m/$submissionFolder/supporting_documents/" . basename($dest);
-                    $fullUrlRel = rtrim(BASE_URL, '/') . '/app/student/' . $rel;
+                    $fullUrlRel = $rel;   // relative, as above
                     
                     // Upload supporting doc to GDrive
                     $docGdriveId = null;
@@ -169,8 +176,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     $st->bind_param('isss', $paper_id, $type, $fullUrlRel, $docGdriveId);
                     $st->execute();
                     
-                    // Remove local file to ensure GDrive storage only
-                    // @unlink($dest); // Temporarily disabled to allow local file access
+                    // Drive has it and the row is written, so the staging copy can go.
+                    if (is_file($dest)) { @unlink($dest); }
                 }
             }
         }
@@ -196,7 +203,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 .dropzone {
     border: 2px dashed #ced4da; 
-    border-radius: .5rem; 
+    border-radius: var(--r-control, 4px); 
     padding: 24px; 
     text-align: center; 
     background: #fafafa; 
@@ -210,7 +217,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
     color: white; 
     padding: 4px 10px; 
-    border-radius: 6px; 
+    border-radius: var(--r-badge, 2px); 
     font-size: 0.75rem; 
     font-weight: 600; 
 }

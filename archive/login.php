@@ -26,7 +26,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $username = trim($_POST['username'] ?? '');
   $password = $_POST['password'] ?? '';
 
-  if ($username && $password) {
+  $locked = ($username !== '') ? login_throttle_locked_for($username) : null;
+
+  /* This is the second sign-in surface — guest invitation emails link straight
+     here — and it was the only one not checking the token. Without it a third
+     party could post a sign-in on a visitor's behalf and settle them into an
+     account of the attacker's choosing. Checked inline rather than through
+     csrf_verify() so the message lands in $error with the others. */
+  if (!csrf_valid()) {
+    $error = 'That form had been open too long. Please try again.';
+  } elseif ($locked !== null) {
+    // Counted across both sign-in surfaces, so this one cannot be used to
+    // sidestep a lock earned on the other.
+    $error = login_throttle_message($locked);
+  } elseif ($username && $password) {
     $stmt = $conn->prepare("SELECT guest_id, username, password, expires_at FROM guest_sessions WHERE username = ? AND expires_at> NOW()");
     $stmt->bind_param('s', $username);
     $stmt->execute();
@@ -34,13 +47,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($row = $res->fetch_assoc()) {
       if (password_verify($password, $row['password'])) {
+        login_throttle_clear($username);
         $u = ['user_id' => 0, 'username' => $row['username'], 'email' => '', 'full_name' => 'Guest User', 'user_role' => 'guest'];
         login_user($u);
         $_SESSION['guest_expire'] = strtotime($row['expires_at']);
         $_SESSION['guest_login'] = true;
+        // Recorded so a revoked pass can be spotted by primary key.
+        $_SESSION['guest_id'] = (int)$row['guest_id'];
         header('Location: index.php');
         exit;
       } else {
+        login_throttle_record_failure($username);
         $error = "Invalid password.";
       }
     } else {
@@ -71,6 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       }
 
       if ($row && password_verify($password, $row['password'])) {
+        login_throttle_clear($username);
         login_user([
           'user_id'     => $row['user_id'],
           'username'    => $row['username'],
@@ -82,8 +100,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header('Location: index.php');
         exit;
       }
-      // Do not paper over a more specific reason set just above.
-      if ($error === null) { $error = "That ID or password is not right."; }
+      /* Only a genuinely wrong credential counts towards a lock. The expired
+         account above got here with the right password, and locking somebody
+         out over an account that already cannot be used helps nobody. */
+      if ($error === null) {
+        login_throttle_record_failure($username);
+        $error = "That ID or password is not right.";
+      }
     }
   } else {
     $error = "Please enter username and password.";
@@ -213,7 +236,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       width: 120px;
       height: 120px;
       background: linear-gradient(135deg, #fede0e, var(--pup-gold));
-      border-radius: 32px;
+      border-radius: var(--r-card, 8px);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -268,7 +291,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       gap: 1rem;
       background: rgba(255, 255, 255, 0.15);
       padding: 1.25rem;
-      border-radius: 16px;
+      border-radius: var(--r-card, 8px);
       backdrop-filter: blur(20px);
       border: 1px solid rgba(255, 255, 255, 0.25);
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -285,7 +308,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       width: 40px;
       height: 40px;
       background: linear-gradient(135deg, #fede0e, var(--pup-gold));
-      border-radius: 10px;
+      border-radius: var(--r-card, 8px);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -339,7 +362,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     .form-card {
       background: rgba(255, 255, 255, 0.98);
       backdrop-filter: blur(25px);
-      border-radius: 24px;
+      border-radius: var(--r-card, 8px);
       box-shadow:
         0 20px 60px rgba(0, 0, 0, 0.12),
         0 10px 30px rgba(129, 4, 3, 0.08),
@@ -405,7 +428,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     .form-control {
       border: 2px solid #e2e8f0;
-      border-radius: 12px;
+      border-radius: var(--r-control, 4px);
       padding: 0.875rem 1rem;
       padding-left: 3rem;
       font-size: 1rem;
@@ -447,7 +470,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       color: #64748b;
       cursor: pointer;
       padding: 0.5rem;
-      border-radius: 8px;
+      border-radius: var(--r-control, 4px);
       transition: all 0.2s;
       z-index: 2;
     }
@@ -466,7 +489,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       background: var(--pup-blue);
       color: white;
       border: none;
-      border-radius: 12px;
+      border-radius: var(--r-control, 4px);
       padding: 1rem 2rem;
       font-weight: 700;
       font-size: 1rem;
@@ -506,7 +529,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       background: var(--pup-gold);
       color: var(--pup-blue);
       border: none;
-      border-radius: 12px;
+      border-radius: var(--r-control, 4px);
       padding: 1rem 2rem;
       font-weight: 700;
       font-size: 1rem;
@@ -567,7 +590,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     /* Alert */
     .alert {
-      border-radius: 12px;
+      border-radius: var(--r-card, 8px);
       border: none;
       padding: 1rem 1.25rem;
       margin-bottom: 1.5rem;
@@ -731,7 +754,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         width: 60px;
         height: 60px;
         background: linear-gradient(135deg, #fede0e, var(--pup-gold));
-        border-radius: 16px;
+        border-radius: var(--r-card, 8px);
         box-shadow: 0 10px 30px rgba(220, 169, 44, 0.3);
       }
 
@@ -790,6 +813,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       }
     }
   </style>
+<?php require_once __DIR__ . '/../includes/focus_ring.php'; ?>
 </head>
 
 <body>
@@ -882,6 +906,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           <?php endif; ?>
 
           <form method="post" id="loginForm">
+            <?= csrf_field() ?>
             <div class="form-group">
               <label class="form-label" for="username">Username / ID</label>
               <div class="input-wrapper">

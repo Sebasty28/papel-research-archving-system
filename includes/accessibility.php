@@ -34,7 +34,7 @@ body {
     gap: .25rem;
     padding: .75rem .5rem;
     border: none;
-    border-radius: 10px 0 0 10px;
+    border-radius: var(--r-control, 4px) 0 0 var(--r-control, 4px);
     background: var(--maroon, #820707);
     color: #fff;
     font-family: var(--font-body), 'Inter', sans-serif;
@@ -51,9 +51,9 @@ body {
 #a11y-toggle .a11y-tab-label { writing-mode: vertical-rl; text-orientation: mixed; }
 /* Whichever edge it is parked on, the curve faces into the page and the
    growth on hover pushes away from the edge. */
-#a11y-widget.edge-left #a11y-toggle { border-radius: 0 10px 10px 0; }
+#a11y-widget.edge-left #a11y-toggle { border-radius: 0 var(--r-control, 4px) var(--r-control, 4px) 0; }
 #a11y-widget.edge-left #a11y-toggle:hover { padding-right: .5rem; padding-left: .75rem; }
-#a11y-widget.edge-right #a11y-toggle { border-radius: 10px 0 0 10px; }
+#a11y-widget.edge-right #a11y-toggle { border-radius: var(--r-control, 4px) 0 0 var(--r-control, 4px); }
 
 /* Along the top or bottom it lies flat: a word set vertically down there reads
    badly and needs far more height than the tab should take. */
@@ -65,8 +65,8 @@ body {
     gap: .4rem;
     padding: .45rem .85rem;
 }
-#a11y-widget.edge-top #a11y-toggle    { border-radius: 0 0 10px 10px; }
-#a11y-widget.edge-bottom #a11y-toggle { border-radius: 10px 10px 0 0; }
+#a11y-widget.edge-top #a11y-toggle    { border-radius: 0 0 var(--r-control, 4px) var(--r-control, 4px); }
+#a11y-widget.edge-bottom #a11y-toggle { border-radius: var(--r-control, 4px) var(--r-control, 4px) 0 0; }
 #a11y-widget.edge-top #a11y-toggle:hover    { padding-bottom: .7rem; padding-right: .85rem; }
 #a11y-widget.edge-bottom #a11y-toggle:hover { padding-top: .7rem;    padding-right: .85rem; }
 #a11y-widget.edge-top .a11y-tab-label,
@@ -95,7 +95,7 @@ body {
     right: 0;
     width: 300px;
     background: #fff;
-    border-radius: 14px;
+    border-radius: var(--r-card, 8px);
     box-shadow: 0 8px 32px rgba(0,0,0,.18), 0 0 0 1px rgba(0,0,0,.06);
     overflow: hidden;
     display: none;
@@ -128,12 +128,12 @@ body {
 #a11y-reset {
     background: none; border: none; cursor: pointer;
     font-size: 11px; color: #6b7280; font-family: inherit;
-    padding: 3px 7px; border-radius: 5px; transition: background .15s, color .15s;
+    padding: 3px 7px; border-radius: var(--r-control, 4px); transition: background .15s, color .15s;
 }
 #a11y-reset:hover { background: #fee2e2; color: #991b1b; }
 #a11y-close {
     background: none; border: none; cursor: pointer;
-    width: 24px; height: 24px; border-radius: 6px;
+    width: 24px; height: 24px; border-radius: var(--r-control, 4px);
     display: flex; align-items: center; justify-content: center;
     font-size: 1rem; color: #9ca3af; transition: background .15s, color .15s;
     padding: 0; line-height: 1;
@@ -151,12 +151,12 @@ body {
 /* Font size control */
 .a11y-font-control {
     display: flex; align-items: center; justify-content: space-between;
-    background: #f3f4f6; border-radius: 8px; padding: 4px;
+    background: #f3f4f6; border-radius: var(--r-card, 8px); padding: 4px;
     margin-bottom: 10px;
 }
 .a11y-font-btn {
     width: 36px; height: 36px; border: none; background: #fff;
-    border-radius: 6px; cursor: pointer; font-size: 1.125rem;
+    border-radius: var(--r-control, 4px); cursor: pointer; font-size: 1.125rem;
     font-weight: 700; color: #374151;
     box-shadow: 0 1px 3px rgba(0,0,0,.1);
     display: flex; align-items: center; justify-content: center;
@@ -171,7 +171,7 @@ body {
     display: flex; flex-direction: column; align-items: center;
     justify-content: center; gap: 5px; padding: 10px 6px;
     border: 1.5px solid #e5e7eb; background: #fff;
-    border-radius: 9px; cursor: pointer; font-family: inherit;
+    border-radius: var(--r-control, 4px); cursor: pointer; font-family: inherit;
     font-size: 11px; font-weight: 500; color: #4b5563;
     line-height: 1.3; text-align: center;
     transition: border-color .15s, background .15s, color .15s;

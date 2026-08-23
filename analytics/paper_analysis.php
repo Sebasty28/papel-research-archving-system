@@ -52,9 +52,9 @@ $approvals = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 <title>Paper Analysis · <?= e(APP_NAME) ?></title>
 <?php require_once ROOT_PATH.'/includes/site_head.php'; ?>
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
-.ai-section { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+.ai-section { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: var(--r-badge, 2px); margin-bottom: 20px; }
 .stat-card { background: #f8f9fa; padding: 15px; margin-bottom: 15px; }
-.metadata-badge { background: #e3f2fd; color: #1976d2; padding: 4px 12px; border-radius: 12px; display: inline-block; margin: 4px; }
+.metadata-badge { background: #e3f2fd; color: #1976d2; padding: 4px 12px; border-radius: var(--r-badge, 2px); display: inline-block; margin: 4px; }
 </style>
 </head>
 <body>
@@ -107,7 +107,7 @@ $approvals = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
               Open Research PDF (GDrive)
             </a>
         <?php else: ?>
-            <a href="<?= e($paper['file_path']) ?>" target="_blank" class="btn btn-primary">
+            <a href="<?= e(paper_file_url(null, $paper['file_path'] ?? null)) ?>" target="_blank" class="btn btn-primary">
               Open Research PDF
             </a>
         <?php endif; ?>

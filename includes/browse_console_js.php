@@ -28,8 +28,8 @@
        true sample rather than an approximation kept in step by hand. */
     var COLOURS = [
         { id: 'maroon',    label: 'PUP Maroon',       swatch: '#820707' },
-        { id: 'lightblue', label: 'PUP Light Blue',   swatch: '#2E86AB' },
-        { id: 'blue',      label: 'PUP Blue',         swatch: '#14487F' },
+        { id: 'green',     label: 'Dark Green',       swatch: '#14532D' },
+        { id: 'blue',      label: 'Dark Blue',        swatch: '#14487F' },
         { id: 'white',     label: 'PUP White Modern', swatch: '#3B3B3B' },
         { id: 'classic',   label: 'PUP Old Classic',  swatch: '#6B0F0F' }
     ];

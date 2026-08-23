@@ -50,7 +50,7 @@ h1, h2, h3, h4, h5, h6,
 .card, .content-card {
     background: var(--white);
     border: 1px solid var(--border) !important;
-    border-radius: 12px !important;
+    border-radius: var(--r-card, 8px)!important;
     box-shadow: none !important;
     margin-bottom: 1.125rem;
 }
@@ -91,14 +91,14 @@ h1, h2, h3, h4, h5, h6,
 }
 .table tbody td { border-bottom: 1px solid var(--border) !important; vertical-align: middle; }
 .table-hover tbody tr:hover > * { background: var(--cream) !important; }
-.table-responsive { border-radius: 10px; overflow: auto; }
+.table-responsive { border-radius: var(--r-control, 4px); overflow: auto; }
 
 /* ---- Buttons ----
    Bootstrap's palette is replaced wholesale: one accent for the action being
    encouraged, an outline for everything else, so a page of controls does not
    read as five competing priorities. */
 .btn {
-    border-radius: 8px;
+    border-radius: var(--r-control, 4px);
     font-family: var(--font-body);
     font-size: .8125rem;
     padding: .45rem 1rem;
@@ -110,12 +110,12 @@ h1, h2, h3, h4, h5, h6,
 }
 .btn-sm { padding: .3rem .7rem; font-size: .75rem; }
 .btn-primary, .btn-success, .btn-info, .btn-dark {
-    background: var(--maroon) !important;
+    background: var(--maroon-surface) !important;
     border-color: var(--maroon) !important;
     color: #fff !important;
 }
 .btn-primary:hover, .btn-success:hover, .btn-info:hover, .btn-dark:hover {
-    background: var(--dark-maroon) !important;
+    background: var(--maroon-surface-hover) !important;
     border-color: var(--dark-maroon) !important;
 }
 .btn-secondary, .btn-outline-secondary, .btn-outline-primary, .btn-light, .btn-warning {
@@ -135,7 +135,7 @@ h1, h2, h3, h4, h5, h6,
     color: var(--dark-maroon) !important;
 }
 .btn-danger:hover, .btn-outline-danger:hover {
-    background: var(--dark-maroon) !important;
+    background: var(--maroon-surface-hover) !important;
     border-color: var(--dark-maroon) !important;
     color: #fff !important;
 }
@@ -150,7 +150,7 @@ h1, h2, h3, h4, h5, h6,
 }
 .form-control, .form-select {
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--r-control, 4px);
     padding: .5rem .7rem;
     font-family: var(--font-body);
     font-size: .8125rem;
@@ -170,7 +170,7 @@ h1, h2, h3, h4, h5, h6,
 .nav-tabs .nav-link {
     border: none;
     border-bottom: 2px solid transparent;
-    border-radius: 0;
+    border-radius: var(--r-control, 4px);
     color: var(--grey);
     font-size: .8125rem;
     padding: .5rem .9rem;
@@ -184,7 +184,7 @@ h1, h2, h3, h4, h5, h6,
 }
 .filter-btn {
     border: 1px solid var(--border) !important;
-    border-radius: 999px !important;
+    border-radius: var(--r-control, 4px)!important;
     background: var(--white) !important;
     color: var(--ink) !important;
     font-size: .75rem;
@@ -200,7 +200,7 @@ h1, h2, h3, h4, h5, h6,
 
 /* ---- Alerts ---- */
 .alert {
-    border-radius: 10px;
+    border-radius: var(--r-card, 8px);
     border: 1px solid var(--border);
     font-size: .8125rem;
     padding: .75rem 1rem;
@@ -212,7 +212,7 @@ h1, h2, h3, h4, h5, h6,
 /* ---- Modals ---- */
 .modal-content {
     border: none;
-    border-radius: 12px;
+    border-radius: var(--r-card, 8px);
     box-shadow: 0 18px 48px rgba(51, 0, 0, .28);
 }
 .modal-header {
@@ -234,7 +234,7 @@ h1, h2, h3, h4, h5, h6,
     font-weight: 500;
     font-size: .6875rem;
     padding: .3rem .55rem;
-    border-radius: 999px;
+    border-radius: var(--r-badge, 2px);
 }
 .bg-primary, .bg-info, .bg-success { background: var(--cream) !important; color: var(--maroon) !important; }
 .bg-secondary { background: var(--cream) !important; color: var(--grey) !important; }

@@ -32,7 +32,7 @@ body {
 }
 
 /* ===== Breadcrumb strip — same maroon bar the archive pages use ===== */
-.crumb-bar { background: var(--dark-maroon); }
+.crumb-bar { background: var(--maroon-surface-hover); }
 .crumb-inner {
     display: flex;
     align-items: center;
@@ -68,14 +68,14 @@ body {
 /* Soft-cream panel carries the column; cards sit on top of it in white. */
 .page-shell {
     background: var(--cream);
-    border-radius: 10px;
+    border-radius: var(--r-card, 8px);
     padding: .75rem;
 }
 
 .page-card {
     background: var(--white);
     border: 1px solid rgba(177,125,125,.22);
-    border-radius: 8px;
+    border-radius: var(--r-card, 8px);
     margin-bottom: .75rem;
     overflow: hidden;
 }
@@ -161,7 +161,7 @@ body {
 .page-chip {
     display: inline-block;
     padding: .15rem .6rem;
-    border-radius: 999px;
+    border-radius: var(--r-control, 4px);
     background: rgba(130,7,7,.08);
     color: var(--maroon);
     font-size: .75rem;
@@ -176,7 +176,7 @@ body {
     width: 100%;
     padding: .625rem .75rem;
     border: 1.5px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--r-control, 4px);
     font-family: inherit;
     font-size: .875rem;
     color: var(--ink);
@@ -192,22 +192,22 @@ body {
 }
 .btn-page {
     padding: .625rem 1.5rem;
-    background: var(--maroon);
+    background: var(--maroon-surface);
     color: #fff;
     border: none;
-    border-radius: 8px;
+    border-radius: var(--r-control, 4px);
     font-family: inherit;
     font-size: .875rem;
     font-weight: 400;
     cursor: pointer;
     transition: background .2s;
 }
-.btn-page:hover { background: var(--dark-maroon); }
+.btn-page:hover { background: var(--maroon-surface-hover); }
 
 /* ===== Alerts ===== */
 .alert {
     padding: .75rem 1rem;
-    border-radius: 8px;
+    border-radius: var(--r-card, 8px);
     font-size: .875rem;
     margin-bottom: 1.25rem;
 }

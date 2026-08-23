@@ -1,6 +1,27 @@
 <?php
 require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/../vendor/autoload.php';
+
+/* The Composer packages, when they are there.
+ *
+ * This used to be a bare require, and vendor/ is not in git. On a fresh clone
+ * that made every page including this file fail outright with a PHP fatal, so
+ * the public repository page was blank while Help Center and Contact Support
+ * worked perfectly. It read as a broken page rather than a missing dependency,
+ * and it cost somebody an evening.
+ *
+ * The Google classes below are only ever used inside functions, so the file
+ * loads and the page renders without them; a Drive action then fails on its own
+ * with a message that says what to do. Run `composer install` and everything
+ * here comes back. */
+if (is_file(__DIR__ . '/../vendor/autoload.php')) {
+    require_once __DIR__ . '/../vendor/autoload.php';
+}
+
+/** Whether the Google client is actually installed. */
+function gdrive_library_ready(): bool
+{
+    return class_exists('Google_Client');
+}
 if (!function_exists('db'))
     require_once __DIR__ . '/core.php';
 
@@ -107,6 +128,11 @@ function update_gdrive_parent_folder_id(string $folderId, int $userId): bool
  */
 function get_gdrive_client($userId = null): Google_Client
 {
+    if (!gdrive_library_ready()) {
+        throw new RuntimeException(
+            'The Google API client is not installed. Run "composer install" in '
+            . 'the project root; vendor/ is not kept in the repository.');
+    }
     $client = new Google_Client();
     $client->setClientId(GDRIVE_CLIENT_ID);
     $client->setClientSecret(GDRIVE_CLIENT_SECRET);
@@ -328,6 +354,47 @@ function upload_supporting_doc_to_gdrive(string $filePath, string $fileName, str
 function get_gdrive_link(string $fileId): string
 {
     return "https://drive.google.com/file/d/{$fileId}/preview?v=" . date('Ymd');
+}
+
+/**
+ * The bytes of a file held on Drive.
+ *
+ * Drive is where a submitted paper lives — the local copy is only ever the
+ * staging file the upload is read from, and is removed once Drive has it. So
+ * anything that needs to hand the PDF to a browser has to fetch it back, which
+ * is what this does.
+ *
+ * Never throws: Drive being unreachable should degrade to "file not available"
+ * rather than a stack trace in the middle of a download. Callers fall back to a
+ * local copy where one still exists — older papers, and the archived rows that
+ * never got a Drive id.
+ *
+ * @return string|null The file's contents, or null if it could not be fetched.
+ */
+function download_from_gdrive(string $fileId): ?string
+{
+    $fileId = trim($fileId);
+    if ($fileId === '') return null;
+
+    if (!is_gdrive_connected()) {
+        error_log('GDrive download skipped (not connected) for file ' . $fileId);
+        return null;
+    }
+
+    try {
+        $client = get_gdrive_client();
+        if (!$client->getAccessToken()) return null;
+
+        $service = new Google_Service_Drive($client);
+        // alt=media asks for the file itself rather than its metadata.
+        $response = $service->files->get($fileId, ['alt' => 'media']);
+        $bytes = $response->getBody()->getContents();
+
+        return ($bytes === '' ? null : $bytes);
+    } catch (Throwable $e) {
+        error_log('GDrive download failed for ' . $fileId . ': ' . $e->getMessage());
+        return null;
+    }
 }
 
 /**

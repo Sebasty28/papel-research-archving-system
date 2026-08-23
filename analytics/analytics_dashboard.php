@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 require_once __DIR__.'/../config/core.php';
 require_once __DIR__.'/../config/groq_config.php';
 /* The Head of Academic Programs used to read these same figures inline on their
@@ -263,6 +263,229 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     fclose($out);
     exit;
 }
+
+/* ---- The other three formats ----------------------------------------------
+   These carry the charts, and a chart only exists in the browser: it is drawn
+   on a canvas by Chart.js, and there is no GD on this server to redraw it. So
+   the page posts the canvases here as images alongside the request, which is
+   why these are a POST and the CSV is still a link.
+
+   A request without figures is still answered, just without them, so the export
+   does not fail outright if a chart has not finished drawing. */
+$exportFormat = $_POST['export'] ?? '';
+if (in_array($exportFormat, ['xlsx', 'docx', 'pdf'], true)) {
+    csrf_verify();
+
+    /* The same numbers the page is showing, gathered once for all three. */
+    $when = date('j F Y, g:i A');
+    $filterLine = 'All submissions';
+    if ($filtered) {
+        $bits = [];
+        if ($fYear)    $bits[] = 'Year ' . $fYear;
+        if ($fProgram) $bits[] = program_code($fProgram) ?: $fProgram;
+        if ($fType)    $bits[] = ucfirst($fType);
+        if ($fStatus)  $bits[] = str_replace('_', ' ', $fStatus);
+        if ($fQuery)   $bits[] = 'matching "' . $fQuery . '"';
+        $filterLine = 'Filtered by ' . implode(' · ', $bits);
+    }
+
+    $everything = $rows($run("SELECT rp.title, rp.paper_type, rp.current_status, rp.upload_date,
+                                     u.full_name AS student, u.program
+                              $FROM $WHERE ORDER BY {$SORTS[$sort][0]} $dir"));
+
+    /* The figures, as sent by the page. Each is a data URL; anything that is
+       not one of ours is ignored rather than trusted. */
+    $figures = [];
+    foreach (($_POST['figures'] ?? []) as $caption => $dataUrl) {
+        if (!is_string($dataUrl)) continue;
+        if (!preg_match('~^data:image/(png|jpeg);base64,([A-Za-z0-9+/=]+)$~', $dataUrl, $m)) {
+            continue;
+        }
+        $bin = base64_decode($m[2], true);
+        if ($bin === false || strlen($bin) < 64) continue;
+        // 3 MB a figure is already generous for a chart; past that something is wrong.
+        if (strlen($bin) > 3 * 1024 * 1024) continue;
+        $figures[] = ['caption' => substr((string)$caption, 0, 120),
+                      'type' => $m[1], 'data' => $bin,
+                      'w' => (int)($_POST['figw'][$caption] ?? 0),
+                      'h' => (int)($_POST['figh'][$caption] ?? 0)];
+    }
+
+    $summary = [
+        ['Submissions', $totalSubs],
+        ['Approved', $approved],
+        ['In review', $pending],
+        ['Returned for revision', $returned],
+    ];
+    $stamp = date('Y-m-d');
+
+    if ($exportFormat === 'xlsx') {
+        require_once ROOT_PATH . '/includes/xlsx_writer.php';
+        $x = new XlsxWriter('Analytics', 'Figures');
+        $x->widths([34, 16, 16, 16, 16, 18]);
+        $x->title('PAPEL Analytics', $filterLine . '  ·  ' . $when);
+
+        $x->section('Summary');
+        $x->headRow(['Measure', 'Papers']);
+        foreach ($summary as $rowPair) $x->row($rowPair);
+
+        $x->section('By programme');
+        $x->headRow(['Programme', 'Submissions', 'Approved', 'In revision']);
+        foreach ($stats as $r) {
+            $x->row([$r['program'], (int)$r['total_papers'], (int)$r['approved'],
+                     (int)$r['revisions']]);
+        }
+
+        $x->section('By paper type');
+        $x->headRow(['Type', 'Submissions', 'Share of all papers (%)']);
+        foreach ($paperTypeStats as $r) {
+            $x->row([ucfirst((string)$r['paper_type']), (int)$r['count'],
+                     $totalPapers > 0 ? round(($r['count'] / $totalPapers) * 100, 1) : 0]);
+        }
+
+        $x->section($byMonth ? 'Submissions by month' : 'Submissions by year');
+        $x->headRow([$byMonth ? 'Month' : 'Year', 'Submissions']);
+        foreach ($timelineData as $r) $x->row([$r['bucket'], (int)$r['count']], [0]);
+
+        $x->section('Every submission');
+        $x->headRow(['Submitted', 'Title', 'Student', 'Programme', 'Type', 'Status']);
+        foreach ($everything as $r) {
+            $x->row([substr((string)$r['upload_date'], 0, 10), $r['title'], $r['student'],
+                     program_code((string)$r['program']) ?: $r['program'],
+                     ucfirst((string)$r['paper_type']),
+                     ucwords(str_replace('_', ' ', (string)$r['current_status']))], [0]);
+        }
+
+        foreach ($figures as $f) {
+            if ($f['type'] === 'png') {
+                $x->image($f['data'], max(1, $f['w']), max(1, $f['h']), $f['caption']);
+            }
+        }
+
+        $bytes = $x->output();
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment; filename="papel_analytics_' . $stamp . '.xlsx"');
+        header('Content-Length: ' . strlen($bytes));
+        echo $bytes;
+        exit;
+    }
+
+    if ($exportFormat === 'docx') {
+        require_once ROOT_PATH . '/includes/docx_writer.php';
+        $d = new DocxWriter();
+        $d->title('PAPEL Analytics', $filterLine . '  ·  ' . $when);
+
+        if ($aiInsight !== '' && stripos($aiInsight, 'unavailable') === false) {
+            $d->heading('What the figures say');
+            $d->paragraph(strip_tags($aiInsight));
+        }
+
+        $d->heading('Summary');
+        $d->table([['Measure', 3, 'left'], ['Papers', 1, 'right']],
+                  array_map(fn($r) => [$r[0], number_format((int)$r[1])], $summary));
+
+        $d->heading('By programme');
+        $d->table([['Programme', 4, 'left'], ['Submissions', 1, 'right'],
+                   ['Approved', 1, 'right'], ['In revision', 1, 'right']],
+                  array_map(fn($r) => [$r['program'], (string)(int)$r['total_papers'],
+                                       (string)(int)$r['approved'],
+                                       (string)(int)$r['revisions']], $stats));
+
+        $d->heading('By paper type');
+        $d->table([['Type', 3, 'left'], ['Submissions', 1, 'right'], ['Share', 1, 'right']],
+                  array_map(fn($r) => [ucfirst((string)$r['paper_type']),
+                                       (string)(int)$r['count'],
+                                       ($totalPapers > 0
+                                            ? round(($r['count'] / $totalPapers) * 100, 1)
+                                            : 0) . '%'], $paperTypeStats));
+
+        $d->heading($byMonth ? 'Submissions by month' : 'Submissions by year');
+        $d->table([[$byMonth ? 'Month' : 'Year', 2, 'left'], ['Submissions', 1, 'right']],
+                  array_map(fn($r) => [$r['bucket'], (string)(int)$r['count']], $timelineData));
+
+        if ($figures) {
+            $d->pageBreak();
+            $d->heading('Figures');
+            foreach ($figures as $f) {
+                if ($f['type'] === 'png') {
+                    $d->image($f['data'], max(1, $f['w']), max(1, $f['h']), $f['caption']);
+                }
+            }
+        }
+
+        $d->pageBreak();
+        $d->heading('Every submission');
+        $d->table([['Submitted', 2, 'left'], ['Title', 6, 'left'], ['Student', 3, 'left'],
+                   ['Programme', 2, 'left'], ['Status', 2, 'left']],
+                  array_map(fn($r) => [substr((string)$r['upload_date'], 0, 10), $r['title'],
+                                       $r['student'],
+                                       program_code((string)$r['program']) ?: $r['program'],
+                                       ucwords(str_replace('_', ' ',
+                                           (string)$r['current_status']))], $everything));
+
+        $bytes = $d->output();
+        header('Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        header('Content-Disposition: attachment; filename="papel_analytics_' . $stamp . '.docx"');
+        header('Content-Length: ' . strlen($bytes));
+        echo $bytes;
+        exit;
+    }
+
+    // pdf
+    require_once ROOT_PATH . '/includes/pdf_writer.php';
+    $pdf = new PdfWriter('PAPEL Analytics', $filterLine . '  -  ' . $when);
+
+    if ($aiInsight !== '' && stripos($aiInsight, 'unavailable') === false) {
+        $pdf->heading('What the figures say');
+        $pdf->paragraph(strip_tags($aiInsight));
+    }
+
+    $pdf->heading('Summary');
+    $pdf->table([['Measure', 320, 'l'], ['Papers', 179, 'r']],
+                array_map(fn($r) => [$r[0], number_format((int)$r[1])], $summary));
+
+    $pdf->heading('By programme');
+    $pdf->table([['Programme', 239, 'l'], ['Submissions', 90, 'r'],
+                 ['Approved', 85, 'r'], ['In revision', 85, 'r']],
+                array_map(fn($r) => [$r['program'], (string)(int)$r['total_papers'],
+                                     (string)(int)$r['approved'],
+                                     (string)(int)$r['revisions']], $stats));
+
+    $pdf->heading('By paper type');
+    $pdf->table([['Type', 259, 'l'], ['Submissions', 120, 'r'], ['Share', 120, 'r']],
+                array_map(fn($r) => [ucfirst((string)$r['paper_type']),
+                                     (string)(int)$r['count'],
+                                     ($totalPapers > 0
+                                        ? round(($r['count'] / $totalPapers) * 100, 1)
+                                        : 0) . '%'], $paperTypeStats));
+
+    $pdf->heading($byMonth ? 'Submissions by month' : 'Submissions by year');
+    $pdf->table([[$byMonth ? 'Month' : 'Year', 259, 'l'], ['Submissions', 240, 'r']],
+                array_map(fn($r) => [$r['bucket'], (string)(int)$r['count']], $timelineData));
+
+    if ($figures) {
+        $pdf->heading('Figures');
+        foreach ($figures as $f) {
+            if ($f['type'] === 'jpeg') $pdf->figure($f['data'], $f['caption']);
+        }
+    }
+
+    $pdf->heading('Every submission');
+    $pdf->table([['Submitted', 66, 'l'], ['Title', 205, 'l'], ['Student', 110, 'l'],
+                 ['Programme', 60, 'l'], ['Status', 58, 'l']],
+                array_map(fn($r) => [substr((string)$r['upload_date'], 0, 10), $r['title'],
+                                     $r['student'],
+                                     program_code((string)$r['program']) ?: $r['program'],
+                                     ucwords(str_replace('_', ' ',
+                                         (string)$r['current_status']))], $everything));
+
+    $bytes = $pdf->output();
+    header('Content-Type: application/pdf');
+    header('Content-Disposition: attachment; filename="papel_analytics_' . $stamp . '.pdf"');
+    header('Content-Length: ' . strlen($bytes));
+    echo $bytes;
+    exit;
+}
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -286,11 +509,48 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
     color: var(--maroon); margin: 0 0 .2rem;
 }
 .an-head p { font-size: .8125rem; color: var(--grey); margin: 0; max-width: 44rem; line-height: 1.6; }
+/* ---- Export dropdown ----
+   One button with four ways out of the page. The menu is a plain absolutely
+   positioned panel rather than a native <select>, because each row carries a
+   line of explanation and a select cannot hold one. */
+.an-export { position: relative; }
+.an-export-menu {
+    position: absolute;
+    top: calc(100% + .375rem);
+    right: 0;
+    z-index: 60;
+    min-width: 17rem;
+    padding: .3rem;
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: var(--r-card, 8px);
+    box-shadow: var(--shadow-md);
+}
+.an-export-menu[hidden] { display: none; }
+.an-export-menu > a,
+.an-export-menu > button {
+    display: flex; align-items: flex-start; gap: .625rem; width: 100%;
+    padding: .5rem .625rem;
+    border: 0; border-radius: var(--r-control, 4px);
+    background: none; text-align: left; cursor: pointer;
+    font-family: var(--font-body); font-size: .8125rem; color: var(--ink);
+    text-decoration: none;
+}
+.an-export-menu > a:hover,
+.an-export-menu > button:hover { background: var(--cream); }
+.an-export-menu .material-symbols-outlined { color: var(--maroon); flex: 0 0 auto; }
+.an-export-menu strong { display: block; font-weight: 600; }
+.an-export-menu small { display: block; font-size: .6875rem; color: var(--grey); margin-top: .05rem; }
+/* While a file is being built the button says so: an Excel export of a long
+   roll takes a moment, and a button that does nothing visible gets pressed
+   again. */
+.an-export.is-busy #anExportBtn { opacity: .65; pointer-events: none; }
+
 .an-head .an-actions { margin-left: auto; display: flex; gap: .5rem; flex-wrap: wrap; }
 
 /* ---- Filters ---- */
 .an-filters {
-    background: var(--cream); border-radius: 10px;
+    background: var(--cream); border-radius: var(--r-card, 8px);
     padding: .75rem .875rem; margin-bottom: 1.125rem;
 }
 .an-filter-row { display: flex; flex-wrap: wrap; gap: .625rem; align-items: flex-end; }
@@ -299,7 +559,7 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
     font-size: .625rem; text-transform: uppercase; letter-spacing: .04em; color: var(--grey);
 }
 .an-filter select, .an-filter input {
-    border: 1px solid var(--border); border-radius: 8px;
+    border: 1px solid var(--border); border-radius: var(--r-control, 4px);
     padding: .4rem .6rem; font-family: var(--font-body); font-size: .8125rem;
     color: var(--ink); background: var(--white); min-width: 9rem;
 }
@@ -319,7 +579,7 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
 }
 .an-chip {
     display: inline-flex; align-items: center; gap: .25rem;
-    background: var(--white); border: 1px solid var(--maroon); border-radius: 999px;
+    background: var(--white); border: 1px solid var(--maroon); border-radius: var(--r-control, 4px);
     padding: .15rem .5rem; font-size: .6875rem; color: var(--maroon);
 }
 .an-chip a { color: var(--maroon); text-decoration: none; font-weight: 600; line-height: 1; }
@@ -330,7 +590,7 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
     display: grid; gap: .875rem; margin-bottom: 1.125rem;
     grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
 }
-.an-tile { background: var(--white); border: 1px solid var(--border); border-radius: 10px; padding: .875rem 1rem; }
+.an-tile { background: var(--white); border: 1px solid var(--border); border-radius: var(--r-card, 8px); padding: .875rem 1rem; }
 .an-tile-label {
     font-size: .6875rem; text-transform: uppercase; letter-spacing: .04em;
     color: var(--grey); display: block; margin-bottom: .25rem;
@@ -340,11 +600,11 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
     color: var(--maroon); line-height: 1.1; font-variant-numeric: tabular-nums;
 }
 .an-tile-note { display: block; font-size: .6875rem; color: var(--grey); margin-top: .2rem; }
-.an-tile-note.is-up { color: #1b5e35; }
-.an-tile-note.is-down { color: var(--dark-maroon); }
+.an-tile-note.is-up { color: var(--ok-text); }
+.an-tile-note.is-down { color: var(--bad-text); }
 
 /* ---- Cards ---- */
-.an-card { background: var(--white); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 1.125rem; overflow: hidden; }
+.an-card { background: var(--white); border: 1px solid var(--border); border-radius: var(--r-card, 8px); margin-bottom: 1.125rem; overflow: hidden; }
 .an-card-head {
     display: flex; align-items: center; gap: .5rem;
     padding: .8rem 1.125rem; border-bottom: 1px solid var(--border);
@@ -380,8 +640,8 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
 .an-table tbody tr:hover { background: var(--cream); }
 .an-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .an-strong { color: var(--maroon); font-weight: 500; }
-.an-bar { display: block; height: 4px; border-radius: 2px; background: var(--cream); margin-top: .3rem; }
-.an-bar span { display: block; height: 100%; border-radius: 2px; background: var(--maroon); }
+.an-bar { display: block; height: 4px; border-radius: var(--r-control, 4px); background: var(--cream); margin-top: .3rem; }
+.an-bar span { display: block; height: 100%; border-radius: var(--r-control, 4px); background: var(--maroon); }
 
 /* A heading you can sort by. */
 .an-sort { color: inherit; text-decoration: none; display: inline-flex; align-items: center; gap: .25rem; }
@@ -392,12 +652,12 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
 .an-sub { display: block; font-size: .6875rem; color: var(--grey); margin-top: .15rem; }
 .an-when { white-space: nowrap; color: var(--grey); font-size: .75rem; }
 .an-status {
-    display: inline-block; padding: .1rem .45rem; border-radius: 999px;
+    display: inline-block; padding: .1rem .45rem; border-radius: var(--r-badge, 2px);
     background: var(--cream); color: var(--maroon);
     font-size: .625rem; text-transform: uppercase; letter-spacing: .03em; white-space: nowrap;
 }
-.an-status.is-approved { background: #e7f6ed; color: #1b5e35; }
-.an-status.is-returned { background: #fdeaea; color: var(--dark-maroon); }
+.an-status.is-approved { background: var(--ok-bg); color: var(--ok-text); }
+.an-status.is-returned { background: var(--bad-bg); color: var(--bad-text); }
 
 /* ---- Paging ---- */
 .an-paging {
@@ -407,7 +667,7 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
 }
 .an-paging .an-pages { margin-left: auto; display: flex; gap: .375rem; align-items: center; }
 .an-page {
-    border: 1px solid var(--border); border-radius: 6px; background: var(--white);
+    border: 1px solid var(--border); border-radius: var(--r-control, 4px); background: var(--white);
     color: var(--maroon); text-decoration: none; padding: .25rem .6rem; font-size: .75rem;
 }
 .an-page:hover { background: var(--cream); border-color: var(--soft-maroon); }
@@ -422,12 +682,12 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
 .an-modal.is-open { opacity: 1; pointer-events: auto; }
 .an-modal-panel {
     width: 100%; max-width: 56rem; background: var(--white);
-    border-radius: 12px; box-shadow: 0 18px 48px rgba(51, 0, 0, .28);
+    border-radius: var(--r-card, 8px); box-shadow: 0 18px 48px rgba(51, 0, 0, .28);
     overflow: hidden; display: flex; flex-direction: column; max-height: calc(100vh - 3rem);
 }
 .an-modal-head { display: flex; align-items: center; gap: .5rem; padding: 1rem 1.25rem; border-bottom: 1px solid var(--maroon); }
 .an-modal-head h2 { font-family: var(--font-head); font-size: 1rem; font-weight: 500; color: var(--maroon); margin: 0; flex: 1 1 auto; }
-.an-modal-close { border: none; background: none; cursor: pointer; padding: .15rem; color: var(--grey); border-radius: 6px; display: inline-flex; }
+.an-modal-close { border: none; background: none; cursor: pointer; padding: .15rem; color: var(--grey); border-radius: var(--r-card, 8px); display: inline-flex; }
 .an-modal-close:hover { background: var(--cream); color: var(--maroon); }
 .an-modal-panel:focus { outline: none; }
 .an-modal-body { padding: 1.25rem; overflow: auto; }
@@ -468,9 +728,39 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
             </p>
         </div>
         <div class="an-actions">
-            <a class="btn-sm-outline" href="<?= e($qs(['export' => 'csv'])) ?>">
-                <span class="material-symbols-outlined mi-18">download</span> Export CSV
-            </a>
+            <div class="an-export" id="anExport">
+                <button type="button" class="btn-sm-outline" id="anExportBtn"
+                        aria-haspopup="menu" aria-expanded="false">
+                    <span class="material-symbols-outlined mi-18">download</span>
+                    Export
+                    <span class="material-symbols-outlined mi-18">expand_more</span>
+                </button>
+                <div class="an-export-menu" id="anExportMenu" role="menu" hidden>
+                    <?php /* CSV is a plain link because it needs nothing from the
+                             page. The other three carry the charts, which only
+                             exist as canvases in the browser, so they post. */ ?>
+                    <a role="menuitem" href="<?= e($qs(['export' => 'csv'])) ?>">
+                        <span class="material-symbols-outlined mi-18">table_view</span>
+                        <span><strong>CSV</strong><small>Plain table, opens anywhere</small></span>
+                    </a>
+                    <button type="button" role="menuitem" data-export="xlsx">
+                        <span class="material-symbols-outlined mi-18">grid_on</span>
+                        <span><strong>Excel</strong><small>Styled sheets, with the charts</small></span>
+                    </button>
+                    <button type="button" role="menuitem" data-export="docx">
+                        <span class="material-symbols-outlined mi-18">description</span>
+                        <span><strong>Word</strong><small>A written report, with the charts</small></span>
+                    </button>
+                    <button type="button" role="menuitem" data-export="pdf">
+                        <span class="material-symbols-outlined mi-18">picture_as_pdf</span>
+                        <span><strong>PDF</strong><small>Ready to print or hand in</small></span>
+                    </button>
+                </div>
+            </div>
+            <form method="post" id="anExportForm" hidden>
+                <?= csrf_field() ?>
+                <input type="hidden" name="export" id="anExportFormat" value="">
+            </form>
         </div>
     </div>
 
@@ -1024,6 +1314,84 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 <?php require ROOT_PATH.'/includes/scroll_jump.php'; ?>
+<script nonce="<?= csp_nonce() ?>">
+/* ---- Export -------------------------------------------------------------
+   The charts live on canvases, so the server cannot draw them: there is no GD
+   here, and even with it the server has no idea what Chart.js painted. The page
+   therefore hands the pictures over with the request.
+
+   Formats differ in what they can carry. Excel and Word embed a PNG happily.
+   A PDF can carry a JPEG byte for byte, and would need the image decoded and
+   re-compressed to take a PNG, so the canvas is asked for JPEG in that case. */
+(function () {
+    var wrap = document.getElementById('anExport');
+    var btn  = document.getElementById('anExportBtn');
+    var menu = document.getElementById('anExportMenu');
+    var form = document.getElementById('anExportForm');
+    if (!wrap || !btn || !menu || !form) return;
+
+    function shut() { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); }
+
+    btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        menu.hidden = !menu.hidden;
+        btn.setAttribute('aria-expanded', menu.hidden ? 'false' : 'true');
+    });
+    document.addEventListener('click', function (e) {
+        if (!wrap.contains(e.target)) shut();
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') shut();
+    });
+
+    /* Every chart on the page, with the caption it will be given in the file. */
+    function figures() {
+        return [
+            ['Submissions over time', document.getElementById('timelineChart')],
+            ['Submissions by month', document.getElementById('monthlyChart')],
+            ['Approval rate', document.getElementById('approvalRateChart')],
+            ['Papers by type', document.getElementById('paperTypeChart')]
+        ].filter(function (f) { return f[1] && f[1].width > 0 && f[1].height > 0; });
+    }
+
+    menu.querySelectorAll('button[data-export]').forEach(function (item) {
+        item.addEventListener('click', function () {
+            var format = item.getAttribute('data-export');
+            shut();
+            wrap.classList.add('is-busy');
+
+            // Clear anything a previous export left behind.
+            form.querySelectorAll('.js-fig').forEach(function (el) { el.remove(); });
+            document.getElementById('anExportFormat').value = format;
+
+            figures().forEach(function (f) {
+                var caption = f[0], canvas = f[1], url;
+                try {
+                    url = format === 'pdf'
+                        ? canvas.toDataURL('image/jpeg', 0.92)
+                        : canvas.toDataURL('image/png');
+                } catch (err) {
+                    return;                     // a tainted canvas: skip that figure
+                }
+                [['figures', url], ['figw', canvas.width], ['figh', canvas.height]]
+                    .forEach(function (pair) {
+                        var input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.className = 'js-fig';
+                        input.name = pair[0] + '[' + caption + ']';
+                        input.value = pair[1];
+                        form.appendChild(input);
+                    });
+            });
+
+            form.submit();
+            // The page does not navigate for a download, so the button comes back.
+            setTimeout(function () { wrap.classList.remove('is-busy'); }, 2500);
+        });
+    });
+})();
+</script>
+
 <?php require ROOT_PATH.'/includes/site_footer.php'; ?>
 </body>
 </html>

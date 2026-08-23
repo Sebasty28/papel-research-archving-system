@@ -21,7 +21,7 @@
 .pd-back {
     display: inline-flex; align-items: center; gap: .3rem; flex: 0 0 auto;
     color: var(--maroon); text-decoration: none; font-size: .8125rem;
-    padding: .35rem .5rem .35rem .3rem; border-radius: 8px;
+    padding: .35rem .5rem .35rem .3rem; border-radius: var(--r-card, 8px);
     border: none; background: none;
 }
 .pd-back:hover { background: var(--cream); }
@@ -37,12 +37,12 @@
 }
 .pd-authors { font-size: .8125rem; color: var(--ink); margin: 0 0 .25rem; }
 .pd-meta { font-size: .75rem; color: var(--grey); }
-.pd-meta .sep { margin: 0 .4rem; color: var(--border); }
+.pd-meta .sep { margin: 0 .4rem; color: var(--grey); }
 .pd-status {
     flex: 0 0 auto; text-align: right; font-size: .75rem; color: var(--grey); white-space: nowrap;
 }
 .pd-status .pd-badge {
-    display: inline-block; margin-top: .2rem; padding: .25rem .6rem; border-radius: 999px;
+    display: inline-block; margin-top: .2rem; padding: .25rem .6rem; border-radius: var(--r-badge, 2px);
     background: var(--cream); color: var(--maroon); font-size: .75rem; font-weight: 500;
 }
 .pd-status .pd-badge.is-warn { background: #fdeaea; color: var(--dark-maroon); }
@@ -50,7 +50,7 @@
 /* What the reviewer said. A returned paper is opened to read this, so it leads
    the page instead of sitting at the foot of it. */
 .pd-callout {
-    display: flex; gap: .75rem; padding: 1rem 1.25rem; border-radius: 12px;
+    display: flex; gap: .75rem; padding: 1rem 1.25rem; border-radius: var(--r-card, 8px);
     margin-bottom: 1.125rem; background: #fdeaea; border: 1px solid var(--soft-maroon);
 }
 .pd-callout.is-info { background: var(--cream); border-color: var(--border); }
@@ -68,7 +68,7 @@
 .pd-callout .btn-sm-maroon { margin-top: .75rem; }
 
 .pd-card {
-    background: var(--white); border: 1px solid var(--border); border-radius: 12px;
+    background: var(--white); border: 1px solid var(--border); border-radius: var(--r-card, 8px);
     padding: 1.375rem 1.5rem; margin-bottom: 1.125rem;
 }
 .pd-card > h2 {
@@ -89,7 +89,7 @@
 
 .pd-chips { display: flex; flex-wrap: wrap; gap: .375rem; }
 .pd-chip {
-    padding: .25rem .65rem; border: 1px solid var(--border); border-radius: 999px;
+    padding: .25rem .65rem; border: 1px solid var(--border); border-radius: var(--r-control, 4px);
     font-size: .75rem; color: var(--ink); background: var(--white);
 }
 
@@ -110,13 +110,23 @@
    dragged are reproduced here exactly rather than being re-guessed. */
 .pd-prose table { border-collapse: collapse; margin: .5rem 0; width: 100%; table-layout: fixed; }
 .pd-prose td, .pd-prose th { border: 1px solid currentColor; padding: .35rem .6rem; background: #fff; }
+/* A picture pasted into a section. Centred on its own line, as it was while
+   it was being written, and never wider than the column it sits in. */
+.pd-prose img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: .75rem auto;
+    border: 1px solid var(--border);
+    border-radius: var(--r-card, 8px);
+}
 .pd-prose-scroll { overflow-x: auto; }
 
 /* Step 3 — the files that went with it */
 .pd-files { display: grid; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: .75rem; }
 .pd-file {
     display: flex; flex-direction: column; gap: .5rem; min-height: 7rem;
-    padding: .875rem; border: 1px solid var(--border); border-radius: 10px;
+    padding: .875rem; border: 1px solid var(--border); border-radius: var(--r-card, 8px);
     text-decoration: none; background: var(--white); transition: border-color .15s, box-shadow .15s;
 }
 .pd-file:hover { border-color: var(--soft-maroon); box-shadow: 0 2px 10px rgba(51,0,0,.06); }
@@ -164,7 +174,7 @@
    itself — the inline margins dotted through the markup were what let it sit
    flush against the file cards and the checklist. */
 .pd-note {
-    display: flex; gap: .5rem; padding: .75rem .875rem; border-radius: 8px;
+    display: flex; gap: .5rem; padding: .75rem .875rem; border-radius: var(--r-card, 8px);
     background: var(--cream); font-size: .75rem; color: var(--ink); line-height: 1.6;
     margin: 0 0 1.25rem;
 }

@@ -208,7 +208,7 @@ ob_start();
    the button next to the one you meant to press. */
 .card-actions .draft-delete-form { margin-left: auto; }
 .btn-card-delete {
-    background: none; border: 1px solid transparent; border-radius: 6px;
+    background: none; border: 1px solid transparent; border-radius: var(--r-control, 4px);
     padding: .35rem; color: var(--grey); cursor: pointer;
     display: inline-flex; align-items: center; transition: color .15s, background .15s, border-color .15s;
 }
@@ -564,8 +564,8 @@ ob_start();
 
                 <div class="filter-section">
                     <span class="filter-section-label">Order By</span>
-                    <label class="filter-radio"><input type="radio" name="sort" value="asc"  <?= $sort_param === 'asc'  ? 'checked' : '' ?>> Ascending</label>
-                    <label class="filter-radio"><input type="radio" name="sort" value="desc" <?= $sort_param === 'desc' ? 'checked' : '' ?>> Descending</label>
+                    <label class="filter-radio"><input type="radio" name="sort" value="desc" <?= $sort_param === 'desc' ? 'checked' : '' ?>> Newest first</label>
+                    <label class="filter-radio"><input type="radio" name="sort" value="asc"  <?= $sort_param === 'asc'  ? 'checked' : '' ?>> Oldest first</label>
                 </div>
 
                 <div class="filter-section">

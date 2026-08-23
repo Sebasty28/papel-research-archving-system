@@ -27,22 +27,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($action === 'reset_password') {
             $user_id = (int) ($_POST['user_id'] ?? 0);
             $new_pass = $_POST['new_password'] ?? '';
-            if ($user_id > 0 && $new_pass && $adminService->resetPassword($user_id, $new_pass))
+            $before = account_snapshot($user_id);
+            if ($user_id > 0 && $new_pass && $adminService->resetPassword($user_id, $new_pass)) {
                 flash('success', 'Password reset successfully.');
-            else
+                // Answered: whatever was asked about this password is settled.
+                support_requests_clear($user_id, 'password');
+                // And they are told, with the password they now have to use.
+                account_change_notice($user_id, $before, account_snapshot($user_id),
+                                      $new_pass, (string)($u['full_name'] ?? ''));
+                // The only time this value is ever shown; nothing stores it.
+                flash('new_password', json_encode([
+                    'who' => trim($_POST['full_name'] ?? ''), 'pw' => $new_pass]));
+            } else {
                 flash('error', 'Failed to reset password.');
+            }
         } elseif ($action === 'update_user') {
             /* Same panel, same fields — only the action underneath it changed.
                A blank password means "leave theirs alone". */
-            $adminService->updateAdmin($_POST, (int) ($_POST['user_id'] ?? 0));
+            $edited = (int) ($_POST['user_id'] ?? 0);
+            $before = account_snapshot($edited);
+            $adminService->updateAdmin($_POST, $edited);
             flash('success', trim($_POST['full_name'] ?? 'That account') . "'s details were saved.");
+            // Answered: the details asked about have been saved.
+            support_requests_clear($edited, 'account');
+            account_change_notice($edited, $before, account_snapshot($edited),
+                                  trim((string)($_POST['password'] ?? '')),
+                                  (string)($u['full_name'] ?? ''));
         } elseif ($action === 'create_user') {
-            $data = $_POST;
-            $data['admin_level'] = (int) ($data['admin_level'] ?? 1);
-            /* The birthdate fields went when sign-in stopped asking for one;
-               createAdmin sets the column to null itself. */
-            $msg = $adminService->createAdmin($data, $u['user_id']);
+            /* The position chosen on the form decides the role and the level;
+               the birthdate column is set to null by createAdmin itself. */
+            $msg = $adminService->createAdmin($_POST, $u['user_id']);
             flash('success', $msg);
+            flash('new_password', json_encode([
+                'who' => trim($_POST['full_name'] ?? ''), 'pw' => $_POST['password'] ?? '']));
         }
     } catch (InvalidArgumentException $e) {
         /* Something about what was typed. These messages are written for the
@@ -61,16 +78,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
-$admin_l1 = $adminService->getAdminsByLevel(1);
-$admin_l2 = $adminService->getAdminsByLevel(2);
+/* The Director fills three positions. What the database stores for each is in
+   staff_positions(); the Head of Academic Programs is listed from both kinds of
+   record, because head_academic and an admin at level 2 mean the same job. */
+$OFFERED = ['Research Coordinator', 'Head of Academic Affairs', 'Librarian'];
+$byPosition = $adminService->getStaffByPosition($OFFERED);
 
 /**
- * One admin level's accounts, in the shape the other management pages use.
+ * One position's accounts, in the shape the other management pages use.
  *
- * Both levels are listed the same way; an archived account keeps its level and
- * is marked on the row, so a status column is not needed to say so.
+ * Every position is listed the same way; an archived account keeps its position
+ * and is marked on the row, so a status column is not needed to say so.
  */
-function admin_table(array $rows, int $level): void {
+function admin_table(array $rows, string $position): void {
     ?>
     <div class="mgmt-panel">
         <div class="mgmt-scroll">
@@ -78,19 +98,17 @@ function admin_table(array $rows, int $level): void {
                 <thead>
                     <tr>
                         <th>Admin</th>
-                        <th><?= $level === 2 ? 'Head of Academic Programs ID' : 'Research Coordinator ID' ?></th>
-                        <th>Password</th>
+                        <th><?= e($position) ?> ID</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                 <?php if (!$rows): ?>
                     <tr>
-                        <td colspan="4">
+                        <td colspan="3">
                             <div class="mgmt-empty">
                                 <span class="material-symbols-outlined">badge</span>
-                                No <?= $level === 2 ? 'Head of Academic Programs' : 'Research Coordinator' ?>
-                                accounts yet. Create one on the left.
+                                No <?= e($position) ?> accounts yet. Create one on the left.
                             </div>
                         </td>
                     </tr>
@@ -102,7 +120,7 @@ function admin_table(array $rows, int $level): void {
                         data-full-name="<?= e($r['full_name']) ?>"
                         data-faculty-id="<?= e($r['faculty_id'] ?? '') ?>"
                         data-email="<?= e($r['email']) ?>"
-                        data-admin-level="<?= (int)$r['admin_level'] ?>">
+                        data-position="<?= e(staff_position_of($r)) ?>">
                         <td class="mgmt-name">
                             <?= e($r['full_name']) ?>
                             <?php if ($off): ?><span class="mgmt-tag">Archived</span><?php endif; ?>
@@ -112,7 +130,6 @@ function admin_table(array $rows, int $level): void {
                             <?= e($r['faculty_id'] ?: '—') ?>
                             <span class="mgmt-sub">Added <?= e(date('M j, Y', strtotime($r['created_at']))) ?></span>
                         </td>
-                        <td class="mgmt-pass"><?= e($r['plain_password'] ?? '—') ?></td>
                         <td>
                             <div class="mgmt-actions">
                                 <?php if ($off): ?>
@@ -153,7 +170,7 @@ function admin_table(array $rows, int $level): void {
                                 <div class="modal-dialog modal-dialog-centered">
                                     <div class="modal-content">
                                         <div class="modal-header">
-                                            <h5 class="modal-title">Reset password &mdash; <?= e($r['full_name']) ?></h5>
+                                            <h5 class="modal-title">Reset password for <?= e($r['full_name']) ?></h5>
                                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                                         </div>
                                         <form method="post">
@@ -167,7 +184,7 @@ function admin_table(array $rows, int $level): void {
                                                            placeholder="Min 6 chars, 1 uppercase, 1 number" required>
                                                     <small class="mgmt-hint">
                                                         <?= e($r['full_name']) ?> will need this to sign in. Tell them
-                                                        yourself &mdash; resetting does not email it.
+                                                        yourself. Resetting does not email it.
                                                     </small>
                                                 </div>
                                             </div>
@@ -189,6 +206,13 @@ function admin_table(array $rows, int $level): void {
     </div>
     <?php
 }
+/* Who on this roll has changed their own password. The tab that shows it is
+   shared with the other two consoles, so the columns and the wording cannot
+   drift apart between them. */
+require_once ROOT_PATH.'/includes/password_audit_tab.php';
+/* Every one of them: the Director is the desk of last resort, and is the
+   only reader with nobody above them to escalate to. */
+$password_rows = password_audit_rows(['admin', 'head_academic', 'librarian']);
 ?>
 <!doctype html>
 <html lang="en">
@@ -199,6 +223,7 @@ function admin_table(array $rows, int $level): void {
 <?php require_once ROOT_PATH.'/includes/site_head.php'; ?>
 <?php require_once ROOT_PATH.'/includes/manage_console.php'; ?>
 <?php require_once ROOT_PATH.'/includes/manage_page.php'; ?>
+<?php require_once ROOT_PATH.'/includes/flash_banner.php'; ?>
 </head>
 <body>
 <?php require ROOT_PATH.'/includes/site_header.php'; ?>
@@ -217,19 +242,15 @@ function admin_table(array $rows, int $level): void {
 
     <div class="mgmt-head">
         <h1>Manage Admins</h1>
-        <p>Create and manage Research Coordinator and Head of Academic Programs accounts.</p>
+        <p>Create and manage Research Coordinator, Head of Academic Programs and Librarian accounts.</p>
     </div>
 
-    <?php if ($m = flash('error')): ?>
-        <div class="mgmt-flash is-bad" role="alert">
-            <span class="material-symbols-outlined">error</span><span><?= e($m) ?></span>
-        </div>
-    <?php endif; ?>
-    <?php if ($m = flash('success')): ?>
-        <div class="mgmt-flash is-good" role="status">
-            <span class="material-symbols-outlined">check_circle</span><span><?= e($m) ?></span>
-        </div>
-    <?php endif; ?>
+        <?php flash_banner(); ?>
+    <?php
+    /* The new password, shown once and only here. Reads through flash(), so a
+       refresh does not bring it back. */
+    require ROOT_PATH.'/includes/password_once.php';
+    ?>
 
     <div class="mgmt-grid">
 
@@ -237,14 +258,13 @@ function admin_table(array $rows, int $level): void {
         <section class="mgmt-panel" id="formPanel">
             <div class="mgmt-panel-head">
                 <span class="material-symbols-outlined" id="formIcon">person_add</span>
-                <span id="formTitle">New admin account</span>
+                <span id="formTitle">New staff account</span>
             </div>
             <div class="mgmt-panel-body">
                 <form method="post" class="js-manage-form" id="adminForm">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" id="formAction" value="create_user">
                     <input type="hidden" name="user_id" id="formUserId" value="">
-                    <input type="hidden" name="role" value="admin">
 
                     <div class="mgmt-editing-note">
                         <span class="material-symbols-outlined">edit</span>
@@ -253,13 +273,17 @@ function admin_table(array $rows, int $level): void {
                     </div>
 
                     <div class="mgmt-field">
-                        <label for="admin_level">Admin level <span class="req">*</span></label>
-                        <select name="admin_level" id="admin_level" required>
-                            <option value="">Select admin level</option>
-                            <option value="1">Admin 1 &mdash; Research Coordinator</option>
-                            <option value="2">Admin 2 &mdash; Head of Academic Programs</option>
+                        <label for="position">Position <span class="req">*</span></label>
+                        <select name="position" id="position" required>
+                            <option value="">Select position</option>
+                            <?php foreach ($OFFERED as $pos): ?>
+                                <option value="<?= e($pos) ?>"><?= e($pos) ?></option>
+                            <?php endforeach; ?>
                         </select>
-                        <small class="mgmt-hint">Admin 1 approves first, then Admin 2.</small>
+                        <small class="mgmt-hint">
+                            The Research Coordinator approves papers; the Head of Academic Programs
+                            and the Librarian read what is published.
+                        </small>
                     </div>
 
                     <div class="mgmt-field">
@@ -300,7 +324,7 @@ function admin_table(array $rows, int $level): void {
                     <div class="mgmt-form-actions">
                         <button type="submit" class="btn-sm-maroon mgmt-submit" id="formSubmit">
                             <span class="material-symbols-outlined mi-18" id="formSubmitIcon">add</span>
-                            <span id="formSubmitText">Create admin account</span>
+                            <span id="formSubmitText">Create account</span>
                         </button>
                         <button type="button" class="btn-sm-outline mgmt-submit" id="formCancel" hidden>
                             Cancel
@@ -316,14 +340,14 @@ function admin_table(array $rows, int $level): void {
              on the row instead. -->
         <section>
             <div class="mgmt-tabs" role="tablist">
-                <button type="button" class="mgmt-tab is-on" data-pane="l1Pane" role="tab">
-                    Admin 1 &middot; Coordinator
-                    <span class="count"><?= count($admin_l1) ?></span>
-                </button>
-                <button type="button" class="mgmt-tab" data-pane="l2Pane" role="tab">
-                    Admin 2 &middot; HAP
-                    <span class="count"><?= count($admin_l2) ?></span>
-                </button>
+                <?php $first = true; foreach ($OFFERED as $i => $pos): ?>
+                    <button type="button" class="mgmt-tab <?= $first ? 'is-on' : '' ?>"
+                            data-pane="pane<?= $i ?>" role="tab">
+                        <?= e($pos === 'Head of Academic Affairs' ? 'Head of Academic Programs' : $pos) ?>
+                        <span class="count"><?= count($byPosition[$pos]) ?></span>
+                    </button>
+                <?php $first = false; endforeach; ?>
+                <?php password_audit_tab($password_rows); ?>
 
                 <span class="mgmt-sort" id="sortChips">
                     <span class="mgmt-chips-label">Sort</span>
@@ -333,13 +357,13 @@ function admin_table(array $rows, int $level): void {
                 </span>
             </div>
 
-            <div id="l1Pane" class="js-pane">
-                <?php admin_table($admin_l1, 1); ?>
-            </div>
-            <div id="l2Pane" class="js-pane" hidden>
-                <?php admin_table($admin_l2, 2); ?>
-            </div>
+            <?php foreach ($OFFERED as $i => $pos): ?>
+                <div id="pane<?= $i ?>" class="js-pane" <?= $i === 0 ? '' : 'hidden' ?>>
+                    <?php admin_table($byPosition[$pos], $pos); ?>
+                </div>
+            <?php endforeach; ?>
 
+            <?php password_audit_pane($password_rows, 'staff'); ?>
         </section>
 
     </div>
@@ -348,36 +372,27 @@ function admin_table(array $rows, int $level): void {
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 document.addEventListener('DOMContentLoaded', function () {
 
-    /* Twelve characters with an uppercase and a digit guaranteed, then shuffled
-       so those two are not always in front. */
-    var genBtn = document.getElementById('generatePasswordBtn');
-    if (genBtn) {
-        genBtn.addEventListener('click', function () {
-            var upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
-                digits = '0123456789',
-                all = 'abcdefghijklmnopqrstuvwxyz' + upper + digits + '!@#$%',
-                pick = function (s) { return s.charAt(Math.floor(Math.random() * s.length)); },
-                pass = pick(upper) + pick(digits);
-            for (var i = 2; i < 12; i++) { pass += pick(all); }
-            document.getElementById('password').value =
-                pass.split('').sort(function () { return Math.random() - 0.5; }).join('');
-        });
-    }
+    /* The Generate button lives in includes/password_generator.php — it needs
+       the name and ID fields, which are shared by all three create forms. */
 
     /* The ID field names whichever role is being created, so it re-labels when
        the level changes — and when a row is loaded for editing. */
-    var levelSelect = document.getElementById('admin_level');
+    var positionSelect = document.getElementById('position');
     var idLabel = document.getElementById('idLabel');
     var idInput = document.getElementById('faculty_id');
 
-    function labelForLevel(level) {
-        return String(level) === '2' ? 'Head of Academic Programs ID' : 'Research Coordinator ID';
-    }
+    /* The ID box names whichever position is being filled. */
+    var ID_LABELS = {
+        'Research Coordinator':     ['Research Coordinator ID', 'e.g. COORDINATOR-01'],
+        'Head of Academic Affairs': ['Head of Academic Programs ID', 'e.g. HAP-2026-001'],
+        'Librarian':                ['Librarian ID', 'e.g. LIB-2026-001']
+    };
     function relabelId() {
-        idLabel.textContent = labelForLevel(levelSelect.value);
-        idInput.placeholder = levelSelect.value === '2' ? 'e.g. HAP-2026-001' : 'e.g. COORDINATOR-01';
+        var pair = ID_LABELS[positionSelect.value] || ['Staff ID', 'e.g. STF-2026-001'];
+        idLabel.textContent = pair[0];
+        idInput.placeholder = pair[1];
     }
-    levelSelect.addEventListener('change', relabelId);
+    positionSelect.addEventListener('change', relabelId);
 
     // Tabs
     var tabs = document.querySelectorAll('.mgmt-tab');
@@ -424,10 +439,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function toCreateMode() {
         panel.classList.remove('is-editing');
-        document.getElementById('formTitle').textContent = 'New admin account';
+        document.getElementById('formTitle').textContent = 'New staff account';
         document.getElementById('formIcon').textContent = 'person_add';
         document.getElementById('formSubmitIcon').textContent = 'add';
-        document.getElementById('formSubmitText').textContent = 'Create admin account';
+        document.getElementById('formSubmitText').textContent = 'Create account';
         document.getElementById('passReq').hidden = false;
         document.getElementById('passHint').textContent =
             'At least one uppercase letter and one number.';
@@ -448,13 +463,13 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('full_name').value   = d.fullName || '';
         document.getElementById('faculty_id').value  = d.facultyId || '';
         document.getElementById('email').value       = d.email || '';
-        document.getElementById('admin_level').value = d.adminLevel || '';
+        positionSelect.value = d.position || '';
         relabelId();
         pw.value = '';
 
         document.getElementById('formAction').value = 'update_user';
         document.getElementById('formUserId').value = d.userId;
-        document.getElementById('formTitle').textContent = 'Edit admin account';
+        document.getElementById('formTitle').textContent = 'Edit staff account';
         document.getElementById('formIcon').textContent = 'edit';
         document.getElementById('formSubmitIcon').textContent = 'save';
         document.getElementById('formSubmitText').textContent = 'Save changes';
@@ -484,7 +499,8 @@ document.addEventListener('DOMContentLoaded', function () {
     cancel.addEventListener('click', toCreateMode);
 });
 </script>
-<?php require ROOT_PATH.'/includes/action_dialogs.php';
+<?php require ROOT_PATH.'/includes/password_generator.php';
+require_once ROOT_PATH.'/includes/action_dialogs.php';
 require ROOT_PATH.'/includes/manage_save_confirm.php';
 require ROOT_PATH.'/includes/scroll_jump.php';
 require ROOT_PATH.'/includes/site_footer.php'; ?>

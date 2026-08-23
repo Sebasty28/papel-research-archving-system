@@ -14,7 +14,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
 <?php require_once ROOT_PATH.'/includes/page_theme.php'; ?>
 <style nonce="<?= $nonce ?>">
 /* ===== Role table ===== */
-.role-table { width: 100%; border-collapse: collapse; margin-top: 1rem; border-radius: 8px; overflow: hidden; }
+.role-table { width: 100%; border-collapse: collapse; margin-top: 1rem; border-radius: var(--r-control, 4px); overflow: hidden; }
 .role-table th {
     background: var(--cream); padding: .875rem 1rem;
     text-align: left; font-size: .8125rem; font-weight: 400;
@@ -25,7 +25,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
 .role-table tr:last-child td { border-bottom: none; }
 .role-badge {
     display: inline-block; padding: .2rem .7rem;
-    border-radius: 999px; font-size: .75rem; font-weight: 400;
+    border-radius: var(--r-badge, 2px); font-size: .75rem; font-weight: 400;
     background: rgba(129,4,3,.08); color: var(--maroon); white-space: nowrap;
 }
 
@@ -33,7 +33,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
 .info-tiles { display: grid; grid-template-columns: repeat(3,1fr); gap: 1rem; margin-top: 1.25rem; }
 .info-tile {
     background: var(--cream); border: 1px solid var(--border);
-    border-radius: 10px; padding: 1.25rem;
+    border-radius: var(--r-card, 8px); padding: 1.25rem;
     display: flex; flex-direction: column; gap: .5rem;
 }
 .info-tile .tile-icon { font-size: 1.5rem; color: var(--maroon); }
@@ -67,7 +67,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
 
     <div class="page-intro">
         <h1>About PAPEL</h1>
-        <p>The PUP Bi&ntilde;an Digital Research Repository &mdash; preserving and sharing the intellectual outputs of our academic community.</p>
+        <p>The PUP Bi&ntilde;an Digital Research Repository, preserving and sharing the intellectual outputs of our academic community.</p>
     </div>
 
     <div class="page-shell">

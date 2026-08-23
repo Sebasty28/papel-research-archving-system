@@ -27,7 +27,6 @@ $docs = $docsStmt->get_result();
 // Visibility Logic
 $show_keywords = !$is_guest;
 $show_full_paper = !$is_guest;
-$can_download = $u && in_array($u['user_role'], ['super_admin', 'admin', 'librarian']); // Admin = Research Coordinator
 
 ?>
 <!doctype html>
@@ -42,7 +41,7 @@ $can_download = $u && in_array($u['user_role'], ['super_admin', 'admin', 'librar
     body { background-color: #f8f9fa; font-family: 'Segoe UI', sans-serif; }
     .paper-header { background: white; padding: 40px 0; border-bottom: 1px solid #e0e0e0; margin-bottom: 30px; }
     .paper-title { font-weight: 800; color: #810403; }
-    .meta-badge { font-size: 0.9rem; padding: 8px 16px; border-radius: 20px; background: #fcf8f7; color: #810403; font-weight: 600; display: inline-block; margin-right: 10px; border: 1px solid #dca92c; }
+    .meta-badge { font-size: 0.9rem; padding: 8px 16px; border-radius: var(--r-badge, 2px); background: #fcf8f7; color: #810403; font-weight: 600; display: inline-block; margin-right: 10px; border: 1px solid #dca92c; }
     .section-title { font-weight: 700; color: #475569; text-transform: uppercase; font-size: 0.9rem; letter-spacing: 1px; margin-bottom: 15px; border-bottom: 2px solid #dca92c; display: inline-block; padding-bottom: 5px; }
     .abstract-text { font-size: 1.1rem; line-height: 1.8; color: #334155; text-align: justify; }
     .imrad-card { background: #fff; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
@@ -53,7 +52,7 @@ $can_download = $u && in_array($u['user_role'], ['super_admin', 'admin', 'librar
     .paper-preview p { text-align: justify; line-height: 1.7; color: #334155; margin-bottom: 15px; }
     .paper-preview .preview-title { text-align: center; font-weight: 800; font-size: 1.5rem; margin-bottom: 10px; color: #0f172a; text-transform: uppercase; }
     .paper-preview .preview-meta { text-align: center; margin-bottom: 30px; color: #64748b; font-style: italic; }
-    .paper-preview .abstract-section { margin-bottom: 30px; padding: 20px; background: #f8fafc; border-radius: 8px; }
+    .paper-preview .abstract-section { margin-bottom: 30px; padding: 20px; background: #f8fafc; border-radius: var(--r-control, 4px); }
     .paper-preview .imrad-section { margin-bottom: 30px; }
     /* Rich text stored by the upload page's section editors. Only the tags the
        sanitiser allows can appear here, so the rules stay deliberately narrow. */
@@ -69,6 +68,8 @@ $can_download = $u && in_array($u['user_role'], ['super_admin', 'admin', 'librar
        the whole page sideways. */
     .rich-text { overflow-x: auto; }
     .rich-text table { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 0.9rem; }
+    /* Pictures pasted into a section, never wider than the column they sit in. */
+    .rich-text img { display: block; max-width: 100%; height: auto; margin: 15px auto; border: 1px solid var(--border); border-radius: var(--r-card, 8px); }
     /* currentColor keeps the rules matched to the body text colour, the same way
        they are shown in the upload editor. */
     .rich-text th, .rich-text td { border: 1px solid currentColor; background: #fff; padding: 8px 10px; text-align: left; vertical-align: top; }
@@ -163,11 +164,7 @@ $can_download = $u && in_array($u['user_role'], ['super_admin', 'admin', 'librar
                             <?php if($paper['gdrive_file_id']): ?>
                                 <a href="<?= get_gdrive_link($paper['gdrive_file_id']) ?>" target="_blank" class="btn btn-primary px-4"><i class="bi bi-eye"></i> View Paper</a>
                             <?php else: ?>
-                                <a href="../<?= e($paper['file_path']) ?>" target="_blank" class="btn btn-primary px-4"><i class="bi bi-eye"></i> View Paper</a>
-                            <?php endif; ?>
-
-                            <?php if($can_download): ?>
-                                <a href="download.php?id=<?= $paper['paper_id'] ?>" class="btn btn-outline-dark px-4"><i class="bi bi-download"></i> Download</a>
+                                <a href="<?= e(paper_file_url(null, $paper['file_path'] ?? null)) ?>" target="_blank" class="btn btn-primary px-4"><i class="bi bi-eye"></i> View Paper</a>
                             <?php endif; ?>
                         </div>
                     </div>

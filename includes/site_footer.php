@@ -66,8 +66,27 @@ document.addEventListener('DOMContentLoaded', function () {
            a failed bookkeeping call should not strand someone on the page they
            just tried to leave. */
         notifDropdown.querySelectorAll('.notif-item').forEach(function (item) {
-            item.addEventListener('click', function () {
+            item.addEventListener('click', function (e) {
                 var id = item.getAttribute('data-notif-id');
+
+                /* An account notice has nowhere to go: what it is about is the
+                   message itself, so it opens where it is rather than sending
+                   the reader to a page that would only repeat it. */
+                var popup = item.getAttribute('data-notif-popup');
+                if (popup && window.papelShow) {
+                    e.preventDefault();
+                    var lines = [popup];
+                    (item.getAttribute('data-notif-detail') || '').split('\n')
+                        .forEach(function (row) {
+                            if (!row.trim()) return;
+                            var at = row.indexOf(':');
+                            lines.push(at === -1
+                                ? row
+                                : [row.slice(0, at).trim(), row.slice(at + 1).trim()]);
+                        });
+                    window.papelShow('Your account was updated', lines);
+                }
+
                 if (!item.classList.contains('unread')) return;
                 item.classList.remove('unread');
                 try {
@@ -195,18 +214,40 @@ document.addEventListener('DOMContentLoaded', function () {
     function updateExpandIcon() {
         if (expandIcon) expandIcon.textContent = loginPanel.classList.contains('expanded') ? 'fullscreen_exit' : 'fullscreen';
     }
-    var roleLabels = { student: 'Student ID', faculty: 'Faculty ID', guest: 'Guest ID' };
+    /* A guest signs in with the username printed on their pass, not an ID.
+       Calling it "Guest ID" sent people looking for a number they were never
+       given. The placeholder follows the label for the same reason. */
+    var roleLabels = {
+        student: 'Student ID',
+        faculty: 'Faculty ID',
+        guest:   'Guest username'
+    };
+    var rolePlaceholders = {
+        student: 'Enter your Student ID',
+        faculty: 'Enter your Faculty ID',
+        guest:   'e.g. guest_4f2a91c8'
+    };
     function selectRole(role) {
         document.querySelectorAll('.role-card').forEach(function (c) {
             c.classList.toggle('active', c.getAttribute('data-role') === role);
         });
         selectedRoleInput.value = role;
         idFieldLabel.textContent = roleLabels[role] || 'ID';
-        var isGuest = role === 'guest';
-        birthdateGroup.style.display = isGuest ? 'none' : '';
-        birthdateGroup.querySelectorAll('select').forEach(function (s) {
-            if (isGuest) s.removeAttribute('required'); else s.setAttribute('required', '');
-        });
+
+        var idInput = document.getElementById('modalIdentifier');
+        if (idInput) { idInput.placeholder = rolePlaceholders[role] || 'Enter your ID'; }
+
+        /* The birthdate was dropped from sign-in and its markup went with it,
+           but this still reached for the element and threw on every role click,
+           stopping whatever came after it. Guarded rather than deleted, so a
+           form that still carries one keeps working. */
+        if (birthdateGroup) {
+            var isGuest = role === 'guest';
+            birthdateGroup.style.display = isGuest ? 'none' : '';
+            birthdateGroup.querySelectorAll('select').forEach(function (s) {
+                if (isGuest) { s.removeAttribute('required'); } else { s.setAttribute('required', ''); }
+            });
+        }
     }
 
     document.getElementById('openModalBtn') && document.getElementById('openModalBtn').addEventListener('click', function () { openLoginModal('student'); });
@@ -242,5 +283,12 @@ document.addEventListener('DOMContentLoaded', function () {
     <?php endif; ?>
 });
 </script>
-<?php require ROOT_PATH.'/includes/theme_welcome.php';
+<?php
+/* The notification bell is on every page the header is on, and an account
+   notice opens its detail in the shared dialog rather than navigating. That
+   dialog therefore has to exist everywhere too. require_once, and the five
+   pages that pull it in themselves do the same, so only one copy is emitted
+   whichever of the two runs first. */
+require_once ROOT_PATH.'/includes/action_dialogs.php';
+require ROOT_PATH.'/includes/theme_welcome.php';
 require ROOT_PATH.'/includes/accessibility.php'; ?>

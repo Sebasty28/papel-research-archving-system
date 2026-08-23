@@ -46,8 +46,8 @@ if (empty($paper['ai_summary'])) {
         }
         
         if ((empty($text) || strlen($text) < 100) && !empty($paper['file_path'])) {
-            $localPath = __DIR__ . '/../' . $paper['file_path'];
-            if (file_exists($localPath)) {
+            $localPath = paper_file_disk_path($paper['file_path']);
+            if ($localPath !== null) {
                 $text = extract_pdf_text($localPath);
             }
         }
@@ -75,31 +75,9 @@ if (empty($paper['ai_summary'])) {
     }
 }
 
-// Handle download
-if(isset($_GET['download'])){
-  if(!$can_view) { http_response_code(403); echo '<div style="padding:2rem;text-align:center;font-family:sans-serif;"><h2>Access Denied</h2><p>You do not have permission to access this resource.</p><a href="index.php">Back to Archive</a></div>'; exit; }
-  if(!$u || !in_array($u['user_role'], ['admin', 'faculty', 'super_admin'])) { http_response_code(403); echo '<div style="padding:2rem;text-align:center;font-family:sans-serif;"><h2>Access Denied</h2><p>Only authorized users can download.</p><a href="index.php">Back to Archive</a></div>'; exit; }
-  $_dl = $conn->prepare("UPDATE analytics SET download_count=download_count+1 WHERE paper_id=?");
-  $_dl->bind_param('i', $id); $_dl->execute();
-  $path = __DIR__.'/../'.$paper['file_path'];
-  if(!is_file($path)){ http_response_code(404); echo '<div style="padding:2rem;text-align:center;font-family:sans-serif;"><h2>File Not Found</h2><p>The requested file could not be found.</p><a href="index.php">Back to Archive</a></div>'; exit; }
-  header('Content-Type: application/pdf'); 
-  header('Content-Disposition: attachment; filename="'.basename($path).'"'); 
-  header('Content-Length: '.filesize($path)); 
-  readfile($path); 
-  exit;
-}
-
-// Update view count
-$_vc = $conn->prepare("INSERT INTO analytics (paper_id, view_count) VALUES (?,1) ON DUPLICATE KEY UPDATE view_count=view_count+1");
-$_vc->bind_param('i', $id); $_vc->execute();
-
-// Get analytics
-$_an = $conn->prepare("SELECT view_count, download_count FROM analytics WHERE paper_id=?");
-$_an->bind_param('i', $id); $_an->execute();
-$analytics = $_an->get_result()->fetch_assoc();
-$views = $analytics['view_count'] ?? 0;
-$downloads = $analytics['download_count'] ?? 0;
+/* There is no download feature: a paper is read in place, through the viewer.
+   The old ?download=1 endpoint had no button pointing at it and has been
+   removed along with the readership counters it fed. */
 
 // Permission check for full access
 $can_full_access = $u && in_array($u['user_role'], ['admin', 'super_admin']);
@@ -110,8 +88,18 @@ $can_full_access = $u && in_array($u['user_role'], ['admin', 'super_admin']);
    deliberately has no approve control, and this does not give them one. */
 $can_view_file = $u && in_array($u['user_role'], ['admin', 'faculty', 'super_admin', 'head_academic'], true);
 
-// Handle Manual AI Regeneration
+/* Handle Manual AI Regeneration.
+
+   Nothing in the codebase posts regenerate_ai any more — the button that drove
+   it is gone, so the only way in is a hand-written request. That is precisely
+   why the token check matters: without it any page could make a signed-in
+   adviser or coordinator spend Groq quota and overwrite the stored AI summary,
+   methodology and field of any paper by id.
+
+   Refused outright rather than redirected: a stale form cannot be the cause
+   when no form posts this at all. */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['regenerate_ai']) && ($can_full_access || ($u && $u['user_role'] === 'faculty'))) {
+    csrf_verify();
     try {
         $text = '';
         // 1. Try extracting from Google Drive
@@ -137,8 +125,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['regenerate_ai']) && (
         
         // 2. Fallback: Try extracting from local file if GDrive failed or returned empty text
         if ((empty($text) || strlen($text) < 100) && !empty($paper['file_path'])) {
-            $localPath = __DIR__ . '/../' . $paper['file_path'];
-            if (file_exists($localPath)) {
+            $localPath = paper_file_disk_path($paper['file_path']);
+            if ($localPath !== null) {
                 $text = extract_pdf_text($localPath);
             }
         }
@@ -184,19 +172,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['regenerate_ai']) && (
 <?php require_once ROOT_PATH.'/includes/console_shell.php'; ?>
 <?php require_once ROOT_PATH.'/includes/paper_record_css.php'; ?>
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
-/* Readership figures, which only the public page carries. */
-.vp-stats { display: flex; gap: 1.5rem; flex-wrap: wrap; }
-.vp-stat-num {
-    display: block; font-family: var(--font-head); font-size: 1.25rem;
-    font-weight: 600; color: var(--maroon); line-height: 1.2;
-}
-.vp-stat-label { font-size: .6875rem; text-transform: uppercase; letter-spacing: .04em; color: var(--grey); }
-
 /* Short answers sit together on one line; the long ones are prose below. */
 .vp-ai-chips { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: .25rem; }
 .vp-ai-chip {
     display: inline-flex; align-items: baseline; gap: .4rem;
-    padding: .4rem .75rem; border: 1px solid var(--border); border-radius: 8px;
+    padding: .4rem .75rem; border: 1px solid var(--border); border-radius: var(--r-control, 4px);
     background: var(--cream);
 }
 .vp-ai-chip-label {
@@ -206,7 +186,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['regenerate_ai']) && (
 .timer-badge {
     position: fixed; top: 72px; right: 1.5rem; z-index: 950;
     display: inline-flex; align-items: center; gap: .4rem;
-    padding: .4rem .75rem; border-radius: 999px;
+    padding: .4rem .75rem; border-radius: var(--r-badge, 2px);
     background: var(--maroon); color: #fff; font-size: .75rem;
     box-shadow: 0 4px 14px rgba(51,0,0,.2);
 }
@@ -408,16 +388,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['regenerate_ai']) && (
                     <?php endif; ?>
                 </div>
             <?php endif; ?>
-        </div>
-
-        <div class="pd-card">
-            <h2><span class="material-symbols-outlined">insights</span> Readership</h2>
-            <div class="vp-stats">
-                <div>
-                    <span class="vp-stat-num"><?= number_format((int)$views) ?></span>
-                    <span class="vp-stat-label">Views</span>
-                </div>
-            </div>
         </div>
 
     </div>

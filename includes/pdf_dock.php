@@ -38,9 +38,16 @@
 .pdf-dock-head {
     display: flex; align-items: center; gap: .5rem;
     padding: .625rem .875rem;
-    background: var(--maroon); color: #fff;
+    /* The same token .crumb-bar uses. The two sit edge to edge across the top
+       of the page, and on --maroon-surface this bar was the lighter of the
+       two, which read as a seam rather than one strip. */
+    background: var(--maroon-surface-hover); color: #fff;
     font-size: .8125rem;
 }
+/* The file-type icon. This was a style attribute, which the CSP drops, so it
+   was rendering at the 24px default rather than the 18px it asked for and
+   sitting taller than the text beside it. */
+.pdf-dock-head > .material-symbols-outlined { font-size: 18px; }
 .pdf-dock-name {
     flex: 1 1 auto; min-width: 0;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -48,7 +55,7 @@
 .pdf-dock-btn {
     display: inline-flex; align-items: center; justify-content: center;
     width: 1.75rem; height: 1.75rem; flex: 0 0 auto;
-    border: none; border-radius: 6px; background: none; color: #fff;
+    border: none; border-radius: var(--r-control, 4px); background: none; color: #fff;
     cursor: pointer; text-decoration: none;
 }
 .pdf-dock-btn:hover { background: rgba(255, 255, 255, .18); color: #fff; }
@@ -109,6 +116,22 @@ body.pdf-docked > main.wrap {
     max-width: none;
     transition: margin-left .18s ease;
 }
+/* The margin alone was not enough, and the page grew a horizontal scrollbar
+   exactly as wide as the panel.
+
+   Two things conspire. `body > main { width: 100% }` gives the record an
+   explicit width, and with border-box that is the full width of the body; a
+   left margin then pushes it that far past the right edge instead of making it
+   narrower. And <body> is a flex container here, so the record is a flex item
+   with min-width:auto and will not shrink below its content either way.
+
+   Taking the panel out of the width is what actually makes room. min-width is
+   released so the flex item is allowed to be that narrow. */
+body.pdf-docked > main.wrap {
+    width: calc(100% - var(--pdf-dock-w) - 2.5rem);
+    min-width: 0;
+    transition: margin-left .18s ease, width .18s ease;
+}
 /* The panel already starts below the header, so nothing needs to move it. */
 
 /* Which file is being shown. */
@@ -122,18 +145,20 @@ body.pdf-docked .pd-back { margin-left: 0; }
 @media (max-width: 900px) {
     :root { --pdf-dock-w: 100vw; }
     .pdf-dock { max-width: none; }
-    /* The panel covers the page at this width, so there is nothing to shift. */
+    /* The panel covers the page at this width, so there is nothing to shift,
+       and the width taken off above has to go back with it. */
     body.pdf-docked .crumb-inner,
     body.pdf-docked > main.wrap { margin-left: auto; margin-right: auto; }
+    body.pdf-docked > main.wrap { width: 100%; }
 }
 </style>
 
 <div class="pdf-dock" id="pdfDock" role="region" aria-label="Document preview">
     <div class="pdf-dock-head">
-        <span class="material-symbols-outlined" style="font-size:18px;">picture_as_pdf</span>
+        <span class="material-symbols-outlined">picture_as_pdf</span>
         <span class="pdf-dock-name" id="pdfDockName">Document</span>
-        <a class="pdf-dock-btn" id="pdfDockOpen" href="#" target="_blank" rel="noopener"
-           title="Open in a new tab"><span class="material-symbols-outlined">open_in_new</span></a>
+        <?php /* No "open in a new tab" here: the Drive viewer inside the frame
+                 has its own, a few pixels below this one. */ ?>
         <button type="button" class="pdf-dock-btn" id="pdfDockClose"
                 title="Close preview" aria-label="Close preview"><span class="material-symbols-outlined">close</span></button>
     </div>
@@ -150,7 +175,6 @@ document.addEventListener('DOMContentLoaded', function () {
     var dock  = document.getElementById('pdfDock');
     var frame = document.getElementById('pdfDockFrame');
     var name  = document.getElementById('pdfDockName');
-    var open  = document.getElementById('pdfDockOpen');
 
     function close() {
         dock.classList.remove('is-open');
@@ -179,7 +203,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
         var label = link.querySelector('.pd-file-name');
         name.textContent = label ? label.textContent.trim() : 'Document';
-        open.href = href;
         frame.src = href;
         dock.classList.add('is-open');
         document.body.classList.add('pdf-docked');

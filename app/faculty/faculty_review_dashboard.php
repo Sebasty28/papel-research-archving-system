@@ -167,6 +167,8 @@ $RC = [
     'approve_lead' => 'This forwards the paper to the Research Coordinator, who makes the final decision.',
     'primary'      => ['href' => 'faculty_manage_students.php', 'icon' => 'group', 'label' => 'My Students'],
     'quick' => [
+        ['href' => BASE_URL.'/app/student/student_upload_ai.php', 'icon' => 'upload_file', 'label' => 'Upload Paper',
+         'desc' => 'Add a paper of your own. It is published straight away, with no review'],
         ['href' => 'faculty_manage_students.php', 'icon' => 'group', 'label' => 'My Students',
          'desc' => $student_count . ' student ' . ($student_count === 1 ? 'account' : 'accounts') . ' — add, edit or reset one'],
         ['href' => BASE_URL.'/analytics/analytics_dashboard.php', 'icon' => 'insights', 'label' => 'Analytics',

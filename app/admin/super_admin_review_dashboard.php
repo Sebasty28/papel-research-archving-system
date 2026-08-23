@@ -93,6 +93,8 @@ $RC = [
     'review'  => null,        // read-only: approving is not this desk's step
     'primary' => ['href' => 'super_admin_manage_admins.php', 'icon' => 'admin_panel_settings', 'label' => 'Manage Admins'],
     'quick' => [
+        ['href' => BASE_URL.'/app/student/student_upload_ai.php', 'icon' => 'upload_file', 'label' => 'Upload Paper',
+         'desc' => 'Add a paper of your own. It is published straight away, with no review'],
         ['href' => 'super_admin_manage_admins.php', 'icon' => 'admin_panel_settings', 'label' => 'Manage Admins',
          'desc' => $admin_count . ' staff ' . ($admin_count === 1 ? 'account' : 'accounts') . ' — add, edit or reset one'],
         ['href' => BASE_URL.'/analytics/analytics_dashboard.php', 'icon' => 'insights', 'label' => 'Analytics',

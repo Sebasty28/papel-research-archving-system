@@ -1,28 +1,12 @@
 <?php
 
-function workflow_statuses(): array {
-    return [
-        'draft',
-        'pending_faculty',
-        'pending_admin',
-        'pending_admin_l1',
-        'pending_admin_l2',
-        'pending_head_academic',
-        'pending_super_admin',
-        'approved',
-        'declined',
-        'archived'
-    ];
-}
-
-function workflow_stage_definitions(): array {
-    return [
-        1 => ['label' => 'Faculty', 'statuses' => ['pending_faculty']],
-        2 => ['label' => 'Research Coordinator', 'statuses' => ['pending_admin_l1', 'pending_admin']],
-        3 => ['label' => 'HAP', 'statuses' => ['pending_head_academic', 'pending_admin_l2']],
-        4 => ['label' => 'Director', 'statuses' => ['pending_super_admin', 'approved']],
-    ];
-}
+/* workflow_statuses() and workflow_stage_definitions() used to sit here. Both
+   were dead — nothing called either — and the second still laid out four stages
+   ending at the Director, contradicting workflow_progress_steps() below, which
+   correctly stops at the Research Coordinator. Since this file is where anyone
+   would come to look the chain up, a wrong answer in it is worse than no
+   answer. workflow_process_statuses() below still lists the legacy statuses,
+   because papers can still carry them. */
 
 function workflow_process_statuses(): array {
     return ['pending_faculty', 'pending_admin', 'pending_admin_l1', 'pending_admin_l2', 'pending_head_academic', 'pending_super_admin'];

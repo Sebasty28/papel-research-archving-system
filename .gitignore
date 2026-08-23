@@ -3,6 +3,10 @@
 google_credentials.json
 gdrive_token.json
 cacert.pem
+# The database CA a hosted provider hands you. Not a secret in the way a
+# password is, but it belongs to one service and one account, so it stays out.
+config/certs/
+*.pem
 # Google hands these out with a name like
 # client_secret_<id>.apps.googleusercontent.com.json — one was sitting in the
 # project root, untracked but unignored, one "git add -A" away from being public.
@@ -20,6 +24,8 @@ composer.phar
 **/uploads/supporting_docs/**
 **/uploads/drafts/**
 **/uploads/temp/**
+# Pictures pasted into the written sections. Students' own work as well.
+**/uploads/section_images/**
 !**/uploads/.htaccess
 !**/uploads/index.php
 

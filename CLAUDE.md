@@ -42,7 +42,7 @@ feedback. So `draft` means either "never submitted" *or* "returned" — see the
 | `admin` + `admin_level=2` | Head of Academic Programs | `app/faculty/head_review_dashboard.php` |
 | `head_academic` | Head of Academic Programs | same page as above |
 | `super_admin` | Director | `app/admin/super_admin_review_dashboard.php` |
-| `librarian` | Librarian | `app/guest/admin_manage_guests.php` |
+| `librarian` | Librarian | `app/librarian/librarian_manage_guests.php` |
 
 **Two roles do the HAP job** — `head_academic`, and `admin` at level 2. Both land
 on the same desk. They have not been consolidated; be careful when writing a
@@ -63,6 +63,21 @@ The site's login slide-in used a class literally called `.modal-backdrop` — th
 same class Bootstrap generates. Every Bootstrap modal inherited its
 `z-index: 1100` and rendered *underneath* its own veil. It is now
 `.login-backdrop`. Do not reintroduce a class that Bootstrap also generates.
+
+### `style="..."` attributes are dropped
+
+`style-src` in the CSP has no `'unsafe-inline'`, and that blocks style
+*attributes* in markup just as it blocks an unnonced `<style>` element. A div
+carrying `style="display:flex;margin-bottom:.75rem"` computes as `display:block`
+with `margin-bottom:0px`. It fails silently, so it reads as a layout bug.
+
+Anything positional goes in a `<style nonce="<?= csp_nonce() ?>">` block or the
+shared stylesheet. Setting `el.style.x` from JavaScript is fine, since the CSSOM
+is not covered by the policy — which is why some of this looks like it works.
+
+About 59 of these attributes are still scattered through the app. Most are
+harmless (duplicating a rule the stylesheet already has) but none of them do
+anything.
 
 ### `bind_param` type-string length
 
@@ -99,6 +114,7 @@ its own palette is a bug, not a style choice.
 | `review_console.php` | The whole review desk. Four roles share it — configure with `$RC` |
 | `manage_page.php` | The `mgmt-*` stylesheet for the three management consoles |
 | `manage_console.php` | Bootstrap-class re-skin for management pages |
+| `password_generator.php` | The Generate button on the create forms — builds `RayverReyes-056` from the name and ID already typed |
 | `action_dialogs.php` | Site-styled confirm on any `[data-confirm]` element |
 | `manage_save_confirm.php` | "Save these changes?" with a field-by-field diff |
 | `theme.php` | Palette + light/dark, applied pre-paint |

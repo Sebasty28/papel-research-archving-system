@@ -5,6 +5,37 @@ $u = current_user();
 $conn = db();
 $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
 
+/* Who hears about a password being changed.
+
+   There is no supervisor column on an account, but there is created_by, and an
+   account is made by the desk responsible for it. Following that one link gives
+   the whole chain without naming a single role here:
+
+       a student's goes to the Research Adviser who enrolled them
+       an adviser's to the Research Coordinator who added them
+       a Coordinator's, a Head's and the Librarian's to the Director
+       the Director's to nobody, because nobody created that account
+
+   Should somebody later be enrolled from a different desk, the notice follows
+   the account rather than an assumption written down here. */
+$notify_upline = null;
+$uq = $conn->prepare(
+    "SELECT c.user_id, c.full_name, c.user_role, c.admin_level
+       FROM users me
+       JOIN users c ON c.user_id = me.created_by
+      WHERE me.user_id = ?
+        AND c.is_active = 1
+        AND c.user_id <> me.user_id     -- an account that made itself tells nobody
+      LIMIT 1");
+$uq->bind_param('i', $u['user_id']);
+$uq->execute();
+$notify_upline = $uq->get_result()->fetch_assoc() ?: null;
+$uq->close();
+
+// account_position() in core.php names every role the way the rest of the
+// system does; this page used to carry its own copy of that list.
+$notify_role = $notify_upline ? account_position($notify_upline) : '';
+
 // ---- Change password ----
 // Runs before any output so the redirect below is safe.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'change_password') {
@@ -29,11 +60,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'chang
         flash('error', 'Your new password must be different from your current one.');
     } else {
         $new_hash = password_hash($new, PASSWORD_DEFAULT);
-        $up = $conn->prepare("UPDATE users SET password = ?, plain_password = NULL WHERE user_id = ?");
+        /* This used to clear plain_password alongside the hash, back when the
+           password was also stored in readable form. That column is gone, so
+           naming it here made prepare() fail and every self-service password
+           change return a 500. */
+        $up = $conn->prepare("UPDATE users SET password = ? WHERE user_id = ?");
         $up->bind_param('si', $new_hash, $u['user_id']);
         $up->execute();
         $up->close();
-        flash('success', 'Your password has been updated.');
+
+        /* The change itself is written down, whether or not there is anybody
+           to notify. A notice is read once and gone; the roll of who has
+           changed theirs, when and how often outlives it, and the Director has
+           nobody above them but still belongs in that list. */
+        // Their own doing, so the roll names them as the one who did it.
+        password_change_record((int)$u['user_id'], (int)$u['user_id']);
+
+        /* The person who created the account is told that it happened, and
+           nothing more. No password, old or new, goes into this message or
+           anywhere near it: the point of the notice is that somebody who should
+           not have changed it can be caught, not that a second person learns
+           the credential. */
+        if ($notify_upline) {
+            $note = $conn->prepare(
+                "INSERT INTO notifications (user_id, paper_id, notification_type, message)
+                 VALUES (?, NULL, 'security', ?)");
+            /* Who, and when, and nothing else. No password, old or new, goes
+               into this message or anywhere near it: the point is that a change
+               nobody authorised can be spotted, not that a second person learns
+               the credential. The role is included so the reader knows why it
+               reached them. */
+            $msg = trim((string)($u['full_name'] ?? 'Someone'))
+                 . ' (' . account_position($u) . ') changed their account password on '
+                 . date('j M Y \a\t g:i A') . '.';
+            $note->bind_param('is', $notify_upline['user_id'], $msg);
+            $note->execute();
+            $note->close();
+        }
+
+        flash('success', $notify_upline
+            ? 'Your password has been updated. ' . $notify_upline['full_name'] . ' has been notified.'
+            : 'Your password has been updated.');
     }
     header('Location: settings.php');
     exit;
@@ -54,10 +121,11 @@ $expiry_ts   = ($profile['user_role'] ?? '') === 'student' && !empty($profile['e
 $expiry_past = $expiry_ts && $expiry_ts < strtotime('today');
 $expiry_soon = $expiry_ts && !$expiry_past && $expiry_ts < strtotime('+120 days');
 
-$id_label = 'Username';
-$id_value = $profile['username'] ?? '';
-if (!empty($profile['student_id'])) { $id_label = 'Student ID'; $id_value = $profile['student_id']; }
-elseif (!empty($profile['faculty_id'])) { $id_label = 'Faculty ID'; $id_value = $profile['faculty_id']; }
+/* Chosen by role rather than by which column holds something: a member of
+   staff whose number sits in student_id was being shown it as a "Student ID". */
+$identity = account_identifier($profile);
+$id_label = $identity['value'] !== '' ? $identity['label'] : 'Username';
+$id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username'] ?? '');
 ?>
 <!doctype html>
 <html lang="en">
@@ -92,7 +160,7 @@ elseif (!empty($profile['faculty_id'])) { $id_label = 'Faculty ID'; $id_value = 
 .option-text strong { display: block; font-size: .875rem; font-weight: 400; color: var(--ink); }
 .option-text span { font-size: .8125rem; color: var(--grey); }
 
-.segmented { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; flex-shrink: 0; }
+.segmented { display: inline-flex; border: 1px solid var(--border); border-radius: var(--r-card, 8px); overflow: hidden; flex-shrink: 0; }
 .segmented input { position: absolute; opacity: 0; pointer-events: none; }
 .segmented label {
     padding: .4rem .875rem;
@@ -105,7 +173,7 @@ elseif (!empty($profile['faculty_id'])) { $id_label = 'Faculty ID'; $id_value = 
 }
 .segmented label:last-of-type { border-right: none; }
 .segmented label:hover { background: var(--cream); }
-.segmented input:checked + label { background: var(--maroon); color: #fff; }
+.segmented input:checked + label { background: var(--maroon-surface); color: #fff; }
 
 /* Toggle switch */
 .switch { position: relative; display: inline-block; width: 42px; height: 24px; flex-shrink: 0; }
@@ -132,6 +200,39 @@ elseif (!empty($profile['faculty_id'])) { $id_label = 'Faculty ID'; $id_value = 
 
 /* Password form (fields themselves come from the shared .page-field styles) */
 .pw-form { max-width: 420px; }
+/* A password you cannot see is a password you cannot check, and these are
+   typed three times over. The eye sits inside the field rather than beside it
+   so the row keeps its shape. */
+.pw-wrap { position: relative; display: block; }
+.pw-wrap input { width: 100%; padding-right: 2.6rem; }
+.pw-eye {
+    position: absolute;
+    top: 50%;
+    right: .5rem;
+    transform: translateY(-50%);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: none;
+    border-radius: var(--r-control, 4px);
+    background: none;
+    color: var(--grey);
+    cursor: pointer;
+    transition: color .15s, background .15s;
+}
+.pw-eye:hover { color: var(--maroon); background: var(--cream); }
+.pw-eye:focus-visible { outline: 2px solid var(--maroon); outline-offset: 1px; }
+.pw-eye .material-symbols-outlined { font-size: 19px; }
+.pw-eye[aria-pressed="true"] { color: var(--maroon); }
+
+/* Who will be told, said on the form as well as in the dialog, so it is not a
+   surprise that only appears at the moment of committing. */
+.pw-notify { display: flex; align-items: flex-start; gap: .375rem; margin-top: .75rem; }
+.pw-notify .material-symbols-outlined { font-size: 16px; color: var(--maroon); flex: 0 0 auto; }
+
 .pw-hint { font-size: .75rem; color: var(--grey); margin-top: .3rem; }
 
 @media (max-width: 700px) {
@@ -341,23 +442,63 @@ elseif (!empty($profile['faculty_id'])) { $id_label = 'Faculty ID'; $id_value = 
             <h2>Security</h2>
         </div>
         <div class="page-card-body">
+            <?php
+            /* Typed out rather than clicked past, and the reader is told who
+               hears about it before they commit rather than afterwards. */
+            $pw_confirm = 'You are about to change the password on your own account.';
+            if ($notify_upline) {
+                $pw_confirm .= ' ' . $notify_upline['full_name']
+                            . ', the ' . $notify_role . ' who set up your account, will be told that'
+                            . ' you changed it. They are not shown the password itself.';
+            }
+            ?>
             <form class="pw-form" method="post" action="settings.php">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="change_password">
                 <div class="page-field">
                     <label for="current_password">Current password</label>
-                    <input type="password" name="current_password" id="current_password" required autocomplete="current-password">
+                    <div class="pw-wrap">
+                        <input type="password" name="current_password" id="current_password" required autocomplete="current-password">
+                        <button type="button" class="pw-eye" data-eye="current_password"
+                                aria-label="Show password" title="Show password" aria-pressed="false">
+                            <span class="material-symbols-outlined">visibility</span>
+                        </button>
+                    </div>
                 </div>
                 <div class="page-field">
                     <label for="new_password">New password</label>
-                    <input type="password" name="new_password" id="new_password" required minlength="8" autocomplete="new-password">
+                    <div class="pw-wrap">
+                        <input type="password" name="new_password" id="new_password" required minlength="8" autocomplete="new-password">
+                        <button type="button" class="pw-eye" data-eye="new_password"
+                                aria-label="Show password" title="Show password" aria-pressed="false">
+                            <span class="material-symbols-outlined">visibility</span>
+                        </button>
+                    </div>
                     <p class="pw-hint">At least 8 characters.</p>
                 </div>
                 <div class="page-field">
                     <label for="confirm_password">Confirm new password</label>
-                    <input type="password" name="confirm_password" id="confirm_password" required minlength="8" autocomplete="new-password">
+                    <div class="pw-wrap">
+                        <input type="password" name="confirm_password" id="confirm_password" required minlength="8" autocomplete="new-password">
+                        <button type="button" class="pw-eye" data-eye="confirm_password"
+                                aria-label="Show password" title="Show password" aria-pressed="false">
+                            <span class="material-symbols-outlined">visibility</span>
+                        </button>
+                    </div>
                 </div>
-                <button type="submit" class="btn-page">Update password</button>
+                <?php if ($notify_upline): ?>
+                    <p class="pw-hint pw-notify">
+                        <span class="material-symbols-outlined">info</span>
+                        <?= e($notify_upline['full_name']) ?> (<?= e($notify_role) ?>) will be told
+                        that you changed it, but never what you changed it to.
+                    </p>
+                <?php endif; ?>
+                <?php /* The question is asked on the button, not the form: a form-wide
+                         data-confirm claims every click inside it, the eyes included. */ ?>
+                <button type="submit" class="btn-page btn-confirm"
+                        data-confirm="<?= e($pw_confirm) ?>"
+                        data-confirm-match="<?= e((string)($u['full_name'] ?? '')) ?>"
+                        data-confirm-input="Type your full name to confirm">Update password</button>
             </form>
         </div>
     </div>
@@ -381,6 +522,28 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Appearance — shares the same storage keys as the browse page's
     // Quick Settings panel, so the two stay in sync.
+    /* Show or hide one password field. Each eye names its own field, so the
+       three on this form never get in each other's way, and the state is
+       announced through aria-pressed rather than by the icon alone. */
+    document.querySelectorAll('.pw-eye').forEach(function (eye) {
+        eye.addEventListener('click', function () {
+            var field = document.getElementById(eye.dataset.eye);
+            if (!field) return;
+            var showing = field.type === 'text';
+            field.type = showing ? 'password' : 'text';
+            eye.setAttribute('aria-pressed', showing ? 'false' : 'true');
+            eye.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+            eye.title = showing ? 'Show password' : 'Hide password';
+            eye.querySelector('.material-symbols-outlined').textContent =
+                showing ? 'visibility' : 'visibility_off';
+            // The caret goes back where it was; toggling the type moves it to
+            // the end otherwise, which is maddening halfway through a password.
+            var at = field.value.length;
+            field.focus();
+            try { field.setSelectionRange(at, at); } catch (err) {}
+        });
+    });
+
     var density = getStored('papel_density', 'default');
     var theme = getStored('papel_theme', 'light');
     document.documentElement.setAttribute('data-density', density);
@@ -392,7 +555,7 @@ document.addEventListener('DOMContentLoaded', function () {
     /* Colour. The same five palettes and the same storage key the Quick
        Settings panel uses, so changing it in either place is the same act. */
     var COLOURS = [
-        ['maroon', 'PUP Maroon'], ['lightblue', 'PUP Light Blue'], ['blue', 'PUP Blue'],
+        ['maroon', 'PUP Maroon'], ['green', 'Dark Green'], ['blue', 'Dark Blue'],
         ['white', 'PUP White Modern'], ['classic', 'PUP Old Classic']
     ];
     var colour = getStored('papel_color', 'maroon');
@@ -473,6 +636,9 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 });
 </script>
+<?php /* The typed confirmation on the password form comes from here. Without
+         it the data-confirm attributes are just markup nobody reads. */ ?>
+<?php require_once ROOT_PATH.'/includes/action_dialogs.php'; ?>
 <?php require ROOT_PATH.'/includes/site_footer.php'; ?>
 </body>
 </html>

@@ -9,8 +9,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   if (isset($_POST['action']) && $_POST['action'] === 'toggle_active') {
     $user_id = (int)($_POST['user_id'] ?? 0);
     if ($user_id> 0) {
-      $stmt = $conn->prepare("UPDATE users SET is_active = NOT is_active WHERE user_id=? AND user_role='student'");
-      $stmt->bind_param('i', $user_id);
+      /* Scoped like the list. Without this the narrowing above would be
+         decoration: the id travels in a form field, and another adviser's
+         student could be archived by posting theirs. */
+      $stmt = $conn->prepare("UPDATE users SET is_active = NOT is_active
+                               WHERE user_id=? AND user_role='student' AND created_by=?");
+      $stmt->bind_param('ii', $user_id, $u['user_id']);
       if ($stmt->execute() && $stmt->affected_rows> 0) {
         flash('success', 'User status updated.');
       }
@@ -23,8 +27,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $user_id = (int)($_POST['user_id'] ?? 0);
     if ($user_id> 0) {
       try {
-        $stmt = $conn->prepare("DELETE FROM users WHERE user_id=? AND user_role='student'");
-        $stmt->bind_param('i', $user_id);
+        $stmt = $conn->prepare("DELETE FROM users
+                                 WHERE user_id=? AND user_role='student' AND created_by=?");
+        $stmt->bind_param('ii', $user_id, $u['user_id']);
         if ($stmt->execute() && $stmt->affected_rows> 0) { flash('success', 'User deleted permanently.'); }
         else { flash('error', 'User not found.'); }
       } catch (Exception $e) { flash('error', 'Cannot delete user. They may have associated data.'); }
@@ -42,11 +47,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         flash('error', 'Password must be at least 6 characters and contain at least one uppercase letter and one number.');
         header('Location: faculty_manage_students.php'); exit;
       }
+      $before = account_snapshot($user_id);
       $hash = password_hash($new_pass, PASSWORD_DEFAULT);
-      $stmt = $conn->prepare("UPDATE users SET password=?, plain_password=? WHERE user_id=? AND user_role='student'");
-      $stmt->bind_param('ssi', $hash, $new_pass, $user_id);
+      $stmt = $conn->prepare("UPDATE users SET password=?
+                               WHERE user_id=? AND user_role='student' AND created_by=?");
+      $stmt->bind_param('sii', $hash, $user_id, $u['user_id']);
       if ($stmt->execute() && $stmt->affected_rows> 0) {
         flash('success', 'Password reset successfully.');
+        // Answered: whatever was asked about this password is settled.
+        support_requests_clear($user_id, 'password');
+        // And the student is told, with the password they now have to use.
+        account_change_notice($user_id, $before, account_snapshot($user_id),
+                              $new_pass, (string)($u['full_name'] ?? ''));
+        // The only time this value is ever shown; nothing stores it.
+        flash('new_password', json_encode([
+            'who' => trim($_POST['full_name'] ?? ''), 'pw' => $new_pass]));
       } else {
         flash('error', 'Failed to reset password.');
       }
@@ -61,7 +76,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
      "reject this". */
   if (($_POST['action'] ?? '') === 'update_user') {
     $edit_id = (int)($_POST['user_id'] ?? 0);
-    $full    = trim($_POST['full_name'] ?? '');
+    /* Accepted as typed, written down properly. See normalize_person_name. */
+    $full    = normalize_person_name($_POST['full_name'] ?? '');
     $email   = trim($_POST['email'] ?? '');
     $program = trim($_POST['program'] ?? '');
     $sid     = trim($_POST['student_id'] ?? '');
@@ -99,29 +115,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $fail('Password must be at least 6 characters and contain at least one uppercase letter and one number.');
       }
       $hash = password_hash($pass, PASSWORD_DEFAULT);
+      /* created_by, for the same reason the other actions carry it: the row
+         being edited is named in a form field, and only this adviser's own
+         students are theirs to edit. */
       $up = $conn->prepare(
         "UPDATE users SET full_name=?, email=?, program=?, academic_year=?, section=?,
-                          student_id=?, expires_on=?, password=?, plain_password=?
-         WHERE user_id=? AND user_role='student'");
-      $up->bind_param('sssssssssi', $full, $email, $program, $ay, $sect, $sid, $expires, $hash, $pass, $edit_id);
+                          student_id=?, expires_on=?, password=?
+         WHERE user_id=? AND user_role='student' AND created_by=?");
+      $up->bind_param('ssssssssii', $full, $email, $program, $ay, $sect, $sid, $expires, $hash,
+                      $edit_id, $u['user_id']);
     } else {
       $up = $conn->prepare(
         "UPDATE users SET full_name=?, email=?, program=?, academic_year=?, section=?,
                           student_id=?, expires_on=?
-         WHERE user_id=? AND user_role='student'");
-      $up->bind_param('sssssssi', $full, $email, $program, $ay, $sect, $sid, $expires, $edit_id);
+         WHERE user_id=? AND user_role='student' AND created_by=?");
+      $up->bind_param('sssssssii', $full, $email, $program, $ay, $sect, $sid, $expires,
+                      $edit_id, $u['user_id']);
     }
 
     /* affected_rows is 0 when nothing actually changed, which is not a failure —
        only a statement that did not run is. */
     // The template escapes the flash on the way out, so it is stored as plain text.
-    if ($up->execute()) { flash('success', $full . "'s details were saved."); }
+    $before = account_snapshot($edit_id);
+    if ($up->execute()) {
+      flash('success', $full . "'s details were saved.");
+      /* Whatever actually changed, including a password when one was typed.
+         Compared before and after rather than read off the form, so a field the
+         form left alone is never reported as new. */
+      account_change_notice($edit_id, $before, account_snapshot($edit_id),
+                            $pass !== '' ? $pass : '', (string)($u['full_name'] ?? ''));
+      // Answered: the details asked about have been saved.
+      support_requests_clear($edit_id, 'account');
+    }
     else                { flash('error', 'Could not save those changes. Please try again.'); }
     header('Location: faculty_manage_students.php'); exit;
   }
 
   // Create student action
-  $full=trim($_POST['full_name']??''); $email=trim($_POST['email']??''); $usern='';   /* derived from the Student ID below - no longer asked for */ $pass=$_POST['password']??''; $program=trim($_POST['program']??''); $student_id=trim($_POST['student_id']??'');
+  $full=normalize_person_name($_POST['full_name']??''); $email=trim($_POST['email']??''); $usern='';   /* derived from the Student ID below - no longer asked for */ $pass=$_POST['password']??''; $program=trim($_POST['program']??''); $student_id=trim($_POST['student_id']??'');
 
   /* Year-and-section and the academic year it belongs to. The form suggests the
      usual values but does not limit them — a programme with its own naming (a
@@ -193,24 +224,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   // How long they will need it, worked out from the section they are in.
   $expires = student_expiry_date($section, $academic_year);
   $stmt = $conn->prepare(
-    "INSERT INTO users (username,email,password,plain_password,full_name,program,academic_year,section,expires_on,student_id,user_role,created_by)
-     VALUES (?,?,?,?,?,?,?,?,?,?,'student',?)");
-  $stmt->bind_param('ssssssssssi', $usern, $email, $hash, $pass, $full, $program,
+    "INSERT INTO users (username,email,password,full_name,program,academic_year,section,expires_on,student_id,user_role,created_by)
+     VALUES (?,?,?,?,?,?,?,?,?,'student',?)");
+  $stmt->bind_param('sssssssssi', $usern, $email, $hash, $full, $program,
                     $academic_year, $section, $expires, $sid, $u['user_id']);
 
   if($stmt->execute()){ 
     // Send credentials via email
-    $emailBody = "Welcome to " . APP_NAME . "!\n\n";
-    $emailBody .= "Your student account has been created.\n\n";
-    $emailBody .= "Student ID: " . $student_id . "\n";
-    $emailBody .= "Program: " . $program . "\n";
-    $emailBody .= "Section: " . $section . "  (A.Y. " . $academic_year . ")\n";
-    $emailBody .= "Password: " . $pass . "\n\n";
-    $emailBody .= "Sign in with your Student ID at: " . BASE_URL . "/archive/index.php";
+    $emailBody  = email_para('Dear ' . $full . ',');
+    $emailBody .= email_para('A student account has been created for you on ' . APP_NAME
+                . ', the research repository of PUP Biñan Campus. Your details are below.');
+    $emailBody .= email_details([
+        'Student ID' => $student_id,
+        'Programme'  => $program,
+        'Section'    => $section . ' (A.Y. ' . $academic_year . ')',
+        'Password'   => $pass,
+    ], ['Student ID', 'Password']);
+    $emailBody .= email_action('Sign in with your Student ID at', BASE_URL . '/archive/index.php');
+    $emailBody .= email_para('Please change your password after signing in for the first time. '
+                . 'If you were not expecting this message, speak to your research adviser.');
     
-    send_email($email, "Your Account Credentials", $emailBody);
-    
-    flash('success','Student created and credentials sent to email.');
+    $sent = send_email($email, "Your Account Credentials", $emailBody);
+
+    // The only time this value is ever shown; nothing stores it.
+    flash('new_password', json_encode(['who' => $full, 'pw' => $pass]));
+
+    flash('success', $sent
+        ? 'Student created and credentials sent to email.'
+        : 'Student created, but the email could not be sent. Give them their password'
+          . ' yourself, or use Reset to set a new one.');
   } else { 
     flash('error','Failed to create student. Please try again.'); 
   }
@@ -220,9 +262,20 @@ try {
   /* Read into arrays rather than holding the result open: the roll is walked
      more than once — the section filter needs to know which sections actually
      appear before the table itself is drawn. */
-  $cols = "user_id,full_name,email,username,plain_password,student_id,program,academic_year,section,expires_on,created_at,is_active";
-  $roll = $conn->query("SELECT $cols FROM users WHERE user_role='student' ORDER BY created_at DESC")
-               ->fetch_all(MYSQLI_ASSOC);
+  $cols = "user_id,full_name,email,username,student_id,program,academic_year,section,expires_on,created_at,is_active";
+  /* The adviser's own students, not every student in the school. The page says
+     "under your supervision" and did not mean it: this listed all of them, so
+     every adviser saw every other adviser's roll and could edit, reset and
+     delete on it. created_by is the record of who enrolled them, and it is the
+     same link the support requests and the password roll are built on. */
+  $rollStmt = $conn->prepare(
+      "SELECT $cols FROM users
+        WHERE user_role='student' AND created_by = ?
+        ORDER BY created_at DESC");
+  $rollStmt->bind_param('i', $u['user_id']);
+  $rollStmt->execute();
+  $roll = $rollStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+  $rollStmt->close();
 
   /* An account past its date cannot be signed into, so listing it as active
      says something untrue. Expired and archived accounts sit together in the
@@ -241,7 +294,6 @@ try {
   /* A column this page needs is not in the database yet. Say which migration
      puts it there rather than showing the visitor a stack trace. */
   $migrations = [
-    'plain_password' => 'scripts/migrations/run_plain_password_migration.php',
     'academic_year'  => 'scripts/migrations/run_student_cohort_migration.php',
     'section'        => 'scripts/migrations/run_student_cohort_migration.php',
     'expires_on'     => 'scripts/migrations/run_account_expiry_migration.php',
@@ -392,7 +444,6 @@ function mgmt_student_row(array $r, array $programs): void {
                 <span class="mgmt-sub">A.Y. <?= e($r['academic_year']) ?></span>
             <?php endif; ?>
         </td>
-        <td class="mgmt-pass"><?= e($r['plain_password'] ?? '—') ?></td>
         <td>
             <div class="mgmt-actions">
                 <?php if ($state === 'archived'): ?>
@@ -434,7 +485,7 @@ function mgmt_student_row(array $r, array $programs): void {
                 <div class="modal-dialog modal-dialog-centered">
                     <div class="modal-content">
                         <div class="modal-header">
-                            <h5 class="modal-title">Reset password &mdash; <?= e($r['full_name']) ?></h5>
+                            <h5 class="modal-title">Reset password for <?= e($r['full_name']) ?></h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
                         <form method="post">
@@ -447,7 +498,7 @@ function mgmt_student_row(array $r, array $programs): void {
                                     <input type="text" name="new_password" minlength="6"
                                            placeholder="Min 6 chars, 1 uppercase, 1 number" required>
                                     <small class="mgmt-hint">
-                                        <?= e($r['full_name']) ?> will need this to sign in. Tell them yourself &mdash;
+                                        <?= e($r['full_name']) ?> will need this to sign in. Tell them yourself,
                                         resetting does not email it.
                                     </small>
                                 </div>
@@ -465,6 +516,12 @@ function mgmt_student_row(array $r, array $programs): void {
     </tr>
     <?php
 }
+/* Who on this roll has changed their own password. The tab that shows it is
+   shared with the other two consoles, so the columns and the wording cannot
+   drift apart between them. */
+require_once ROOT_PATH.'/includes/password_audit_tab.php';
+// Their own students, matching the roll on the other two tabs.
+$password_rows = password_audit_rows(['student'], (int)$u['user_id']);
 ?>
 <!doctype html>
 <html lang="en">
@@ -475,6 +532,7 @@ function mgmt_student_row(array $r, array $programs): void {
 <?php require_once ROOT_PATH.'/includes/site_head.php'; ?>
 <?php require_once ROOT_PATH.'/includes/manage_console.php'; ?>
 <?php require_once ROOT_PATH.'/includes/manage_page.php'; ?>
+<?php require_once ROOT_PATH.'/includes/flash_banner.php'; ?>
 </head>
 <body>
 <?php require ROOT_PATH.'/includes/site_header.php'; ?>
@@ -496,16 +554,12 @@ function mgmt_student_row(array $r, array $programs): void {
         <p>Create and manage the student accounts under your supervision.</p>
     </div>
 
-    <?php if ($m = flash('error')): ?>
-        <div class="mgmt-flash is-bad" role="alert">
-            <span class="material-symbols-outlined">error</span><span><?= e($m) ?></span>
-        </div>
-    <?php endif; ?>
-    <?php if ($m = flash('success')): ?>
-        <div class="mgmt-flash is-good" role="status">
-            <span class="material-symbols-outlined">check_circle</span><span><?= e($m) ?></span>
-        </div>
-    <?php endif; ?>
+        <?php flash_banner(); ?>
+    <?php
+    /* The new password, shown once and only here. Reads through flash(), so a
+       refresh does not bring it back. */
+    require ROOT_PATH.'/includes/password_once.php';
+    ?>
 
     <div class="mgmt-grid">
 
@@ -555,7 +609,7 @@ function mgmt_student_row(array $r, array $programs): void {
                         <select name="program" id="program" required>
                             <option value="">Select program</option>
                             <?php foreach ($PROGRAMS as $pname => $code): ?>
-                                <option value="<?= e($pname) ?>"><?= e($code) ?> &mdash; <?= e($pname) ?></option>
+                                <option value="<?= e($pname) ?>"><?= e($code) ?>: <?= e($pname) ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
@@ -629,6 +683,7 @@ function mgmt_student_row(array $r, array $programs): void {
                     Archived / Expired
                     <span class="count"><?= count($archived) ?></span>
                 </button>
+                <?php password_audit_tab($password_rows); ?>
 
                 <!-- Sort rides on the tab row rather than under the chips: it is
                      not a way of choosing who to show, and it applies to both
@@ -655,7 +710,6 @@ function mgmt_student_row(array $r, array $programs): void {
                                     <th>Student ID</th>
                                     <th>Program</th>
                                     <th>Section</th>
-                                    <th>Password</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -664,7 +718,7 @@ function mgmt_student_row(array $r, array $programs): void {
                                 <?php foreach ($active as $r) { mgmt_student_row($r, $PROGRAMS); } ?>
                             <?php else: ?>
                                 <tr>
-                                    <td colspan="6">
+                                    <td colspan="5">
                                         <div class="mgmt-empty">
                                             <span class="material-symbols-outlined">group</span>
                                             No student accounts yet. Create one on the left.
@@ -673,7 +727,7 @@ function mgmt_student_row(array $r, array $programs): void {
                                 </tr>
                             <?php endif; ?>
                             <tr class="js-no-match" hidden>
-                                <td colspan="6">
+                                <td colspan="5">
                                     <div class="mgmt-empty">
                                         <span class="material-symbols-outlined">filter_alt_off</span>
                                         No students match that filter.
@@ -699,7 +753,6 @@ function mgmt_student_row(array $r, array $programs): void {
                                     <th>Student ID</th>
                                     <th>Program</th>
                                     <th>Section</th>
-                                    <th>Password</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -708,7 +761,7 @@ function mgmt_student_row(array $r, array $programs): void {
                                 <?php foreach ($archived as $r) { mgmt_student_row($r, $PROGRAMS); } ?>
                             <?php else: ?>
                                 <tr>
-                                    <td colspan="6">
+                                    <td colspan="5">
                                         <div class="mgmt-empty">
                                             <span class="material-symbols-outlined">archive</span>
                                             Nothing archived, and nothing expired.
@@ -717,7 +770,7 @@ function mgmt_student_row(array $r, array $programs): void {
                                 </tr>
                             <?php endif; ?>
                             <tr class="js-no-match" hidden>
-                                <td colspan="6">
+                                <td colspan="5">
                                     <div class="mgmt-empty">
                                         <span class="material-symbols-outlined">filter_alt_off</span>
                                         No students match that filter.
@@ -729,6 +782,7 @@ function mgmt_student_row(array $r, array $programs): void {
                     </div>
                 </div>
             </div>
+            <?php password_audit_pane($password_rows, 'students'); ?>
         </section>
 
     </div>
@@ -757,7 +811,7 @@ function mgmt_student_row(array $r, array $programs): void {
             <p class="mgmt-help-note">
                 Together these decide how long the account lasts: five years for a first year,
                 four for a second, three for a third, and two for a fourth year or a ladderized
-                intake &mdash; counted from the academic year the account was created in. Moving a
+                intake, counted from the academic year the account was created in. Moving a
                 student up a year recalculates it.
             </p>
             <p>
@@ -785,21 +839,8 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    /* Twelve characters with an uppercase and a digit guaranteed, then shuffled
-       so those two are not always in front. */
-    var genBtn = document.getElementById('generatePasswordBtn');
-    if (genBtn) {
-        genBtn.addEventListener('click', function () {
-            var upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
-                digits = '0123456789',
-                all = 'abcdefghijklmnopqrstuvwxyz' + upper + digits + '!@#$%',
-                pick = function (s) { return s.charAt(Math.floor(Math.random() * s.length)); },
-                pass = pick(upper) + pick(digits);
-            for (var i = 2; i < 12; i++) { pass += pick(all); }
-            document.getElementById('password').value =
-                pass.split('').sort(function () { return Math.random() - 0.5; }).join('');
-        });
-    }
+    /* The Generate button lives in includes/password_generator.php — it needs
+       the name and ID fields, which are shared by all three create forms. */
 
     // Tabs
     var tabs = document.querySelectorAll('.mgmt-tab');
@@ -1073,7 +1114,8 @@ document.addEventListener('DOMContentLoaded', function () {
     refreshYears();
 });
 </script>
-<?php require ROOT_PATH.'/includes/action_dialogs.php';
+<?php require ROOT_PATH.'/includes/password_generator.php';
+require_once ROOT_PATH.'/includes/action_dialogs.php';
 require ROOT_PATH.'/includes/manage_save_confirm.php';
 require ROOT_PATH.'/includes/site_footer.php'; ?>
 </body>

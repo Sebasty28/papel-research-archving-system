@@ -53,7 +53,19 @@ body {
     display: flex;
     flex-direction: column;
 }
-body > main { flex: 1 0 auto; }
+/* width:100% is doing real work here, not padding out the rule.
+
+   body is a column flex container, and .wrap sets margin:0 auto. Auto margins
+   on the cross axis of a flex container switch off the default stretch, so
+   <main> stopped filling the window and sized itself to its contents instead.
+   Nobody noticed while pages were full: the content was wide enough to reach
+   max-width anyway. It showed the moment a list came back empty, when the whole
+   page narrowed to the width of "No papers found" and re-centred, so searching
+   appeared to rearrange the site. Every page with a list did it.
+
+   The explicit width restores the fill; max-width and the auto margins still
+   centre the content exactly as before. */
+body > main { flex: 1 0 auto; width: 100%; }
 .site-footer { margin-top: auto; flex-shrink: 0; }
 
 h1, h2, h3, .font-head { font-family: var(--font-head); }
@@ -65,7 +77,7 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
    Used on almost every signed-in page. It lived in console_shell.php and again
    in manage_console.php, so a page that included neither — analytics, say —
    rendered its crumbs as bare blue links. It belongs here with .wrap. */
-.crumb-bar { background: var(--dark-maroon); }
+.crumb-bar { background: var(--maroon-surface-hover); }
 .crumb-inner {
     display: flex; align-items: center; gap: .25rem;
     padding-top: .5rem; padding-bottom: .5rem;
@@ -78,17 +90,60 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
 
 /* ===== The two small buttons the whole site uses ===== */
 .btn-sm-maroon {
-    background: var(--maroon); color: #fff; border: none; border-radius: 6px;
+    background: var(--maroon-surface); color: #fff; border: none; border-radius: var(--r-control, 4px);
     padding: .4rem 1rem; font-family: var(--font-body); font-size: .75rem; cursor: pointer;
     text-decoration: none; display: inline-flex; align-items: center; gap: .35rem;
 }
-.btn-sm-maroon:hover { background: var(--dark-maroon); color: #fff; }
+.btn-sm-maroon:hover { background: var(--maroon-surface-hover); color: #fff; }
 .btn-sm-outline {
     background: none; color: var(--maroon); border: 1px solid var(--soft-maroon);
-    border-radius: 6px; padding: .4rem 1rem; font-family: var(--font-body); font-size: .75rem;
+    border-radius: var(--r-control, 4px); padding: .4rem 1rem; font-family: var(--font-body); font-size: .75rem;
     cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: .35rem;
 }
 .btn-sm-outline:hover { background: var(--cream); }
+
+/* ===== Bootstrap buttons, wearing the site's colours =====
+   A few pages still use Bootstrap's .btn-primary and .btn-outline-secondary.
+   Bootstrap paints them from its own --bs-btn-* variables, and its hover, focus
+   and active rules read those variables rather than any `background` a page
+   sets afterwards. Overriding only the background therefore left buttons that
+   were maroon at rest and Bootstrap blue the moment they were hovered or
+   focused, and left the blue focus ring everywhere.
+
+   Setting the variables here covers every state at once, on every page that
+   includes this file, so a page does not have to remember to do it. */
+.btn-primary {
+    --bs-btn-color: #fff;
+    --bs-btn-bg: var(--maroon-surface);
+    --bs-btn-border-color: var(--maroon-surface);
+    --bs-btn-hover-color: #fff;
+    --bs-btn-hover-bg: var(--maroon-surface-hover);
+    --bs-btn-hover-border-color: var(--maroon-surface-hover);
+    --bs-btn-active-color: #fff;
+    --bs-btn-active-bg: var(--maroon-surface-hover);
+    --bs-btn-active-border-color: var(--maroon-surface-hover);
+    --bs-btn-disabled-color: #fff;
+    --bs-btn-disabled-bg: var(--soft-maroon);
+    --bs-btn-disabled-border-color: var(--soft-maroon);
+    --bs-btn-focus-shadow-rgb: 177, 125, 125;
+}
+.btn-outline-secondary,
+.btn-secondary {
+    --bs-btn-color: var(--maroon);
+    --bs-btn-bg: transparent;
+    --bs-btn-border-color: var(--soft-maroon);
+    --bs-btn-hover-color: var(--maroon);
+    --bs-btn-hover-bg: var(--cream);
+    --bs-btn-hover-border-color: var(--soft-maroon);
+    --bs-btn-active-color: var(--maroon);
+    --bs-btn-active-bg: var(--cream);
+    --bs-btn-active-border-color: var(--soft-maroon);
+    --bs-btn-focus-shadow-rgb: 177, 125, 125;
+}
+/* Chrome paints its own widget for a button with no author border, and on
+   Windows a focused one comes out in the platform blue regardless of the
+   background above. */
+.btn { appearance: none; -webkit-appearance: none; }
 
 /* Google Material Icons — inline sizing */
 .material-symbols-outlined {
@@ -125,15 +180,21 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
     z-index: 900;
     transition: background .3s ease, box-shadow .3s ease, border-color .3s ease;
 }
+/* The frosted state, which is applied by script once the page scrolls past
+   8px. The white here was literal, so in dark mode the header started
+   correctly dark and washed out to near-white as soon as you scrolled. It is
+   a token now, and dark mode gives it the dark surface instead. */
 .site-header.scrolled {
-    background: rgba(255,255,255,.72);
+    background: var(--header-frost, rgba(255,255,255,.72));
     -webkit-backdrop-filter: blur(14px) saturate(180%);
     backdrop-filter: blur(14px) saturate(180%);
-    border-bottom-color: rgba(177,125,125,.28);
-    box-shadow: 0 2px 16px rgba(51,0,0,.08);
+    border-bottom-color: var(--header-frost-edge, rgba(177,125,125,.28));
+    box-shadow: 0 2px 16px var(--header-frost-shadow, rgba(51,0,0,.08));
 }
+/* Without backdrop-filter there is no blur to hide behind, so the same colour
+   is used at nearly full opacity. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-    .site-header.scrolled { background: rgba(255,255,255,.97); }
+    .site-header.scrolled { background: var(--header-frost-solid, rgba(255,255,255,.97)); }
 }
 
 .nav-icon-btn {
@@ -159,7 +220,7 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
     height: 15px;
     padding: 0 3px;
     border-radius: 999px;
-    background: var(--maroon);
+    background: var(--maroon-surface);
     color: #fff;
     font-size: .5625rem;
     font-weight: 700;
@@ -210,7 +271,7 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
     font-size: .875rem;
     font-weight: 400;
     padding: .375rem .875rem;
-    border-radius: 6px;
+    border-radius: var(--r-control, 4px);
     transition: color .2s, background .2s;
 }
 .main-nav a:hover,
@@ -228,7 +289,7 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
     font-size: .875rem;
     font-weight: 400;
     padding: .375rem .875rem;
-    border-radius: 6px;
+    border-radius: var(--r-control, 4px);
     cursor: pointer;
     transition: color .2s, background .2s;
 }
@@ -243,7 +304,7 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
     transform: translateX(-50%);
     background: var(--white);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--r-control, 4px);
     box-shadow: var(--shadow-md);
     min-width: 190px;
     z-index: 1000;
@@ -281,7 +342,7 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
     font-weight: 400;
     cursor: pointer;
     padding: .375rem .75rem;
-    border-radius: 6px;
+    border-radius: var(--r-control, 4px);
     transition: color .2s, background .2s;
     text-decoration: none;
 }
@@ -290,7 +351,7 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
 .user-avatar-btn {
     width: 34px; height: 34px;
     border-radius: 50%;
-    background: var(--maroon);
+    background: var(--maroon-surface);
     color: #fff;
     font-weight: 700;
     font-size: .875rem;
@@ -306,7 +367,7 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
     right: 0;
     background: var(--white);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--r-control, 4px);
     box-shadow: var(--shadow-md);
     min-width: 190px;
     z-index: 1000;
@@ -342,7 +403,7 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 4px;
+    border-radius: var(--r-control, 4px);
     color: var(--grey);
     cursor: pointer;
     transition: background .15s, color .15s;
@@ -373,7 +434,7 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
     right: 0;
     background: var(--white);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--r-control, 4px);
     box-shadow: var(--shadow-md);
     width: 340px;
     max-height: 26rem;
@@ -394,7 +455,7 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
     align-items: center;
     justify-content: space-between;
     padding: .75rem 1rem;
-    background: var(--dark-maroon);
+    background: var(--maroon-surface-hover);
     color: #fff;
 }
 .notif-dropdown-header span { font-weight: 700; font-size: .8125rem; }
@@ -412,7 +473,7 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
 .notif-close {
     display: inline-flex; align-items: center; justify-content: center;
     width: 1.5rem; height: 1.5rem; padding: 0;
-    border: none; border-radius: 6px; background: none;
+    border: none; border-radius: var(--r-control, 4px); background: none;
     color: rgba(255, 255, 255, .8); cursor: pointer;
 }
 .notif-close:hover { background: rgba(255, 255, 255, .18); color: #fff; }
@@ -426,7 +487,7 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
     background: var(--white);
 }
 .notif-tab {
-    padding: .25rem .75rem; border: 1px solid transparent; border-radius: 999px;
+    padding: .25rem .75rem; border: 1px solid transparent; border-radius: var(--r-control, 4px);
     background: none; color: var(--grey); font-family: inherit; font-size: .75rem;
     cursor: pointer;
 }
@@ -470,7 +531,7 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
     text-align: center;
     margin: .5rem;
     padding: .55rem;
-    border-radius: 8px;
+    border-radius: var(--r-card, 8px);
     background: var(--cream);
     font-size: .75rem;
     color: var(--maroon);
@@ -481,7 +542,7 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
 
 /* ===== Site footer ===== */
 .site-footer {
-    background: var(--dark-maroon);
+    background: var(--maroon-surface-hover);
     color: rgba(255,255,255,.75);
     min-height: 68px;
     display: flex;
@@ -562,7 +623,7 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
 .panel-ctrl-btn {
     width: 34px; height: 34px;
     border: none;
-    border-radius: 6px;
+    border-radius: var(--r-control, 4px);
     background: none;
     color: var(--ink);
     cursor: pointer;
@@ -636,7 +697,7 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
 .role-card.active .role-dot { display: block; }
 .role-icon {
     width: 105px; height: 105px;
-    border-radius: 10px;
+    border-radius: var(--r-card, 8px);
     background: var(--cream);
     display: flex;
     align-items: center;
@@ -675,7 +736,7 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
     width: 100%;
     padding: .75rem .875rem;
     border: 1.5px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--r-control, 4px);
     font-size: .9rem;
     font-family: var(--font-body);
     font-weight: 400;
@@ -703,7 +764,7 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
     justify-content: center;
     background: none;
     border: none;
-    border-radius: 6px;
+    border-radius: var(--r-control, 4px);
     color: var(--grey);
     cursor: pointer;
     transition: color .2s, background .2s;
@@ -738,7 +799,7 @@ select.lf-input {
     background: var(--maroon);
     color: #fff;
     border: none;
-    border-radius: 8px;
+    border-radius: var(--r-control, 4px);
     font-size: 1rem;
     font-weight: 400;
     cursor: pointer;
@@ -769,7 +830,7 @@ select.lf-input {
 .panel-alert {
     width: 100%;
     padding: .75rem 1rem;
-    border-radius: 8px;
+    border-radius: var(--r-card, 8px);
     font-size: .875rem;
     margin-bottom: 1rem;
 }
@@ -794,3 +855,5 @@ select.lf-input {
 <?php /* Palettes and light/dark. Included last so its :root wins over the
         literal token values above, without editing them. */ ?>
 <?php require_once __DIR__ . '/theme.php'; ?>
+<?php require_once __DIR__ . '/focus_ring.php'; ?>
+<?php require_once __DIR__ . '/select_skin.php'; ?>

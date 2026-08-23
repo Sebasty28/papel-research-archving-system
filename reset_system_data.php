@@ -9,20 +9,43 @@ $u = current_user();
 $message = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_reset']) && $_POST['confirm_reset'] === 'CONFIRM') {
-    
+
+    /* Typing CONFIRM proves intent, not origin: any page on the internet can
+       post that word. Without this check a single link, followed while the
+       Director had a live session, emptied the system. */
+    csrf_verify();
+
     // Disable foreign key checks to prevent errors during deletion
     $conn->query("SET FOREIGN_KEY_CHECKS = 0");
 
-    // List of tables to truncate (Empty completely)
-    // These are tables identified from your context files
+    /* Everything a paper leaves behind, in the order it was accumulated.
+       The previous list had drifted a long way from the schema — five of its
+       seven names did not exist, and the tables that actually hold a paper's
+       trail were all missing, so a reset deleted the papers and left
+       approval_workflow, the checklists and the supporting documents pointing
+       at rows that were gone.
+
+       papers_archive is cleared here too. It is deliberately allowed to
+       outlive an individual paper, but this is a full reset: leaving it would
+       keep publishing work whose authors were just deleted.
+
+       Not cleared: users (handled below, so the Director survives),
+       system_settings and gdrive_settings, which are configuration. */
     $tables = [
         'notifications',
+        'notification_schedule',
         'research_papers',
-        'paper_authors', 
-        'comments',
-        'favorites',
-        'downloads',
-        'audit_logs'
+        'papers_archive',
+        'approval_workflow',
+        'paper_checklist',
+        'imrad_checklist',
+        'supporting_documents',
+        'paper_favorites',
+        'analytics',
+        'ai_processing_log',
+        'ai_rate_limits',
+        'storage_usage',
+        'guest_sessions',
     ];
 
     $cleared_tables = [];
@@ -98,6 +121,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_reset']) && $
                             <li>All Research Papers and Submissions</li>
                             <li>All Notifications and Logs</li>
                         </ul>
+                        <p class="mb-0 mt-2 small">Uploaded PDFs stay on disk under
+                            <code>uploads/</code> and have to be cleared separately.</p>
                     </div>
                     
                     <p class="fw-bold text-success mb-4">
@@ -105,6 +130,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_reset']) && $
                     </p>
 
                     <form method="post">
+                        <?= csrf_field() ?>
                         <div class="mb-3">
                             <label class="form-label text-muted small">Type <strong>CONFIRM</strong> to proceed:</label>
                             <input type="text" name="confirm_reset" class="form-control text-center fw-bold" required pattern="CONFIRM" autocomplete="off">

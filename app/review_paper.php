@@ -199,7 +199,7 @@ $approveLead  = $isAdviser
     display: block; font-size: .75rem; font-weight: 500; color: var(--ink); margin-bottom: .35rem;
 }
 .rv-field textarea {
-    width: 100%; border: 1px solid var(--border); border-radius: 8px;
+    width: 100%; border: 1px solid var(--border); border-radius: var(--r-control, 4px);
     padding: .625rem .75rem; font-family: var(--font-body); font-size: .8125rem;
     color: var(--ink); resize: vertical; background: var(--white);
 }

@@ -7,6 +7,10 @@ $u=current_user();
 
 $facultyService = new FacultyManagementService($conn);
 
+/* The Research Coordinator staffs the review side and the library. The two
+   admin positions are the Director's to fill, so they are not offered here. */
+$OFFERED = ['Research Adviser', 'Librarian'];
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   csrf_verify();
   $action = $_POST['action'] ?? '';
@@ -26,6 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       } elseif ($action === 'update_user') {
           /* Same panel, same fields — only the action underneath it changed.
              A blank password means "leave theirs alone". */
+          $before = account_snapshot((int)($_POST['user_id'] ?? 0));
           $message = $facultyService->updateFaculty([
               'full_name'  => $_POST['full_name'] ?? '',
               'email'      => $_POST['email'] ?? '',
@@ -35,12 +40,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           flash($message ? 'success' : 'error',
                 $message ? trim($_POST['full_name'] ?? 'That adviser') . "'s details were saved."
                          : 'Could not save those changes. Please try again.');
+          // Answered: the details asked about have been saved.
+          if ($message) {
+              $edited = (int)($_POST['user_id'] ?? 0);
+              support_requests_clear($edited, 'account');
+              account_change_notice($edited, $before, account_snapshot($edited),
+                                    trim((string)($_POST['password'] ?? '')),
+                                    (string)($u['full_name'] ?? ''));
+          }
       } elseif ($action === 'reset_password') {
           $user_id = (int)($_POST['user_id'] ?? 0);
           $new_pass = $_POST['new_password'] ?? '';
           if ($user_id> 0 && $new_pass) {
-              if ($facultyService->resetFacultyPassword($user_id, $new_pass)) flash('success', 'Password reset successfully.');
-              else flash('error', 'Failed to reset password.');
+              $before = account_snapshot($user_id);
+              if ($facultyService->resetFacultyPassword($user_id, $new_pass)) {
+                  flash('success', 'Password reset successfully.');
+                  // Answered: whatever was asked about this password is settled.
+                  support_requests_clear($user_id, 'password');
+                  // And they are told, with the password they now have to use.
+                  account_change_notice($user_id, $before, account_snapshot($user_id),
+                                        $new_pass, (string)($u['full_name'] ?? ''));
+                  // The only time this value is ever shown; nothing stores it.
+                  flash('new_password', json_encode([
+                      'who' => trim($_POST['full_name'] ?? ''), 'pw' => $new_pass]));
+              } else {
+                  flash('error', 'Failed to reset password.');
+              }
           }
       } else {
           // Create User Action
@@ -55,6 +80,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           ];
           $message = $facultyService->createFaculty($data, $u['user_id']);
           flash('success', $message);
+          flash('new_password', json_encode([
+              'who' => $data['full_name'], 'pw' => $data['password']]));
       }
   } catch (InvalidArgumentException $e) {
       /* Something about what was typed. These messages are written for the
@@ -79,11 +106,9 @@ try {
   $active   = $facultyService->getActiveFaculty()->fetch_all(MYSQLI_ASSOC);
   $archived = $facultyService->getInactiveFaculty()->fetch_all(MYSQLI_ASSOC);
 } catch (mysqli_sql_exception $e) {
-  if (strpos($e->getMessage(), "Unknown column 'plain_password'") !== false) {
-    error_log('Database migration required: plain_password column is missing from users table. Run scripts/migrations/run_plain_password_migration.php to fix.');
-    flash('error', 'A system update is required. Please contact your administrator.');
-    header('Location: admin_manage_faculty.php'); exit;
-  }
+  /* This used to special-case a missing plain_password column. The column is
+     gone on purpose — see UserRepository::updatePassword — so a query failing
+     here now means something genuinely unexpected. */
   throw $e;
 }
 
@@ -99,24 +124,23 @@ function staff_table(array $rows, string $which): void {
             <table class="mgmt-table">
                 <thead>
                     <tr>
-                        <th>Adviser</th>
-                        <th>Faculty ID</th>
+                        <th>Staff</th>
+                        <th>ID</th>
                         <th>Position</th>
-                        <th>Password</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                 <?php if (!$rows): ?>
                     <tr>
-                        <td colspan="5">
+                        <td colspan="4">
                             <div class="mgmt-empty">
                                 <span class="material-symbols-outlined">
                                     <?= $which === 'archived' ? 'archive' : 'badge' ?>
                                 </span>
                                 <?= $which === 'archived'
                                         ? 'Nothing archived.'
-                                        : 'No adviser accounts yet. Create one on the left.' ?>
+                                        : 'No staff accounts yet. Create one on the left.' ?>
                             </div>
                         </td>
                     </tr>
@@ -126,7 +150,8 @@ function staff_table(array $rows, string $which): void {
                         data-user-id="<?= (int)$r['user_id'] ?>"
                         data-full-name="<?= e($r['full_name']) ?>"
                         data-faculty-id="<?= e($r['faculty_id'] ?? '') ?>"
-                        data-email="<?= e($r['email']) ?>">
+                        data-email="<?= e($r['email']) ?>"
+                        data-position="<?= e($r['title'] ?: staff_position_of($r)) ?>">
                         <td class="mgmt-name">
                             <?= e($r['full_name']) ?>
                             <span class="mgmt-sub" title="<?= e($r['email']) ?>"><?= e($r['email']) ?></span>
@@ -135,8 +160,7 @@ function staff_table(array $rows, string $which): void {
                             <?= e($r['faculty_id'] ?: '—') ?>
                             <span class="mgmt-sub">Added <?= e(date('M j, Y', strtotime($r['created_at']))) ?></span>
                         </td>
-                        <td class="mgmt-prog"><?= e($r['title'] ?: 'Research Adviser') ?></td>
-                        <td class="mgmt-pass"><?= e($r['plain_password'] ?? '—') ?></td>
+                        <td class="mgmt-prog"><?= e($r['title'] ?: staff_position_of($r)) ?></td>
                         <td>
                             <div class="mgmt-actions">
                                 <?php if ($which === 'archived'): ?>
@@ -177,7 +201,7 @@ function staff_table(array $rows, string $which): void {
                                 <div class="modal-dialog modal-dialog-centered">
                                     <div class="modal-content">
                                         <div class="modal-header">
-                                            <h5 class="modal-title">Reset password &mdash; <?= e($r['full_name']) ?></h5>
+                                            <h5 class="modal-title">Reset password for <?= e($r['full_name']) ?></h5>
                                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                                         </div>
                                         <form method="post">
@@ -191,7 +215,7 @@ function staff_table(array $rows, string $which): void {
                                                            placeholder="Min 6 chars, 1 uppercase, 1 number" required>
                                                     <small class="mgmt-hint">
                                                         <?= e($r['full_name']) ?> will need this to sign in. Tell them
-                                                        yourself &mdash; resetting does not email it.
+                                                        yourself. Resetting does not email it.
                                                     </small>
                                                 </div>
                                             </div>
@@ -213,6 +237,12 @@ function staff_table(array $rows, string $which): void {
     </div>
     <?php
 }
+/* Who on this roll has changed their own password. The tab that shows it is
+   shared with the other two consoles, so the columns and the wording cannot
+   drift apart between them. */
+require_once ROOT_PATH.'/includes/password_audit_tab.php';
+// The staff this Coordinator created.
+$password_rows = password_audit_rows(['faculty', 'librarian'], (int)$u['user_id']);
 ?>
 <!doctype html>
 <html lang="en">
@@ -223,6 +253,7 @@ function staff_table(array $rows, string $which): void {
 <?php require_once ROOT_PATH.'/includes/site_head.php'; ?>
 <?php require_once ROOT_PATH.'/includes/manage_console.php'; ?>
 <?php require_once ROOT_PATH.'/includes/manage_page.php'; ?>
+<?php require_once ROOT_PATH.'/includes/flash_banner.php'; ?>
 </head>
 <body>
 <?php require ROOT_PATH.'/includes/site_header.php'; ?>
@@ -233,27 +264,23 @@ function staff_table(array $rows, string $which): void {
         <span class="material-symbols-outlined crumb-arrow">chevron_right</span>
         <a href="<?= e(role_home($u['user_role'])) ?>"><?= e(role_home_label($u['user_role'])) ?></a>
         <span class="material-symbols-outlined crumb-arrow">chevron_right</span>
-        <span class="crumb-current">Research Advisers</span>
+        <span class="crumb-current">Advisers &amp; Librarians</span>
     </div>
 </div>
 
 <main class="wrap mgmt-wrap">
 
     <div class="mgmt-head">
-        <h1>Research Advisers</h1>
-        <p>Create and manage the adviser accounts who review student research.</p>
+        <h1>Advisers &amp; Librarians</h1>
+        <p>Create and manage Research Adviser and Librarian accounts.</p>
     </div>
 
-    <?php if ($m = flash('error')): ?>
-        <div class="mgmt-flash is-bad" role="alert">
-            <span class="material-symbols-outlined">error</span><span><?= e($m) ?></span>
-        </div>
-    <?php endif; ?>
-    <?php if ($m = flash('success')): ?>
-        <div class="mgmt-flash is-good" role="status">
-            <span class="material-symbols-outlined">check_circle</span><span><?= e($m) ?></span>
-        </div>
-    <?php endif; ?>
+        <?php flash_banner(); ?>
+    <?php
+    /* The new password, shown once and only here. Reads through flash(), so a
+       refresh does not bring it back. */
+    require ROOT_PATH.'/includes/password_once.php';
+    ?>
 
     <div class="mgmt-grid">
 
@@ -262,16 +289,14 @@ function staff_table(array $rows, string $which): void {
         <section class="mgmt-panel" id="formPanel">
             <div class="mgmt-panel-head">
                 <span class="material-symbols-outlined" id="formIcon">person_add</span>
-                <span id="formTitle">New adviser account</span>
+                <span id="formTitle">New staff account</span>
             </div>
             <div class="mgmt-panel-body">
                 <form method="post" class="js-manage-form" id="staffForm">
                     <?= csrf_field(); ?>
                     <input type="hidden" name="action" id="formAction" value="create_user">
                     <input type="hidden" name="user_id" id="formUserId" value="">
-                    <!-- Every account made here is an adviser; the other staff roles
-                         are created on the Director's Manage Admins page. -->
-                    <input type="hidden" name="title" value="Research Adviser">
+
 
                     <div class="mgmt-editing-note">
                         <span class="material-symbols-outlined">edit</span>
@@ -287,7 +312,9 @@ function staff_table(array $rows, string $which): void {
                     </div>
 
                     <div class="mgmt-field">
-                        <label for="faculty_id">Faculty ID <span class="req">*</span></label>
+                        <label for="faculty_id">
+                            <span id="idLabel">Faculty ID</span> <span class="req">*</span>
+                        </label>
                         <input type="text" name="faculty_id" id="faculty_id"
                                placeholder="e.g. FAC-2026-001" required>
                         <small class="mgmt-hint">This is what they sign in with.</small>
@@ -299,10 +326,14 @@ function staff_table(array $rows, string $which): void {
                     </div>
 
                     <div class="mgmt-field">
-                        <label>Position</label>
-                        <input type="text" value="Research Adviser" disabled>
+                        <label for="title">Position <span class="req">*</span></label>
+                        <select name="title" id="title" required>
+                            <?php foreach ($OFFERED as $pos): ?>
+                                <option value="<?= e($pos) ?>"><?= e($pos) ?></option>
+                            <?php endforeach; ?>
+                        </select>
                         <small class="mgmt-hint">
-                            Coordinators, the Head of Academic Programs and Librarians are created by the Director.
+                            Coordinators and the Head of Academic Programs are created by the Director.
                         </small>
                     </div>
 
@@ -321,7 +352,7 @@ function staff_table(array $rows, string $which): void {
                     <div class="mgmt-form-actions">
                         <button type="submit" class="btn-sm-maroon mgmt-submit" id="formSubmit">
                             <span class="material-symbols-outlined mi-18" id="formSubmitIcon">add</span>
-                            <span id="formSubmitText">Create adviser account</span>
+                            <span id="formSubmitText">Create account</span>
                         </button>
                         <button type="button" class="btn-sm-outline mgmt-submit" id="formCancel" hidden>
                             Cancel
@@ -335,13 +366,14 @@ function staff_table(array $rows, string $which): void {
         <section>
             <div class="mgmt-tabs" role="tablist">
                 <button type="button" class="mgmt-tab is-on" data-pane="activePane" role="tab">
-                    Active advisers
+                    Active staff
                     <span class="count"><?= count($active) ?></span>
                 </button>
                 <button type="button" class="mgmt-tab" data-pane="archivedPane" role="tab">
                     Archived
                     <span class="count"><?= count($archived) ?></span>
                 </button>
+                <?php password_audit_tab($password_rows); ?>
 
                 <span class="mgmt-sort" id="sortChips">
                     <span class="mgmt-chips-label">Sort</span>
@@ -358,6 +390,7 @@ function staff_table(array $rows, string $which): void {
             <div id="archivedPane" class="js-pane" hidden>
                 <?php staff_table($archived, 'archived'); ?>
             </div>
+            <?php password_audit_pane($password_rows, 'staff'); ?>
         </section>
 
     </div>
@@ -366,21 +399,19 @@ function staff_table(array $rows, string $which): void {
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 document.addEventListener('DOMContentLoaded', function () {
 
-    /* Twelve characters with an uppercase and a digit guaranteed, then shuffled
-       so those two are not always in front. */
-    var genBtn = document.getElementById('generatePasswordBtn');
-    if (genBtn) {
-        genBtn.addEventListener('click', function () {
-            var upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
-                digits = '0123456789',
-                all = 'abcdefghijklmnopqrstuvwxyz' + upper + digits + '!@#$%',
-                pick = function (s) { return s.charAt(Math.floor(Math.random() * s.length)); },
-                pass = pick(upper) + pick(digits);
-            for (var i = 2; i < 12; i++) { pass += pick(all); }
-            document.getElementById('password').value =
-                pass.split('').sort(function () { return Math.random() - 0.5; }).join('');
-        });
+    /* The Generate button lives in includes/password_generator.php — it needs
+       the name and ID fields, which are shared by all three create forms. */
+
+    /* The ID box is named for whichever position is selected — a librarian
+       does not have a "Faculty ID". */
+    var positionSelect = document.getElementById('title');
+    var idLabel = document.getElementById('idLabel');
+    function relabelId() {
+        if (!positionSelect || !idLabel) { return; }
+        idLabel.textContent = positionSelect.value === 'Librarian' ? 'Librarian ID' : 'Faculty ID';
     }
+    if (positionSelect) { positionSelect.addEventListener('change', relabelId); }
+    relabelId();
 
     // Tabs
     var tabs = document.querySelectorAll('.mgmt-tab');
@@ -431,10 +462,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function toCreateMode() {
         panel.classList.remove('is-editing');
-        document.getElementById('formTitle').textContent = 'New adviser account';
+        document.getElementById('formTitle').textContent = 'New staff account';
         document.getElementById('formIcon').textContent = 'person_add';
         document.getElementById('formSubmitIcon').textContent = 'add';
-        document.getElementById('formSubmitText').textContent = 'Create adviser account';
+        document.getElementById('formSubmitText').textContent = 'Create account';
         document.getElementById('passReq').hidden = false;
         document.getElementById('passHint').textContent =
             'At least one uppercase letter and one number.';
@@ -442,6 +473,7 @@ document.addEventListener('DOMContentLoaded', function () {
         pw.placeholder = 'Min 6 chars, 1 uppercase, 1 number';
         cancel.hidden = true;
         form.reset();
+        relabelId();
         // form.reset() restores the markup's values, not these — set them after.
         document.getElementById('formAction').value = 'create_user';
         document.getElementById('formUserId').value = '';
@@ -454,15 +486,17 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('full_name').value  = d.fullName || '';
         document.getElementById('faculty_id').value = d.facultyId || '';
         document.getElementById('email').value      = d.email || '';
+        if (positionSelect && d.position) { positionSelect.value = d.position; }
+        relabelId();
         pw.value = '';
 
         document.getElementById('formAction').value = 'update_user';
         document.getElementById('formUserId').value = d.userId;
-        document.getElementById('formTitle').textContent = 'Edit adviser account';
+        document.getElementById('formTitle').textContent = 'Edit staff account';
         document.getElementById('formIcon').textContent = 'edit';
         document.getElementById('formSubmitIcon').textContent = 'save';
         document.getElementById('formSubmitText').textContent = 'Save changes';
-        document.getElementById('editingWho').textContent = d.fullName || 'this adviser';
+        document.getElementById('editingWho').textContent = d.fullName || 'this account';
         // A blank password here means "keep the current one", so it cannot be required.
         document.getElementById('passReq').hidden = true;
         document.getElementById('passHint').textContent =
@@ -488,7 +522,8 @@ document.addEventListener('DOMContentLoaded', function () {
     cancel.addEventListener('click', toCreateMode);
 });
 </script>
-<?php require ROOT_PATH.'/includes/action_dialogs.php';
+<?php require ROOT_PATH.'/includes/password_generator.php';
+require_once ROOT_PATH.'/includes/action_dialogs.php';
 require ROOT_PATH.'/includes/manage_save_confirm.php';
 require ROOT_PATH.'/includes/scroll_jump.php';
 require ROOT_PATH.'/includes/site_footer.php'; ?>

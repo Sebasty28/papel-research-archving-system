@@ -27,7 +27,7 @@ $CARD_COLLAPSE_SELECTOR = $CARD_COLLAPSE_SELECTOR ?? '.pd-card';
     align-items: center;
     padding: .15rem;
     border: none;
-    border-radius: 6px;
+    border-radius: var(--r-control, 4px);
     background: none;
     color: var(--maroon);
     cursor: pointer;

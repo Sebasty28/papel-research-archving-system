@@ -303,38 +303,3 @@ function generate_statistical_analysis($pdfText)
 
     return json_decode($response, true) ?? [];
 }
-
-/**
- * Checks similarity between a new abstract and a list of existing abstracts using AI
- * 
- * @param string $newAbstract - The abstract of the paper being uploaded
- * @param array $existingAbstracts - Array of strings (abstracts) from approved papers
- * @return array - ['percentage' => int, 'reason' => string]
- */
-function check_similarity_groq($newAbstract, $existingAbstracts)
-{
-    if (empty($existingAbstracts))
-        return ['percentage' => 0, 'reason' => 'No existing papers to compare.'];
-
-    $systemPrompt = "You are a plagiarism and similarity detection expert. Compare the 'Target Abstract' against the list of 'Existing Abstracts'. Analyze for semantic similarity, not just word matching.";
-
-    $userPrompt = "Target Abstract:\n" . substr($newAbstract, 0, 2000) . "\n\n";
-    $userPrompt .= "Existing Abstracts to check against:\n";
-
-    foreach ($existingAbstracts as $index => $abstract) {
-        $userPrompt .= "[$index] " . substr($abstract, 0, 1000) . "\n---\n";
-    }
-
-    $userPrompt .= "\nTask: Determine the highest similarity percentage found between the Target Abstract and ANY of the Existing Abstracts.\n";
-    $userPrompt .= "Strictly follow this rule: If the semantic overlap is significant, rate it high. The acceptable limit is 15%.\n";
-    $userPrompt .= "Return ONLY valid JSON in this format:\n";
-    $userPrompt .= "{\n  \"highest_similarity_percentage\": 0,\n  \"most_similar_abstract_index\": -1,\n  \"reason\": \"brief explanation\"\n}";
-
-    $result = call_groq_api($systemPrompt, $userPrompt, 500);
-
-    if (!$result['success'])
-        return ['percentage' => 0, 'reason' => 'AI check failed'];
-
-    $data = json_decode($result['response'], true);
-    return ['percentage' => (int) ($data['highest_similarity_percentage'] ?? 0), 'reason' => $data['reason'] ?? ''];
-}

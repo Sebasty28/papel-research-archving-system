@@ -6,25 +6,53 @@ class UserRepository {
         $this->conn = $dbConnection;
     }
 
-    public function toggleActiveStatus($userId, $role) {
-        $stmt = $this->conn->prepare("UPDATE users SET is_active = NOT is_active WHERE user_id=? AND user_role=?");
-        $stmt->bind_param('is', $userId, $role);
+    /* The role argument on the four methods below is a guard, not a lookup: it
+       stops one console acting on an account belonging to another. It accepts a
+       list now, because the Research Coordinator's page manages advisers and
+       librarians together and a single role could not express that. */
+    private function roleGuard($role): array {
+        $roles = is_array($role) ? array_values($role) : [$role];
+        return [implode(',', array_fill(0, count($roles), '?')), $roles,
+                str_repeat('s', count($roles))];
+    }
+
+    private function runGuarded(string $sql, array $head, string $headTypes, $role): bool {
+        [$marks, $roles, $roleTypes] = $this->roleGuard($role);
+        $stmt = $this->conn->prepare(str_replace('{roles}', $marks, $sql));
+        $args = array_merge($head, $roles);
+        $refs = [$headTypes . $roleTypes];
+        foreach ($args as $k => $_) { $refs[] = &$args[$k]; }
+        call_user_func_array([$stmt, 'bind_param'], $refs);
         $stmt->execute();
-        return $stmt->affected_rows> 0;
+        return $stmt->affected_rows > 0;
+    }
+
+    public function toggleActiveStatus($userId, $role) {
+        return $this->runGuarded(
+            "UPDATE users SET is_active = NOT is_active WHERE user_id=? AND user_role IN ({roles})",
+            [$userId], 'i', $role);
     }
 
     public function deleteUser($userId, $role) {
-        $stmt = $this->conn->prepare("DELETE FROM users WHERE user_id=? AND user_role=?");
-        $stmt->bind_param('is', $userId, $role);
-        $stmt->execute();
-        return $stmt->affected_rows> 0;
+        return $this->runGuarded(
+            "DELETE FROM users WHERE user_id=? AND user_role IN ({roles})",
+            [$userId], 'i', $role);
     }
 
-    public function updatePassword($userId, $role, $hash, $plainPassword) {
-        $stmt = $this->conn->prepare("UPDATE users SET password=?, plain_password=? WHERE user_id=? AND user_role=?");
-        $stmt->bind_param('ssis', $hash, $plainPassword, $userId, $role);
-        $stmt->execute();
-        return $stmt->affected_rows> 0;
+    /**
+     * The password itself is deliberately not kept.
+     *
+     * Every account used to be stored twice: once hashed, and once in clear
+     * text so the management consoles could print it in a Password column.
+     * That put every password in the system — including any a person had
+     * reused elsewhere — in reach of anyone at the screen or holding a copy of
+     * the database. Only the hash is written now. Whoever performs a reset
+     * types the new password, so they already know it; nobody else needs to.
+     */
+    public function updatePassword($userId, $role, $hash) {
+        return $this->runGuarded(
+            "UPDATE users SET password=? WHERE user_id=? AND user_role IN ({roles})",
+            [$hash, $userId], 'si', $role);
     }
 
     public function isUsernameOrEmailExists($username, $email) {
@@ -44,9 +72,9 @@ class UserRepository {
     }
 
     public function createUser($data) {
-        $stmt = $this->conn->prepare("INSERT INTO users (username, email, password, plain_password, full_name, title, faculty_id, birthdate, user_role, created_by, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)");
-        $stmt->bind_param('sssssssssi', 
-            $data['username'], $data['email'], $data['hash'], $data['plain_password'], 
+        $stmt = $this->conn->prepare("INSERT INTO users (username, email, password, full_name, title, faculty_id, birthdate, user_role, created_by, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)");
+        $stmt->bind_param('ssssssssi',
+            $data['username'], $data['email'], $data['hash'],
             $data['full_name'], $data['title'], $data['faculty_id'], $data['birthdate'], $data['user_role'], $data['created_by']
         );
         return $stmt->execute();
@@ -71,21 +99,44 @@ class UserRepository {
         if ($password !== '') {
             $hash = password_hash($password, PASSWORD_DEFAULT);
             $stmt = $this->conn->prepare(
-                "UPDATE users SET full_name=?, email=?, faculty_id=?, password=?, plain_password=?
-                 WHERE user_id=? AND user_role='faculty'");
-            $stmt->bind_param('sssssi', $data['full_name'], $data['email'], $data['faculty_id'],
-                              $hash, $password, $userId);
+                "UPDATE users SET full_name=?, email=?, faculty_id=?, password=?
+                 WHERE user_id=? AND user_role IN ('faculty','librarian')");
+            $stmt->bind_param('ssssi', $data['full_name'], $data['email'], $data['faculty_id'],
+                              $hash, $userId);
         } else {
             $stmt = $this->conn->prepare(
                 "UPDATE users SET full_name=?, email=?, faculty_id=?
-                 WHERE user_id=? AND user_role='faculty'");
+                 WHERE user_id=? AND user_role IN ('faculty','librarian')");
             $stmt->bind_param('sssi', $data['full_name'], $data['email'], $data['faculty_id'], $userId);
         }
         return $stmt->execute();
     }
 
+    /**
+     * Accounts holding any of several roles, at a given active/archived state.
+     *
+     * The single-role version below could not answer "advisers and librarians",
+     * which is what the Research Coordinator's page now lists.
+     */
+    public function getUsersByRolesAndStatus(array $roles, $isActive) {
+        if (!$roles) { return null; }
+        $marks = implode(',', array_fill(0, count($roles), '?'));
+        $stmt = $this->conn->prepare(
+            "SELECT user_id, full_name, email, username, title, faculty_id,
+                    admin_level, created_at, is_active, user_role
+             FROM users WHERE user_role IN ($marks) AND is_active = ?
+             ORDER BY created_at DESC");
+        $args  = array_merge($roles, [$isActive]);
+        $types = str_repeat('s', count($roles)) . 'i';
+        $refs  = [$types];
+        foreach ($args as $k => $_) { $refs[] = &$args[$k]; }
+        call_user_func_array([$stmt, 'bind_param'], $refs);
+        $stmt->execute();
+        return $stmt->get_result();
+    }
+
     public function getUsersByRoleAndStatus($role, $isActive) {
-        $stmt = $this->conn->prepare("SELECT user_id, full_name, email, username, plain_password, title, faculty_id, created_at, is_active, user_role FROM users WHERE user_role=? AND is_active=? ORDER BY created_at DESC");
+        $stmt = $this->conn->prepare("SELECT user_id, full_name, email, username, title, faculty_id, created_at, is_active, user_role FROM users WHERE user_role=? AND is_active=? ORDER BY created_at DESC");
         $stmt->bind_param('si', $role, $isActive);
         $stmt->execute();
         return $stmt->get_result();

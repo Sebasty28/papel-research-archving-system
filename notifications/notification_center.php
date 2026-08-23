@@ -76,7 +76,7 @@ $kinds = [
 
 .nc-tabs { display: flex; gap: .375rem; margin-bottom: 1rem; }
 .nc-tab {
-    padding: .35rem .9rem; border: 1px solid var(--border); border-radius: 999px;
+    padding: .35rem .9rem; border: 1px solid var(--border); border-radius: var(--r-control, 4px);
     background: var(--white); color: var(--ink); font-size: .8125rem; text-decoration: none;
 }
 .nc-tab:hover { border-color: var(--soft-maroon); color: var(--maroon); }
@@ -84,7 +84,7 @@ $kinds = [
 
 .nc-list {
     background: var(--white); border: 1px solid var(--border);
-    border-radius: 12px; overflow: hidden;
+    border-radius: var(--r-card, 8px); overflow: hidden;
 }
 .nc-item {
     display: flex; align-items: flex-start; gap: .75rem;
@@ -97,7 +97,7 @@ $kinds = [
 .nc-item:hover { background: var(--cream); }
 .nc-item.is-unread { background: var(--cream); }
 .nc-ico {
-    width: 2rem; height: 2rem; flex: 0 0 2rem; border-radius: 8px;
+    width: 2rem; height: 2rem; flex: 0 0 2rem; border-radius: var(--r-card, 8px);
     display: inline-flex; align-items: center; justify-content: center;
     background: var(--white); border: 1px solid var(--border); color: var(--maroon);
 }
@@ -180,7 +180,8 @@ $kinds = [
                 <?php foreach ($notifs as $n): ?>
                     <?php
                     $kind = $kinds[$n['notification_type']] ?? ['icon' => 'notifications', 'label' => 'Notice'];
-                    $href = notification_link(isset($n['paper_id']) ? (int)$n['paper_id'] : null, $u['user_role']);
+                    $href = notification_link(isset($n['paper_id']) ? (int)$n['paper_id'] : null,
+                                              $u['user_role'], (string)($n['notification_type'] ?? ''));
                     ?>
                     <a class="nc-item <?= $n['is_read'] ? '' : 'is-unread' ?>"
                        href="<?= e($href) ?>" data-notif-id="<?= (int)$n['notification_id'] ?>">

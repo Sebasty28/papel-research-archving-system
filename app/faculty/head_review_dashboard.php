@@ -72,6 +72,8 @@ $RC = [
     'review'  => null,        // read-only: no approve, no return
     'primary' => ['href' => BASE_URL.'/analytics/analytics_dashboard.php', 'icon' => 'insights', 'label' => 'Analytics'],
     'quick' => [
+        ['href' => BASE_URL.'/app/student/student_upload_ai.php', 'icon' => 'upload_file', 'label' => 'Upload Paper',
+         'desc' => 'Add a paper of your own. It is published straight away, with no review'],
         ['href' => BASE_URL.'/analytics/analytics_dashboard.php', 'icon' => 'insights', 'label' => 'Analytics',
          'desc' => 'Output by program, paper type and month'],
         ['href' => BASE_URL.'/archive/index.php?browse=1', 'icon' => 'menu_book', 'label' => 'Public Repository',

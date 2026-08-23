@@ -68,7 +68,7 @@ if ($sc) $stored = (int)($sc->fetch_assoc()['n'] ?? 0);
 .set-head p { font-size: .875rem; color: var(--grey); line-height: 1.7; margin: 0 0 1.75rem; max-width: 44rem; }
 
 .set-card {
-    background: var(--white); border: 1px solid var(--border); border-radius: 12px;
+    background: var(--white); border: 1px solid var(--border); border-radius: var(--r-card, 8px);
     padding: 1.5rem; margin-bottom: 1.25rem;
 }
 .set-card h2 {
@@ -81,13 +81,13 @@ if ($sc) $stored = (int)($sc->fetch_assoc()['n'] ?? 0);
 .set-card ol, .set-card ul { margin: 0 0 .75rem; padding-left: 1.25rem; }
 .set-card code {
     font-family: monospace; font-size: .75rem; background: var(--cream);
-    color: var(--dark-maroon); padding: .1rem .35rem; border-radius: 4px;
+    color: var(--dark-maroon); padding: .1rem .35rem; border-radius: var(--r-card, 8px);
 }
 
 /* Current state, stated plainly before the control that changes it. */
 .set-status { display: flex; align-items: flex-start; gap: .75rem; }
 .set-status-ico {
-    width: 2.25rem; height: 2.25rem; flex: 0 0 2.25rem; border-radius: 9px;
+    width: 2.25rem; height: 2.25rem; flex: 0 0 2.25rem; border-radius: var(--r-badge, 2px);
     display: inline-flex; align-items: center; justify-content: center;
     background: var(--cream); color: var(--maroon);
 }
@@ -104,7 +104,7 @@ if ($sc) $stored = (int)($sc->fetch_assoc()['n'] ?? 0);
     display: block; font-size: .75rem; font-weight: 500; color: var(--ink); margin-bottom: .35rem;
 }
 .set-field input {
-    width: 100%; border: 1px solid var(--border); border-radius: 8px;
+    width: 100%; border: 1px solid var(--border); border-radius: var(--r-control, 4px);
     padding: .625rem .75rem; font-family: monospace; font-size: .8125rem;
     color: var(--ink); background: var(--white);
 }
@@ -112,7 +112,7 @@ if ($sc) $stored = (int)($sc->fetch_assoc()['n'] ?? 0);
 .set-actions { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
 .set-actions .set-hint { font-size: .75rem; color: var(--grey); }
 
-.set-flash { border-radius: 8px; padding: .75rem 1rem; font-size: .8125rem; margin-bottom: 1.25rem; }
+.set-flash { border-radius: var(--r-card, 8px); padding: .75rem 1rem; font-size: .8125rem; margin-bottom: 1.25rem; }
 .set-flash.ok  { background: #e7f6ed; color: #1b5e35; }
 .set-flash.bad { background: #fdeaea; color: var(--dark-maroon); }
 

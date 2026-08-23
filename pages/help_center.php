@@ -16,7 +16,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
 /* ===== Hero ===== */
 /* ===== FAQ Accordion ===== */
 .faq-list { display: flex; flex-direction: column; gap: .625rem; }
-.faq-item { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.faq-item { border: 1px solid var(--border); border-radius: var(--r-card, 8px); overflow: hidden; }
 .faq-trigger {
     width: 100%; display: flex; align-items: center; justify-content: space-between;
     padding: 1.125rem 1.25rem; background: var(--white);
@@ -30,13 +30,35 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
 .faq-trigger.open .faq-icon { transform: rotate(45deg); color: var(--maroon); }
 .faq-body { display: none; padding: 1.125rem 1.25rem; background: var(--white); color: var(--ink); font-size: .9375rem; line-height: 1.75; }
 .faq-body.open { display: block; }
-.faq-body ol { padding-left: 1.25rem; margin-top: .5rem; }
+.faq-body ol, .faq-body ul { padding-left: 1.25rem; margin-top: .5rem; }
 .faq-body li { margin-bottom: .5rem; }
+.faq-body p { margin: 0 0 .75rem; }
+.faq-body p:last-child { margin-bottom: 0; }
+.faq-body a { color: var(--maroon); text-decoration: underline; text-underline-offset: 2px; }
+.faq-body a:hover { color: var(--dark-maroon); }
+/* An aside rather than an instruction: true and worth knowing, but not part of
+   what the reader came here to do. */
+.faq-body .faq-note {
+    margin-top: 1rem; padding-top: .75rem;
+    border-top: 1px solid var(--border);
+    font-size: .8125rem; color: var(--grey);
+}
+
+/* Marked when a link brought the reader straight to it, so the thing they were
+   sent to see is obvious among a column of identical rows. It stays marked:
+   a highlight that fades while somebody is still reading is worse than none. */
+.faq-item.is-called-out { border-color: var(--maroon); box-shadow: 0 0 0 3px rgba(129,4,3,.08); }
+.quick-link-card.is-called-out {
+    border-color: var(--maroon);
+    background: rgba(129,4,3,.05);
+    box-shadow: 0 0 0 3px rgba(129,4,3,.08);
+}
+.quick-link-card.is-called-out .qlc-title { color: var(--maroon); font-weight: 500; }
 
 /* ===== Quick links grid ===== */
 .quick-links { display: grid; grid-template-columns: repeat(3,1fr); gap: 1rem; margin-top: 0; }
 .quick-link-card {
-    background: var(--cream); border: 1px solid var(--border); border-radius: 10px;
+    background: var(--cream); border: 1px solid var(--border); border-radius: var(--r-card, 8px);
     padding: 1.25rem; text-decoration: none; color: var(--ink);
     display: flex; flex-direction: column; gap: .5rem; transition: all .2s;
 }
@@ -58,13 +80,13 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
 #chat-window {
     display: none; position: absolute; bottom: 70px; left: 0;
     width: 360px; height: 520px; background: white;
-    border-radius: 14px; box-shadow: var(--shadow-md); border: 1px solid var(--border);
+    border-radius: var(--r-card, 8px); box-shadow: var(--shadow-md); border: 1px solid var(--border);
     flex-direction: column; overflow: hidden;
 }
 #chat-header { background: var(--maroon); color: white; padding: 1rem; font-weight: 400; font-size: .875rem; display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
 #chat-messages { flex: 1; padding: 1rem; overflow-y: auto; background: var(--cream); display: flex; flex-direction: column; gap: .625rem; }
 #chat-input-area { padding: .75rem 1rem; border-top: 1px solid var(--border); display: flex; gap: .5rem; background: white; }
-.chat-msg { padding: .625rem .875rem; border-radius: 10px; max-width: 82%; font-size: .875rem; line-height: 1.5; }
+.chat-msg { padding: .625rem .875rem; border-radius: var(--r-card, 8px); max-width: 82%; font-size: .875rem; line-height: 1.5; }
 .chat-msg.user { background: var(--maroon); color: white; align-self: flex-end; border-bottom-right-radius: 3px; }
 .chat-msg.bot { background: var(--white); color: var(--ink); align-self: flex-start; border: 1px solid var(--border); border-bottom-left-radius: 3px; }
 #chat-close-btn { background: none; border: none; color: rgba(255,255,255,.8); cursor: pointer; font-size: 1.125rem; padding: 0; line-height: 1; }
@@ -156,17 +178,40 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
                     <i class="bi bi-plus faq-icon"></i>
                 </button>
                 <div class="faq-body" id="q4">
-                    Yes. The public archive allows browsing and searching research papers without an account. However, to view full paper details or download files, you must log in using a Guest, Student, or Faculty account.
+                    Yes. The public archive allows browsing and searching research papers without an account. However, to view full paper details and read the manuscript itself, you must log in using a Guest, Student, or Faculty account.
                 </div>
             </div>
 
-            <div class="faq-item">
+            <?php /* Linked to directly from the sign-in panel, so it carries an id
+                     of its own rather than relying on the question's position. */ ?>
+            <div class="faq-item" id="forgot-password">
                 <button class="faq-trigger" type="button" data-faq="q5">
                     I forgot my password. How do I reset it?
                     <i class="bi bi-plus faq-icon"></i>
                 </button>
                 <div class="faq-body" id="q5">
-                    Contact your Faculty adviser or the Research Office Admin to have your password reset. Currently, self-service password reset is not available. Your admin can update your credentials through the Faculty Management panel.
+                    <p><strong>If you still know your password</strong> and simply want a new one,
+                    you can change it yourself: sign in, open <a href="settings.php">Settings</a>
+                    and use the Security card. You will be asked for your current password and to
+                    type your full name to confirm.</p>
+
+                    <p><strong>If you have forgotten it</strong>, it cannot be recovered — passwords
+                    are stored scrambled and nobody, including the Research Office, can read yours.
+                    A new one has to be issued by whoever set up your account:</p>
+
+                    <ul>
+                        <li><strong>Students</strong> — your Research Adviser.</li>
+                        <li><strong>Research Advisers and the Librarian</strong> — the Research Coordinator.</li>
+                        <li><strong>Research Coordinator and the Head of Academic Programs</strong> — the Director.</li>
+                    </ul>
+
+                    <p>They will give you a new password to sign in with, which you should change to
+                    one of your own straight afterwards. You can also ask through
+                    <a href="contact_support.php" class="js-support-link">Contact Support</a>, which
+                    asks who set up your account and sends the request straight to them.</p>
+
+                    <p class="faq-note">Whenever a password is changed, the person who created the
+                    account is told that it happened. They are never shown the password itself.</p>
                 </div>
             </div>
 
@@ -187,7 +232,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
                 <div class="qlc-title">Browse Repository</div>
                 <div class="qlc-desc">Search and explore all published research papers</div>
             </a>
-            <a href="contact_support.php" class="quick-link-card">
+            <a href="contact_support.php" class="quick-link-card is-support">
                 <div class="qlc-icon"><i class="bi bi-envelope"></i></div>
                 <div class="qlc-title">Contact Support</div>
                 <div class="qlc-desc">Reach out to the Research Office directly</div>
@@ -256,9 +301,34 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    // Open first FAQ by default
-    var firstTrigger = document.querySelector('.faq-trigger');
-    if (firstTrigger) firstTrigger.click();
+    /* Arriving from the sign-in panel's "Forgot password?" opens that answer
+       rather than the first one, brings it into view, and marks the Contact
+       Support card, which is where the reader is most likely headed next. A
+       fragment on its own would scroll to a closed accordion and look like
+       nothing had happened. */
+    function openFromHash() {
+        var id = (location.hash || '').replace('#', '');
+        if (!id) return false;
+        var item = document.getElementById(id);
+        if (!item || !item.classList.contains('faq-item')) return false;
+
+        var trigger = item.querySelector('.faq-trigger');
+        if (!trigger) return false;
+        if (!trigger.classList.contains('open')) trigger.click();
+        item.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        item.classList.add('is-called-out');
+
+        var support = document.querySelector('.quick-link-card.is-support');
+        if (support) support.classList.add('is-called-out');
+        return true;
+    }
+
+    // Open first FAQ by default, unless a link asked for a particular one.
+    if (!openFromHash()) {
+        var firstTrigger = document.querySelector('.faq-trigger');
+        if (firstTrigger) firstTrigger.click();
+    }
+    window.addEventListener('hashchange', openFromHash);
 
     <?php if ($u): ?>
     // Chatbot

@@ -188,7 +188,7 @@ $types_res = $conn->query("SELECT DISTINCT paper_type FROM research_papers WHERE
         background: linear-gradient(135deg, var(--accent-blue), var(--accent-blue-light));
         color: white;
         padding: 0.25rem 0.75rem;
-        border-radius: 20px;
+        border-radius: var(--r-badge, 2px);
         font-size: 0.75rem;
         font-weight: 600;
         letter-spacing: 0.5px;
@@ -206,7 +206,7 @@ $types_res = $conn->query("SELECT DISTINCT paper_type FROM research_papers WHERE
         color: var(--accent-blue);
         font-weight: 600;
         padding: 0.5rem 1.5rem;
-        border-radius: 8px;
+        border-radius: var(--r-control, 4px);
         transition: all 0.3s ease;
     }
     
@@ -259,7 +259,7 @@ $types_res = $conn->query("SELECT DISTINCT paper_type FROM research_papers WHERE
     .filter-card {
         background: var(--paper-white);
         border: 1px solid var(--border-light);
-        border-radius: 16px;
+        border-radius: var(--r-card, 8px);
         box-shadow: var(--shadow-md);
         overflow: hidden;
         transition: all 0.3s ease;
@@ -338,7 +338,7 @@ $types_res = $conn->query("SELECT DISTINCT paper_type FROM research_papers WHERE
     
     .form-select {
         border: 2px solid var(--border-light);
-        border-radius: 10px;
+        border-radius: var(--r-control, 4px);
         padding: 0.625rem 0.875rem;
         font-size: 0.9375rem;
         color: var(--ink-medium);
@@ -356,7 +356,7 @@ $types_res = $conn->query("SELECT DISTINCT paper_type FROM research_papers WHERE
         color: var(--ink-medium);
         font-weight: 600;
         padding: 0.625rem;
-        border-radius: 10px;
+        border-radius: var(--r-control, 4px);
         transition: all 0.3s ease;
         width: 100%;
     }
@@ -383,7 +383,7 @@ $types_res = $conn->query("SELECT DISTINCT paper_type FROM research_papers WHERE
         gap: 0.75rem;
         background: var(--paper-white);
         padding: 0.5rem;
-        border-radius: 16px;
+        border-radius: var(--r-control, 4px);
         border: 2px solid var(--border-light);
         box-shadow: var(--shadow-md);
         transition: all 0.3s ease;
@@ -414,7 +414,7 @@ $types_res = $conn->query("SELECT DISTINCT paper_type FROM research_papers WHERE
         color: white;
         border: none;
         padding: 0.875rem 2rem;
-        border-radius: 12px;
+        border-radius: var(--r-control, 4px);
         font-weight: 600;
         transition: all 0.3s ease;
         box-shadow: 0 4px 12px rgba(129, 4, 3, 0.25);
@@ -434,7 +434,7 @@ $types_res = $conn->query("SELECT DISTINCT paper_type FROM research_papers WHERE
     .paper-card {
         background: var(--paper-white);
         border: 1px solid var(--border-light);
-        border-radius: 16px;
+        border-radius: var(--r-card, 8px);
         padding: 2rem;
         box-shadow: var(--shadow-sm);
         transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
@@ -513,7 +513,7 @@ $types_res = $conn->query("SELECT DISTINCT paper_type FROM research_papers WHERE
         background: linear-gradient(135deg, var(--accent-blue), var(--accent-blue-light));
         color: white;
         padding: 0.375rem 0.875rem;
-        border-radius: 20px;
+        border-radius: var(--r-badge, 2px);
         font-size: 0.75rem;
         font-weight: 600;
         letter-spacing: 0.5px;
@@ -556,7 +556,7 @@ $types_res = $conn->query("SELECT DISTINCT paper_type FROM research_papers WHERE
         background: #fff8e1;
         color: var(--accent-blue);
         padding: 0.375rem 0.75rem;
-        border-radius: 8px;
+        border-radius: var(--r-badge, 2px);
         font-size: 0.8125rem;
         font-weight: 500;
         border: 1px solid rgba(220, 169, 44, 0.3);
@@ -575,7 +575,7 @@ $types_res = $conn->query("SELECT DISTINCT paper_type FROM research_papers WHERE
         color: var(--accent-blue);
         border: 2px solid var(--accent-blue);
         padding: 0.625rem 1.5rem;
-        border-radius: 10px;
+        border-radius: var(--r-control, 4px);
         font-weight: 600;
         font-size: 0.9375rem;
         transition: all 0.3s ease;
@@ -662,7 +662,7 @@ $types_res = $conn->query("SELECT DISTINCT paper_type FROM research_papers WHERE
         width: 50px;
         height: 50px;
         background: linear-gradient(135deg, var(--accent-blue), var(--accent-yellow));
-        border-radius: 12px;
+        border-radius: var(--r-card, 8px);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -770,7 +770,7 @@ $types_res = $conn->query("SELECT DISTINCT paper_type FROM research_papers WHERE
     
     ::-webkit-scrollbar-thumb {
         background: linear-gradient(180deg, var(--accent-blue), var(--accent-yellow));
-        border-radius: 6px;
+        border-radius: var(--r-control, 4px);
     }
     
     ::-webkit-scrollbar-thumb:hover {

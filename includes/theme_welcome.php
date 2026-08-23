@@ -22,7 +22,7 @@
     width: min(21rem, calc(100vw - 3rem));
     padding: 1.125rem 1.25rem;
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: var(--r-card, 8px);
     background: var(--white);
     box-shadow: 0 12px 32px rgba(0, 0, 0, .18);
     display: none;
@@ -47,7 +47,7 @@
 .tw-swatch.is-on { border-color: var(--ink); transform: scale(1.08); }
 .tw-modes { display: flex; gap: .4rem; margin-bottom: 1rem; }
 .tw-mode {
-    flex: 1 1 0; padding: .45rem; border: 1px solid var(--border); border-radius: 8px;
+    flex: 1 1 0; padding: .45rem; border: 1px solid var(--border); border-radius: var(--r-card, 8px);
     background: var(--white); color: var(--ink); font-family: inherit; font-size: .75rem;
     cursor: pointer;
 }
@@ -93,8 +93,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     var COLOURS = [
         ['maroon', '#820707', 'PUP Maroon'],
-        ['lightblue', '#2E86AB', 'PUP Light Blue'],
-        ['blue', '#14487F', 'PUP Blue'],
+        ['green', '#14532D', 'Dark Green'],
+        ['blue', '#14487F', 'Dark Blue'],
         ['white', '#3B3B3B', 'PUP White Modern'],
         ['classic', '#6B0F0F', 'PUP Old Classic']
     ];

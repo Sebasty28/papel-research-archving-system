@@ -10,7 +10,7 @@
  * without being touched.
  *
  * Two attributes on <html> carry it:
- *   data-color  maroon | lightblue | blue | white | classic
+ *   data-color  maroon | green | blue | white | classic
  *   data-mode   light | dark        (resolved; "system" is worked out in JS)
  *
  * The script below runs before anything is painted, so a reader who chose dark
@@ -26,6 +26,12 @@
     var get = function (k, d) { try { return localStorage.getItem(k) || d; } catch (e) { return d; } };
 
     var colour = get('papel_color', 'maroon');
+    /* Renamed when the palette became dark green. Without this, a reader who
+       had chosen it would silently land back on maroon. */
+    if (colour === 'lightblue') {
+        colour = 'green';
+        try { localStorage.setItem('papel_color', 'green'); } catch (e) {}
+    }
     var theme  = get('papel_theme', 'light');    // PAPEL is a light site by default
     var dark   = theme === 'dark' ||
                  (theme === 'system' && window.matchMedia &&
@@ -54,18 +60,23 @@ html[data-color="maroon"] {
     --accent-dark:  #630000;
     --accent-soft:  #B17D7D;
     --accent-tint:  #FFF5F5;
-    --accent-light: #E08A8A;
+    /* 6.50:1 on the new dark surface, where it needs 7. #E39494 gives 7.10. */
+    --accent-light: #E39494;
     --ink-base:     #330000;
     --border-base:  #E6D4D4;
 }
-html[data-color="lightblue"] {
-    --accent:       #2E86AB;
-    --accent-dark:  #1F5F7A;
-    --accent-soft:  #9EC7DA;
-    --accent-tint:  #F2FAFD;
-    --accent-light: #79C4E3;
-    --ink-base:     #10303D;
-    --border-base:  #D3E6EF;
+/* Dark green. Chosen against the same bar the rest of the palette meets:
+   9.11:1 as text on white, and 9.11:1 for white text on it, so it works as
+   both a heading colour and a button fill. --accent-light is the lift for
+   dark mode, at 9.15:1 on the dark surface. */
+html[data-color="green"] {
+    --accent:       #14532D;
+    --accent-dark:  #0E3D21;
+    --accent-soft:  #8FB79E;
+    --accent-tint:  #F2FAF5;
+    --accent-light: #7FC79A;
+    --ink-base:     #0B2E1A;
+    --border-base:  #D6E7DC;
 }
 html[data-color="blue"] {
     --accent:       #14487F;
@@ -108,7 +119,63 @@ html[data-color="classic"] {
     --ink:          var(--ink-base);
     --border:       var(--border-base);
     --white:        #FFFFFF;
-    --grey:         #9F9F9F;
+    /* Muted text. #9F9F9F sat at 2.65:1 on white, then #6E6A6E at 5.32:1,
+       which clears AA but not the AAA this palette is now held to. It carries
+       hints, table headers, timestamps and empty-state copy on nearly every
+       page, so it is the single token that decides whether the secondary text
+       of the site is comfortable to read. 7.92:1 on white, 7.40:1 on the tint,
+       and still plainly lighter than --ink. */
+    --grey:         #545054;
+
+    /* The accent doing two different jobs.
+       --maroon is used both as text and as a background, which is fine while
+       the page is light but pulls in opposite directions once it is dark: text
+       has to lift to stay legible, a background carrying white text has to stay
+       dark. These are the background form, and they do not lift. */
+    --maroon-surface:       var(--accent);
+    --maroon-surface-hover: var(--accent-dark);
+
+    /* Success and failure, which are their own colours rather than the accent.
+       Kept as tokens because they were hardcoded hex before, and a hardcoded
+       green on a card that turns dark is simply not readable. */
+    /* 6.97:1 on its own background, which rounds to AAA and is not AAA.
+       8.35:1 now. */
+    --ok-text:    #17512E;
+    --ok-bg:      #E7F6ED;
+    --ok-border:  #BFE3CD;
+    --bad-text:   var(--accent-dark);
+    --bad-bg:     #FDEAEA;
+    --bad-border: var(--accent-soft);
+
+    /* ---- Corner radius ----------------------------------------------
+       One scale, four steps, because a repository is read as a document
+       rather than played with as an app. Softer corners were reading as
+       consumer software and, at 10px and 12px on a dense table, they also
+       fought the grid.
+
+         --r-badge    2px  a label that is read, not pressed: PDF, Thesis,
+                           a programme code, a status chip
+         --r-control  4px  anything you click or type into: buttons, fields,
+                           selects, tabs, filter chips, pagination
+         --r-card     8px  something that holds content: cards, panels,
+                           modals, banners, the review record
+         --r-data     0    table shells and grids, where any rounding pulls
+                           the first and last cell out of line
+
+       Circles keep 50% and are deliberately outside this scale: an avatar,
+       an unread dot or a toggle knob is round because of what it is. */
+    --r-badge:   2px;
+    --r-control: 4px;
+    --r-card:    8px;
+    --r-data:    0px;
+    --r-round:   50%;
+
+    /* The sticky header once it is scrolled. Kept beside the palette because
+       it is a surface colour, and it has to change with the mode. */
+    --header-frost:        rgba(255, 255, 255, .72);
+    --header-frost-solid:  rgba(255, 255, 255, .97);
+    --header-frost-edge:   rgba(177, 125, 125, .28);
+    --header-frost-shadow: rgba(51, 0, 0, .08);
 }
 
 /* ---------------------------------------------------------------
@@ -116,15 +183,24 @@ html[data-color="classic"] {
 
    --white is the surface colour everywhere on the site, so turning it
    dark turns the site dark; the accent lifts to stay legible against
-   it. Text sitting *on* the accent is a literal #fff throughout the
-   stylesheets, so it stays readable either way.
+   it.
+
+   That lift is right for the accent as *text* and wrong for it as a
+   *background*. This block used to claim that text on the accent "stays
+   readable either way" — it did not: white on the lifted accent measured
+   2.57:1 across the navbar, breadcrumb, footer and primary buttons on
+   every page, against the 4.5:1 the rest of the site meets. The surface
+   tokens below therefore keep the dark values.
    --------------------------------------------------------------- */
 html[data-mode="dark"] {
-    --white:        #17141A;
+    /* A blue-black rather than the warm purple-black this used to be. The tint
+       above it composites to #282C33, which is what the muted text below is
+       measured against, since that is where most of it sits. */
+    --white:        #1A1E26;
     --cream:        rgba(255, 255, 255, .06);
-    --ink:          #ECE7EA;
-    --grey:         #9C949A;
-    --border:       #332C33;
+    --ink:          #E6EAF0;      /* 13.83:1 on the page, 11.61:1 on the tint */
+    --grey:         #B4BDCA;      /*  8.80:1 and 7.39:1, so AAA on both       */
+    --border:       #333A47;
     --border-soft:  rgba(255, 255, 255, .13);
     --maroon:       var(--accent-light);
     --pup-maroon:   var(--accent-light);
@@ -132,9 +208,26 @@ html[data-mode="dark"] {
     --soft-maroon:  var(--accent-soft);
     --shadow-sm:    0 1px 3px rgba(0, 0, 0, .5);
     --shadow-md:    0 6px 18px rgba(0, 0, 0, .55);
+
+    /* Lifted to read on a dark card, and their tinted backgrounds turned into
+       a wash of the same colour rather than the pale pink and mint that only
+       work on white. */
+    --ok-text:    #7FBB92;
+    --ok-bg:      rgba(127, 187, 146, .12);
+    --ok-border:  rgba(127, 187, 146, .32);
+    --bad-text:   #F0A2A2;
+    --bad-bg:     rgba(240, 162, 162, .12);
+    --bad-border: rgba(240, 162, 162, .32);
+
+    /* The same frosted header, in the dark surface rather than white. */
+    --header-frost:        rgba(26, 30, 38, .72);
+    --header-frost-solid:  rgba(26, 30, 38, .97);
+    --header-frost-edge:   rgba(255, 255, 255, .14);
+    --header-frost-shadow: rgba(0, 0, 0, .45);
+
     color-scheme: dark;                    /* native controls follow */
 }
-html[data-mode="dark"] body { background: #100E12; }
+html[data-mode="dark"] body { background: #14171E; }
 
 /* A few places paint a literal white that would glare on a dark page. */
 html[data-mode="dark"] .doc-surface,
@@ -157,7 +250,18 @@ html[data-mode="dark"] img:not([src*=".svg"]) { filter: brightness(.92); }
     display: flex; align-items: center; gap: .5rem;
     padding: .3rem .1rem; font-size: .8125rem; color: var(--ink); cursor: pointer;
 }
-.qs-color input { accent-color: var(--accent); flex: 0 0 auto; }
+/* The same control the Density and Theme rows use, which is a filled dot
+   rather than the browser's ring. Those live in browse_console.php, which is
+   not on every page carrying this panel, so the declarations are repeated here
+   rather than depending on that file being present. */
+.qs-color input[type="radio"] {
+    appearance: none; -webkit-appearance: none;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: #E2DCDC;
+    margin: 0; flex: 0 0 auto; cursor: pointer;
+}
+.qs-color input[type="radio"]:checked { background: var(--accent); }
 /* A solid dot of the palette's own accent — an inset ring here would hollow it
    out and leave only a rim of the colour it is meant to be showing. */
 .qs-swatch {

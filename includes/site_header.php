@@ -41,7 +41,7 @@ if (!$u) {
             if (($u['admin_level'] ?? 1) == 2) {
                 // Level 2 is the Head of Academic Programs, who shares that desk.
                 $nav_links = [
-                    ['label' => role_home_label('admin'), 'href' => BASE_URL.'/app/faculty/head_review_dashboard.php', 'match' => ['head_review_dashboard.php', 'admin_l2_dashboard.php']],
+                    ['label' => role_home_label('admin'), 'href' => BASE_URL.'/app/faculty/head_review_dashboard.php', 'match' => ['head_review_dashboard.php']],
                 ];
             } else {
                 $nav_links = [
@@ -59,7 +59,7 @@ if (!$u) {
             break;
         case 'librarian':
             $nav_links = [
-                ['label' => 'Manage Guests', 'href' => BASE_URL.'/app/guest/admin_manage_guests.php', 'match' => ['admin_manage_guests.php']],
+                ['label' => 'Guest Passes', 'href' => BASE_URL.'/app/librarian/librarian_manage_guests.php', 'match' => ['librarian_manage_guests.php']],
             ];
             break;
         default:
@@ -103,7 +103,11 @@ if ($u) {
                 <?php $is_active = !empty($link['match']) && in_array($current_script, $link['match'], true); ?>
                 <a href="<?= e($link['href']) ?>" class="<?= $is_active ? 'active' : '' ?>"<?= !empty($link['external']) ? ' target="_blank" rel="noopener"' : '' ?>><?= e($link['label']) ?></a>
             <?php endforeach; ?>
-            <?php if ($u): ?>
+            <?php /* A guest's own nav is already About PAPEL, Help Center and
+                      Contact Support, so the dropdown repeated all three of them
+                      beside the originals. Everyone else has role links there
+                      instead, and still needs somewhere to reach these. */ ?>
+            <?php if ($u && ($u['user_role'] ?? '') !== 'guest'): ?>
                 <?php
                 // Logged-in users still get the public/info pages, just tucked
                 // into a "Resources" dropdown so the role-specific links above
@@ -113,6 +117,17 @@ if ($u) {
                     ['label' => 'Help Center',     'href' => BASE_URL.'/pages/help_center.php',     'match' => ['help_center.php']],
                     ['label' => 'Contact Support', 'href' => BASE_URL.'/pages/contact_support.php', 'match' => ['contact_support.php']],
                 ];
+                /* Anyone who can be asked for a password or a correction needs a
+                   standing way back to what has been asked. The notification is
+                   the first route to it, but a notification is read once and
+                   gone, and the request outlives it. */
+                if (in_array($u['user_role'] ?? '', ['faculty', 'admin', 'super_admin', 'head_academic', 'librarian'], true)) {
+                    array_unshift($info_links, [
+                        'label' => 'Support Requests',
+                        'href'  => BASE_URL.'/app/support_requests.php',
+                        'match' => ['support_requests.php'],
+                    ]);
+                }
                 $info_active = false;
                 foreach ($info_links as $il) {
                     if (in_array($current_script, $il['match'], true)) { $info_active = true; break; }
@@ -166,12 +181,26 @@ if ($u) {
                             <?php foreach ($recent_notifs as $n): ?>
                                 <?php /* A link, not a button: it goes to the paper the
                                          notification is about, and middle-click works. */ ?>
+                                <?php
+                                /* An account notice carries its detail on the
+                                   second line and after: the list shows the
+                                   first line only, and the rest opens in a
+                                   dialog, because there is no page to send the
+                                   reader to and the detail can hold a password. */
+                                $isAccount = ($n['notification_type'] ?? '') === 'account';
+                                $lines   = preg_split('/\r\n|\r|\n/', (string)$n['message']);
+                                $summary = $isAccount ? array_shift($lines) : (string)$n['message'];
+                                ?>
                                 <a class="notif-item<?= $n['is_read'] ? '' : ' unread' ?>"
-                                   href="<?= e(notification_link(isset($n['paper_id']) ? (int)$n['paper_id'] : null, $u['user_role'])) ?>"
+                                   href="<?= e(notification_link(isset($n['paper_id']) ? (int)$n['paper_id'] : null, $u['user_role'], (string)($n['notification_type'] ?? ''))) ?>"
+                                   <?php if ($isAccount && $lines): ?>
+                                       data-notif-popup="<?= e($summary) ?>"
+                                       data-notif-detail="<?= e(implode("\n", $lines)) ?>"
+                                   <?php endif; ?>
                                    data-notif-id="<?= (int)$n['notification_id'] ?>">
                                     <span class="notif-dot" aria-hidden="true"></span>
                                     <span class="notif-body">
-                                        <span class="notif-text"><?= e($n['message']) ?></span>
+                                        <span class="notif-text"><?= e($summary) ?></span>
                                         <small><?= e(date('M j, Y g:i A', strtotime($n['created_at']))) ?></small>
                                     </span>
                                 </a>
@@ -255,10 +284,15 @@ if ($u) {
             </div>
         </div>
 
-        <?php if ($m = flash('error')): ?>
+        <?php /* Only messages about signing in. This panel is on every page, and
+                 flash() consumes what it reads, so reading the general keys here
+                 swallowed whatever the page underneath meant to say: a contact
+                 form's "message sent" appeared above the Student ID field
+                 instead of on the page that sent it. */ ?>
+        <?php if ($m = flash('login_error')): ?>
         <div class="panel-alert error"><?= e($m) ?></div>
         <?php endif; ?>
-        <?php if ($m = flash('success')): ?>
+        <?php if ($m = flash('login_success')): ?>
         <div class="panel-alert success"><?= e($m) ?></div>
         <?php endif; ?>
 
@@ -280,7 +314,11 @@ if ($u) {
                         <span class="material-symbols-outlined mi-20" id="togglePasswordIcon">visibility</span>
                     </button>
                 </div>
-                <a class="lf-forgot" href="<?= e(BASE_URL) ?>/pages/contact_support.php?subject=Password%20Reset">Forgot password?</a>
+                <?php /* The Help Centre entry rather than the contact form: it says what
+                         happens next, and offers the form for the part that needs a
+                         person. Asking somebody to write a message first put the work
+                         before the explanation. */ ?>
+                <a class="lf-forgot" href="<?= e(BASE_URL) ?>/pages/help_center.php#forgot-password">Forgot password?</a>
             </div>
 
             <button type="submit" class="btn-panel-login">Sign In</button>

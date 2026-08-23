@@ -24,7 +24,57 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       /* An ID and a password. The birthdate used to be a third factor here,
          which meant an account with none on file could not sign in at all — and
          a date of birth is not a secret, so it was never adding much. */
-      if ($id === '' || $pw === '') { flash('error','Enter your ID and password.'); header('Location: '.$error_redirect); exit; }
+      if ($id === '' || $pw === '') { flash('login_error','Enter your ID and password.'); header('Location: '.$error_redirect); exit; }
+
+      /* Guessing is cheap without this: the IDs follow a pattern, so the only
+         thing standing between an attacker and an account was the password
+         rule, which allows six characters. */
+      $locked = login_throttle_locked_for($id);
+      if ($locked !== null) {
+        flash('login_error', login_throttle_message($locked));
+        header('Location: '.$error_redirect); exit;
+      }
+
+      /* A guest pass is not an account.
+         Guests live in guest_sessions, not users, so the query below could
+         never find one — yet the modal offers a Guest tab on every page of the
+         site. Anyone issued a pass who used it there was told their credentials
+         were wrong, and the only place that actually worked was
+         archive/login.php, which the credentials email happens to link to.
+         Handled here so both sign-in surfaces behave the same way. */
+      if ($role_hint === 'guest') {
+          $gq = $conn->prepare(
+              "SELECT guest_id, username, password, expires_at
+                 FROM guest_sessions
+                WHERE username = ? AND expires_at > NOW() LIMIT 1");
+          $gq->bind_param('s', $id);
+          $gq->execute();
+          $guest = $gq->get_result()->fetch_assoc();
+
+          if (!$guest || !password_verify($pw, $guest['password'])) {
+              login_throttle_record_failure($id);
+              /* Said plainly: an expired pass and a mistyped one look the same
+                 from here, and "not right or has expired" covers both without
+                 revealing which. */
+              flash('login_error', 'That guest username or password is not right, or the pass has expired.');
+              header('Location: '.$error_redirect); exit;
+          }
+
+          login_throttle_clear($id);
+          login_user([
+              'user_id'   => 0,
+              'username'  => $guest['username'],
+              'email'     => '',
+              'full_name' => 'Guest User',
+              'user_role' => 'guest',
+          ]);
+          $_SESSION['guest_expire'] = strtotime($guest['expires_at']);
+          $_SESSION['guest_login']  = true;
+          // Recorded so a revoked pass can be spotted by primary key.
+          $_SESSION['guest_id']     = (int)$guest['guest_id'];
+          header('Location: '.BASE_URL.'/archive/index.php');
+          exit;
+      }
 
       /* Whatever ID this person was given, it signs them in.
          Students carry theirs in student_id and staff in faculty_id — which
@@ -44,7 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       } catch (mysqli_sql_exception $e) {
         if (strpos($e->getMessage(), "Unknown column 'student_id'") !== false) {
           error_log('Database migration required: student_id column is missing from users table. Run scripts/migrations/ to fix.');
-          flash('error', 'A system update is required. Please contact your administrator.');
+          flash('login_error', 'A system update is required. Please contact your administrator.');
           header('Location: '.BASE_URL.'/archive/index.php?login_modal=1'); exit;
         }
         throw $e;
@@ -52,10 +102,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $stmt->bind_param('ssss', $id, $id, $id, $id);
       $stmt->execute();
       $stmt->store_result();
-      if ($stmt->num_rows !== 1) { flash('error','That ID or password is not right.'); header('Location: '.$error_redirect); exit; }
+      if ($stmt->num_rows !== 1) {
+        login_throttle_record_failure($id);
+        flash('login_error','That ID or password is not right.'); header('Location: '.$error_redirect); exit;
+      }
       $stmt->bind_result($user_id, $username, $email, $password_hash, $full_name, $user_role, $is_active, $student_id, $stored_birthdate, $expires_on, $admin_level);
       $stmt->fetch();
-      if (!$is_active || !password_verify($pw, $password_hash)) { flash('error','That ID or password is not right.'); header('Location: '.$error_redirect); exit; }
+      if (!$is_active || !password_verify($pw, $password_hash)) {
+        login_throttle_record_failure($id);
+        flash('login_error','That ID or password is not right.'); header('Location: '.$error_redirect); exit;
+      }
+
+      /* The password was right, so this person is not the one being guarded
+         against — whatever happens below is about which desk they land on. */
+      login_throttle_clear($id);
 
       // Enforce that the user's actual role matches the tab they logged in from
       $role_groups = [
@@ -64,7 +124,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           'guest'   => ['guest'],
       ];
       if (!in_array($user_role, $role_groups[$role_hint] ?? [])) {
-          flash('error', 'This account does not belong to the selected login section. Please choose the correct tab.');
+          flash('login_error', 'This account does not belong to the selected login section. Please choose the correct tab.');
           header('Location: '.$error_redirect);
           exit;
       }
@@ -75,7 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
          adviser to move them on, which recalculates the date. The password was
          correct, so say plainly what is wrong rather than "not right". */
       if ($user_role === 'student' && !empty($expires_on) && strtotime($expires_on) < strtotime('today')) {
-          flash('error', 'This student account expired on ' . date('F j, Y', strtotime($expires_on)) .
+          flash('login_error', 'This student account expired on ' . date('F j, Y', strtotime($expires_on)) .
                          '. Ask your research adviser to renew it.');
           header('Location: '.$error_redirect); exit;
       }
@@ -83,7 +143,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       // Additional validation for students: must have student_id or username
       if ($user_role === 'student') {
         if (empty($student_id) && empty($username)) {
-          flash('error','Student account is missing required login credentials. Please contact administrator.');
+          flash('login_error','Student account is missing required login credentials. Please contact administrator.');
           header('Location: '.$error_redirect); exit;
         }
       }
@@ -108,7 +168,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
        *     $masked_email = preg_replace('/(?<=.{2}).(?=.*@)/', '*', $email);
        *     flash('success', "An OTP has been sent to your email: {$masked_email}.");
        * } catch (Exception $e) {
-       *     flash('error', "Failed to send OTP email. Please try again or contact support.");
+       *     flash('login_error', "Failed to send OTP email. Please try again or contact support.");
        *     unset($_SESSION['pending_login']);
        *     header('Location: '.$error_redirect);
        *     exit;
@@ -148,7 +208,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $entered_otp = trim($_POST['otp'] ?? '');
 
       if (!isset($_SESSION['pending_login'])) {
-          flash('error', 'Session expired. Please login again.');
+          flash('login_error', 'Session expired. Please login again.');
           header('Location: '.BASE_URL.'/archive/index.php?login_modal=1');
           exit;
       }
@@ -157,13 +217,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
       if (time() > $pending['otp_expires']) {
           unset($_SESSION['pending_login']);
-          flash('error', 'OTP has expired. Please login again.');
+          flash('login_error', 'OTP has expired. Please login again.');
           header('Location: '.BASE_URL.'/archive/index.php?login_modal=1');
           exit;
       }
 
       if ($entered_otp !== $pending['otp']) {
-          flash('error', 'Invalid OTP. Please try again.');
+          flash('login_error', 'Invalid OTP. Please try again.');
           header('Location: '.BASE_URL.'/archive/index.php?login_modal=1');
           exit;
       }
@@ -319,7 +379,7 @@ if (false):
     width: 120px;
     height: 120px;
     background: linear-gradient(135deg, var(--pup-gold-400), var(--pup-gold-600));
-    border-radius: 32px;
+    border-radius: var(--r-card, 8px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -367,7 +427,7 @@ if (false):
     gap: 1rem;
     background: rgba(255, 255, 255, 0.15);
     padding: 1.25rem;
-    border-radius: 16px;
+    border-radius: var(--r-card, 8px);
     backdrop-filter: blur(20px);
     border: 1px solid rgba(255, 255, 255, 0.25);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -384,7 +444,7 @@ if (false):
     width: 40px;
     height: 40px;
     background: linear-gradient(135deg, var(--pup-gold-400), var(--pup-gold-600));
-    border-radius: 10px;
+    border-radius: var(--r-card, 8px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -437,7 +497,7 @@ if (false):
   .form-card {
     background: rgba(255, 255, 255, 0.98);
     backdrop-filter: blur(25px);
-    border-radius: 24px;
+    border-radius: var(--r-card, 8px);
     box-shadow: 
       0 20px 60px rgba(0, 0, 0, 0.12),
       0 10px 30px rgba(129, 4, 3, 0.08),
@@ -503,7 +563,7 @@ if (false):
 
   .form-control {
     border: 2px solid #e2e8f0;
-    border-radius: 12px;
+    border-radius: var(--r-control, 4px);
     padding: 0.875rem 1rem;
     padding-left: 3rem;
     font-size: 1rem;
@@ -545,7 +605,7 @@ if (false):
     color: #64748b;
     cursor: pointer;
     padding: 0.5rem;
-    border-radius: 8px;
+    border-radius: var(--r-control, 4px);
     transition: all 0.2s;
     z-index: 2;
   }
@@ -564,7 +624,7 @@ if (false):
     background: var(--pup-maroon-900);
     color: white;
     border: none;
-    border-radius: 12px;
+    border-radius: var(--r-control, 4px);
     padding: 1rem 2rem;
     font-weight: 700;
     font-size: 1rem;
@@ -604,7 +664,7 @@ if (false):
     background: var(--pup-gold-600);
     color: var(--pup-maroon-900);
     border: none;
-    border-radius: 12px;
+    border-radius: var(--r-control, 4px);
     padding: 1rem 2rem;
     font-weight: 700;
     font-size: 1rem;
@@ -665,7 +725,7 @@ if (false):
 
   /* Alert */
   .alert {
-    border-radius: 12px;
+    border-radius: var(--r-card, 8px);
     border: none;
     padding: 1rem 1.25rem;
     margin-bottom: 1.5rem;
@@ -811,7 +871,7 @@ if (false):
       width: 60px;
       height: 60px;
       background: linear-gradient(135deg, var(--pup-gold-400), var(--pup-gold-600));
-      border-radius: 16px;
+      border-radius: var(--r-card, 8px);
       box-shadow: 0 10px 30px rgba(220, 169, 44, 0.3);
     }
 
@@ -869,6 +929,7 @@ if (false):
     }
   }
 </style>
+<?php require_once __DIR__ . '/../../includes/focus_ring.php'; ?>
 </head>
 <body>
 
@@ -940,7 +1001,7 @@ if (false):
       </div>
 
       <!-- Alert placeholder for PHP flash messages -->
-      <?php if($m=flash('error')): ?>
+      <?php if($m=flash('login_error')): ?>
         <div class="alert alert-danger" role="alert">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" style="vertical-align: text-bottom; margin-right: 0.5rem;" viewBox="0 0 16 16">
             <path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/>
@@ -948,7 +1009,7 @@ if (false):
           <?= e($m) ?>
         </div>
       <?php endif; ?>
-      <?php if($m=flash('success')): ?>
+      <?php if($m=flash('login_success')): ?>
         <div class="alert alert-success" role="alert" style="background: #d1fae5; color: #065f46; border-radius: 12px; border-top: none; border-right: none; border-bottom: none; padding: 1rem 1.25rem; margin-bottom: 1.5rem;">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" style="vertical-align: text-bottom; margin-right: 0.5rem;" viewBox="0 0 16 16">
             <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zm-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>

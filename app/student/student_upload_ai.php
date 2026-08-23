@@ -2,12 +2,56 @@
 error_reporting(0);
 ini_set('display_errors', '0');
 require_once '../../config/core.php';
-require_role(['student', 'faculty', 'admin', 'head_academic', 'super_admin']);
+/* Anyone who writes a paper, which is everyone.
+
+   Staff upload their own work here too, and their submissions are published the
+   moment they are made: they are the people who would otherwise be reviewing
+   it, so there is nobody above them in the chain to ask.
+
+   Drafts remain student-only, and deliberately. Every page that manages a draft
+   is student-only — the Drafts tab on the student dashboard,
+   student_draft_delete.php, student_cancel_submission.php — so a draft saved by
+   a member of staff would be invisible the moment they left: no way to resume
+   it, no way to delete it, and it would sit in the database counting as
+   somebody's unfinished work forever. That is what closed this page to them in
+   the first place. Rather than reopen that hole, staff fill the form and submit
+   it in one sitting, and $canDraft below is what enforces it. */
+require_role(['student', 'faculty', 'admin', 'super_admin', 'head_academic', 'librarian']);
 require_once '../../config/groq_config.php';
 require_once '../../config/gdrive_config.php';
 require_once '../../ai/rate_limiter.php';
 $conn = db();
 $u = current_user();
+
+/* A student's paper goes to their adviser; everyone else's is published as it is
+   submitted. $canDraft follows from that: a draft only makes sense while there
+   is a review to prepare for, and only students can see one afterwards. */
+$isStudent = (($u['user_role'] ?? '') === 'student');
+$canDraft  = $isStudent;
+
+/* The student's own programme.
+   A student belongs to one, it is set when their adviser creates the account,
+   and every paper they submit is for it, so asking them to pick it from a list
+   of ten was a question with one right answer that they could get wrong. It is
+   read here rather than taken from the session, which only carries identity.
+   The select below opens on it; a draft that already records a programme still
+   wins, because the draft is applied after the page renders. */
+$myProgram = '';
+if ($isStudent) {
+    $pq = $conn->prepare("SELECT program FROM users WHERE user_id = ? LIMIT 1");
+    $pq->bind_param('i', $u['user_id']);
+    $pq->execute();
+    if ($row = $pq->get_result()->fetch_assoc()) {
+        $myProgram = trim((string)($row['program'] ?? ''));
+    }
+} else {
+    /* Staff do not belong to a programme, they belong to the faculty, so the
+       question is not asked: the field states the answer instead of offering a
+       list of degrees none of which is theirs. The value is one the rest of the
+       system already knows — get_program_folder() files it under FACULTY, and
+       program_code() prints it as it is. */
+    $myProgram = 'Faculty Member';
+}
 
 // AJAX: Get recent publication locations for suggestions
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['action'] === 'get_locations') {
@@ -104,33 +148,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'extra
       'ai_research_field' => ''
     ];
     
-    // Perform Similarity Check immediately after extraction
-    $similarity = ['percentage' => 0, 'reason' => 'No existing papers to compare.'];
-    if (!empty($result['abstract'])) {
-        $approvedAbstracts = [];
-        // Check against approved papers (limit to recent 50 for better coverage)
-        $sql = "(SELECT abstract, 'Active' as source, upload_date FROM research_papers WHERE current_status = 'approved' AND abstract IS NOT NULL AND abstract != '') 
-                UNION ALL 
-                (SELECT abstract, 'Archive' as source, upload_date FROM papers_archive WHERE abstract IS NOT NULL AND abstract != '') 
-                ORDER BY upload_date DESC LIMIT 50";
-        $simCheck = $conn->query($sql);
-        while($row = $simCheck->fetch_assoc()){
-            $approvedAbstracts[] = "[Source: " . $row['source'] . "] " . $row['abstract'];
-        }
-
-        if (!empty($approvedAbstracts)) {
-            $batches = array_chunk($approvedAbstracts, 10);
-            foreach ($batches as $batch) {
-                $simResult = check_similarity_groq($result['abstract'], $batch, $modelChoice);
-                
-                if ($simResult['percentage']> $similarity['percentage'] || $similarity['reason'] === 'No existing papers to compare.') {
-                    $similarity = $simResult;
-                }
-                if ($similarity['percentage']> 15) break; 
-            }
-        }
-    }
-    $result['similarity'] = $similarity;
+    /* Similarity detection used to run here, comparing this abstract against
+       the last fifty approved ones through the AI, one request per batch of
+       ten. It has been removed: a repository records work that has already
+       been reviewed and approved, and it holds no rule about two papers
+       resembling each other, so the figure was informational only and
+       nothing acted on it. Extraction is correspondingly quicker. */
 
     echo json_encode(['success'=>true,'data'=>$result]); 
     exit;
@@ -161,11 +184,122 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'extra
    when Drive is unreachable, which is exactly when a student most needs their
    work kept.
    --------------------------------------------------------------------------- */
+/* AJAX: a picture pasted, dropped or chosen inside a section editor.
+
+   Pictures are stored as files and referenced by URL rather than inlined into
+   the section HTML as data. That is not a preference: the four sections go into
+   one column, and MariaDB's max_allowed_packet here is 1 MB, so a single
+   screenshot carried as base64 would fail the save outright and take the whole
+   paper with it. Files also let a reader's browser cache them.
+
+   They are written under uploads/, which carries an .htaccess that switches PHP
+   execution off for anything below it. */
+const SECTION_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+const SECTION_IMAGE_TYPES = [
+    IMAGETYPE_PNG  => ['png',  'image/png'],
+    IMAGETYPE_JPEG => ['jpg',  'image/jpeg'],
+    IMAGETYPE_GIF  => ['gif',  'image/gif'],
+    IMAGETYPE_WEBP => ['webp', 'image/webp'],
+];
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'upload_section_image') {
+  while (ob_get_level() > 0) { ob_end_clean(); }
+  header('Content-Type: application/json');
+  try {
+    csrf_verify();
+
+    $f = $_FILES['image'] ?? null;
+    if (!$f || !is_uploaded_file($f['tmp_name'] ?? '') || ($f['error'] ?? 1) !== UPLOAD_ERR_OK) {
+      throw new UserFacingException('That picture did not arrive. Try pasting it again.');
+    }
+    if ((int)$f['size'] > SECTION_IMAGE_MAX_BYTES) {
+      throw new UserFacingException('That picture is larger than 5 MB. Crop it, or save it at a smaller size, and paste it again.');
+    }
+
+    /* getimagesize() reads the file's own header rather than trusting its name
+       or the type the browser declared, so a renamed script cannot pass itself
+       off as a screenshot. It is core PHP, not GD, which this install does not
+       load, and it is also why the file is never re-encoded here: the browser
+       has already redrawn it through a canvas before sending. */
+    $info = @getimagesize($f['tmp_name']);
+    $type = is_array($info) ? (int)($info[2] ?? 0) : 0;
+    if (!isset(SECTION_IMAGE_TYPES[$type])) {
+      throw new UserFacingException('That file is not a picture the repository can show. Use PNG, JPEG, GIF or WebP.');
+    }
+    [$ext, $expectMime] = SECTION_IMAGE_TYPES[$type];
+
+    // The header said one thing; libmagic has to agree, or the file is carrying
+    // two formats at once and one of them was not the one that was checked.
+    $finfo = new finfo(FILEINFO_MIME_TYPE);
+    $mime  = $finfo->file($f['tmp_name']);
+    if ($mime !== $expectMime) {
+      throw new UserFacingException('That file is not a picture the repository can show. Use PNG, JPEG, GIF or WebP.');
+    }
+    // A picture claiming enormous dimensions is either broken or aimed at the
+    // memory of whatever eventually opens it.
+    if ((int)$info[0] < 1 || (int)$info[1] < 1 || (int)$info[0] > 12000 || (int)$info[1] > 12000) {
+      throw new UserFacingException('That picture is too large to display. Resize it and paste it again.');
+    }
+
+    $uid = (int)$u['user_id'];
+    $dir = ROOT_PATH . '/uploads/section_images/' . $uid;
+    ensure_dir($dir);
+    // Random rather than derived from the original name: two students pasting
+    // "Screenshot 2026-08-19.png" must not collide, and the stored name is what
+    // the sanitiser matches on, so it has to be a shape we control.
+    $name = bin2hex(random_bytes(16)) . '.' . $ext;
+    if (!move_uploaded_file($f['tmp_name'], $dir . '/' . $name)) {
+      throw new Exception('move_uploaded_file failed for section image');
+    }
+
+    $rel = 'uploads/section_images/' . $uid . '/' . $name;
+    echo json_encode([
+      'success' => true,
+      'url'     => upload_url($rel),
+      'width'   => (int)$info[0],
+      'height'  => (int)$info[1],
+    ]);
+
+    /* One upload in fifty tidies up after drafts that were abandoned, the same
+       way the login throttle sweeps its own stale rows. It runs after the
+       answer has gone out, so nobody waits for it, and it can never turn a
+       stored picture into a failed one. */
+    if (random_int(1, 50) === 1) {
+      if (function_exists('fastcgi_finish_request')) { fastcgi_finish_request(); }
+      else { flush(); }
+      try { section_images_sweep(); }
+      catch (Throwable $sweepError) {
+        error_log('Section image sweep failed: ' . $sweepError->getMessage());
+      }
+    }
+    exit;
+
+  } catch (Throwable $e) {
+    http_response_code(($e instanceof UserFacingException) ? 400 : 500);
+    if (!($e instanceof UserFacingException)) {
+      error_log('Section image upload failed: ' . $e->getMessage());
+    }
+    echo json_encode([
+      'success' => false,
+      'message' => ($e instanceof UserFacingException)
+          ? $e->getMessage()
+          : 'That picture could not be saved. Try again in a moment.',
+    ]);
+    exit;
+  }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_draft') {
   while (ob_get_level() > 0) { ob_end_clean(); }
   header('Content-Type: application/json');
   try {
     csrf_verify();
+    /* The page hides every draft control from staff, so this only fires for a
+       stale tab or a hand-made request. Refused rather than honoured: a draft
+       they cannot see again is worse than no draft. */
+    if (!$canDraft) {
+      throw new UserFacingException('Drafts are for student submissions. Your paper is published as soon as you submit it.');
+    }
     $conn = db();
 
     $draftId = (int)($_POST['draft_id'] ?? 0);
@@ -197,7 +331,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
     $statusArr   = $_POST['paper_status'] ?? [];
     $pubStatus   = is_array($statusArr) ? implode(', ', $statusArr) : '';
     $pubLocation = trim($_POST['publication_location'] ?? '');
-    $program     = trim($_POST['program_category'] ?? ($u['program'] ?? ''));
+    $program     = trim($_POST['program_category'] ?? '') ?: $myProgram;
 
     // A draft may carry a PDF or not. When one is sent it is stored locally so
     // the student does not have to re-attach it next time; Drive is untouched.
@@ -231,7 +365,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
     }
 
     if ($draftId > 0) {
-      if ($filePath === null) { $filePath = $draftRowFile; }
+      if ($filePath === null) {
+        $filePath = $draftRowFile;
+      } elseif ($draftRowFile) {
+        /* A replacement PDF arrived, so the one it replaces is now unreferenced.
+           Each save used to leave its predecessor behind: one draft saved four
+           times left four PDFs on disk, and only the last was ever read again.
+           Only files under this student's own draft folder are removed — a path
+           anywhere else belongs to a submitted paper and is not ours to touch. */
+        $mine = 'uploads/drafts/' . (int)$u['user_id'] . '/';
+        if (strpos($draftRowFile, $mine) === 0) {
+          $stale = __DIR__ . '/' . $draftRowFile;
+          if (is_file($stale)) { @unlink($stale); }
+        }
+      }
 
       $sql = "UPDATE research_papers SET title=?, author_names=?, year=?, research_date=?, abstract=?,
               imrad_content=?, keywords=?, file_path=?, paper_type=?, research_type=?, manuscript_type=?,
@@ -286,6 +433,23 @@ if (isset($_GET['draft'])) {
     $dq->execute();
     $draftRow = $dq->get_result()->fetch_assoc() ?: null;
   }
+}
+
+/* Which drafts this student still has.
+ *
+ * The copy kept on the device is what drives the "Continue your draft?" prompt,
+ * and deleting a draft from the dashboard never touched it — so the prompt kept
+ * coming back for work the student had already thrown away, and answering
+ * Continue saved it again as a brand new draft. The page now knows which ids
+ * are real, so a local copy pointing at a draft that is gone can be recognised
+ * as stale and dropped. */
+$liveDraftIds = [];
+$lq = db()->prepare(
+  "SELECT paper_id FROM research_papers WHERE uploaded_by=? AND current_status='draft'");
+$lq->bind_param('i', $u['user_id']);
+$lq->execute();
+foreach ($lq->get_result()->fetch_all(MYSQLI_ASSOC) as $r) {
+  $liveDraftIds[] = (int)$r['paper_id'];
 }
 
 // Handed to the page as JSON so the same restore path serves both a local
@@ -391,14 +555,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
 
     // The four IMRAD sections arrive as HTML from the rich-text editors, so this
     // is where untrusted markup stops. Each is stored as sanitised HTML in
-    // imrad_content; `abstract` keeps a plain-text copy because the similarity
-    // check, the repository cards and the search all read that column as text.
+    // imrad_content; `abstract` keeps a plain-text copy because the repository
+    // cards and the search both read that column as text.
     $sectionLabels = paper_section_labels();
     $sectionKeys   = array_keys($sectionLabels);
     $sections = [];
     foreach ($sectionKeys as $key) {
         $clean = rich_text_sanitize((string)($_POST[$key] ?? ''));
-        if (rich_text_to_plain($clean) === '') {
+        /* A section of nothing but a table of results, or a photograph of the
+           apparatus, is written. The editor has always taken that view, so the
+           submit handler has to as well: measuring the plain text alone let a
+           table-only section through every step and refused it at the last. */
+        $hasFigure = (bool)preg_match('/<(img|table)\b/i', $clean);
+        if (rich_text_to_plain($clean) === '' && !$hasFigure) {
             throw new Exception('Please write the ' . $sectionLabels[$key] . ' section.');
         }
         $sections[$key] = $clean;
@@ -442,29 +611,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     //     throw new Exception("A paper with this title already exists.");
     // }
 
-    // 3. Similarity Threshold - DISABLED (no longer blocks submission)
-    // The similarity check still runs during AI extraction (extract_ai step) for informational purposes,
-    // but it no longer prevents the student from submitting their paper.
-    // if (!empty($abstract)) {
-    //     $approvedAbstracts = [];
-    //     $sql = "(SELECT abstract, 'Active' as source, upload_date FROM research_papers WHERE current_status = 'approved' AND abstract IS NOT NULL AND abstract != '') 
-    //             UNION ALL 
-    //             (SELECT abstract, 'Archive' as source, upload_date FROM papers_archive WHERE abstract IS NOT NULL AND abstract != '')
-    //             ORDER BY upload_date DESC LIMIT 100";
-    //     $simCheck = $conn->query($sql);
-    //     while($row = $simCheck->fetch_assoc()){
-    //         $approvedAbstracts[] = "[Source: " . $row['source'] . "] " . $row['abstract'];
-    //     }
-    //     if (!empty($approvedAbstracts)) {
-    //         $batches = array_chunk($approvedAbstracts, 10);
-    //         foreach ($batches as $batch) {
-    //             $simResult = check_similarity_groq($abstract, $batch);
-    //             if ($simResult['percentage']> 15) {
-    //                 throw new Exception("Similarity Alert: Your abstract has a " . $simResult['percentage'] . "% similarity match with an existing approved paper. Limit is 15%.");
-    //             }
-    //         }
-    //     }
-    // }
 
     // 3. Special Requirements: BSIT Code Upload
     // Create submission folder structure
@@ -497,8 +643,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     }
     
     // Insert paper
+    /* Stored relative to app/student/, not as a full URL. The old absolute form
+       baked this machine's BASE_URL into the row, so after the project moved to
+       another computer — or was simply served on a different address — the file
+       could not be found again, and nothing that needed the file rather than a
+       link could resolve it at all. paper_file_url() still renders a correct
+       link from a relative path, and paper_file_disk_path() reads either form. */
     $relPath = "uploads/research/$programFolder/$paperType/$y/$m/$submissionFolder/" . basename($destPath);
-    $fullUrlPath = rtrim(BASE_URL, '/') . '/app/student/' . $relPath;
+    $fullUrlPath = $relPath;
     $sz = filesize($destPath) ?: 0;
     $null = null;
     
@@ -548,6 +700,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     }
     
     $paper_id = $stmt->insert_id;
+
+    /* Drive is where a submitted paper lives. The local file was only ever the
+       staging copy the Drive upload reads from — keeping it meant every paper
+       was stored twice, for good. It goes now that Drive has it (the upload
+       throws above if it did not) and the row recording it exists.
+
+       A paper is read through the viewer, which opens it on Drive, so nothing
+       needs the local file once it is up there. */
+    if (is_file($destPath)) { @unlink($destPath); }
 
     /* The draft this submission grew out of becomes the submission itself, so
        the new row replaces it: the values are copied across, the draft's own
@@ -601,7 +762,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
           $dest = $supDir . "/{$paper_id}_{$docType}_{$safe}.pdf";
           if (move_uploaded_file($_FILES[$docType]['tmp_name'], $dest)) {
             $rel = "uploads/research/$programFolder/$paperType/$y/$m/$submissionFolder/supporting_documents/" . basename($dest);
-            $fullUrlRel = rtrim(BASE_URL, '/') . '/app/student/' . $rel;
+            $fullUrlRel = $rel;   // relative, for the reasons above
             
             // Upload to Google Drive
             $docGdriveId = null;
@@ -616,8 +777,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
             $st->bind_param('isss', $paper_id, $docType, $fullUrlRel, $docGdriveId);
             $st->execute();
             
-            // Remove local file to ensure GDrive storage only
-            // @unlink($dest); // Temporarily disabled to allow local file access
+            // Drive has it and the row is written, so the staging copy can go.
+            if (is_file($dest)) { @unlink($dest); }
           }
         }
       }
@@ -632,7 +793,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
         $dest = $supDir . "/{$paper_id}_{$otherType}_{$safe}.pdf";
         if (move_uploaded_file($_FILES['other_doc']['tmp_name'], $dest)) {
           $rel = "uploads/research/$programFolder/$paperType/$y/$m/$submissionFolder/supporting_documents/" . basename($dest);
-          $fullUrlRel = rtrim(BASE_URL, '/') . '/app/student/' . $rel;
+          $fullUrlRel = $rel;   // relative, for the reasons above
           
           // Upload to Google Drive
           $otherGdriveId = null;
@@ -646,12 +807,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
           $st->bind_param('isss', $paper_id, $otherType, $fullUrlRel, $otherGdriveId);
           $st->execute();
           
-          // Remove local file to ensure GDrive storage only
-          // @unlink($dest); // Temporarily disabled to allow local file access
+          // Drive has it and the row is written, so the staging copy can go.
+          if (is_file($dest)) { @unlink($dest); }
         }
       }
     }
     
+    /* The folders held nothing but those staging files. rmdir only removes an
+       empty directory, so anything still in there is left exactly as it is. */
+    if (is_dir($supDir))  { @rmdir($supDir); }
+    if (is_dir($destDir)) { @rmdir($destDir); }
+
     /* Tell the Research Adviser there is something waiting. The adviser is the
        faculty member who created this student's account, which is the same link
        their review queue is built on — so if there is no creator, nobody would
@@ -751,56 +917,88 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
 }
 #uploadOverlay.active { display: flex; }
 
-/* Orb — clean maroon ring spinner on white card */
-.claude-orb-wrap {
+/* The loader: a book with its pages turning. Two resting halves and three
+   leaves that flip across the spine on a stagger, so one is always in flight.
+   Built from tokens rather than an image, so it follows the theme into dark
+   mode and stays crisp at any pixel density. */
+.page-turn {
+    --pt-rule: var(--border);
     position: relative;
-    width: 84px;
-    height: 84px;
+    width: 112px;
+    height: 78px;
     margin-bottom: 1.6rem;
+    perspective: 460px;      /* shallow enough that a turning page foreshortens */
 }
-.claude-orb {
-    width: 84px;
-    height: 84px;
-    border-radius: 50%;
-    background: conic-gradient(from 0deg, var(--maroon), var(--soft-maroon), var(--maroon));
-    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 7px), #000 calc(100% - 6px));
-            mask: radial-gradient(farthest-side, transparent calc(100% - 7px), #000 calc(100% - 6px));
-    animation: orbSpin 1s linear infinite;
-}
-@keyframes orbSpin { to { transform: rotate(360deg); } }
-
-.claude-orb-inner {
+/* The pages already read and the ones still to come. */
+.page-turn-half {
     position: absolute;
-    inset: 17px;
-    border-radius: 50%;
-    background: transparent;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    top: 0;
+    bottom: 0;
+    width: 50%;
+    background: var(--white);
+    border: 1px solid var(--border);
 }
-.claude-orb-icon {
-    width: 34px;
-    height: 34px;
-    animation: iconPulse 1.8s ease-in-out infinite;
-}
-@keyframes iconPulse {
-    0%, 100% { transform: scale(1);    opacity: 1; }
-    50%       { transform: scale(1.1); opacity: .8; }
+.page-turn-left  { left: 0;  border-right: none; border-radius: var(--r-control, 4px) 0 0 var(--r-control, 4px); }
+.page-turn-right { right: 0; border-left: none;  border-radius: 0 var(--r-control, 4px) var(--r-control, 4px) 0; }
+
+/* Ruled lines, drawn rather than drawn on, so they scale with the box. */
+.page-turn-half::before,
+.page-turn-leaf::before {
+    content: '';
+    position: absolute;
+    inset: 11px 9px;
+    background: repeating-linear-gradient(to bottom,
+                var(--pt-rule) 0 1.5px, transparent 1.5px 9px);
+    opacity: .7;
 }
 
-/* Soft ring pulse (single, subtle) */
-.orb-ring {
+/* The spine. A little darker than the rules so the fold reads as a fold. */
+.page-turn::after {
+    content: '';
     position: absolute;
-    inset: -8px;
-    border-radius: 50%;
-    border: 2px solid rgba(130,7,7,.28);
-    animation: ringPulse 1.8s ease-out infinite;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 3px;
+    transform: translateX(-50%);
+    background: linear-gradient(to right,
+                rgba(0,0,0,.14), rgba(0,0,0,.05), rgba(0,0,0,.14));
+    z-index: 4;
 }
-.orb-ring:nth-child(2) { inset: -8px; border-color: rgba(220,169,44,.22); animation-delay: .6s; }
-.orb-ring:nth-child(3) { display: none; }
-@keyframes ringPulse {
-    0%   { opacity: .8; transform: scale(1); }
-    100% { opacity: 0;  transform: scale(1.5); }
+
+.page-turn-leaf {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 50%;
+    height: 100%;
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-left: none;
+    border-radius: 0 var(--r-control, 4px) var(--r-control, 4px) 0;
+    transform-origin: left center;
+    animation: pageTurn 2.4s cubic-bezier(.45,.05,.4,1) infinite;
+    /* The leaf looks the same from behind, so the gradient stands in for the
+       shadow a real page casts on itself as it lifts. */
+    box-shadow: -6px 0 12px rgba(40,2,2,.10);
+}
+.page-turn-leaf:nth-child(4) { animation-delay: .8s; }
+.page-turn-leaf:nth-child(5) { animation-delay: 1.6s; }
+
+/* Fades out flat against the left half, which is exactly where a turned page
+   comes to rest, then fades back in on the right for the next one. */
+@keyframes pageTurn {
+    0%   { transform: rotateY(0deg);    opacity: 0; }
+    6%   { transform: rotateY(-8deg);   opacity: 1; }
+    55%  { transform: rotateY(-160deg); opacity: 1; }
+    63%  { transform: rotateY(-180deg); opacity: 0; }
+    100% { transform: rotateY(-180deg); opacity: 0; }
+}
+
+/* Motion is the whole point of this one, so when it is unwelcome the book
+   simply sits there and the progress bar carries the message instead. */
+@media (prefers-reduced-motion: reduce) {
+    .page-turn-leaf { animation: none; opacity: 0; }
 }
 
 /* White card */
@@ -811,14 +1009,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     align-items: center;
     gap: 0;
     background: var(--white);
-    border-radius: 20px;
+    border-radius: var(--r-card, 8px);
     padding: 2.5rem 2.75rem 2.25rem;
     box-shadow: 0 24px 60px rgba(40,2,2,.28);
     max-width: 90vw;
     animation: slideUp 0.5s cubic-bezier(0.34,1.56,0.64,1);
 }
 .loading-text {
-    color: #5a0302;
+    color: var(--maroon);
     font-size: 1.4rem;
     font-weight: 500;
     letter-spacing: .2px;
@@ -826,7 +1024,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     margin-bottom: .4rem;
 }
 .loading-status {
-    color: #8a7e7d;
+    color: var(--grey);
     font-size: .95rem;
     font-weight: 500;
     text-align: center;
@@ -839,7 +1037,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
 .upload-progress-track {
     width: min(320px, 72vw);
     height: 6px;
-    background: #f0e8e7;
+    background: var(--cream);
     border-radius: 99px;
     overflow: hidden;
     margin-bottom: .6rem;
@@ -858,7 +1056,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     100% { background-position: -200% center; }
 }
 .upload-progress-label {
-    color: #b08524;
+    color: var(--grey);
     font-size: .72rem;
     font-weight: 500;
     letter-spacing: .8px;
@@ -889,14 +1087,14 @@ body {
 /* Soft-cream panel carrying the form card, mirroring the dashboard shell. */
 .upload-shell {
   background: var(--cream);
-  border-radius: 10px;
+  border-radius: var(--r-card, 8px);
   padding: .875rem;
 }
 
 .upload-card {
   background: var(--white);
   border: 1px solid rgba(177,125,125,.22);
-  border-radius: 8px;
+  border-radius: var(--r-card, 8px);
   overflow: hidden;
 }
 
@@ -917,7 +1115,7 @@ body {
 }
 
 .alert {
-  border-radius: 8px;
+  border-radius: var(--r-card, 8px);
   border: none;
   padding: .75rem 1rem;
   font-size: .8125rem;
@@ -950,7 +1148,7 @@ body {
   height: 24px;
   padding: 0;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-control, 4px);
   background: none;
   color: inherit;
   opacity: .65;
@@ -985,7 +1183,7 @@ body {
 
 .form-control, .form-select {
   border: 1.5px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-control, 4px);
   padding: .75rem .875rem;
   font-size: .9rem;
   font-family: var(--font-body);
@@ -1008,7 +1206,7 @@ body {
    act on a selection the way a word processor does. */
 .doc-editor {
   border: 1.5px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--r-control, 4px);
   background: var(--white);
   margin-bottom: 1.25rem;
   overflow: hidden;
@@ -1034,7 +1232,7 @@ body {
   bottom: 0;
   z-index: 800;
   margin: 0;
-  border-radius: 0;
+  border-radius: var(--r-card, 8px);
   border-width: 1px 0 0 0;
   display: flex;
   flex-direction: column;
@@ -1090,7 +1288,7 @@ body.doc-expanded.chat-docked-right { padding-right: 0; }
   padding: .4rem .85rem;
   border: 1px solid var(--border);
   border-bottom: none;
-  border-radius: 8px 8px 0 0;
+  border-radius: var(--r-control, 4px) var(--r-control, 4px) 0 0;
   background: #fdf4f3;
   color: var(--ink);
   font-family: inherit;
@@ -1188,7 +1386,7 @@ body.doc-expanded.chat-docked-right { padding-right: 0; }
   height: 28px;
   padding: 0;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--r-control, 4px);
   background: none;
   color: var(--ink);
   cursor: pointer;
@@ -1235,10 +1433,6 @@ body.doc-expanded.chat-docked-right { padding-right: 0; }
 .doc-surface > blockquote {
   text-align: justify !important;
 }
-/* Dimmed while the caret is outside a table, to show they do not apply there
-   without hiding them and making the toolbar jump about as you type. */
-.doc-tool.is-off { opacity: .3; }
-.doc-tool.is-off:hover { background: none; color: var(--grey); cursor: default; }
 /* contenteditable has no placeholder of its own. `is-empty` is maintained in JS
    because an "empty" editor still holds <p><br></p> after the first edit, which
    :empty would not match. */
@@ -1301,6 +1495,82 @@ body.doc-expanded.chat-docked-right { padding-right: 0; }
   color: var(--grey);
 }
 
+/* Pictures inside the editor.
+
+   Centred and on their own line, which is how a figure sits in a paper, and
+   never wider than the box however large the original was. */
+.doc-surface img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: .75rem auto;
+    border: 1px solid var(--border);
+    border-radius: var(--r-card, 8px);
+    background: var(--white);
+}
+/* contenteditable gives no sign that a picture is selected, and the right-click
+   menu is the only way to size or remove one, so it is worth pointing at. */
+.doc-surface img:hover { border-color: var(--soft-maroon); cursor: context-menu; }
+
+/* While a picture is on its way to the server. The box is left usable: the
+   upload does not block typing, and the picture lands where the caret was. */
+.doc-editor.is-uploading .doc-editor-head::after {
+    content: 'Adding picture…';
+    margin-left: .5rem;
+    font-size: .6875rem;
+    color: var(--grey);
+    white-space: nowrap;
+}
+.doc-editor.is-drop-target { border-color: var(--maroon); }
+.doc-editor.is-drop-target .doc-surface { background: var(--cream); }
+
+/* A rule between groups of the right-click menu, so sizing a picture does not
+   sit flush against deleting it. */
+.doc-context-sep {
+    height: 1px;
+    margin: .25rem 0;
+    background: var(--border);
+}
+
+/* Reopens the explanation given on arriving at this step.
+
+   A line of its own: trailing the sentence it belongs to, it read as a stray
+   underlined link caught in the paragraph rather than as a control. `flex`
+   rather than `inline-flex` is what breaks the line, and the fitted width stops
+   a block-level button from stretching the whole way across. */
+.btn-why-sections {
+    display: flex;
+    width: fit-content;
+    align-items: center;
+    gap: .375rem;
+    margin-top: .75rem;
+    padding: .3125rem .75rem;
+    border: 1px solid var(--soft-maroon);
+    border-radius: var(--r-control, 4px);
+    background: var(--white);
+    color: var(--maroon);
+    font-family: var(--font-body);
+    font-size: .8125rem;
+    font-weight: 500;
+    line-height: 1.4;
+    cursor: pointer;
+    transition: background .15s, border-color .15s, color .15s;
+}
+.btn-why-sections:hover {
+    background: var(--cream);
+    border-color: var(--maroon);
+    color: var(--dark-maroon);
+}
+.btn-why-sections:focus-visible { outline: 2px solid var(--maroon); outline-offset: 2px; }
+.btn-why-sections .material-symbols-outlined { font-size: 17px; }
+
+/* The explanation itself, which is the one dialog on this page with more than a
+   sentence in it. */
+#papelDialogMessage p { margin: 0 0 .625rem; }
+#papelDialogMessage p:last-child { margin-bottom: 0; }
+#papelDialogMessage ul { margin: 0 0 .625rem; padding-left: 1.15rem; }
+#papelDialogMessage li { margin-bottom: .2rem; }
+
 /* Links inside the editor */
 .doc-surface a { color: var(--maroon); text-decoration: underline; }
 
@@ -1317,7 +1587,7 @@ body.doc-expanded.chat-docked-right { padding-right: 0; }
   padding: .625rem;
   background: var(--white);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-card, 8px);
   box-shadow: var(--shadow-md);
   white-space: nowrap;
 }
@@ -1341,7 +1611,7 @@ body.doc-expanded.chat-docked-right { padding-right: 0; }
   padding: .25rem;
   background: var(--white);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-control, 4px);
   box-shadow: var(--shadow-md);
 }
 .doc-context-menu.open { display: block; }
@@ -1350,7 +1620,7 @@ body.doc-expanded.chat-docked-right { padding-right: 0; }
   width: 100%;
   padding: .375rem .625rem;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--r-card, 8px);
   background: none;
   color: var(--ink);
   font-family: inherit;
@@ -1375,7 +1645,7 @@ body.doc-expanded.chat-docked-right { padding-right: 0; }
   width: 18px;
   height: 18px;
   border: 1px solid var(--border);
-  border-radius: 2px;
+  border-radius: var(--r-data, 0px);
   background: var(--white);
   cursor: pointer;
 }
@@ -1391,7 +1661,7 @@ body.doc-expanded.chat-docked-right { padding-right: 0; }
 .doc-table-action {
   padding: .3125rem .5rem;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--r-control, 4px);
   background: none;
   color: var(--ink);
   font-family: inherit;
@@ -1406,7 +1676,7 @@ body.doc-expanded.chat-docked-right { padding-right: 0; }
 .doc-surface::-webkit-scrollbar-track { background: var(--cream); }
 .doc-surface::-webkit-scrollbar-thumb {
   background: var(--soft-maroon);
-  border-radius: 6px;
+  border-radius: var(--r-control, 4px);
   border: 2px solid var(--cream);
 }
 .doc-surface::-webkit-scrollbar-thumb:hover { background: var(--maroon); }
@@ -1422,7 +1692,7 @@ body.doc-expanded.chat-docked-right { padding-right: 0; }
   color: #fff;
   border: none;
   padding: .4rem 1rem;
-  border-radius: 6px;
+  border-radius: var(--r-control, 4px);
   margin-right: .75rem;
   font-family: var(--font-body);
   font-weight: 400;
@@ -1445,7 +1715,7 @@ body.doc-expanded.chat-docked-right { padding-right: 0; }
 
 .btn {
   padding: .75rem 1.5rem;
-  border-radius: 8px;
+  border-radius: var(--r-control, 4px);
   font-family: var(--font-body);
   font-weight: 400;
   font-size: .875rem;
@@ -1479,13 +1749,40 @@ body.doc-expanded.chat-docked-right { padding-right: 0; }
   color: var(--dark-maroon);
 }
 
+/* The third way out of the leave dialog, sitting in the corner of the header
+   rather than among the buttons. It is neither the safe choice nor the
+   recommended one, so it stays out of the row where those two live. */
+.papel-dialog-x {
+  margin-left: auto;          /* the far corner, whatever the title's length */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: var(--r-control, 4px);
+  background: none;
+  color: var(--grey);
+  cursor: pointer;
+}
+.papel-dialog-x:hover { background: var(--cream); color: var(--maroon); }
+.papel-dialog-x:focus-visible { outline: 2px solid var(--maroon); outline-offset: 2px; }
+.papel-dialog-head .papel-dialog-x .material-symbols-outlined {
+  font-size: 20px;
+  top: 0;                      /* the head nudges its icons up; this one is centred */
+  color: inherit;
+}
+
+/* The Bootstrap button colours live in includes/site_head.php, so every page
+   gets them. This only keeps the background explicit for the rules below. */
 .btn-primary {
-  background: var(--maroon);
+  background: var(--maroon-surface);
   color: #fff;
 }
 
 .btn-primary:hover {
-  background: var(--dark-maroon);
+  background: var(--maroon-surface-hover);
   color: #fff;
 }
 
@@ -1560,8 +1857,7 @@ hr {
   }
 
   .loading-text { font-size: 1.5rem; }
-  .claude-orb-wrap { width: 100px; height: 100px; }
-  .claude-orb { width: 100px; height: 100px; }
+  .page-turn { width: 128px; height: 90px; }
 }
 
 /* Chatbot Styles - Enhanced - LEFT SIDE */
@@ -1597,7 +1893,7 @@ hr {
     height: 520px;
     max-height: 85vh;
     background: var(--white);
-    border-radius: 14px;
+    border-radius: var(--r-card, 8px);
     box-shadow: var(--shadow-md);
     border: 1px solid var(--border);
     flex-direction: column;
@@ -1625,7 +1921,7 @@ hr {
 }
 #chat-messages::-webkit-scrollbar { width: 8px; }
 #chat-messages::-webkit-scrollbar-track { background: var(--cream); }
-#chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+#chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: var(--r-card, 8px); }
 #chat-input-area {
     padding: .75rem 1rem;
     border-top: 1px solid var(--border);
@@ -1636,7 +1932,7 @@ hr {
 }
 #chat-input {
     border: 1.5px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--r-control, 4px);
     background: var(--cream);
     flex: 1;
     padding: .5rem .75rem;
@@ -1655,7 +1951,7 @@ hr {
     background: var(--maroon);
     color: #fff;
     border: none;
-    border-radius: 8px;
+    border-radius: var(--r-control, 4px);
     width: 36px;
     height: 36px;
     flex-shrink: 0;
@@ -1718,7 +2014,7 @@ hr {
     padding: .625rem .75rem;
     background: var(--white);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--r-card, 8px);
     box-shadow: var(--shadow-md);
     opacity: 0;
     visibility: hidden;
@@ -1762,7 +2058,7 @@ hr {
     color: #fff;
     background-color: rgba(255,255,255,.14);
     border: 1px solid rgba(255,255,255,.28);
-    border-radius: 6px;
+    border-radius: var(--r-control, 4px);
     padding: .25rem 1.5rem .25rem .55rem;
     cursor: pointer;
     outline: none;
@@ -1792,7 +2088,7 @@ hr {
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 6px;
+    border-radius: var(--r-control, 4px);
     flex-shrink: 0;
     transition: background .15s, color .15s;
 }
@@ -1811,7 +2107,7 @@ hr {
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 6px;
+    border-radius: var(--r-control, 4px);
     flex-shrink: 0;
     transition: background .15s, color .15s;
 }
@@ -1845,7 +2141,7 @@ hr {
     height: 100%;
     max-height: none;
     margin: 0;
-    border-radius: 0;
+    border-radius: var(--r-card, 8px);
     border: none;
     box-shadow: var(--shadow-md);
 }
@@ -1868,7 +2164,7 @@ body.chat-docked-right { padding-right: var(--chat-dock-w, 380px); }
 /* Chat bubbles — same treatment as the Help Center's .chat-msg */
 .message {
     padding: .625rem .875rem;
-    border-radius: 10px;
+    border-radius: var(--r-card, 8px);
     max-width: 82%;
     font-size: .875rem;
     line-height: 1.5;
@@ -1929,7 +2225,7 @@ body.chat-docked-right { padding-right: var(--chat-dock-w, 380px); }
     /* The indicator is also the navigation. */
     cursor: pointer;
     padding: .25rem .5rem;
-    border-radius: 8px;
+    border-radius: var(--r-card, 8px);
     transition: background .15s;
 }
 .step-item:hover { background: rgba(130, 7, 7, .06); }
@@ -2051,7 +2347,7 @@ body.chat-docked-right { padding-right: var(--chat-dock-w, 380px); }
     min-width: 11rem;
     margin: 0 auto;
     font-size: .85rem;
-    border-radius: 8px;
+    border-radius: var(--r-control, 4px);
     border: 2px solid var(--border);
     /* text-align centres the closed value, text-align-last is what Firefox
        honours. Matching the left padding to the space Bootstrap reserves for
@@ -2074,7 +2370,7 @@ body.chat-docked-right { padding-right: var(--chat-dock-w, 380px); }
    headings, Inter for everything else, nothing bolded, maroon on cream. */
 .docs-card {
     border: 1.5px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--r-card, 8px);
     background: var(--white);
     margin-bottom: 1.25rem;
     overflow: hidden;
@@ -2149,7 +2445,7 @@ body.chat-docked-right { padding-right: var(--chat-dock-w, 380px); }
     transition: background-color .15s;
 }
 .form-check-input[type="radio"] { border-radius: 50%; }
-.form-check-input[type="checkbox"] { border-radius: 4px; }
+.form-check-input[type="checkbox"] { border-radius: var(--r-control, 4px); }
 .form-check-input:checked { background-color: var(--pup-maroon); }
 /* Material Symbols "check" glyph, drawn in white once ticked. */
 .form-check-input[type="checkbox"]:checked {
@@ -2177,7 +2473,7 @@ body.chat-docked-right { padding-right: var(--chat-dock-w, 380px); }
 .ai-extraction-zone {
     background: linear-gradient(135deg, var(--cream), var(--cream));
     border: 2px dashed var(--maroon);
-    border-radius: 8px;
+    border-radius: var(--r-control, 4px);
     padding: 1.5rem;
     text-align: center;
 }
@@ -2211,7 +2507,7 @@ body.chat-docked-right { padding-right: var(--chat-dock-w, 380px); }
     color: #fff;
     font-weight: 400;
     padding: .75rem 1.75rem;
-    border-radius: 8px;
+    border-radius: var(--r-control, 4px);
     font-size: .875rem;
     border: none;
     transition: background .2s;
@@ -2229,7 +2525,7 @@ body.chat-docked-right { padding-right: var(--chat-dock-w, 380px); }
 /* Metadata fields */
 .metadata-fields {
     background: var(--cream);
-    border-radius: 8px;
+    border-radius: var(--r-control, 4px);
     padding: 1.25rem;
     border: 2px solid var(--border);
 }
@@ -2245,7 +2541,7 @@ body.chat-docked-right { padding-right: var(--chat-dock-w, 380px); }
 .doc-upload-card {
     background: white;
     border: 2px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--r-card, 8px);
     padding: 1.25rem;
     text-align: center;
     transition: all 0.3s ease;
@@ -2285,7 +2581,7 @@ body.chat-docked-right { padding-right: var(--chat-dock-w, 380px); }
 /* Review summary */
 .review-summary {
     background: var(--cream);
-    border-radius: 8px;
+    border-radius: var(--r-card, 8px);
     padding: 1.25rem;
     border: 2px solid var(--border);
 }
@@ -2327,7 +2623,7 @@ body.chat-docked-right { padding-right: var(--chat-dock-w, 380px); }
 .file-indicator {
     margin-top: 0.75rem;
     padding: 0.75rem;
-    border-radius: 8px;
+    border-radius: var(--r-card, 8px);
     font-size: 0.9rem;
     font-weight: 500;
     text-align: center;
@@ -2444,12 +2740,17 @@ body.chat-docked-right { padding-right: var(--chat-dock-w, 380px); }
 .papel-dialog {
     background: var(--white);
     border: 1px solid rgba(177,125,125,.22);
-    border-radius: 10px;
+    border-radius: var(--r-card, 8px);
     box-shadow: var(--shadow-md);
     width: 100%;
-    max-width: 400px;
+    max-width: 440px;
     overflow: hidden;
 }
+/* For dialogs that explain rather than announce. Wide enough for a comfortable
+   line, and capped so the text never runs to the full width of a large screen,
+   where the eye loses its place returning to the next line. */
+.papel-dialog.is-wide { max-width: 720px; }
+.papel-dialog.is-wide .papel-dialog-body { padding: 1.125rem 1.5rem; }
 .papel-dialog-head {
     display: flex;
     align-items: center;
@@ -2526,7 +2827,7 @@ body.chat-docked-right { padding-right: var(--chat-dock-w, 380px); }
     height: 28px;
     padding: 0 .25rem;
     border: none;
-    border-radius: 6px;
+    border-radius: var(--r-control, 4px);
     background: none;
     color: #fff;
     font-family: inherit;
@@ -2577,7 +2878,7 @@ body.chat-docked-right { padding-right: var(--chat-dock-w, 380px); }
 #pdf-preview-scroll::-webkit-scrollbar-track { background: var(--cream); }
 #pdf-preview-scroll::-webkit-scrollbar-thumb {
     background: var(--soft-maroon);
-    border-radius: 6px;
+    border-radius: var(--r-card, 8px);
     border: 2px solid var(--cream);
 }
 #pdf-preview-scroll::-webkit-scrollbar-thumb:hover { background: var(--maroon); }
@@ -2607,7 +2908,7 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
     gap: .25rem;
     padding: .75rem .5rem;
     border: none;
-    border-radius: 10px 0 0 10px;
+    border-radius: var(--r-control, 4px) 0 0 var(--r-control, 4px);
     background: var(--maroon);
     color: #fff;
     font-family: var(--font-body);
@@ -2652,35 +2953,30 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
 }
 .papel-dialog-foot {
     display: flex;
+    align-items: center;
     justify-content: flex-end;
+    flex-wrap: wrap;          /* three actions still fit on a narrow phone */
     gap: .5rem;
     padding: 1.25rem;
 }
+/* A button label is a phrase, not a paragraph: without this "Leave without
+   saving" broke onto three lines the moment a third action joined the row. */
+.papel-dialog-foot .btn { white-space: nowrap; }
 </style>
 </head>
 <body>
 
-<!-- Claude-inspired Upload Overlay -->
+<!-- Upload / extraction overlay -->
 <div id="uploadOverlay">
   <div class="loading-content">
-    <!-- Animated orb -->
-    <div class="claude-orb-wrap">
-      <div class="orb-ring"></div>
-      <div class="orb-ring"></div>
-      <div class="orb-ring"></div>
-      <div class="claude-orb"></div>
-      <div class="claude-orb-inner">
-        <svg class="claude-orb-icon" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M24 6L6 18v12l18 12 18-12V18L24 6z" fill="url(#og)" opacity=".9"/>
-          <path d="M24 6v36M6 18l18 12 18-12" stroke="rgba(255,255,255,.35)" stroke-width="1.2"/>
-          <defs>
-            <linearGradient id="og" x1="6" y1="6" x2="42" y2="42" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stop-color="var(--soft-maroon)"/>
-              <stop offset="100%" stop-color="var(--maroon)"/>
-            </linearGradient>
-          </defs>
-        </svg>
-      </div>
+    <!-- The book. Decorative: the text below it says what is happening, and
+         a screen reader should hear that rather than five empty divs. -->
+    <div class="page-turn" aria-hidden="true">
+      <div class="page-turn-half page-turn-left"></div>
+      <div class="page-turn-half page-turn-right"></div>
+      <div class="page-turn-leaf"></div>
+      <div class="page-turn-leaf"></div>
+      <div class="page-turn-leaf"></div>
     </div>
 
     <!-- Text -->
@@ -2702,7 +2998,7 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
   <div class="wrap crumb-inner">
     <a href="<?= e(BASE_URL) ?>/archive/index.php">Home</a>
     <span class="material-symbols-outlined crumb-arrow">chevron_right</span>
-    <a href="student_dashboard.php">My Dashboard</a>
+    <a href="<?= e($isStudent ? 'student_dashboard.php' : role_home($u['user_role'])) ?>"><?= e(role_home_label($u['user_role'])) ?></a>
     <span class="material-symbols-outlined crumb-arrow">chevron_right</span>
     <span class="crumb-current">Upload Paper</span>
   </div>
@@ -2768,21 +3064,32 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
                 <div class="row g-4">
                   <div class="col-md-12">
                     <label class="form-label">Academic Program <span class="text-danger">*</span></label>
+                    <?php if (!$isStudent): ?>
+                      <?php /* Not a question for staff: they belong to the faculty rather
+                               than to a degree, so the field states that instead of
+                               offering ten programmes none of which is theirs. Posted as
+                               a hidden field, exactly as a chosen one would be. */ ?>
+                      <input type="text" class="form-control" value="Faculty Member" readonly
+                             aria-label="Academic Program">
+                      <input type="hidden" name="program_category" id="programSelect" value="Faculty Member">
+                      <small class="text-muted">Papers you upload are filed under the faculty, not a programme.</small>
+                    <?php else: ?>
                     <select class="form-select" name="program_category" id="programSelect" required>
                       <option value="">Select Program...</option>
-                      <option value="Bachelor of Science in Information Technology">BS Information Technology</option>
-                      <option value="Bachelor of Science in Industrial Engineering">BS Industrial Engineering</option>
-                      <option value="Bachelor of Science in Computer Engineering">BS Computer Engineering</option>
-                      <option value="Bachelor of Secondary Education major in English">BSEd English</option>
-                      <option value="Bachelor of Secondary Education major in Social Studies">BSEd Social Studies</option>
-                      <option value="Bachelor of Elementary Education">BEEd</option>
-                      <option value="Bachelor of Science in Psychology">BS Psychology</option>
-                      <option value="Diploma in Information Technology">Diploma IT</option>
-                      <option value="Diploma in Computer Engineering Technology">Diploma Computer Engineering</option>
-                      <option value="Bachelor of Science in Business Administration major in Human Resource Management">BSBA HRM</option>
-                      <option value="Faculty Member">Faculty Member</option>
-                      <option value="Other">Others</option>
+                      <option value="Bachelor of Science in Information Technology"<?= $myProgram === 'Bachelor of Science in Information Technology' ? ' selected' : '' ?>>BS Information Technology</option>
+                      <option value="Bachelor of Science in Industrial Engineering"<?= $myProgram === 'Bachelor of Science in Industrial Engineering' ? ' selected' : '' ?>>BS Industrial Engineering</option>
+                      <option value="Bachelor of Science in Computer Engineering"<?= $myProgram === 'Bachelor of Science in Computer Engineering' ? ' selected' : '' ?>>BS Computer Engineering</option>
+                      <option value="Bachelor of Secondary Education major in English"<?= $myProgram === 'Bachelor of Secondary Education major in English' ? ' selected' : '' ?>>BSEd English</option>
+                      <option value="Bachelor of Secondary Education major in Social Studies"<?= $myProgram === 'Bachelor of Secondary Education major in Social Studies' ? ' selected' : '' ?>>BSEd Social Studies</option>
+                      <option value="Bachelor of Elementary Education"<?= $myProgram === 'Bachelor of Elementary Education' ? ' selected' : '' ?>>BEEd</option>
+                      <option value="Bachelor of Science in Psychology"<?= $myProgram === 'Bachelor of Science in Psychology' ? ' selected' : '' ?>>BS Psychology</option>
+                      <option value="Diploma in Information Technology"<?= $myProgram === 'Diploma in Information Technology' ? ' selected' : '' ?>>Diploma IT</option>
+                      <option value="Diploma in Computer Engineering Technology"<?= $myProgram === 'Diploma in Computer Engineering Technology' ? ' selected' : '' ?>>Diploma Computer Engineering</option>
+                      <option value="Bachelor of Science in Business Administration major in Human Resource Management"<?= $myProgram === 'Bachelor of Science in Business Administration major in Human Resource Management' ? ' selected' : '' ?>>BSBA HRM</option>
+                      <option value="Faculty Member"<?= $myProgram === 'Faculty Member' ? ' selected' : '' ?>>Faculty Member</option>
+                      <option value="Other"<?= $myProgram === 'Other' ? ' selected' : '' ?>>Others</option>
                     </select>
+                    <?php endif; ?>
                   </div>
 
                   <div class="col-md-6">
@@ -2922,6 +3229,12 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
                         Only the Abstract is taken from your PDF, copied word-for-word so you can
                         check it against your paper. Write the Introduction, Methodology, Results
                         and Discussion, Conclusion and References yourself. Every section is required.
+                        <?php /* The same explanation the dialog gives on arriving at this step, so
+                                 closing that dialog does not put it out of reach. */ ?>
+                        <button type="button" class="btn-why-sections" id="btnWhySections">
+                          <span class="material-symbols-outlined mi-18">help</span>
+                          <span>Why do I have to type these?</span>
+                        </button>
                       </div>
 
                       <?php
@@ -2960,13 +3273,10 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
                             <button type="button" class="doc-tool" data-cmd="italic" title="Italic (Ctrl+I)" aria-label="Italic"><span class="material-symbols-outlined mi-18">format_italic</span></button>
                             <button type="button" class="doc-tool" data-cmd="underline" title="Underline (Ctrl+U)" aria-label="Underline"><span class="material-symbols-outlined mi-18">format_underlined</span></button>
                             <button type="button" class="doc-tool" data-cmd="strikeThrough" title="Strikethrough" aria-label="Strikethrough"><span class="material-symbols-outlined mi-18">format_strikethrough</span></button>
-                            <span class="doc-tool-sep"></span>
-                            <?php /* Alignment applies to the paragraph the caret is in, or to every
-                                     cell a selection touches when it is inside a table. */ ?>
-                            <button type="button" class="doc-tool" data-cmd="justifyLeft" title="Align left" aria-label="Align left"><span class="material-symbols-outlined mi-18">format_align_left</span></button>
-                            <button type="button" class="doc-tool" data-cmd="justifyCenter" title="Centre" aria-label="Centre"><span class="material-symbols-outlined mi-18">format_align_center</span></button>
-                            <button type="button" class="doc-tool" data-cmd="justifyRight" title="Align right" aria-label="Align right"><span class="material-symbols-outlined mi-18">format_align_right</span></button>
-                            <button type="button" class="doc-tool" data-cmd="justifyFull" title="Justify" aria-label="Justify"><span class="material-symbols-outlined mi-18">format_align_justify</span></button>
+                            <?php /* No alignment buttons here. They can only act on a table cell,
+                                     so on a toolbar used mostly for prose they sat greyed out and
+                                     read as broken. Alignment now lives on the right-click menu
+                                     over a table, where it always applies. */ ?>
                             <span class="doc-tool-sep"></span>
                             <button type="button" class="doc-tool" data-cmd="insertUnorderedList" title="Bulleted list" aria-label="Bulleted list"><span class="material-symbols-outlined mi-18">format_list_bulleted</span></button>
                             <button type="button" class="doc-tool" data-cmd="insertOrderedList" title="Numbered list" aria-label="Numbered list"><span class="material-symbols-outlined mi-18">format_list_numbered</span></button>
@@ -2976,6 +3286,7 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
                             <button type="button" class="doc-tool" data-role="link" title="Insert link (Ctrl+K)" aria-label="Insert link"><span class="material-symbols-outlined mi-18">link</span></button>
                             <button type="button" class="doc-tool" data-role="unlink" title="Remove link" aria-label="Remove link"><span class="material-symbols-outlined mi-18">link_off</span></button>
                             <span class="doc-tool-sep"></span>
+                            <button type="button" class="doc-tool" data-role="image" title="Insert picture" aria-label="Insert picture"><span class="material-symbols-outlined mi-18">image</span></button>
                             <span class="doc-pop-wrap doc-table-wrap" data-pop="table">
                               <button type="button" class="doc-tool" data-role="table" title="Table" aria-label="Insert or edit table" aria-haspopup="true"><span class="material-symbols-outlined mi-18">table</span></button>
                             </span>
@@ -3162,9 +3473,11 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
                   <button type="button" class="btn btn-outline-secondary" data-goto-step="3">
                     Back
                   </button>
+                  <?php if ($canDraft): ?>
                   <button class="btn btn-outline-secondary btn-lg" id="btnSaveDraft" type="button">
                     Save as Draft
                   </button>
+                  <?php endif; ?>
                   <button class="btn btn-primary btn-lg" id="btnUpload" type="submit">
                     Submit Paper
                   </button>
@@ -3339,17 +3652,23 @@ function handleStatusChange(checkbox) {
    ========================================================================= */
 const papelDoc = (function () {
     const editors = {};                      // section key -> { root, surface, input, count }
-    // Alignment is fixed at justify and cannot be changed, so there are no
-    // alignment commands to reflect in the toolbar's pressed states.
-    const ALIGN_CMDS = ['justifyLeft', 'justifyCenter', 'justifyRight', 'justifyFull'];
+    /* Alignment is a table cell's business, and is offered on the right-click
+       menu over a table and in the table popover. Neither is a toolbar button,
+       so none of them has a pressed state to reflect. */
+    const CELL_ALIGN = [
+        ['Align left',   'left'],
+        ['Align centre', 'center'],
+        ['Align right',  'right'],
+        ['Justify',      'justify'],
+    ];
     const STATE_CMDS = ['bold', 'italic', 'underline', 'strikeThrough',
-                        'insertUnorderedList', 'insertOrderedList'].concat(ALIGN_CMDS);
+                        'insertUnorderedList', 'insertOrderedList'];
 
     // Mirrors rich_text_sanitize() in config/core.php. The server is still the
     // authority — this only keeps the live document clean, since pasted markup
     // is inserted into a contenteditable long before it is ever submitted.
     const ALLOWED = ['p','br','div','span','b','strong','i','em','u','strike','s','del','sub','sup',
-                     'ul','ol','li','blockquote','a',
+                     'ul','ol','li','blockquote','a','img',
                      'table','thead','tbody','tfoot','tr','th','td','caption'];
     const DROPPED = ['script','style','iframe','object','embed','applet','noscript','template',
                      'svg','math','head','title','link','meta','base',
@@ -3436,19 +3755,93 @@ const papelDoc = (function () {
         return out.replace(/[ \t]{2,}/g, ' ');
     }
 
+    /* Mirrors $safeImageSrc in rich_text_sanitize(). Only pictures this site
+       stores are kept: a remote src would have every reader of the paper fetch
+       it from somewhere else, and would break the day that host went away.
+       Pictures pasted from a web page are re-hosted before this runs. */
+    const IMG_SRC_RE = /(?:^|\/)uploads\/section_images\/\d+\/[a-f0-9]{32}\.(png|jpe?g|gif|webp)$/i;
+
+    function safeImageSrc(src) {
+        const v = String(src || '').trim();
+        if (v === '') return null;
+        if (/^[a-z][a-z0-9+.\-]*:/i.test(v) || v.indexOf('//') === 0) return null;
+        if (v.indexOf('..') !== -1) return null;
+        return IMG_SRC_RE.test(v) ? v : null;
+    }
+
+    // How many pictures the last sanitize had to turn away, so the student can
+    // be told rather than left to notice a gap in what they pasted.
+    let droppedImages = 0;
+
+    /* Something that at least looks like a host: labels separated by dots and
+       ending in a real suffix, optionally with a port and a path. */
+    const HOST_RE = /^[a-z0-9](?:[a-z0-9\-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9\-]*[a-z0-9])?)*\.[a-z]{2,}(?::\d{1,5})?(?:[\/?#]\S*)?$/i;
+    const MAILTO_RE = /^mailto:[^\s@]+@[a-z0-9.\-]+\.[a-z]{2,}$/i;
+
+    /* Mirrors $safeHref in rich_text_sanitize().
+
+       This used to turn away only the schemes that can execute, which left
+       every address without a scheme accepted as a relative one. That is how
+       "asdasd" became a link: perfectly valid to a browser, and pointing at a
+       page in this site that does not exist. An address now has to look like
+       one.
+
+       A bare host is allowed and given the scheme it was missing, because
+       "pup.edu.ph" is what people type and refusing it would be pedantic. */
     function safeHref(href) {
-        const h = String(href || '').trim();
-        if (h === '') return null;
-        // Strip whitespace and control characters first: browsers ignore them
-        // when resolving a scheme, so "java\tscript:" would otherwise slip past.
-        const probe = h.replace(/[\s\x00-\x1f]/g, '').toLowerCase();
-        const scheme = /^([a-z][a-z0-9+.\-]*):/.exec(probe);
-        if (scheme && ['http', 'https', 'mailto'].indexOf(scheme[1]) === -1) return null;
-        return h;
+        const raw = String(href || '').trim();
+        if (raw === '') return null;
+        // Browsers ignore whitespace and control characters when working out a
+        // scheme, so "java\tscript:" has to be judged on what they would see.
+        const probe = raw.replace(/[\s\x00-\x1f]/g, '');
+        const scheme = /^([a-z][a-z0-9+.\-]*):/i.exec(probe);
+
+        if (!scheme) return HOST_RE.test(probe) ? 'https://' + probe : null;
+
+        const name = scheme[1].toLowerCase();
+        if (name === 'mailto') return MAILTO_RE.test(probe) ? probe : null;
+        if (name !== 'http' && name !== 'https') return null;
+        return HOST_RE.test(probe.replace(/^https?:\/\//i, '')) ? probe : null;
     }
 
     function esc(s) {
         return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    // For values going inside a quoted attribute, where a stray " would end it.
+    function escAttr(s) {
+        return esc(s).replace(/"/g, '&quot;');
+    }
+
+    /* A picture as markup rather than as a node.
+
+       Everything that puts a picture into a box does it by handing this string
+       to insertHtmlAtCaret, because that goes through execCommand and so lands
+       on the browser's undo history along with the typing around it. */
+    function imageMarkup(src, alt, width) {
+        return '<img src="' + escAttr(src) + '" alt="' + escAttr(alt || '') + '"'
+             + (width ? ' style="width:' + escAttr(width) + '"' : '') + '>';
+    }
+
+    /* Replaces one picture with another version of itself, as a single edit.
+
+       Selecting the node first is what makes insertHTML replace it rather than
+       insert beside it, and it is the whole reason resizing a picture can be
+       undone: the browser sees one edit that swapped a selection for some
+       markup, exactly as it sees a paste. */
+    function replaceNode(ed, node, markup) {
+        ed.surface.focus();
+        const range = document.createRange();
+        range.selectNode(node);
+        const sel = window.getSelection();
+        if (!sel) return false;
+        sel.removeAllRanges();
+        sel.addRange(range);
+        if (markup === '') {
+            try { return document.execCommand('delete', false, null); }
+            catch (err) { node.remove(); return true; }
+        }
+        return insertHtmlAtCaret(ed, markup);
     }
 
     function sanitizeHtml(html) {
@@ -3456,6 +3849,7 @@ const papelDoc = (function () {
         const doc = new DOMParser().parseFromString('<div id="r">' + html + '</div>', 'text/html');
         const root = doc.getElementById('r');
         if (!root) return '';
+        droppedImages = 0;
 
         (function walk(node) {
             let child = node.firstChild;
@@ -3482,7 +3876,65 @@ const papelDoc = (function () {
                     continue;
                 }
 
-                const isCell = (tag === 'td' || tag === 'th');
+                const isCell  = (tag === 'td' || tag === 'th');
+                const isImage = (tag === 'img');
+                /* A paragraph inside a cell is where the browser puts the
+                   alignment when the cell holds one, so its text-align has to
+                   survive too or centring a column silently comes undone at the
+                   next save. Outside a cell it is still dropped: body text is
+                   justified for every paper. */
+                const inCellBlock = (tag === 'p' || tag === 'div')
+                    && !!(child.closest && child.closest('td, th'));
+
+                if (tag === 'a') {
+                    /* The server keeps a link's destination; this did not, so a
+                       page pasted with links arrived with every href stripped
+                       and the server then unwrapped them all. */
+                    const keptHref = safeHref(child.getAttribute('href'));
+                    Array.prototype.slice.call(child.attributes).forEach(function (attr) {
+                        child.removeAttribute(attr.name);
+                    });
+                    if (keptHref === null) {
+                        // No usable destination: keep the words, drop the link.
+                        const first = child.firstChild;
+                        while (child.firstChild) node.insertBefore(child.firstChild, child);
+                        node.removeChild(child);
+                        child = first || next;
+                        continue;
+                    }
+                    child.setAttribute('href', keptHref);
+                    child.setAttribute('target', '_blank');
+                    child.setAttribute('rel', 'noopener noreferrer nofollow');
+                    walk(child);
+                    child = next;
+                    continue;
+                }
+
+                if (isImage) {
+                    const keptSrc = safeImageSrc(child.getAttribute('src'));
+                    if (keptSrc === null) {
+                        // Void element: nothing inside it to preserve.
+                        droppedImages++;
+                        node.removeChild(child);
+                        child = next;
+                        continue;
+                    }
+                    const alt = (child.getAttribute('alt') || '').trim().slice(0, 300);
+                    // How wide the student set it, if they set it at all.
+                    const w = /(?:^|;)\s*width\s*:\s*([\d.]+)(%|px)\s*(?:;|$)/i
+                                .exec(child.getAttribute('style') || '');
+                    Array.prototype.slice.call(child.attributes).forEach(function (attr) {
+                        child.removeAttribute(attr.name);
+                    });
+                    child.setAttribute('src', keptSrc);
+                    child.setAttribute('alt', alt);
+                    if (w && parseFloat(w[1]) > 0) {
+                        child.setAttribute('style', 'width:' + parseFloat(w[1]) + w[2].toLowerCase());
+                    }
+                    child = next;
+                    continue;
+                }
+
                 Array.prototype.slice.call(child.attributes).forEach(function (attr) {
                     const name = attr.name.toLowerCase();
                     if (isCell && (name === 'colspan' || name === 'rowspan')) {
@@ -3496,13 +3948,23 @@ const papelDoc = (function () {
                        column is. Body text is justified for every paper, so
                        alignment on a paragraph is dropped along with fonts,
                        colours, Word's shading and url(). */
-                    if (name === 'style' && (isCell || tag === 'table')) {
+                    if (name === 'style' && (isCell || inCellBlock || tag === 'table')) {
                         const keep = [];
-                        const align = isCell
+                        const align = (isCell || inCellBlock)
                             ? /text-align\s*:\s*(left|right|center|justify)\b/i.exec(attr.value)
                             : null;
                         if (align) keep.push('text-align:' + align[1].toLowerCase());
-                        {
+                        // auto and 0 only, which is all that centring a table
+                        // needs and nothing that can carry a url() or a length
+                        // large enough to push the page about.
+                        if (tag === 'table') {
+                            const m = /(?:^|;)\s*margin-(left|right)\s*:\s*(auto|0)\s*(?:;|$)/gi;
+                            let hit;
+                            while ((hit = m.exec(attr.value)) !== null) {
+                                keep.push('margin-' + hit[1].toLowerCase() + ':' + hit[2].toLowerCase());
+                            }
+                        }
+                        if (!inCellBlock) {
                             /* No \b after the unit: "%" is not a word character,
                                so a boundary after it never matches at the end of
                                the value and every percentage width was dropped. */
@@ -3524,7 +3986,179 @@ const papelDoc = (function () {
             }
         })(root);
 
+        tidyTables(root);
         return root.innerHTML;
+    }
+
+    /* Pasted tables arrive padded.
+
+       Word wraps every cell's text in its own <p>, Excel pads cells out with
+       non-breaking spaces, a table copied from a PDF carries the line breaks of
+       the page it was laid out on, and any of them may be sitting inside a
+       one-cell table used purely as a frame. None of that is data, and all of it
+       shows up as a lopsided table in the finished paper, so it is taken off
+       here rather than left for the student to clean by hand. */
+    function tidyTables(root) {
+        // A table whose only content is another table is a frame, not data.
+        // Unwrapped repeatedly, because Word nests them several deep.
+        for (let pass = 0; pass < 4; pass++) {
+            const frames = Array.prototype.filter.call(root.querySelectorAll('table'), function (t) {
+                /* Only this table's own cells: querySelectorAll reaches through
+                   the nested table as well, and counting those made every
+                   wrapper look far too full to be a wrapper. */
+                const own = Array.prototype.filter.call(t.querySelectorAll('th, td'), function (c) {
+                    return c.closest('table') === t;
+                });
+                return own.length === 1 && own[0].querySelector('table');
+            });
+            if (!frames.length) break;
+            frames.forEach(function (t) {
+                const cell = t.querySelector('th, td');
+                while (cell.firstChild) t.parentNode.insertBefore(cell.firstChild, t);
+                t.remove();
+            });
+        }
+
+        root.querySelectorAll('th, td').forEach(function (cell) {
+            // A cell's own paragraphs are Word's doing, not the author's: they
+            // add a blank line above and below every value in the column.
+            cell.querySelectorAll('p, div').forEach(function (block) {
+                // If that paragraph was the thing carrying the alignment, the
+                // cell inherits it rather than losing it with the wrapper.
+                const align = /text-align\s*:\s*(left|right|center|justify)\b/i
+                                .exec(block.getAttribute('style') || '');
+                if (align && !cell.style.textAlign) {
+                    cell.style.textAlign = align[1].toLowerCase();
+                }
+                if (block.nextElementSibling || block.previousElementSibling) {
+                    block.insertAdjacentHTML('afterend', '<br>');
+                }
+                while (block.firstChild) block.parentNode.insertBefore(block.firstChild, block);
+                block.remove();
+            });
+
+            // Non-breaking spaces are how a spreadsheet pads a column to width.
+            // They are spaces once the table has its own borders.
+            const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT, null);
+            const texts = [];
+            while (walker.nextNode()) texts.push(walker.currentNode);
+            texts.forEach(function (t) {
+                t.nodeValue = t.nodeValue.replace(/[\u00a0\s]+/g, ' ');
+            });
+
+            // A trailing <br> is the line break at the end of the cell's last
+            // line, and an empty text node either side of it is nothing at all.
+            while (cell.lastChild && (
+                     (cell.lastChild.nodeType === 3 && cell.lastChild.nodeValue.trim() === '') ||
+                     (cell.lastChild.nodeType === 1 && cell.lastChild.nodeName === 'BR'))) {
+                cell.removeChild(cell.lastChild);
+            }
+            while (cell.firstChild && cell.firstChild.nodeType === 3
+                   && cell.firstChild.nodeValue.trim() === '') {
+                cell.removeChild(cell.firstChild);
+            }
+
+            /* The padding is trimmed off the first and last piece of *text* in
+               the cell rather than its first and last child. Word puts the
+               value inside a <span>, and trimming the cell's children then
+               reached an element and did nothing at all. */
+            const inner = [];
+            const w2 = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT, null);
+            while (w2.nextNode()) inner.push(w2.currentNode);
+            if (inner.length) {
+                inner[0].nodeValue = inner[0].nodeValue.replace(/^ +/, '');
+                inner[inner.length - 1].nodeValue = inner[inner.length - 1].nodeValue.replace(/ +$/, '');
+            }
+        });
+
+        // A row where every cell is empty is the spacer row a layout table uses.
+        root.querySelectorAll('tr').forEach(function (row) {
+            const cells = row.querySelectorAll('th, td');
+            if (!cells.length) { row.remove(); return; }
+            const anything = Array.prototype.some.call(cells, function (c) {
+                return c.textContent.trim() !== '' || c.querySelector('img');
+            });
+            if (!anything) row.remove();
+        });
+
+        // Whatever is left with no rows at all is not a table any more.
+        root.querySelectorAll('table').forEach(function (t) {
+            if (!t.querySelector('tr')) t.remove();
+        });
+    }
+
+    /* A table that arrived as plain text.
+
+       Excel, Sheets and Word all put tab-separated text on the clipboard
+       alongside their HTML, and a table copied out of a PDF or a terminal has no
+       HTML at all: its columns are held apart by runs of spaces. Both are real
+       tables to the person pasting them, so both are rebuilt as one.
+
+       Returns null for anything that does not look like a grid, which is how
+       ordinary prose stays prose. */
+    function textToTable(text) {
+        const lines = String(text || '').replace(/\r\n?/g, '\n').split('\n')
+                        .filter(function (l) { return l.trim() !== ''; });
+        if (lines.length < 2) return null;
+
+        let rows = null;
+
+        // Tabs are unambiguous: prose does not carry one on every line.
+        if (lines.every(function (l) { return l.indexOf('\t') !== -1; })) {
+            rows = lines.map(function (l) { return l.split('\t'); });
+        } else {
+            /* Columns held apart by padding. Far easier to mistake for prose, so
+               this asks for more: the same number of columns on every line, and
+               no "cell" long enough to be a sentence that merely happens to
+               contain a double space. */
+            const split = lines.map(function (l) { return l.trim().split(/\s{2,}/); });
+            const width = split[0].length;
+            const uniform = width >= 2 && split.every(function (r) { return r.length === width; });
+            const short = split.every(function (r) {
+                return r.every(function (c) { return c.length <= 120; });
+            });
+            if (uniform && short) rows = split;
+        }
+        if (!rows) return null;
+
+        const cols = rows.reduce(function (m, r) { return Math.max(m, r.length); }, 0);
+        if (cols < 2) return null;
+
+        /* The first row is a header when it is complete and none of it is a
+           number, which is what a row of column names looks like. */
+        const first = rows[0];
+        const isHeader = first.length === cols
+            && first.every(function (c) { return c.trim() !== ''; })
+            && !first.some(function (c) { return /^[-+]?[\d.,%]+$/.test(c.trim()); });
+
+        const width = (100 / cols).toFixed(4);
+        let out = '<table><tbody>';
+        rows.forEach(function (r, i) {
+            const tag = (isHeader && i === 0) ? 'th' : 'td';
+            out += '<tr>';
+            for (let c = 0; c < cols; c++) {
+                // Width on the first row only: the rest inherit the column.
+                const style = (i === 0) ? ' style="width:' + width + '%"' : '';
+                out += '<' + tag + style + '>' + esc((r[c] || '').trim()) + '</' + tag + '>';
+            }
+            out += '</tr>';
+        });
+        return out + '</tbody></table>';
+    }
+
+    /* Web addresses typed or pasted as bare text become links.
+
+       Only in the plain-text path: markup that arrived as HTML already carries
+       whatever links it meant to have. */
+    const URL_RE = /\b((?:https?:\/\/|www\.)[^\s<>()"']+[^\s<>()"'.,;:!?])/gi;
+
+    function autoLink(escaped) {
+        return escaped.replace(URL_RE, function (m) {
+            const href = safeHref(m);
+            if (!href) return m;
+            return '<a href="' + href.replace(/"/g, '&quot;') + '" target="_blank"'
+                 + ' rel="noopener noreferrer nofollow">' + m + '</a>';
+        });
     }
 
     // Plain text from the extractor becomes real paragraphs, so the student can
@@ -3539,9 +4173,283 @@ const papelDoc = (function () {
             // blank line starts a new paragraph. Keeping them as <br> would stop
             // the text justifying, because a line ending in a forced break is
             // always treated as a final line.
-            .map(b => '<p>' + esc(b).replace(/\s*\n\s*/g, ' ') + '</p>')
+            .map(b => '<p>' + autoLink(esc(b).replace(/\s*\n\s*/g, ' ')) + '</p>')
             .join('');
         return html;
+    }
+
+    /* ----- Pictures -----
+
+       A screenshot off the clipboard is 2 to 8 MB of PNG at the size of the
+       screen it was taken on. It is redrawn through a canvas first, which costs
+       nothing visible in a paper and saves both the upload and every reader of
+       it afterwards. Smaller pictures are sent as they are: re-encoding a chart
+       that is already the right size only makes it worse. */
+    const IMAGE_MAX_EDGE    = 1600;              // px, longest side after redraw
+    const IMAGE_REDRAW_OVER = 1.5 * 1024 * 1024; // redraw anything bigger, whatever its size
+    const IMAGE_MAX_AT_ONCE = 8;
+
+    function prepareImage(file) {
+        return new Promise(function (resolve, reject) {
+            const url = URL.createObjectURL(file);
+            const probe = new Image();
+            probe.onload = function () {
+                const w = probe.naturalWidth, h = probe.naturalHeight;
+                if (!w || !h) { URL.revokeObjectURL(url); reject(new Error('empty image')); return; }
+                if (Math.max(w, h) <= IMAGE_MAX_EDGE && file.size <= IMAGE_REDRAW_OVER) {
+                    URL.revokeObjectURL(url);
+                    resolve(file);
+                    return;
+                }
+                const scale  = IMAGE_MAX_EDGE / Math.max(w, h);
+                const canvas = document.createElement('canvas');
+                canvas.width  = Math.max(1, Math.round(w * Math.min(1, scale)));
+                canvas.height = Math.max(1, Math.round(h * Math.min(1, scale)));
+                const ctx = canvas.getContext('2d');
+                /* A screenshot is text, and JPEG puts a halo round every letter
+                   of it, so anything that came in as PNG or GIF leaves as PNG.
+                   A photograph has no such problem and compresses far better.
+                   JPEG cannot hold transparency either, hence the white ground:
+                   without it the transparent parts come out black. */
+                const keepPng = /png|gif/i.test(file.type || '');
+                if (!keepPng) {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                }
+                ctx.drawImage(probe, 0, 0, canvas.width, canvas.height);
+                URL.revokeObjectURL(url);
+                canvas.toBlob(function (blob) { resolve(blob || file); },
+                              keepPng ? 'image/png' : 'image/jpeg', 0.85);
+            };
+            probe.onerror = function () {
+                URL.revokeObjectURL(url);
+                reject(new Error('unreadable image'));
+            };
+            probe.src = url;
+        });
+    }
+
+    function uploadImage(blob) {
+        const fd = new FormData();
+        const type = (blob.type || 'image/png').toLowerCase();
+        const ext  = type.indexOf('png')  !== -1 ? 'png'
+                   : type.indexOf('gif')  !== -1 ? 'gif'
+                   : type.indexOf('webp') !== -1 ? 'webp' : 'jpg';
+        fd.append('action', 'upload_section_image');
+        // The server names the stored file itself; this only has to be present.
+        fd.append('image', blob, 'picture.' + ext);
+        const token = document.querySelector('input[name="_token"]');
+        if (token) fd.append(token.name, token.value);
+
+        return fetch('student_upload_ai.php', { method: 'POST', body: fd })
+            .then(function (r) {
+                return r.json().catch(function () {
+                    return { success: false, message: 'The server did not answer properly.' };
+                });
+            })
+            .then(function (j) {
+                if (!j || !j.success || !j.url) {
+                    throw new Error((j && j.message) || 'That picture could not be saved.');
+                }
+                return j;
+            });
+    }
+
+    /* Uploads first, inserts second.
+
+       The obvious alternative is to show the picture straight away and swap the
+       address in when the upload lands. It was not worth it: an autosave firing
+       in that window would write a blob: address into the draft, which is a
+       reference to memory in one tab of one browser and means nothing anywhere
+       else. Waiting keeps everything that reaches the draft real. */
+    function insertImages(ed, files) {
+        let list = Array.prototype.filter.call(files, function (f) {
+            return f && /^image\//i.test(f.type || '');
+        });
+        if (!list.length) return false;
+        if (list.length > IMAGE_MAX_AT_ONCE) {
+            list = list.slice(0, IMAGE_MAX_AT_ONCE);
+            window.papelAlert('Only the first ' + IMAGE_MAX_AT_ONCE + ' pictures were added. Paste the rest separately.');
+        }
+
+        /* Where the picture goes is decided now. The caret moves the moment
+           anything else takes focus, and the upload takes long enough for that
+           to happen. */
+        const sel = window.getSelection();
+        let range = null;
+        if (sel && sel.rangeCount) {
+            const r = sel.getRangeAt(0);
+            if (ed.surface.contains(r.commonAncestorContainer)) range = r.cloneRange();
+        }
+        if (!range) {
+            range = document.createRange();
+            range.selectNodeContents(ed.surface);
+            range.collapse(false);
+        }
+
+        ed.root.classList.add('is-uploading');
+
+        let chain = Promise.resolve();
+        list.forEach(function (file) {
+            chain = chain.then(function () {
+                return prepareImage(file).then(uploadImage).then(function (res) {
+                    /* Put the caret back where the paste happened, then insert
+                       as markup. Going through insertHtmlAtCaret rather than
+                       range.insertNode is what puts the picture on the undo
+                       history: Ctrl+Z takes it out again, Ctrl+Y brings it
+                       back, and both sit in order with the surrounding typing. */
+                    ed.surface.focus();
+                    const sel = window.getSelection();
+                    if (sel) {
+                        range.collapse(false);
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                    }
+                    insertHtmlAtCaret(ed, imageMarkup(res.url, ''));
+
+                    /* Carry the caret forward, so pasting several pictures at
+                       once puts them in the order they were given rather than
+                       stacking them all at the first one's position. */
+                    const now = window.getSelection();
+                    if (now && now.rangeCount
+                        && ed.surface.contains(now.getRangeAt(0).commonAncestorContainer)) {
+                        range = now.getRangeAt(0).cloneRange();
+                    }
+                });
+            });
+        });
+
+        chain.catch(function (err) {
+            window.papelAlert(String((err && err.message) || 'That picture could not be added.'),
+                              { tone: 'error' });
+        }).then(function () {
+            ed.root.classList.remove('is-uploading');
+            ed.surface.focus();
+            const s2 = window.getSelection();
+            if (s2) { s2.removeAllRanges(); s2.addRange(range); }
+            refresh(ed);
+        });
+        return true;
+    }
+
+    /* Puts already-sanitised markup in at the caret.
+
+       execCommand keeps the browser's own undo stack, which is why it is tried
+       first, but it is deprecated and it answers false rather than throwing when
+       it will not act, so the result has to be checked. Whatever it declines is
+       inserted by hand. The markup is parsed in a detached document and the
+       nodes imported, so nothing in it can run on the way in. */
+    function insertHtmlAtCaret(ed, html) {
+        try { if (document.execCommand('insertHTML', false, html)) return true; }
+        catch (err) { /* fall through to the manual path */ }
+
+        /* Below this line the edit is made directly and the browser's undo
+           history knows nothing about it, so Ctrl+Z will not take it back. That
+           is the price of not losing the paste altogether, and it is only paid
+           when execCommand has already refused to act. */
+
+        const sel = window.getSelection();
+        let range = null;
+        if (sel && sel.rangeCount) {
+            const r = sel.getRangeAt(0);
+            if (ed.surface.contains(r.commonAncestorContainer)) range = r;
+        }
+        if (!range) {
+            range = document.createRange();
+            range.selectNodeContents(ed.surface);
+            range.collapse(false);
+        }
+        range.deleteContents();
+
+        const parsed = new DOMParser().parseFromString('<div id="i">' + html + '</div>', 'text/html');
+        const src = parsed.getElementById('i');
+        if (!src) return false;
+        const frag = document.createDocumentFragment();
+        // importNode copies rather than moves, so the source node has to be
+        // taken out by hand or firstChild never changes and this never ends.
+        while (src.firstChild) {
+            const node = src.firstChild;
+            src.removeChild(node);
+            frag.appendChild(document.importNode(node, true));
+        }
+        const last = frag.lastChild;
+        if (!last) return false;
+
+        range.insertNode(frag);
+        range.setStartAfter(last);
+        range.collapse(true);
+        if (sel) { sel.removeAllRanges(); sel.addRange(range); }
+        return true;
+    }
+
+    /* Links the current selection.
+
+       execCommand('createLink') has the same weakness as insertHTML: it answers
+       false rather than throwing when it will not act, and a paste that was
+       supposed to link the selected words left them unlinked with nothing to
+       show for it. Anything it declines is wrapped by hand. */
+    function linkSelection(ed, href) {
+        let made = null;
+        try {
+            if (document.execCommand('createLink', false, href)) made = linkAtCaret(ed.surface);
+        } catch (err) { /* fall through to the manual path */ }
+
+        if (!made) {
+            const sel = window.getSelection();
+            if (!sel || !sel.rangeCount) return null;
+            const range = sel.getRangeAt(0);
+            if (range.collapsed || !ed.surface.contains(range.commonAncestorContainer)) return null;
+            const a = document.createElement('a');
+            a.setAttribute('href', href);
+            try {
+                // Fails when the selection starts inside one element and ends
+                // inside another, which is when the contents have to be moved.
+                range.surroundContents(a);
+            } catch (err) {
+                a.appendChild(range.extractContents());
+                range.insertNode(a);
+            }
+            made = a;
+        }
+
+        if (made) {
+            made.setAttribute('href', href);
+            // Without noopener the page opened gets a handle back to this one.
+            made.setAttribute('target', '_blank');
+            made.setAttribute('rel', 'noopener noreferrer nofollow');
+        }
+        return made;
+    }
+
+    // One hidden input serves every editor: only one file dialog can be open.
+    let imagePicker = null;
+
+    function pickImage(ed) {
+        if (!imagePicker) {
+            imagePicker = document.createElement('input');
+            imagePicker.type = 'file';
+            imagePicker.accept = 'image/png,image/jpeg,image/gif,image/webp';
+            imagePicker.multiple = true;
+            imagePicker.hidden = true;
+            document.body.appendChild(imagePicker);
+        }
+        imagePicker.value = '';                       // so the same file re-fires
+        imagePicker.onchange = function () {
+            if (imagePicker.files && imagePicker.files.length) insertImages(ed, imagePicker.files);
+        };
+        imagePicker.click();
+    }
+
+    // Pictures pasted from a web page point back at that site, so the allowlist
+    // turns them away. Saying so once is better than a silent gap in the paste.
+    function noteDroppedImages(count) {
+        if (count > 0) {
+            window.papelAlert(
+                count === 1
+                    ? 'One picture in what you pasted came from another website, so it was left out. Copy the picture on its own and paste it again, or use Insert picture.'
+                    : count + ' pictures in what you pasted came from other websites, so they were left out. Copy each one on its own and paste it again, or use Insert picture.'
+            );
+        }
     }
 
     function plainText(ed) {
@@ -3561,19 +4469,25 @@ const papelDoc = (function () {
         if (!blank) ed.root.classList.remove('is-invalid');
     }
 
+    /* Every one of this editor's buttons, wherever it currently sits.
+
+       Whatever no longer fits on the bar is moved into the overflow menu, and
+       that menu is attached to <body> rather than to the editor, so a search
+       rooted at the editor quietly misses it: a button that had moved kept
+       whatever dimmed or pressed state it had at the time and never changed
+       again. */
+    function toolButtons(ed) {
+        const list = Array.prototype.slice.call(ed.root.querySelectorAll('.doc-tool'));
+        if (ed.overflow && ed.overflow.menu) {
+            Array.prototype.push.apply(list,
+                Array.prototype.slice.call(ed.overflow.menu.querySelectorAll('.doc-tool')));
+        }
+        return list;
+    }
+
     function refreshToolbar(ed) {
-        /* Alignment belongs to tables. Body text is justified for every paper so
-           submissions read alike, but a column of figures needs centring — so
-           the four buttons dim to show they do not apply, and wake up when the
-           caret is inside a cell. */
-        const inCell = !!cellAtCaret(ed.surface);
-        ed.root.querySelectorAll('.doc-tool').forEach(function (btn) {
+        toolButtons(ed).forEach(function (btn) {
             const cmd = btn.getAttribute('data-cmd');
-            if (ALIGN_CMDS.indexOf(cmd) !== -1) {
-                btn.classList.toggle('is-off', !inCell);
-                btn.setAttribute('aria-disabled', inCell ? 'false' : 'true');
-                btn.title = inCell ? btn.dataset.onTitle : 'Alignment applies inside a table';
-            }
             if (STATE_CMDS.indexOf(cmd) === -1) return;
             let on = false;
             try { on = document.queryCommandState(cmd); } catch (err) { on = false; }
@@ -4039,7 +4953,7 @@ const papelDoc = (function () {
                 cellBtn.addEventListener('mousedown', function (e) { e.preventDefault(); });
                 cellBtn.addEventListener('click', function () {
                     ed.surface.focus();
-                    try { document.execCommand('insertHTML', false, buildTable(r, c)); } catch (err) {}
+                    insertHtmlAtCaret(ed, buildTable(r, c));
                     refresh(ed);
                     closePopovers();
                 });
@@ -4113,18 +5027,42 @@ const papelDoc = (function () {
     function alignCell(ed, how) {
         const cell = cellAtCaret(ed.surface);
         if (!cell) return;
+        const table = cell.closest('table');
 
         const sel = window.getSelection();
         let targets = [cell];
-        if (sel && !sel.isCollapsed) {
-            const table = cell.closest('table');
-            if (table) {
-                targets = Array.prototype.slice.call(table.querySelectorAll('th, td'))
-                    .filter(function (c) { return sel.containsNode(c, true); });
-                if (!targets.length) targets = [cell];
-            }
+        if (sel && !sel.isCollapsed && table) {
+            targets = Array.prototype.slice.call(table.querySelectorAll('th, td'))
+                .filter(function (c) { return sel.containsNode(c, true); });
+            if (!targets.length) targets = [cell];
         }
-        targets.forEach(function (c) { c.style.textAlign = how; });
+
+        if (targets.length === 1) {
+            /* One cell is exactly what execCommand is for, and going through it
+               keeps the change on the browser's undo history alongside the
+               typing, and leaves the caret where it was. */
+            const cmd = { left: 'justifyLeft', center: 'justifyCenter',
+                          right: 'justifyRight', justify: 'justifyFull' }[how];
+            ed.surface.focus();
+            if (cmd) { try { document.execCommand(cmd, false, null); } catch (err) {} }
+            refresh(ed);
+            return;
+        }
+
+        /* A column or a whole table at once. execCommand only ever touches the
+           cell the caret is in, so the table is rebuilt with all of them
+           changed and swapped in as one edit, which is what keeps Ctrl+Z able
+           to take the whole thing back. Setting each cell's style directly
+           would be invisible to the undo history. */
+        if (!table) return;
+        const clone = table.cloneNode(true);
+        const all = Array.prototype.slice.call(table.querySelectorAll('th, td'));
+        const cloned = clone.querySelectorAll('th, td');
+        targets.forEach(function (c) {
+            const i = all.indexOf(c);
+            if (i >= 0 && cloned[i]) cloned[i].style.textAlign = how;
+        });
+        replaceNode(ed, table, clone.outerHTML);
         refresh(ed);
     }
 
@@ -4150,13 +5088,63 @@ const papelDoc = (function () {
         ['table-delete', 'Delete table',        'delete'],
     ];
 
+    // Applied as a style rather than an attribute so it survives the sanitiser,
+    // which keeps a width declaration on a picture and nothing else.
+    const IMAGE_SIZES = [['Half width', '50%'], ['Three quarters', '75%'], ['Full width', '100%']];
+
+    /* Moving a table means giving it a width first: it fills the box by
+       default, and something already the full width cannot be anywhere but in
+       the middle. The two menus therefore go together. */
+    const TABLE_WIDTHS = [['Full width', ''], ['Three quarters', '75%'], ['Half width', '50%']];
+    const TABLE_SIDES  = [['Table left', 'left'], ['Table centred', 'center'], ['Table right', 'right']];
+
+    function tableStyle(table) {
+        const style = table.getAttribute('style') || '';
+        const w = /(?:^|;)\s*width\s*:\s*([\d.]+%)/i.exec(style);
+        const ml = /(?:^|;)\s*margin-left\s*:\s*(auto|0)/i.exec(style);
+        const mr = /(?:^|;)\s*margin-right\s*:\s*(auto|0)/i.exec(style);
+        /* Absent means whatever the stylesheet gives, and that is 0 on both
+           sides. Defaulting the right margin to auto instead made a table
+           pushed right ("margin-left:auto" alone, since the browser drops the
+           redundant "margin-right:0") read back as centred. */
+        const left  = ml ? ml[1].toLowerCase() : '0';
+        const right = mr ? mr[1].toLowerCase() : '0';
+        return {
+            width: w ? w[1] : '',
+            side: (left === 'auto' && right === 'auto') ? 'center'
+                : (left === 'auto') ? 'right' : 'left'
+        };
+    }
+
+    /* Rebuilt as one edit through insertHTML rather than restyled in place, so
+       moving a table can be undone like anything else. */
+    function setTableStyle(ed, table, width, side) {
+        const parts = [];
+        if (width) parts.push('width:' + width);
+        // A full-width table needs no margins at all; anything narrower is
+        // pushed about with auto, which is the only value the sanitiser keeps.
+        if (width) {
+            // Only the side that has to give way is written. The browser drops
+            // a margin of 0 when it re-serialises anyway, so writing one only
+            // made the stored style disagree with what came back.
+            if (side !== 'left')  parts.push('margin-left:auto');
+            if (side !== 'right') parts.push('margin-right:auto');
+        }
+        const clone = table.cloneNode(true);
+        if (parts.length) clone.setAttribute('style', parts.join(';'));
+        else clone.removeAttribute('style');
+        replaceNode(ed, table, clone.outerHTML);
+        refresh(ed);
+    }
+
     let ctxMenu = null;
 
     function hideContextMenu() {
         if (ctxMenu) ctxMenu.classList.remove('open');
     }
 
-    function showContextMenu(ed, x, y) {
+    function showContextMenu(ed, x, y, ctx) {
+        ctx = ctx || {};
         if (!ctxMenu) {
             ctxMenu = document.createElement('div');
             ctxMenu.className = 'doc-context-menu';
@@ -4164,17 +5152,77 @@ const papelDoc = (function () {
             document.body.appendChild(ctxMenu);
         }
         ctxMenu.innerHTML = '';
-        TABLE_MENU_ITEMS.forEach(function (item) {
+
+        function item(label, run, danger) {
             const b = document.createElement('button');
             b.type = 'button';
-            b.className = 'doc-context-item' + (item[2] === 'delete' ? ' danger' : '');
-            b.textContent = item[1];
-            b.addEventListener('click', function () {
-                tableAction(ed, item[0]);
-                hideContextMenu();
-            });
+            b.className = 'doc-context-item' + (danger ? ' danger' : '');
+            b.textContent = label;
+            b.addEventListener('click', function () { run(); hideContextMenu(); });
             ctxMenu.appendChild(b);
-        });
+        }
+        function separator() {
+            const hr = document.createElement('div');
+            hr.className = 'doc-context-sep';
+            ctxMenu.appendChild(hr);
+        }
+
+        if (ctx.image) {
+            IMAGE_SIZES.forEach(function (size) {
+                item(size[0], function () {
+                    // Swapped rather than restyled, so the change is one edit
+                    // the browser can undo like any other.
+                    replaceNode(ed, ctx.image,
+                                imageMarkup(ctx.image.getAttribute('src'),
+                                            ctx.image.getAttribute('alt'), size[1]));
+                    refresh(ed);
+                });
+            });
+            separator();
+            item('Remove picture', function () {
+                replaceNode(ed, ctx.image, '');
+                refresh(ed);
+            }, true);
+            separator();
+        }
+
+        item('Insert picture…', function () { pickImage(ed); });
+
+        if (ctx.cell) {
+            const table = ctx.cell.closest('table');
+            if (table) {
+                const now = tableStyle(table);
+                separator();
+                TABLE_WIDTHS.forEach(function (w) {
+                    item(w[0] + (now.width === w[1] ? '  ✓' : ''), function () {
+                        setTableStyle(ed, table, w[1], now.side);
+                    });
+                });
+                // Nothing to move while the table already fills the box.
+                if (now.width) {
+                    separator();
+                    TABLE_SIDES.forEach(function (sd) {
+                        item(sd[0] + (now.side === sd[1] ? '  ✓' : ''), function () {
+                            setTableStyle(ed, table, now.width, sd[1]);
+                        });
+                    });
+                }
+            }
+            /* How the text sits in the cell that was right-clicked. The caret
+               was put in that cell above, so the command has its target. */
+            const current = getComputedStyle(ctx.cell).textAlign;
+            separator();
+            CELL_ALIGN.forEach(function (a) {
+                item(a[0] + (current === a[1] ? '  ✓' : ''), function () {
+                    alignCell(ed, a[1]);
+                });
+            });
+
+            separator();
+            TABLE_MENU_ITEMS.forEach(function (entry) {
+                item(entry[1], function () { tableAction(ed, entry[0]); }, entry[2] === 'delete');
+            });
+        }
 
         // Place it at the pointer, then pull it back inside the viewport if the
         // click happened near the right or bottom edge.
@@ -4232,14 +5280,18 @@ const papelDoc = (function () {
 
             const href = safeHref(url);
             if (!href) {
-                window.papelAlert('That link was not added. Only http, https and mailto addresses are allowed.', { tone: 'error' });
+                window.papelAlert('That is not a web address, so no link was added. Enter something like pup.edu.ph, https://pup.edu.ph or mailto:name@pup.edu.ph.', { tone: 'error' });
                 return;
             }
 
             if (existing) {
-                existing.setAttribute('href', href);
+                // Swapped for a new anchor rather than having its href set in
+                // place, so that changing where a link points can be undone.
+                const a = existing.cloneNode(true);
+                a.setAttribute('href', href);
+                replaceNode(ed, existing, a.outerHTML);
             } else if (selectedText) {
-                try { document.execCommand('createLink', false, href); } catch (err) {}
+                linkSelection(ed, href);
             } else {
                 // Nothing selected: insert the address as its own link text.
                 // Built as an element so the browser handles attribute and text
@@ -4247,7 +5299,7 @@ const papelDoc = (function () {
                 const a = document.createElement('a');
                 a.setAttribute('href', href);
                 a.textContent = href;
-                try { document.execCommand('insertHTML', false, a.outerHTML + '&nbsp;'); } catch (err) {}
+                insertHtmlAtCaret(ed, a.outerHTML + '&nbsp;');
             }
             // Whatever execCommand produced, force our own link attributes.
             ed.surface.querySelectorAll('a[href]').forEach(function (a) {
@@ -4275,21 +5327,11 @@ const papelDoc = (function () {
 
         root.querySelectorAll('.doc-tool[data-cmd]').forEach(function (btn) {
             const cmd = btn.getAttribute('data-cmd');
-            // Kept so the tooltip can be restored when the button wakes up.
-            if (ALIGN_CMDS.indexOf(cmd) !== -1) btn.dataset.onTitle = btn.title;
-
             // mousedown, not click: preventing the default here stops the button
             // from stealing the selection the command needs to act on.
             btn.addEventListener('mousedown', function (e) { e.preventDefault(); });
             btn.addEventListener('click', function () {
                 ed.surface.focus();
-                // Alignment outside a table would change body text that is meant
-                // to look the same in every paper, so the button does nothing
-                // there rather than quietly having its result stripped on save.
-                if (ALIGN_CMDS.indexOf(cmd) !== -1 && !cellAtCaret(ed.surface)) {
-                    refreshToolbar(ed);
-                    return;
-                }
                 try { document.execCommand(cmd, false, null); } catch (err) {}
                 refresh(ed);
                 refreshToolbar(ed);
@@ -4346,6 +5388,15 @@ const papelDoc = (function () {
             linkBtn.addEventListener('mousedown', function (e) { e.preventDefault(); });
             linkBtn.addEventListener('click', function () { insertLink(ed); });
         }
+        const imageBtn = root.querySelector('.doc-tool[data-role="image"]');
+        if (imageBtn) {
+            // mousedown is where the caret would be lost, so it is stopped
+            // there rather than on click: the picture goes where the student
+            // was typing, not at the top of the box.
+            imageBtn.addEventListener('mousedown', function (e) { e.preventDefault(); });
+            imageBtn.addEventListener('click', function () { pickImage(ed); });
+        }
+
         const unlinkBtn = root.querySelector('.doc-tool[data-role="unlink"]');
         if (unlinkBtn) {
             unlinkBtn.addEventListener('mousedown', function (e) { e.preventDefault(); });
@@ -4423,56 +5474,209 @@ const papelDoc = (function () {
             indentAtCaret(ed, e.shiftKey);
         });
 
-        // Right-clicking a table offers the row and column operations in place;
-        // anywhere else the browser's own menu is left alone (spellcheck, paste).
-        ed.surface.addEventListener('contextmenu', function (e) {
-            if (!cellAtCaret(ed.surface) && !e.target.closest('td, th')) return;
-            const cell = e.target.closest('td, th');
-            if (!cell || !ed.surface.contains(cell)) return;
+        /* Right-clicking offers what applies where the click landed: the row
+           and column operations over a table, the size and removal of a picture
+           over a picture, and Insert picture anywhere at all. */
+        /* The explanation, the first time one of these boxes is about to be
+           used. On mousedown rather than after the click: the whole point is to
+           say why the boxes exist before anything is typed into one. The click
+           is held back, the note is shown, and the box takes the caret the
+           moment it is closed, so nothing is lost by the interruption.
+
+           Capture phase, because the surface's own handlers would otherwise
+           move the caret first. Once per page load; the button above the boxes
+           brings it back after that. */
+        ed.surface.addEventListener('mousedown', function (e) {
+            if (typeof explainSections !== 'function') return;
+            if (typeof sectionsExplained !== 'undefined' && sectionsExplained) return;
             e.preventDefault();
-            // Put the caret in the clicked cell so the actions target it.
-            const range = document.createRange();
-            range.selectNodeContents(cell);
-            range.collapse(true);
-            const sel = window.getSelection();
-            sel.removeAllRanges();
-            sel.addRange(range);
-            closePopovers();
-            showContextMenu(ed, e.clientX, e.clientY);
+            e.stopPropagation();
+            explainSections().then(function () {
+                // The box was clicked, so it is already on screen; focusing it
+                // must not move the page underneath the reader.
+                try { ed.surface.focus({ preventScroll: true }); }
+                catch (err) { ed.surface.focus(); }
+            });
+        }, true);
+
+        // Tabbing into a box counts as going to use it just as much as clicking.
+        ed.surface.addEventListener('focus', function () {
+            if (typeof explainSections === 'function') explainSections();
         });
 
-        // Paste keeps structure — tables above all — but not presentation. The
-        // clipboard HTML is run through the allowlist first, so rows, columns
-        // and lists survive while Word's fonts, colours and widths do not.
+        ed.surface.addEventListener('contextmenu', function (e) {
+            const image = e.target && e.target.closest ? e.target.closest('img') : null;
+            const cell  = e.target && e.target.closest ? e.target.closest('td, th') : null;
+            const inCell = (cell && ed.surface.contains(cell)) ? cell : null;
+            const inImage = (image && ed.surface.contains(image)) ? image : null;
+
+            e.preventDefault();
+            if (inCell) {
+                /* Put the caret in the clicked cell so the actions target it,
+                   unless there is already a selection covering that cell. A
+                   column dragged across in order to centre it must survive the
+                   right-click that opens the menu, or only one cell is aligned. */
+                const sel = window.getSelection();
+                const insideSelection = sel && !sel.isCollapsed
+                    && sel.rangeCount && sel.containsNode(inCell, true);
+                if (!insideSelection) {
+                    const range = document.createRange();
+                    range.selectNodeContents(inCell);
+                    range.collapse(true);
+                    sel.removeAllRanges();
+                    sel.addRange(range);
+                }
+            } else if (!inImage) {
+                // Anywhere else, the caret follows the click, so a picture is
+                // inserted where the student pointed rather than where they
+                // last happened to be typing.
+                let range = null;
+                if (document.caretRangeFromPoint) {
+                    range = document.caretRangeFromPoint(e.clientX, e.clientY);
+                } else if (document.caretPositionFromPoint) {
+                    const pos = document.caretPositionFromPoint(e.clientX, e.clientY);
+                    if (pos) {
+                        range = document.createRange();
+                        range.setStart(pos.offsetNode, pos.offset);
+                        range.collapse(true);
+                    }
+                }
+                if (range && ed.surface.contains(range.commonAncestorContainer)) {
+                    const sel = window.getSelection();
+                    sel.removeAllRanges();
+                    sel.addRange(range);
+                }
+            }
+            closePopovers();
+            showContextMenu(ed, e.clientX, e.clientY, { cell: inCell, image: inImage });
+        });
+
+        // Paste keeps structure — pictures and tables above all — but not
+        // presentation. The clipboard HTML is run through the allowlist first,
+        // so rows, columns and lists survive while Word's fonts, colours and
+        // widths do not.
+        function clipboardImages(clip) {
+            const out = [];
+            const files = clip.files && clip.files.length ? clip.files : (clip.items || []);
+            Array.prototype.forEach.call(files, function (entry) {
+                const f = (entry && typeof entry.getAsFile === 'function')
+                        ? (entry.kind === 'file' ? entry.getAsFile() : null)
+                        : entry;
+                if (f && /^image\//i.test(f.type || '')) out.push(f);
+            });
+            return out;
+        }
+
+        function insertAndRefresh(ed, html, dropped) {
+            if (!insertHtmlAtCaret(ed, html)) return false;
+            refresh(ed);
+            if (dropped) noteDroppedImages(dropped);
+            return true;
+        }
+
         ed.surface.addEventListener('paste', function (e) {
             const clip = e.clipboardData || window.clipboardData;
             if (!clip) return;
-            e.preventDefault();
 
             const html = clip.getData('text/html');
             const text = clip.getData('text/plain');
+            const sel  = window.getSelection();
+
+            /* A screenshot is on the clipboard as a file with nothing beside it.
+               Copying a picture out of a web page gives the file *and* that
+               page's markup; both are taken, words first, because the markup's
+               own <img> only points back at the site it came from. */
+            const images = clipboardImages(clip);
+            if (images.length) {
+                e.preventDefault();
+                if (html) {
+                    const doc = new DOMParser().parseFromString(html, 'text/html');
+                    if ((doc.body.textContent || '').trim() !== '') {
+                        const clean = reflowBreaks(sanitizeHtml(html));
+                        droppedImages = 0;               // the files carry them
+                        if (clean.trim() !== '') insertAndRefresh(ed, clean, 0);
+                    }
+                }
+                insertImages(ed, images);
+                return;
+            }
+
+            e.preventDefault();
+
+            /* An address pasted over selected words links those words, which is
+               what every other editor does and what the student expects. */
+            const one = (text || '').trim();
+            const oneHref = /^\S+$/.test(one) ? safeHref(one) : null;
+            if (sel && !sel.isCollapsed && oneHref) {
+                if (linkSelection(ed, oneHref)) {
+                    refresh(ed);
+                    return;
+                }
+                // Otherwise fall through and paste it as the text it is.
+            }
 
             if (html) {
                 const clean = reflowBreaks(sanitizeHtml(html));
-                if (clean.trim() !== '') {
-                    try { document.execCommand('insertHTML', false, clean); refresh(ed); return; }
-                    catch (err) { /* fall through to plain text */ }
-                }
+                const missed = droppedImages;
+                if (clean.trim() !== '' && insertAndRefresh(ed, clean, missed)) return;
             }
-            // Plain text arrives with the same per-line breaks, so it is rebuilt
-            // into paragraphs the same way rather than inserted line by line.
+
             if (text) {
+                /* A grid of values is a table to the person who copied it,
+                   whether it came with any markup or not. */
+                const asTable = textToTable(text);
+                if (asTable && insertAndRefresh(ed, asTable, 0)) return;
+
+                // Otherwise the same per-line breaks as any other plain text, so
+                // it is rebuilt into paragraphs rather than inserted line by line.
                 const built = textToHtml(text);
-                if (built) {
-                    try { document.execCommand('insertHTML', false, built); refresh(ed); return; }
-                    catch (err) { /* fall through */ }
-                }
+                if (built && insertAndRefresh(ed, built, 0)) return;
             }
-            try { document.execCommand('insertText', false, text); }
-            catch (err) { ed.surface.textContent += text; }
+
+            // Nothing else fitted, so it goes in as the plain text it is.
+            if (!insertHtmlAtCaret(ed, '<p>' + esc(text) + '</p>')) {
+                ed.surface.textContent += text;
+            }
             refresh(ed);
         });
-        ed.surface.addEventListener('drop', function (e) { e.preventDefault(); });
+
+        /* Dropping a picture file onto the box puts it where it was dropped.
+           Anything else is still refused: a dropped .docx would otherwise be
+           navigated to, replacing the page and everything not yet saved. */
+        ed.surface.addEventListener('dragover', function (e) {
+            if (e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') !== -1) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'copy';
+                ed.root.classList.add('is-drop-target');
+            }
+        });
+        ed.surface.addEventListener('dragleave', function (e) {
+            if (e.target === ed.surface) ed.root.classList.remove('is-drop-target');
+        });
+        ed.surface.addEventListener('drop', function (e) {
+            e.preventDefault();
+            ed.root.classList.remove('is-drop-target');
+            const files = (e.dataTransfer && e.dataTransfer.files) || [];
+            if (!files.length) return;
+            // Put the caret where the file landed, so that is where it appears.
+            let range = null;
+            if (document.caretRangeFromPoint) {
+                range = document.caretRangeFromPoint(e.clientX, e.clientY);
+            } else if (document.caretPositionFromPoint) {
+                const pos = document.caretPositionFromPoint(e.clientX, e.clientY);
+                if (pos) {
+                    range = document.createRange();
+                    range.setStart(pos.offsetNode, pos.offset);
+                    range.collapse(true);
+                }
+            }
+            if (range && ed.surface.contains(range.commonAncestorContainer)) {
+                const sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+            }
+            insertImages(ed, files);
+        });
 
         /* ----- Resizing a table's columns -----
            The border between two columns is the handle. Dragging it takes width
@@ -4770,13 +5974,27 @@ const papelPdfPreview = (function () {
    letting a student discover it at the submit button.
    ========================================================================= */
 const papelDraft = (function () {
-    const KEY = 'papel_upload_draft_' + <?= json_encode((string)($u['user_id'] ?? 'anon'), JSON_UNESCAPED_SLASHES) ?>;
-    // Set when the dashboard sent us here with ?draft=<id>.
-    const SERVER_DRAFT = <?= $draftPayload ? json_encode($draftPayload, JSON_UNESCAPED_SLASHES) : 'null' ?>;
+    const KEY = 'papel_upload_draft_' + <?= json_encode((string)($u['user_id'] ?? 'anon'), JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) ?>;
+    /* Set when the dashboard sent us here with ?draft=<id>.
+
+       JSON_HEX_TAG matters here: a title is free text, and without it a title
+       containing a closing script tag ended this block early — the rest of the
+       draft became markup and papelDraft was never defined, which quietly broke
+       the whole wizard. */
+    const SERVER_DRAFT = <?= $draftPayload ? json_encode($draftPayload, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) : 'null' ?>;
+    // The drafts this student actually still has, so a local copy left over
+    // from a deleted one can be told apart from unsaved work.
+    const LIVE_DRAFTS = <?= json_encode($liveDraftIds) ?>;
     let draftId = SERVER_DRAFT ? SERVER_DRAFT.id : 0;
     const SKIP = ['_token', 'action'];
     let saveTimer = null;
     let submitting = false;
+    /* What the form looked like the last time it was saved. dirty() used to ask
+       only "is there anything typed?", which is true from the first keystroke
+       and stays true after a save — so every link on the page kept asking to
+       save a draft that was already saved, on page after page. Comparing
+       against this makes "unsaved" mean what it says. */
+    let savedSignature = null;
 
     function form() { return document.getElementById('uploadForm'); }
 
@@ -4816,6 +6034,14 @@ const papelDraft = (function () {
             fields: fields,
             files: files
         };
+    }
+
+    /* Only the typed values matter for "has this changed" — the file list is
+       rebuilt from scratch on every visit and would otherwise report a change
+       that the student never made. */
+    function signature(data) {
+        if (!data) return null;
+        try { return JSON.stringify(data.fields); } catch (err) { return null; }
     }
 
     // Anything worth keeping? A bare form should never trigger a prompt.
@@ -4896,12 +6122,25 @@ const papelDraft = (function () {
         },
         has: function () { return hasContent(read()); },
         stored: read,
-        clear: function () { try { localStorage.removeItem(KEY); } catch (err) {} },
+        /* Cancels the pending autosave before removing the copy. Typing
+           schedules a write 700ms later, so discarding within that window
+           removed the copy and then had it written straight back, which is why
+           "Continue your draft?" kept returning after the draft was discarded. */
+        clear: function () {
+            clearTimeout(saveTimer);
+            saveTimer = null;
+            try { localStorage.removeItem(KEY); } catch (err) {}
+        },
         // Set while the form is being submitted, so leaving the page as a
         // result of a successful upload does not raise a warning.
         beginSubmit: function () { submitting = true; },
         isSubmitting: function () { return submitting; },
-        dirty: function () { return !submitting && hasContent(collect()); },
+        dirty: function () {
+            if (submitting) return false;
+            const data = collect();
+            if (!hasContent(data)) return false;
+            return signature(data) !== savedSignature;
+        },
 
         /* Saves to the server, where the dashboard can see it. Returns the
            draft's id so later saves update the same row instead of piling up
@@ -4922,7 +6161,11 @@ const papelDraft = (function () {
             try {
                 const res = await fetch('student_upload_ai.php', { method: 'POST', body: body });
                 const json = await res.json();
-                if (json && json.success) { draftId = json.draft_id; return draftId; }
+                if (json && json.success) {
+                    draftId = json.draft_id;
+                    savedSignature = signature(collect());
+                    return draftId;
+                }
             } catch (err) { /* the local copy still holds everything */ }
             return 0;
         },
@@ -4931,10 +6174,18 @@ const papelDraft = (function () {
 
         // Offered once, on arrival.
         offerRestore: async function () {
+            /* The baseline for "unsaved". Some boxes arrive already filled — the
+               year, the student's own name — so without this the page counts as
+               having unsaved work before the student has touched anything, and
+               the leave prompt fires on the very first link they click. */
+            savedSignature = signature(collect());
+
             // A draft opened from the dashboard is applied without asking —
             // clicking it *is* the request to continue.
             if (SERVER_DRAFT) {
                 apply({ fields: SERVER_DRAFT.fields, files: {}, step: 1 });
+                // Nothing has been changed yet, so there is nothing to save.
+                savedSignature = signature(collect());
                 if (SERVER_DRAFT.status) {
                     String(SERVER_DRAFT.status).split(',').map(function (v) { return v.trim(); })
                         .forEach(function (v) {
@@ -4947,6 +6198,17 @@ const papelDraft = (function () {
 
             const data = read();
             if (!hasContent(data)) return;
+
+            /* A local copy that came from a draft the student has since deleted
+               is not unfinished work, it is a leftover. Prompting about it made
+               a deleted draft look undeletable, and answering Continue wrote it
+               straight back as a new draft. A copy with no draft id has never
+               been on the server at all, so that one really is unsaved and is
+               still offered. */
+            if (data.draftId && LIVE_DRAFTS.indexOf(Number(data.draftId)) === -1) {
+                papelDraft.clear();
+                return;
+            }
 
             const when = new Date(data.savedAt || Date.now());
             const files = Object.keys(data.files || {});
@@ -4965,6 +6227,9 @@ const papelDraft = (function () {
                 // Carry on saving into the same row this work came from.
                 if (data.draftId) draftId = data.draftId;
                 apply(data);
+                /* savedSignature deliberately stays at the pristine baseline:
+                   this copy came off the device, not the server, so it really
+                   is unsaved and the leave prompt should still fire. */
             } else {
                 papelDraft.clear();
             }
@@ -5095,6 +6360,57 @@ function goToStep(step) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+/* Why the sections have to be typed out.
+
+   Shown once on arriving at step 2, and available from the "Why do I have to
+   type these?" button after that. Once per visit rather than once ever: a
+   student uploads a paper rarely enough that the second time is usually months
+   later, and a note nobody can find again is worse than one seen twice. */
+let sectionsExplained = false;
+
+const CAN_DRAFT = <?= $canDraft ? 'true' : 'false' ?>;
+
+const SECTIONS_NOTE =
+    '<p>Your PDF and what you type here are read by different people, and they'
+  + ' are not interchangeable.</p>'
+  + (CAN_DRAFT
+      ? '<p><strong>The PDF goes to your reviewers.</strong> Your Research Adviser'
+        + ' and the Research Coordinator open it to check your work as you submitted'
+        + ' it, formatting, figures, appendices and all.</p>'
+      : '<p><strong>The PDF is the record of the paper itself.</strong> It is kept'
+        + ' as you submitted it, formatting, figures, appendices and all, and is'
+        + ' what anyone goes back to for the full document.</p>')
+  + '<p><strong>What you type is what the repository shows.</strong> When your'
+  + ' paper is published, a reader opens the page built from these boxes. The'
+  + ' PDF is not what they read, and it is not what the search looks through.</p>'
+  + '<p>That is why all six are required:</p>'
+  + '<ul>'
+  + '<li><strong>Abstract</strong> — taken from your PDF word for word, so check it.</li>'
+  + '<li><strong>Introduction</strong></li>'
+  + '<li><strong>Methodology</strong></li>'
+  + '<li><strong>Results and Discussion</strong></li>'
+  + '<li><strong>Conclusion</strong></li>'
+  + '<li><strong>References</strong></li>'
+  + '</ul>'
+  + '<p>You can paste them straight from your document. Tables, pictures and'
+  + ' links all survive the paste'
+  + (CAN_DRAFT
+      ? ', and a draft can be saved at any point.</p>'
+      : '. Your paper is published as soon as you submit it, with no review step,'
+        + ' so fill it in before you leave the page: drafts are for student'
+        + ' submissions only.</p>');
+
+function explainSections(force) {
+    if (sectionsExplained && !force) return Promise.resolve(false);
+    sectionsExplained = true;
+    return window.papelAlert('', {
+        title: 'Why you type the sections out',
+        icon: 'menu_book',
+        wide: true,
+        html: SECTIONS_NOTE
+    });
+}
+
 function updateReview() {
     const paperType = document.querySelector('select[name="paper_type"]');
     const pdfFile = document.getElementById('pdfFile');
@@ -5159,7 +6475,6 @@ document.getElementById('btnExtract').addEventListener('click', function(){
     'Reading your PDF...',
     'Extracting title & authors...',
     'Analyzing abstract...',
-    'Running similarity check...',
     'Almost done...'
   ];
   let aiIdx = 0;
@@ -5202,29 +6517,6 @@ document.getElementById('btnExtract').addEventListener('click', function(){
       document.getElementById('aiSampleSizeField').value = data.data.ai_sample_size || '';
       document.getElementById('aiResearchFieldField').value = data.data.ai_research_field || '';
       
-      // Display Similarity Result
-      const sim = data.data.similarity;
-      const metaContainer = document.getElementById('metadataFields');
-      const existingAlert = document.getElementById('simAlert');
-      if(existingAlert) existingAlert.remove();
-      
-      const alertDiv = document.createElement('div');
-      alertDiv.id = 'simAlert';
-      
-      // Similarity is shown as informational only — never blocks submission
-      if(sim && sim.percentage> 15) {
-          alertDiv.className = 'alert alert-warning mb-4';
-          alertDiv.innerHTML = `<div class="d-flex align-items-start gap-3"><div class="w-100"><strong>High Similarity Detected: ${sim.percentage}%</strong><p class="mb-0 mt-1 small">${sim.reason}</p><p class="mb-0 mt-1 small text-muted">Note: This is for your information only. You may still proceed with submission.</p></div></div>`;
-      } else if (sim) {
-          alertDiv.className = 'alert alert-success mb-4';
-          alertDiv.innerHTML = `<div class="d-flex align-items-start gap-3"><div><strong>Similarity Check Passed: ${sim.percentage}%</strong><p class="mb-0 mt-1 small">${sim.reason}</p><p class="mb-0 mt-1 small">Your abstract is unique enough for submission.</p></div></div>`;
-      }
-      
-      if(metaContainer.firstChild) {
-        metaContainer.insertBefore(alertDiv, metaContainer.firstChild);
-      } else {
-        metaContainer.appendChild(alertDiv);
-      }
 
       // Show metadata fields and always allow proceeding
       document.getElementById('metadataBadge').className = 'step-badge';
@@ -5550,6 +6842,10 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.addEventListener('click', function() { goToStep(parseInt(this.getAttribute('data-goto-step'), 10)); });
     });
 
+    // The explanation given on arriving at step 2, brought back on demand.
+    const whyBtn = document.getElementById('btnWhySections');
+    if (whyBtn) whyBtn.addEventListener('click', function () { explainSections(true); });
+
     // Manual entry button
     document.getElementById('btnManual').addEventListener('click', function() {
         var pdfFile = document.getElementById('pdfFile').files[0];
@@ -5569,10 +6865,8 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('aiVariablesField').value = '';
         document.getElementById('aiSampleSizeField').value = '';
         document.getElementById('aiResearchFieldField').value = '';
-        // Remove any previous similarity alert and extraction notice — neither
-        // describes what is on screen once the student switches to manual entry.
-        var simAlert = document.getElementById('simAlert');
-        if (simAlert) simAlert.remove();
+        // The extraction notice does not describe what is on screen once the
+        // student switches to manual entry.
         var extractMsg = document.getElementById('extractMsg');
         if (extractMsg) extractMsg.remove();
         // Update header to show Manual mode
@@ -5608,6 +6902,7 @@ document.addEventListener('DOMContentLoaded', function() {
        is the browser's own and only asks whether to stay; it cannot be relied
        on to run anything afterwards, so the write comes first. */
     window.addEventListener('beforeunload', function (e) {
+        if (!CAN_DRAFT) return;
         if (papelDraft.isSubmitting()) return;
         if (!papelDraft.dirty()) return;
         papelDraft.save();
@@ -5620,6 +6915,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('click', function (e) {
         const link = e.target.closest('a[href]');
         if (!link) return;
+        if (!CAN_DRAFT) return;
         if (papelDraft.isSubmitting() || !papelDraft.dirty()) return;
 
         const href = link.getAttribute('href');
@@ -5632,15 +6928,28 @@ document.addEventListener('DOMContentLoaded', function() {
             'Save this paper as a draft before you go? It will appear under Drafts on '
             + 'your dashboard, ready to finish later.',
             { title: 'Leave this page?', icon: 'save',
-              confirmText: 'Save draft and leave', cancelText: 'Stay here' }
-        ).then(async function (leave) {
-            if (!leave) return;
-            await papelDraft.saveToServer();
+              confirmText: 'Save draft and leave', cancelText: 'Stay here',
+              altText: 'Discard this draft and leave' }
+        ).then(async function (answer) {
+            if (!answer) return;                       // stayed here
+
+            /* Leaving without saving has to mean it, on both counts: no draft
+               row is written, and the copy this page keeps on the device goes
+               too. Leaving that copy behind made the next visit open with
+               "Continue your draft?", which is the opposite of what was just
+               asked for, and left the choice looking as though it had been
+               ignored. */
+            if (answer === 'alt') {
+                papelDraft.clear();
+            } else {
+                await papelDraft.saveToServer();
+            }
             papelDraft.beginSubmit();
             window.location.href = link.href;
         });
     });
 
+    // Absent for staff, who have no drafts; the wiring below already guards on it.
     const saveDraftBtn = document.getElementById('btnSaveDraft');
     if (saveDraftBtn) {
         saveDraftBtn.addEventListener('click', async function () {
@@ -5683,6 +6992,7 @@ document.addEventListener('DOMContentLoaded', function() {
         backGuardArmed = false;
 
         // Nothing worth keeping, or already on the way out: let Back do its job.
+        if (!CAN_DRAFT) return;
         if (papelDraft.isSubmitting() || !papelDraft.dirty()) return;
 
         // Stay put while the question is on screen.
@@ -5692,10 +7002,16 @@ document.addEventListener('DOMContentLoaded', function() {
             'Save this paper as a draft before going back? It will appear under Drafts '
             + 'on your dashboard, ready to finish later.',
             { title: 'Leave this page?', icon: 'save',
-              confirmText: 'Save draft and leave', cancelText: 'Stay here' }
-        ).then(async function (leave) {
-            if (!leave) return;
-            await papelDraft.saveToServer();
+              confirmText: 'Save draft and leave', cancelText: 'Stay here',
+              altText: 'Discard this draft and leave' }
+        ).then(async function (answer) {
+            if (!answer) return;                       // stayed here
+            // Discards the device copy as well; see the note in the link guard.
+            if (answer === 'alt') {
+                papelDraft.clear();
+            } else {
+                await papelDraft.saveToServer();
+            }
             papelDraft.beginSubmit();
 
             // Somewhere definite rather than history arithmetic: the guard
@@ -5710,7 +7026,7 @@ document.addEventListener('DOMContentLoaded', function() {
     armBackGuard();
 
     // Offer any earlier draft back, once the page has settled.
-    setTimeout(function () { papelDraft.offerRestore(); }, 400);
+    if (CAN_DRAFT) setTimeout(function () { papelDraft.offerRestore(); }, 400);
 
     /* The progress indicator doubles as navigation. Going back is always free;
        going forward runs the same checks the Next button does, one step at a
@@ -5767,6 +7083,14 @@ document.addEventListener('DOMContentLoaded', function() {
     // Escape undocks before it closes the panel
     document.addEventListener('keydown', function (e) {
         if (e.key !== 'Escape') return;
+
+        /* A dialog sits above every one of these, so it takes Escape before any
+           of them. This used to be checked below, after the PDF panel had
+           already acted and returned, so dismissing a message also closed the
+           preview behind it and shifted the page as the layout reflowed. */
+        const openDialog = document.getElementById('papelDialog');
+        if (openDialog && openDialog.classList.contains('open')) return;
+
         // The PDF preview is the most recently opened surface, so Escape
         // belongs to it first. It steps back rather than closing outright:
         // drag mode returns to selecting text, and only then does a second
@@ -5783,9 +7107,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             return;
         }
-        // The message dialog sits above the chat; let it take Escape first.
-        const dlg = document.getElementById('papelDialog');
-        if (dlg && dlg.classList.contains('open')) return;
         const widget = document.getElementById('chat-widget');
         if (widget && widget.classList.contains('is-docked')) {
             e.preventDefault();
@@ -5869,6 +7190,12 @@ document.addEventListener('DOMContentLoaded', () => {
     <div class="papel-dialog-head">
       <span class="material-symbols-outlined" id="papelDialogIcon">info</span>
       <h2 id="papelDialogTitle">Notice</h2>
+      <!-- Only appears when a caller offers a third answer, so every other
+           dialog keeps a header with nothing in the corner. -->
+      <button type="button" class="papel-dialog-x" id="papelDialogAlt" hidden
+              aria-label="Leave without saving" title="Leave without saving">
+        <span class="material-symbols-outlined">close</span>
+      </button>
     </div>
     <div class="papel-dialog-body" id="papelDialogMessage"></div>
     <div class="papel-dialog-body papel-dialog-input" id="papelDialogInputWrap" hidden>
@@ -5887,24 +7214,42 @@ document.addEventListener('DOMContentLoaded', () => {
    existing call sites only needed their function name swapped. */
 (function () {
     var backdrop = document.getElementById('papelDialog');
+    var dialogEl = backdrop.querySelector('.papel-dialog');
     var msgEl    = document.getElementById('papelDialogMessage');
     var titleEl  = document.getElementById('papelDialogTitle');
     var iconEl   = document.getElementById('papelDialogIcon');
     var okBtn    = document.getElementById('papelDialogOk');
     var cancelBtn = document.getElementById('papelDialogCancel');
+    var altBtn    = document.getElementById('papelDialogAlt');
     var inputWrap = document.getElementById('papelDialogInputWrap');
     var inputEl   = document.getElementById('papelDialogInput');
     var lastFocus = null;
+    /* Where the page was when the dialog opened. Restoring focus on close
+       scrolls to whatever is being focused, which is fine when it is on screen
+       and jarring when it is not: closing this from a box near the bottom of
+       the page used to jump more than a thousand pixels back up. */
+    var lastScrollY = 0;
     var resolver = null;
     var isPrompt = false;
     var isConfirm = false;
 
     function close(value) {
         backdrop.classList.remove('open');
+        dialogEl.classList.remove('is-wide');
         document.body.style.overflow = '';
         inputWrap.hidden = true;
         cancelBtn.hidden = true;
-        if (lastFocus && lastFocus.focus) lastFocus.focus();
+        altBtn.hidden = true;
+        // preventScroll, then the recorded position: the first stops focus from
+        // dragging the page to the restored element, the second undoes anything
+        // that moved while the dialog was up.
+        if (lastFocus && lastFocus.focus) {
+            try { lastFocus.focus({ preventScroll: true }); }
+            catch (err) { lastFocus.focus(); }
+        }
+        if (Math.abs(window.scrollY - lastScrollY) > 1) {
+            window.scrollTo({ top: lastScrollY, behavior: 'auto' });
+        }
         if (resolver) { var r = resolver; resolver = null; r(value); }
         isPrompt = false;
         isConfirm = false;
@@ -5919,11 +7264,20 @@ document.addEventListener('DOMContentLoaded', () => {
         var isError = opts.tone === 'error' || text.indexOf('❌') === 0;
         text = text.replace(/^❌\s*/, '');
 
-        msgEl.textContent = text;
+        /* opts.html is for markup written on this page and nowhere else. It is
+           assigned rather than escaped, so a caller must never hand it anything
+           that came from a person: everything else here goes through
+           textContent precisely so that a message cannot become markup. */
+        if (opts.html) { msgEl.innerHTML = opts.html; }
+        else { msgEl.textContent = text; }
+        // Long messages get the roomier box; everything else keeps the narrow
+        // one, which is what makes a one-line notice read as a one-line notice.
+        dialogEl.classList.toggle('is-wide', !!opts.wide);
         titleEl.textContent = opts.title || (isError ? 'Something went wrong' : 'Notice');
-        iconEl.textContent = isError ? 'error' : 'info';
+        iconEl.textContent = opts.icon || (isError ? 'error' : 'info');
 
         lastFocus = document.activeElement;
+        lastScrollY = window.scrollY;
         backdrop.classList.add('open');
         document.body.style.overflow = 'hidden';
         okBtn.focus();
@@ -5946,6 +7300,7 @@ document.addEventListener('DOMContentLoaded', () => {
         isPrompt = true;
 
         lastFocus = document.activeElement;
+        lastScrollY = window.scrollY;
         backdrop.classList.add('open');
         document.body.style.overflow = 'hidden';
         inputEl.focus();
@@ -5964,11 +7319,23 @@ document.addEventListener('DOMContentLoaded', () => {
         okBtn.textContent = opts.confirmText || 'OK';
         cancelBtn.textContent = opts.cancelText || 'Cancel';
         cancelBtn.hidden = false;
+
+        /* A third answer, for questions that have one, shown as an X in the
+           header. Resolves the string 'alt' rather than a boolean so a caller
+           cannot mistake it for yes: `if (leave)` would otherwise treat it as
+           the confirming button. The text becomes the tooltip and the label a
+           screen reader announces, since the button itself is only an icon. */
+        if (opts.altText) {
+            altBtn.setAttribute('aria-label', opts.altText);
+            altBtn.setAttribute('title', opts.altText);
+            altBtn.hidden = false;
+        }
         inputWrap.hidden = true;
         isPrompt = false;
         isConfirm = true;
 
         lastFocus = document.activeElement;
+        lastScrollY = window.scrollY;
         backdrop.classList.add('open');
         document.body.style.overflow = 'hidden';
         okBtn.focus();
@@ -5979,6 +7346,7 @@ document.addEventListener('DOMContentLoaded', () => {
         close(isPrompt ? inputEl.value.trim() : (isConfirm ? true : undefined));
     });
     cancelBtn.addEventListener('click', function () { close(isConfirm ? false : null); });
+    altBtn.addEventListener('click', function () { close('alt'); });
     backdrop.addEventListener('click', function (e) {
         if (e.target === backdrop) close(isConfirm ? false : (isPrompt ? null : undefined));
     });

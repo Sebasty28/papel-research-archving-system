@@ -8,12 +8,16 @@ class FacultyManagementService {
         $this->userRepo = new UserRepository($dbConnection);
     }
 
+    /* Advisers and librarians are both created and managed from the Research
+       Coordinator's console, so every operation here accepts either. */
+    private const MANAGES = ['faculty', 'librarian'];
+
     public function toggleFacultyStatus($userId) {
-        return $this->userRepo->toggleActiveStatus($userId, 'faculty');
+        return $this->userRepo->toggleActiveStatus($userId, self::MANAGES);
     }
 
     public function deleteFaculty($userId) {
-        return $this->userRepo->deleteUser($userId, 'faculty');
+        return $this->userRepo->deleteUser($userId, self::MANAGES);
     }
 
     public function resetFacultyPassword($userId, $newPassword) {
@@ -21,7 +25,7 @@ class FacultyManagementService {
             throw new InvalidArgumentException("Password must be at least 6 characters and contain at least one uppercase letter and one number.");
         }
         $hash = password_hash($newPassword, PASSWORD_DEFAULT);
-        return $this->userRepo->updatePassword($userId, 'faculty', $hash, $newPassword);
+        return $this->userRepo->updatePassword($userId, self::MANAGES, $hash);
     }
 
     /**
@@ -37,7 +41,9 @@ class FacultyManagementService {
         $userId = (int)$userId;
         if (!$userId) { throw new InvalidArgumentException("That account could not be found."); }
 
-        $data['full_name']  = trim($data['full_name'] ?? '');
+        /* Accepted as typed, written down properly: an all-capitals entry is
+           re-cased, anything with a lowercase letter in it is left alone. */
+        $data['full_name']  = normalize_person_name($data['full_name'] ?? '');
         $data['email']      = trim($data['email'] ?? '');
         $data['faculty_id'] = trim($data['faculty_id'] ?? '');
         $password           = $data['password'] ?? '';
@@ -69,6 +75,8 @@ class FacultyManagementService {
         if ($data['username'] === '') { $data['username'] = 'staff' . substr(bin2hex(random_bytes(4)), 0, 6); }
         $data['birthdate'] = null;
 
+        $data['full_name'] = normalize_person_name($data['full_name'] ?? '');
+
         if (!$data['full_name'] || !$data['email'] || !$data['password'] || !$data['title'] || !$data['faculty_id']) {
             throw new InvalidArgumentException("All fields are required.");
         }
@@ -88,15 +96,16 @@ class FacultyManagementService {
             throw new InvalidArgumentException("Faculty ID already exists. Please use a different Faculty ID.");
         }
 
-        $userRole = 'faculty';
-        if ($data['title'] === 'Head of Academic Affairs') {
-            $userRole = 'head_academic';
-        } elseif ($data['title'] === 'Librarian') {
-            $userRole = 'librarian';
+        /* The position chosen on the form decides the role stored. Only the two
+           this console offers are accepted — a hand-edited form cannot mint an
+           admin from here. */
+        $map = staff_position_map($data['title']);
+        if (!$map || !in_array($map['role'], self::MANAGES, true)) {
+            throw new InvalidArgumentException('Choose a position.');
         }
+        $userRole = $map['role'];
 
         $data['hash'] = password_hash($data['password'], PASSWORD_DEFAULT);
-        $data['plain_password'] = $data['password'];
         $data['user_role'] = $userRole;
         $data['created_by'] = $createdBy;
 
@@ -107,15 +116,31 @@ class FacultyManagementService {
     }
 
     private function sendWelcomeEmail($userData) {
-        $emailBody = "Welcome to " . APP_NAME . "!\n\nYour account has been created.\n\nRole: " . $userData['title'] . "\nFaculty ID: " . $userData['faculty_id'] . "\nPassword: " . $userData['plain_password'] . "\n\nSign in with your Faculty ID at: " . BASE_URL . "/archive/index.php";
+        $emailBody  = email_para('Dear ' . $userData['full_name'] . ',');
+        $emailBody .= email_para('An account has been created for you on ' . APP_NAME
+                    . ', the research repository of PUP Biñan Campus.');
+        $emailBody .= email_details([
+            'Position'   => $userData['title'],
+            'Faculty ID' => $userData['faculty_id'],
+            'Password'   => $userData['password'],
+        ], ['Faculty ID', 'Password']);
+        $emailBody .= email_action('Sign in with your Faculty ID at', BASE_URL . '/archive/index.php');
+        $emailBody .= email_para('Please change your password after signing in for the first time.');
         try {
-            if (function_exists('send_email')) send_email($userData['email'], "Your Account Credentials", $emailBody);
-            return $userData['title'] . ' account created and credentials sent to email.';
+            /* Say what actually happened. This used to claim the email had
+               been sent regardless, so a failing mail server looked like a
+               working one and nobody knew to pass the password on by hand. */
+            $sent = function_exists('send_email')
+                 && send_email($userData['email'], "Your Account Credentials", $emailBody);
+            return $userData['title'] . ($sent
+                ? ' account created and credentials sent to email.'
+                : ' account created, but the email could not be sent. Give them their'
+                  . ' password yourself, or use Reset to set a new one.');
         } catch (Exception $e) {
             return $userData['title'] . ' account created, but email failed: ' . $e->getMessage();
         }
     }
 
-    public function getActiveFaculty() { return $this->userRepo->getUsersByRoleAndStatus('faculty', 1); }
-    public function getInactiveFaculty() { return $this->userRepo->getUsersByRoleAndStatus('faculty', 0); }
+    public function getActiveFaculty() { return $this->userRepo->getUsersByRolesAndStatus(self::MANAGES, 1); }
+    public function getInactiveFaculty() { return $this->userRepo->getUsersByRolesAndStatus(self::MANAGES, 0); }
 }

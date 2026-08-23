@@ -60,7 +60,7 @@ body {
     height: 30px;
     padding: 0 .5rem;
     border: none;
-    border-radius: 6px;
+    border-radius: var(--r-control, 4px);
     background: none;
     color: #fff;
     font-family: inherit;
@@ -103,7 +103,7 @@ body {
 #viewer-scroll::-webkit-scrollbar-track { background: var(--cream); }
 #viewer-scroll::-webkit-scrollbar-thumb {
     background: var(--soft-maroon);
-    border-radius: 6px;
+    border-radius: var(--r-card, 8px);
     border: 3px solid var(--cream);
 }
 #viewer-scroll::-webkit-scrollbar-thumb:hover { background: var(--maroon); }

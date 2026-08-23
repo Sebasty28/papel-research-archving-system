@@ -28,19 +28,19 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
 }
 .main-col { position: relative; min-width: 0; }
 /* Soft-cream panel carries the console; paper cards sit on it in white. */
-.dash-shell { background: var(--cream); border-radius: 10px; padding: .875rem; }
+.dash-shell { background: var(--cream); border-radius: var(--r-card, 8px); padding: .875rem; }
 /* ===== Search + upload row ===== */
 .dash-top { display: flex; align-items: center; gap: .75rem; margin-bottom: .75rem; }
 .dash-top .search-shell { flex: 1; min-width: 0; position: relative; }
 .btn-upload {
     display: inline-flex; align-items: center; gap: .5rem;
-    background: var(--maroon); color: #fff; text-decoration: none;
-    border: none; border-radius: 8px;
+    background: var(--maroon-surface); color: #fff; text-decoration: none;
+    border: none; border-radius: var(--r-control, 4px);
     padding: .75rem 1.5rem; font-family: inherit; font-size: .875rem;
     white-space: nowrap; flex-shrink: 0;
     transition: background .2s;
 }
-.btn-upload:hover { background: var(--dark-maroon); color: #fff; }
+.btn-upload:hover { background: var(--maroon-surface-hover); color: #fff; }
 .btn-upload .material-symbols-outlined { font-size: 20px; }
 /* ===== Tabs + toolbar row ===== */
 .dash-bar {
@@ -52,7 +52,7 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
 .dash-tabs { display: flex; align-items: center; gap: .25rem; flex-wrap: wrap; }
 .dash-tab {
     display: inline-flex; align-items: center; gap: .35rem;
-    padding: .4rem .875rem; border-radius: 6px;
+    padding: .4rem .875rem; border-radius: var(--r-control, 4px);
     font-size: .8125rem; color: var(--grey); text-decoration: none;
     border: none; background: none; font-family: inherit; cursor: pointer;
     transition: background .2s, color .2s;
@@ -66,12 +66,12 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
    right instead of hanging off the left edge. */
 .dash-tabs .quick-settings-dropdown { left: 0; right: auto; }
 .dash-shell .card-tool:hover { background: var(--white); }
-.dash-tab .count { font-size: .6875rem; color: var(--soft-maroon); }
+.dash-tab .count { font-size: .6875rem; color: var(--grey); }
 /* ===== Paper cards ===== */
 .paper-card {
     background: var(--white);
     border: 1px solid rgba(177,125,125,.22);
-    border-radius: 8px;
+    border-radius: var(--r-card, 8px);
     padding: 1rem 1.25rem;
     margin-bottom: .75rem;
 }
@@ -96,7 +96,7 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
     color: var(--border); flex-shrink: 0;
 }
 .track-dot .material-symbols-outlined { font-size: 18px; --mi-fill: 1; }
-.track-step.done .track-dot { background: var(--maroon); border-color: var(--maroon); color: #fff; }
+.track-step.done .track-dot { background: var(--maroon-surface); border-color: var(--maroon-surface); color: #fff; }
 .track-step.current .track-dot { border-color: var(--maroon); color: var(--maroon); }
 .track-label { font-size: .625rem; color: var(--grey); text-align: center; line-height: 1.25; }
 .track-step.done .track-label, .track-step.current .track-label { color: var(--maroon); }
@@ -120,7 +120,7 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
 .card-people .who { color: var(--maroon); }
 .card-feedback {
     margin-top: .875rem; padding: .625rem .875rem;
-    background: #fdeaea; border-radius: 6px;
+    background: #fdeaea; border-radius: var(--r-card, 8px);
     font-size: .75rem; color: var(--dark-maroon); line-height: 1.6;
 }
 .card-actions { margin-top: .875rem; display: flex; gap: .5rem; flex-wrap: wrap; }
@@ -135,7 +135,7 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
 .papel-dialog-backdrop.open { opacity: 1; pointer-events: auto; }
 .papel-dialog {
     width: 100%; max-width: 26rem; background: var(--white);
-    border-radius: 12px; box-shadow: 0 18px 48px rgba(51, 0, 0, .28); overflow: hidden;
+    border-radius: var(--r-card, 8px); box-shadow: 0 18px 48px rgba(51, 0, 0, .28); overflow: hidden;
 }
 .papel-dialog-head {
     display: flex; align-items: center; gap: .5rem;

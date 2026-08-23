@@ -53,10 +53,21 @@ class PaperRepository {
     }
 
     public function getProgramAnalytics($approvedOnly = false) {
-        $cond = $approvedOnly ? "rp.current_status='approved'" : "rp.current_status IN ('approved', 'pending_super_admin', 'pending_head_academic')";
+        /* Approval ends at the Research Coordinator, so 'approved' is the only
+           status that means approved. This used to count pending_super_admin
+           and pending_head_academic as well — stages the chain no longer has —
+           which overstated the rate the moment a paper carried one. */
+        $cond = "rp.current_status='approved'";
         $sql = "SELECT u.program, COUNT(rp.paper_id) as total_papers";
         if (!$approvedOnly) {
-            $sql .= ", SUM(CASE WHEN $cond THEN 1 ELSE 0 END) as approved, SUM(CASE WHEN rp.current_status='draft' THEN 1 ELSE 0 END) as revisions";
+            /* A returned paper is back in 'draft' but has been reviewed; one
+               nobody has looked at is also 'draft'. Only the first is a
+               revision, which is what the workflow row distinguishes. */
+            $sql .= ", SUM(CASE WHEN $cond THEN 1 ELSE 0 END) as approved,"
+                  . " SUM(CASE WHEN rp.current_status='draft' AND EXISTS ("
+                  . "     SELECT 1 FROM approval_workflow aw"
+                  . "      WHERE aw.paper_id = rp.paper_id AND aw.status = 'declined')"
+                  . "   THEN 1 ELSE 0 END) as revisions";
         }
         $sql .= " FROM research_papers rp JOIN users u ON rp.uploaded_by=u.user_id WHERE u.user_role='student' AND u.program IS NOT NULL ";
         if ($approvedOnly) $sql .= "AND rp.current_status='approved' ";
@@ -82,7 +93,8 @@ class PaperRepository {
         if ($superAdminFlow) {
             $sql = "SELECT rp.paper_type, COUNT(DISTINCT rp.paper_id) as total, SUM(CASE WHEN rp.current_status IN ('approved', 'pending_admin') THEN 1 ELSE 0 END) as approved FROM research_papers rp JOIN users u ON rp.uploaded_by=u.user_id WHERE u.user_role='student' AND u.program IS NOT NULL AND (rp.current_status IN ('approved', 'pending_admin') OR (rp.current_status='draft' AND EXISTS (SELECT 1 FROM approval_workflow aw WHERE aw.paper_id=rp.paper_id AND aw.status='declined' AND aw.review_level IN ('faculty', 'admin')))) GROUP BY rp.paper_type HAVING total> 0";
         } else {
-            $sql = "SELECT rp.paper_type, COUNT(*) as total, SUM(CASE WHEN rp.current_status IN ('approved', 'pending_super_admin', 'pending_head_academic') THEN 1 ELSE 0 END) as approved FROM research_papers rp JOIN users u ON u.user_id=rp.uploaded_by WHERE u.user_role='student' GROUP BY rp.paper_type";
+            // Approved means approved; the two pending_* stages are retired.
+            $sql = "SELECT rp.paper_type, COUNT(*) as total, SUM(CASE WHEN rp.current_status = 'approved' THEN 1 ELSE 0 END) as approved FROM research_papers rp JOIN users u ON u.user_id=rp.uploaded_by WHERE u.user_role='student' GROUP BY rp.paper_type";
         }
         $res = $this->conn->query($sql);
         $data = []; 

@@ -123,6 +123,8 @@ $RC = [
     'approve_lead'  => 'This publishes the paper to the public repository, where anyone can read it. It is the last step.',
     'primary'       => ['href' => 'admin_manage_faculty.php', 'icon' => 'diversity_3', 'label' => 'Manage Faculty'],
     'quick' => [
+        ['href' => BASE_URL.'/app/student/student_upload_ai.php', 'icon' => 'upload_file', 'label' => 'Upload Paper',
+         'desc' => 'Add a paper of your own. It is published straight away, with no review'],
         ['href' => 'admin_manage_faculty.php', 'icon' => 'diversity_3', 'label' => 'Manage Faculty',
          'desc' => $faculty_count . ' adviser ' . ($faculty_count === 1 ? 'account' : 'accounts') . ' — add, edit or reset one'],
         ['href' => BASE_URL.'/analytics/analytics_dashboard.php', 'icon' => 'insights', 'label' => 'Analytics',

@@ -36,7 +36,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
 .terms-section a { color: var(--maroon); font-weight: 400; }
 
 /* ===== Data table ===== */
-.data-table { width: 100%; border-collapse: collapse; margin-top: 1rem; border-radius: 8px; overflow: hidden; }
+.data-table { width: 100%; border-collapse: collapse; margin-top: 1rem; border-radius: var(--r-data, 0px); overflow: hidden; }
 .data-table th {
     background: var(--cream); padding: .8rem 1rem; text-align: left;
     font-size: .8125rem; font-weight: 400; text-transform: uppercase;

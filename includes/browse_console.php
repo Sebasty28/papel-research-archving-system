@@ -17,14 +17,17 @@
     gap: .875rem;
     background: var(--white);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--r-control, 4px);
     padding: .75rem 1rem;
     box-shadow: var(--shadow-md);
     transition: border-color .2s, box-shadow .2s;
 }
 .search-form:hover { border-color: var(--soft-maroon); }
 .search-form:focus-within {
-    border-color: var(--soft-maroon);
+    /* The full accent rather than the soft tint, because this is now the only
+       thing marking focus on the field: the ring on the input itself is turned
+       off below. */
+    border-color: var(--maroon);
     box-shadow: 0 0 0 3px rgba(177,125,125,.20);
 }
 /* Magnifier picks up maroon whenever the field is engaged */
@@ -54,6 +57,30 @@
     color: var(--ink);
 }
 .search-input::placeholder { color: var(--grey); }
+/* The shared focus ring is deliberately !important, so turning it off for one
+   control has to be as well. The container above shows focus for both of them,
+   and the ring drawn inside the box was a second rectangle a few pixels in from
+   the first. */
+.search-input:focus,
+.search-input:focus-visible { outline: none !important; }
+
+/* The clear button, which is the browser's own and arrives bright blue. It
+   cannot be recoloured as a control, so the glyph is redrawn as a mask and the
+   colour comes from background-color, which we do control. */
+.search-input::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+            appearance: none;
+    width: .75rem; height: .75rem;
+    cursor: pointer;
+    background-color: var(--search-clear, #454545);
+    opacity: .7;
+    transition: opacity .15s ease;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M1.5 1.5l9 9M10.5 1.5l-9 9' stroke='%23000' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M1.5 1.5l9 9M10.5 1.5l-9 9' stroke='%23000' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.search-input::-webkit-search-cancel-button:hover { opacity: 1; }
+/* Light on a dark field, for the same reason it is dark on a light one. */
+html[data-mode="dark"] { --search-clear: #C3CAD4; }
 
 /* ===== Paper list ===== */
 /* Row hover bleeds slightly past the column, so the cream block reads as a
@@ -62,7 +89,7 @@
     position: relative;
     padding: .875rem 1.25rem;
     margin: 0 -.75rem;
-    border-radius: 6px;
+    border-radius: var(--r-card, 8px);
     transition: background .2s ease;
 }
 .paper-item:hover { background: var(--cream); }
@@ -109,7 +136,10 @@
     align-items: center;
     gap: .4rem;
 }
-.paper-meta .sep { color: var(--soft-maroon); }
+/* The dot between date, type and status. --soft-maroon put it at 3.44:1,
+   the one thing on the site still under AAA. It is punctuation, so it takes
+   the muted text colour rather than an accent. */
+.paper-meta .sep { color: var(--grey); }
 .paper-side {
     text-align: left;
     font-size: .6875rem;
@@ -151,7 +181,7 @@
     width: 26px;
     height: 26px;
     border: none;
-    border-radius: 5px;
+    border-radius: var(--r-control, 4px);
     background: none;
     color: var(--maroon);
     text-decoration: none;
@@ -160,7 +190,9 @@
     transition: background .2s, color .2s;
 }
 .toolbar-btn:hover { background: var(--cream); color: var(--dark-maroon); }
-.toolbar-btn.disabled { color: var(--border); pointer-events: none; }
+/* --border is all but invisible against a dark surface (1.25:1 measured);
+   a disabled control should read as muted, not absent. */
+.toolbar-btn.disabled { color: var(--grey); opacity: .65; pointer-events: none; }
 .toolbar-btn .material-symbols-outlined { font-size: 18px; }
 
 /* Quick Settings dropdown (Density / Theme) */
@@ -171,7 +203,7 @@
     right: 0;
     background: var(--white);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--r-control, 4px);
     box-shadow: var(--shadow-md);
     width: 220px;
     z-index: 1000;
@@ -199,7 +231,7 @@
     justify-content: center;
     width: 22px;
     height: 22px;
-    border-radius: 4px;
+    border-radius: var(--r-control, 4px);
     padding: 0;
 }
 .qs-close:hover { background: var(--cream); color: var(--maroon); }
@@ -286,8 +318,8 @@
     scrollbar-color: var(--dark-maroon) var(--cream);
 }
 .paper-list.is-scrollable::-webkit-scrollbar { width: 8px; }
-.paper-list.is-scrollable::-webkit-scrollbar-track { background: var(--cream); border-radius: 4px; }
-.paper-list.is-scrollable::-webkit-scrollbar-thumb { background: var(--dark-maroon); border-radius: 4px; }
+.paper-list.is-scrollable::-webkit-scrollbar-track { background: var(--cream); border-radius: var(--r-card, 8px); }
+.paper-list.is-scrollable::-webkit-scrollbar-thumb { background: var(--dark-maroon); border-radius: var(--r-card, 8px); }
 
 /* Loading state while search/filter/pagination fetch results via AJAX */
 .main-col { position: relative; }
@@ -325,13 +357,13 @@
    A soft-cream panel carries the column; the cards sit on top of it in white. */
 .sidebar-right {
     background: var(--cream);
-    border-radius: 10px;
+    border-radius: var(--r-card, 8px);
     padding: .75rem;
 }
 .sidebar-card {
     background: var(--white);
     border: 1px solid rgba(177,125,125,.22);
-    border-radius: 8px;
+    border-radius: var(--r-card, 8px);
     margin-bottom: .75rem;
     overflow: hidden;
 }
@@ -375,7 +407,7 @@
     padding: 0;
     color: var(--maroon);
     text-decoration: none;
-    border-radius: 3px;
+    border-radius: var(--r-card, 8px);
     cursor: pointer;
     transition: color .2s;
 }
@@ -449,7 +481,7 @@
     margin-right: .5rem;
     padding: .3rem 1.75rem .3rem .45rem;
     border: 1px solid var(--soft-maroon);
-    border-radius: 6px;
+    border-radius: var(--r-control, 4px);
     font-family: inherit;
     font-size: .75rem;
     color: var(--ink);
@@ -475,7 +507,7 @@
 
 .note-card {
     border: 1px solid rgba(177,125,125,.22);
-    border-radius: 8px;
+    border-radius: var(--r-card, 8px);
     padding: .5rem .75rem;
     font-size: .75rem;
     color: var(--maroon);
@@ -490,7 +522,7 @@
     left: 0; right: 0;
     background: var(--white);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--r-control, 4px);
     box-shadow: var(--shadow-md);
     z-index: 800;
     max-height: 280px;

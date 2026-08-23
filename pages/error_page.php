@@ -115,7 +115,7 @@ $description = $descriptions[$error_http_code] ?? 'An unexpected error occurred.
     background: #f1f5f9;
     color: #475569;
     padding: 0.5rem 1.25rem;
-    border-radius: 8px;
+    border-radius: var(--r-card, 8px);
     font-size: 0.875rem;
     font-weight: 600;
     font-family: 'Courier New', monospace;
@@ -133,7 +133,7 @@ $description = $descriptions[$error_http_code] ?? 'An unexpected error occurred.
     color: white;
     border: none;
     padding: 0.875rem 2rem;
-    border-radius: 12px;
+    border-radius: var(--r-control, 4px);
     font-weight: 700;
     font-size: 1rem;
     text-decoration: none;
@@ -150,7 +150,7 @@ $description = $descriptions[$error_http_code] ?? 'An unexpected error occurred.
     color: var(--pup-maroon);
     border: 2px solid var(--pup-maroon);
     padding: 0.875rem 2rem;
-    border-radius: 12px;
+    border-radius: var(--r-control, 4px);
     font-weight: 700;
     font-size: 1rem;
     text-decoration: none;
@@ -167,6 +167,7 @@ $description = $descriptions[$error_http_code] ?? 'An unexpected error occurred.
     font-size: 0.8rem;
   }
 </style>
+<?php require_once __DIR__ . '/../includes/focus_ring.php'; ?>
 </head>
 <body>
 <div class="error-container">

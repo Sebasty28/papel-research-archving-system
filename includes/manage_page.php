@@ -44,7 +44,7 @@
 .mgmt-panel {
     background: var(--white);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--r-card, 8px);
     overflow: hidden;
 }
 .mgmt-panel-head {
@@ -67,7 +67,7 @@
 .mgmt-field .req { color: var(--maroon); }
 .mgmt-field input, .mgmt-field select {
     width: 100%;
-    border: 1px solid var(--border); border-radius: 8px;
+    border: 1px solid var(--border); border-radius: var(--r-control, 4px);
     padding: .5rem .7rem;
     font-family: var(--font-body); font-size: .8125rem;
     color: var(--ink); background: var(--white);
@@ -100,6 +100,9 @@
 .mgmt-help:focus-visible { outline: 2px solid var(--maroon); outline-offset: 1px; }
 .mgmt-field input::placeholder { color: var(--grey); }
 .mgmt-hint { display: block; font-size: .6875rem; color: var(--grey); margin-top: .25rem; }
+/* The hint doubles as the Generate button's only way to answer back — there is
+   no alert() on this site — so it needs a state that reads as a correction. */
+.mgmt-hint.is-warn { color: var(--maroon); font-weight: 500; }
 /* Academic year and section sit together — they are read as one answer. */
 .mgmt-pair { display: grid; grid-template-columns: 1fr 1fr; gap: .625rem; }
 .mgmt-with-btn { display: flex; gap: .375rem; }
@@ -115,7 +118,7 @@
 .mgmt-editing-note {
     display: none; align-items: flex-start; gap: .4rem;
     margin-bottom: .875rem; padding: .5rem .625rem;
-    background: var(--cream); border-radius: 8px;
+    background: var(--cream); border-radius: var(--r-card, 8px);
     font-size: .6875rem; color: var(--ink); line-height: 1.5;
 }
 #formPanel.is-editing .mgmt-editing-note { display: flex; }
@@ -130,23 +133,28 @@
     margin-bottom: .875rem;
 }
 .mgmt-tab {
-    display: inline-flex; align-items: center; gap: .35rem;
-    padding: .5rem .9rem;
+    display: inline-flex; align-items: center; gap: .3rem;
+    padding: .5rem .7rem;
     border: none; background: none; cursor: pointer;
-    font-family: var(--font-body); font-size: .8125rem;
+    font-family: var(--font-body); font-size: .75rem;
     color: var(--grey); text-decoration: none;
+    /* The Director's console carries four tabs and the longest of them is
+       "Head of Academic Programs", which wrapped to two lines and left the row
+       uneven. It stays on one line now and the row keeps its height whatever
+       is on it. */
+    white-space: nowrap;
     border-bottom: 2px solid transparent; margin-bottom: -1px;
 }
 .mgmt-tab:hover { color: var(--maroon); border-bottom-color: var(--soft-maroon); }
 .mgmt-tab.is-on { color: var(--maroon); border-bottom-color: var(--maroon); font-weight: 500; }
-.mgmt-tab .count { color: var(--soft-maroon); font-size: .6875rem; }
+.mgmt-tab .count { color: var(--grey); font-size: .625rem; }
 
 /* ---- Filter chips ---- */
 .mgmt-chips { display: flex; flex-wrap: wrap; align-items: center; gap: .375rem; margin-bottom: .875rem; }
 /* The section row is the second step, so it is set back from the first. */
 .mgmt-chips-sub {
     margin-top: -.375rem; padding: .5rem .625rem;
-    background: var(--cream); border-radius: 8px;
+    background: var(--cream); border-radius: var(--r-control, 4px);
 }
 .mgmt-chips-label {
     font-size: .6875rem; color: var(--grey);
@@ -161,19 +169,22 @@
 .mgmt-sort .mgmt-chip { padding: .25rem .7rem; }
 @media (max-width: 780px) {
     .mgmt-tabs { flex-wrap: wrap; }
+    /* Wrapping between tabs is fine on a narrow screen; wrapping inside one is
+       what looked broken, so that stays prevented. */
+    .mgmt-tab { padding-left: .55rem; padding-right: .55rem; }
     .mgmt-sort { margin-left: 0; width: 100%; padding-bottom: .5rem; }
 }
 
 /* Why a row is in the second tab, said on the row itself. */
 .mgmt-tag {
     display: inline-block; margin-left: .35rem; vertical-align: 1px;
-    padding: .05rem .4rem; border-radius: 999px;
+    padding: .05rem .4rem; border-radius: var(--r-badge, 2px);
     background: var(--cream); color: var(--grey);
     font-size: .625rem; font-weight: 500; text-transform: uppercase; letter-spacing: .03em;
 }
 .mgmt-tag.is-lapsed { background: #fdeaea; color: var(--dark-maroon); }
 .mgmt-chip {
-    border: 1px solid var(--border); border-radius: 999px;
+    border: 1px solid var(--border); border-radius: var(--r-control, 4px);
     background: var(--white); color: var(--ink);
     font-family: var(--font-body); font-size: .75rem;
     padding: .3rem .8rem; cursor: pointer;
@@ -222,12 +233,8 @@
 .mgmt-cohort { white-space: nowrap; font-variant-numeric: tabular-nums; }
 /* An account close to its end, or past it, says so where the date is. */
 .mgmt-sub.is-closing { color: var(--dark-maroon); }
-.mgmt-sub.is-lapsed  { color: var(--dark-maroon); font-weight: 500; }
-.mgmt-table tbody tr.is-lapsed > td { background: #fdeaea; }
-.mgmt-pass {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: .75rem; color: var(--maroon);
-}
+.mgmt-sub.is-lapsed  { color: var(--bad-text); font-weight: 500; }
+.mgmt-table tbody tr.is-lapsed > td { background: var(--bad-bg); }
 .mgmt-date { white-space: nowrap; color: var(--grey); font-size: .75rem; }
 .mgmt-actions { display: flex; gap: .25rem; white-space: nowrap; justify-content: flex-end; }
 /* Each action posts its own form. Left as blocks they stack one per line, so
@@ -236,7 +243,7 @@
 /* Borderless: a row of outlined boxes competed with the table's own rules for
    attention. The words carry the action; a tint on hover confirms the target. */
 .mgmt-act {
-    border: none; border-radius: 6px;
+    border: none; border-radius: var(--r-control, 4px);
     background: none; color: var(--maroon);
     font-family: var(--font-body); font-size: .6875rem;
     padding: .25rem .5rem; cursor: pointer; text-decoration: none;
@@ -246,13 +253,13 @@
 .mgmt-act:hover { background: var(--cream); color: var(--maroon); }
 .mgmt-act:focus-visible { outline: 2px solid var(--maroon); outline-offset: 1px; }
 .mgmt-act.is-danger { color: var(--dark-maroon); }
-.mgmt-act.is-danger:hover { background: var(--dark-maroon); color: #fff; }
+.mgmt-act.is-danger:hover { background: var(--maroon-surface-hover); color: #fff; }
 /* The Generate button beside the password box is not in a table row, so it
    keeps an edge — there it reads as part of the field. */
 .mgmt-with-btn .mgmt-act { border: 1px solid var(--border); background: var(--white); }
 .mgmt-with-btn .mgmt-act:hover { border-color: var(--soft-maroon); }
 .mgmt-row-off td { color: var(--grey); }
-.mgmt-row-off .mgmt-prog, .mgmt-row-off .mgmt-pass { color: var(--grey); }
+.mgmt-row-off .mgmt-prog { color: var(--grey); }
 
 /* ---- Nothing to show ---- */
 .mgmt-empty { padding: 3rem 1rem; text-align: center; color: var(--grey); font-size: .8125rem; }
@@ -270,7 +277,7 @@
 .mgmt-help-backdrop.is-open { opacity: 1; pointer-events: auto; }
 .mgmt-help-panel {
     width: 100%; max-width: 30rem; background: var(--white);
-    border-radius: 12px; box-shadow: 0 18px 48px rgba(51, 0, 0, .28);
+    border-radius: var(--r-card, 8px); box-shadow: 0 18px 48px rgba(51, 0, 0, .28);
     overflow: hidden; max-height: calc(100vh - 3rem); display: flex; flex-direction: column;
 }
 .mgmt-help-head {
@@ -284,7 +291,7 @@
 }
 .mgmt-help-close {
     border: none; background: none; cursor: pointer; padding: .15rem;
-    color: var(--grey); border-radius: 6px; display: inline-flex;
+    color: var(--grey); border-radius: var(--r-control, 4px); display: inline-flex;
 }
 .mgmt-help-close:hover { background: var(--cream); color: var(--maroon); }
 .mgmt-help-panel:focus { outline: none; }
@@ -297,19 +304,19 @@
 .mgmt-help-body strong { color: var(--maroon); font-weight: 600; }
 .mgmt-help-body em { font-style: normal; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .mgmt-help-note {
-    background: var(--cream); border-radius: 8px; padding: .625rem .75rem;
+    background: var(--cream); border-radius: var(--r-card, 8px); padding: .625rem .75rem;
 }
 .mgmt-help-foot { display: flex; justify-content: flex-end; padding: 0 1.25rem 1.25rem; }
 
 /* ---- Flash ---- */
 .mgmt-flash {
     display: flex; align-items: flex-start; gap: .5rem;
-    border-radius: 10px; border: 1px solid var(--border);
+    border-radius: var(--r-card, 8px); border: 1px solid var(--border);
     font-size: .8125rem; padding: .75rem 1rem; margin-bottom: 1rem;
 }
 .mgmt-flash .material-symbols-outlined { font-size: 18px; flex: 0 0 auto; }
-.mgmt-flash.is-good { background: #e7f6ed; border-color: #bfe3cd; color: #1b5e35; }
-.mgmt-flash.is-bad  { background: #fdeaea; border-color: var(--soft-maroon); color: var(--dark-maroon); }
+.mgmt-flash.is-good { background: var(--ok-bg); border-color: var(--ok-border); color: var(--ok-text); }
+.mgmt-flash.is-bad  { background: var(--bad-bg); border-color: var(--bad-border); color: var(--bad-text); }
 
 @media (max-width: 1100px) {
     .mgmt-grid { grid-template-columns: 1fr; }
@@ -317,4 +324,74 @@
 @media (max-width: 600px) {
     .mgmt-pair { grid-template-columns: 1fr; }
 }
+
+/* ---- The row a link arrived for ----
+   A support request, or a notification, sends the reader here about one named
+   account. These rolls run to dozens of rows, so the one that was meant is
+   marked and scrolled to rather than left to be found by eye. The mark stays:
+   it is the answer to "which one", and it should still be there after the
+   reader has looked away to read the request. */
+.mgmt-table tbody tr.is-found > td {
+    background: var(--cream);
+}
+.mgmt-table tbody tr.is-found > td:first-child {
+    box-shadow: inset 3px 0 0 var(--maroon);
+}
 </style>
+
+<script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
+/* Arrived at with ?q=<the ID on the account>. Opens the tab the row is on,
+   marks it and brings it into view. Shared by all four consoles: they differ in
+   which column holds the identifier, so all of them are checked. */
+(function () {
+    var wanted = new URLSearchParams(location.search).get('q');
+    if (!wanted) return;
+    wanted = wanted.trim().toLowerCase();
+
+    document.addEventListener('DOMContentLoaded', function () {
+        /* One tick later, for the same reason the password tab waits: each
+           console wires its own tabs in a DOMContentLoaded listener registered
+           after this one, and a tab clicked before that is a button nothing is
+           listening to. */
+        setTimeout(function () {
+            var rows = document.querySelectorAll('.mgmt-table tbody tr[data-student-id],'
+                     + '.mgmt-table tbody tr[data-faculty-id],'
+                     + '.mgmt-table tbody tr[data-username]');
+            var hit = null;
+            Array.prototype.forEach.call(rows, function (row) {
+                if (hit) return;
+                var d = row.dataset;
+                [d.studentId, d.facultyId, d.username].forEach(function (v) {
+                    if (!hit && v && v.trim().toLowerCase() === wanted) hit = row;
+                });
+            });
+            if (!hit) return;
+
+            /* The row may be on a tab that is not the one showing — an archived
+               student, say. Press that tab rather than revealing the pane here,
+               so the console stays the only thing deciding what "selected"
+               looks like. Which pane it sits in is read from the tabs, because
+               the four consoles name their panes differently: activePane on
+               one, pane0 on another. */
+            Array.prototype.forEach.call(
+                document.querySelectorAll('.mgmt-tab[data-pane]'), function (tab) {
+                    var pane = document.getElementById(tab.dataset.pane);
+                    if (pane && pane.contains(hit) && !tab.classList.contains('is-on')) tab.click();
+                });
+
+            hit.classList.add('is-found');
+
+            /* Open the account for editing, by pressing the row's own Edit
+               rather than filling the panel from here: the console knows what
+               editing means on its own roll — which fields, what the panel
+               title says, that a blank password keeps the old one — and there is
+               no second copy of that to fall out of step.
+               Its own scrolling then stands, which is why the row is only
+               scrolled to when there is no Edit to press. */
+            var edit = hit.querySelector('.js-edit');
+            if (edit) edit.click();
+            else hit.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }, 0);
+    });
+})();
+</script>

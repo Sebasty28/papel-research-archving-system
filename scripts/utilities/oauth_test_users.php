@@ -174,7 +174,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-s
                 <a href="https://sis8.pup.edu.ph/" target="_blank">PUPSIS</a>
                 <a href="../../app/admin/admin_manage_faculty.php">Manage Faculty</a>
                 <a href="oauth_test_users.php" class="active">OAuth Users</a>
-                <a href="../../app/guest/admin_manage_guests.php">Guests</a>
+                <a href="../../app/librarian/librarian_manage_guests.php">Guests</a>
                 <a href="../../app/admin/admin_review_dashboard.php">Dashboard</a>
             <?php endif; ?>
         </nav>

@@ -36,7 +36,7 @@
     transition: opacity .18s ease, transform .18s ease, visibility .18s, background .15s;
 }
 .scroll-jump.is-visible { opacity: 1; visibility: visible; transform: none; }
-.scroll-jump:hover { background: var(--maroon); color: #fff; }
+.scroll-jump:hover { background: var(--maroon-surface); color: #fff; }
 .scroll-jump:focus-visible { outline: 2px solid var(--maroon); outline-offset: 2px; }
 .scroll-jump .material-symbols-outlined { font-size: 22px; transition: transform .18s ease; }
 

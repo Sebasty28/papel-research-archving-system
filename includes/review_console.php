@@ -274,16 +274,16 @@ ob_start();
 .rc-stat {
     display: flex; align-items: center; gap: .625rem;
     padding: .75rem .875rem; background: var(--white); border: 1px solid var(--border);
-    border-radius: 10px; text-decoration: none; transition: border-color .15s, box-shadow .15s, background .15s;
+    border-radius: var(--r-card, 8px); text-decoration: none; transition: border-color .15s, box-shadow .15s, background .15s;
 }
 .rc-stat:hover { border-color: var(--soft-maroon); box-shadow: 0 2px 10px rgba(51,0,0,.06); }
 .rc-stat.active { background: var(--cream); border-color: var(--maroon); }
 .rc-stat-ico {
-    width: 2rem; height: 2rem; flex: 0 0 2rem; border-radius: 8px;
+    width: 2rem; height: 2rem; flex: 0 0 2rem; border-radius: var(--r-card, 8px);
     display: inline-flex; align-items: center; justify-content: center;
     background: var(--cream); color: var(--maroon);
 }
-.rc-stat.active .rc-stat-ico { background: var(--maroon); color: #fff; }
+.rc-stat.active .rc-stat-ico { background: var(--maroon-surface); color: #fff; }
 .rc-stat-ico .material-symbols-outlined { font-size: 18px; }
 /* The number sits above its label, so the text half of the tile is a block. */
 .rc-stat > span:last-child { display: block; min-width: 0; }
@@ -296,7 +296,7 @@ ob_start();
 .rc-docs { display: flex; gap: .375rem; flex-wrap: wrap; margin-top: .625rem; }
 .rc-doc-chip {
     display: inline-flex; align-items: center; gap: .25rem;
-    padding: .25rem .5rem; border: 1px solid var(--border); border-radius: 999px;
+    padding: .25rem .5rem; border: 1px solid var(--border); border-radius: var(--r-control, 4px);
     font-size: .6875rem; color: var(--ink); text-decoration: none; background: var(--white);
 }
 .rc-doc-chip:hover { border-color: var(--soft-maroon); color: var(--maroon); background: var(--cream); }
@@ -311,13 +311,13 @@ ob_start();
 .rc-field { display: block; margin-top: .875rem; }
 .rc-field span.rc-label { display: block; font-size: .75rem; font-weight: 500; color: var(--ink); margin-bottom: .35rem; }
 .rc-field textarea {
-    width: 100%; border: 1px solid var(--border); border-radius: 8px;
+    width: 100%; border: 1px solid var(--border); border-radius: var(--r-control, 4px);
     padding: .625rem .75rem; font-family: var(--font-body); font-size: .8125rem;
     color: var(--ink); resize: vertical; background: var(--white);
 }
 .rc-field textarea:focus { outline: none; border-color: var(--maroon); }
 .rc-hint { display: block; font-size: .6875rem; color: var(--grey); margin-top: .35rem; }
-.rc-checklist { border: 1px solid var(--border); border-radius: 8px; padding: .75rem .875rem; }
+.rc-checklist { border: 1px solid var(--border); border-radius: var(--r-card, 8px); padding: .75rem .875rem; }
 .rc-check-group + .rc-check-group { margin-top: .75rem; padding-top: .75rem; border-top: 1px solid var(--border); }
 .rc-check-head {
     display: flex; align-items: center; justify-content: space-between; gap: .5rem;
@@ -364,6 +364,12 @@ ob_start();
 <main class="wrap layout">
     <div class="main-col" id="mainCol">
         <?php ob_start(); ?>
+
+        <?php /* Forwarding, returning and approving all set a message and land
+                 back here. Until this was added the desk never read it, so it
+                 sat in the session and turned up on whichever page the reviewer
+                 opened next. */ ?>
+        <?php require_once ROOT_PATH.'/includes/flash_banner.php'; flash_banner(); ?>
 
         <?php if ($RC['role'] || $RC['blurb']): ?>
         <div class="rc-intro">
@@ -683,8 +689,8 @@ ob_start();
 
                 <div class="filter-section">
                     <span class="filter-section-label">Order By</span>
-                    <label class="filter-radio"><input type="radio" name="sort" value="asc"  <?= $sort_param === 'asc'  ? 'checked' : '' ?>> Oldest first</label>
                     <label class="filter-radio"><input type="radio" name="sort" value="desc" <?= $sort_param === 'desc' ? 'checked' : '' ?>> Newest first</label>
+                    <label class="filter-radio"><input type="radio" name="sort" value="asc"  <?= $sort_param === 'asc'  ? 'checked' : '' ?>> Oldest first</label>
                 </div>
 
                 <div class="filter-section">
