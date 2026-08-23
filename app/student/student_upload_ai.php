@@ -1887,6 +1887,25 @@ hr {
     transition: transform .2s, box-shadow .2s;
 }
 #chat-button:hover { transform: scale(1.07); box-shadow: 0 6px 20px rgba(130,7,7,.4); }
+
+/* ----- PUPPY's face -----
+   The mascot GIFs are opaque 320x320 squares on a pale ground, so they are
+   cropped to a circle. Dropped in square, that ground reads as a grey patch
+   stuck onto the maroon header rather than as the dog's avatar. */
+.puppy-avatar {
+    display: block;
+    flex-shrink: 0;
+    border-radius: 50%;
+    object-fit: cover;
+    background: var(--cream);
+}
+#puppyHeader {
+    width: 48px;
+    height: 48px;
+    border: 2px solid var(--white);
+}
+/* Smaller than the 56px button so the maroon shows as a ring around the dog. */
+#puppyFab { width: 48px; height: 48px; }
 #chat-window {
     display: none;
     width: 360px;
@@ -2184,6 +2203,29 @@ body.chat-docked-right { padding-right: var(--chat-dock-w, 380px); }
     border-bottom-left-radius: 3px;
 }
 .message.bot a { color: var(--maroon); }
+
+/* Every answer is signed with the dog's face, sat at the foot of the bubble so
+   a long reply still reads as coming from one speaker rather than restarting. */
+.msg-row {
+    display: flex;
+    align-items: flex-end;
+    gap: .5rem;
+    max-width: 92%;
+    align-self: flex-start;
+}
+.msg-row .message {
+    align-self: auto;
+    max-width: 100%;
+}
+.msg-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: var(--cream);
+    border: 1px solid var(--border);
+}
 
 /* Icon animations */
 @keyframes iconBounce {
@@ -3504,7 +3546,8 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
                 <button type="button" id="chatSideBtn" title="Move to right side" aria-label="Move to right side">
                     <span class="material-symbols-outlined mi-20" id="chatSideIcon">dock_to_right</span>
                 </button>
-                <span class="material-symbols-outlined">smart_toy</span>
+                <img id="puppyHeader" class="puppy-avatar" width="34" height="34"
+                     alt="PUPPY" src="<?= BASE_URL ?>/assests/images/papel_red_welcome.gif">
                 <div class="chat-identity" tabindex="0" aria-describedby="chatIdentityTip">
                     <h5 class="mb-0">PUPPY the Ai dog assistant</h5>
                     <p class="mb-0 small">Here to help with uploading</p>
@@ -3523,7 +3566,11 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
             </div>
         </div>
         <div id="chat-messages">
-            <div class="message bot">Hi! I'm PUPPY the Ai dog assistant, your upload guide. Need help with requirements like Ethics Clearance or Consent Forms? Ask me!</div>
+            <div class="msg-row">
+                <img class="msg-avatar" data-mood="welcome" alt="PUPPY"
+                     src="<?= BASE_URL ?>/assests/images/papel_red_welcome.gif">
+                <div class="message bot">Hi! I'm PUPPY the Ai dog assistant, your upload guide. Need help with requirements like Ethics Clearance or Consent Forms? Ask me!</div>
+            </div>
         </div>
         <div id="chat-input-area">
             <form id="chatForm" class="chat-input-wrapper">
@@ -3533,7 +3580,8 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
         </div>
     </div>
     <button type="button" id="chat-button" title="Ask AI Assistant">
-        <span class="material-symbols-outlined">smart_toy</span>
+        <img id="puppyFab" class="puppy-avatar" width="48" height="48"
+             alt="Ask PUPPY" src="<?= BASE_URL ?>/assests/images/papel_red_welcome.gif">
     </button>
 </div>
 
@@ -6671,6 +6719,7 @@ function toggleChat() {
     } else {
         win.style.display = 'flex';
         btn.style.display = 'none';
+        setPuppyState('welcome');
         document.getElementById('chat-input').focus();
     }
 }
@@ -6768,6 +6817,60 @@ document.getElementById('chat-input').addEventListener('keypress', function(e) {
     if (e.key === 'Enter') sendMessage();
 });
 
+/* ----- PUPPY's moods -----
+   Two models, four moods. The model select picks the colour (1 Aincrad is the
+   maroon dog, 2 Alfheim the yellow) and the conversation picks the mood, so the
+   face is rebuilt whenever either changes. All eight are preloaded: swapping
+   src on a cold cache leaves a blank frame mid-conversation, which reads as the
+   widget breaking rather than as the dog thinking. */
+const PUPPY_BASE    = <?= json_encode(BASE_URL . '/assests/images/', JSON_UNESCAPED_SLASHES) ?>;
+const PUPPY_COLOURS = { '1': 'red', '2': 'yellow' };
+const PUPPY_STATES  = ['welcome', 'processing', 'successful', 'alert'];
+
+Object.keys(PUPPY_COLOURS).forEach(function (k) {
+    PUPPY_STATES.forEach(function (st) {
+        new Image().src = PUPPY_BASE + 'papel_' + PUPPY_COLOURS[k] + '_' + st + '.gif';
+    });
+});
+
+let puppyRevertTimer = null;
+
+function puppyColour() {
+    const sel = document.getElementById('chatModelSelect');
+    return PUPPY_COLOURS[sel ? sel.value : '1'] || 'red';
+}
+
+function setPuppyState(state) {
+    if (PUPPY_STATES.indexOf(state) === -1) state = 'welcome';
+    const src = PUPPY_BASE + 'papel_' + puppyColour() + '_' + state + '.gif';
+    ['puppyHeader', 'puppyFab'].forEach(function (id) {
+        const img = document.getElementById(id);
+        if (!img) return;
+        // Re-assigning an identical src does not restart a GIF, so only write on
+        // a real change - otherwise the reaction plays once and never again.
+        if (img.getAttribute('src') !== src) img.setAttribute('src', src);
+    });
+}
+
+/* The model often answers in a few hundred milliseconds, which flashes
+   "processing" past too fast to register and makes the reply feel canned rather
+   than worked out. The answer is held until the thinking animation has had its
+   moment; an answer that was already slower than this waits no longer. */
+const PUPPY_MIN_THINK = 1500;
+
+function puppyFinishThinking(since) {
+    const left = PUPPY_MIN_THINK - (Date.now() - since);
+    return left > 0 ? new Promise(function (r) { setTimeout(r, left); }) : Promise.resolve();
+}
+
+/* The reactions are momentary: they play, then the dog settles back to waiting.
+   Without this the avatar sits on "successful" until the next message. */
+function flashPuppyState(state, ms) {
+    clearTimeout(puppyRevertTimer);
+    setPuppyState(state);
+    puppyRevertTimer = setTimeout(function () { setPuppyState('welcome'); }, ms || 2600);
+}
+
 async function sendMessage() {
     const input = document.getElementById('chat-input');
     const msg = input.value.trim();
@@ -6776,6 +6879,9 @@ async function sendMessage() {
     addMessage(msg, 'user');
     input.value = '';
 
+    clearTimeout(puppyRevertTimer);          // a reaction still counting down must not
+    setPuppyState('processing');             // overwrite the face mid-request
+    const thinkingSince = Date.now();
     try {
         const modelChoice = document.getElementById('chatModelSelect').value;
         const res = await fetch('student_chatbot.php', {
@@ -6784,14 +6890,33 @@ async function sendMessage() {
             body: JSON.stringify({message: msg, model_choice: modelChoice})
         });
         const data = await res.json();
-        addMessage(data.reply || 'Error processing request', 'bot');
+        await puppyFinishThinking(thinkingSince);
+        // A 200 carrying no reply is still a failure to the student, so the dog
+        // reacts to what actually came back rather than to the status code.
+        if (data && data.reply) {
+            addMessage(data.reply, 'bot');
+            flashPuppyState('successful', 3200);
+        } else {
+            addMessage('Error processing request', 'bot', 'alert');
+            flashPuppyState('alert', 4000);
+        }
     } catch (e) {
         console.error('Chatbot Error:', e);
-        addMessage('Connection error', 'bot');
+        await puppyFinishThinking(thinkingSince);
+        addMessage('Connection error', 'bot', 'alert');
+        flashPuppyState('alert', 4000);
     }
 }
 
-function addMessage(text, sender) {
+/* Switching model mid-conversation would otherwise leave the transcript in the
+   colour each line was written in, which reads as two different dogs answering. */
+function repaintMessageAvatars() {
+    document.querySelectorAll('.msg-avatar').forEach(function (img) {
+        img.src = PUPPY_BASE + 'papel_' + puppyColour() + '_' + (img.dataset.mood || 'welcome') + '.gif';
+    });
+}
+
+function addMessage(text, sender, mood) {
     const div = document.createElement('div');
     div.className = `message ${sender}`;
     div.id = 'msg-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
@@ -6823,7 +6948,23 @@ function addMessage(text, sender) {
     
     div.innerHTML = safeText;
     const container = document.getElementById('chat-messages');
-    container.appendChild(div);
+    if (sender === 'bot') {
+        /* The face is the dog's resting one on a normal answer and the worried
+           one on a failure, so scrolling back shows which replies went wrong
+           without having to re-read them. */
+        const row = document.createElement('div');
+        row.className = 'msg-row';
+        const face = document.createElement('img');
+        face.className = 'msg-avatar';
+        face.alt = 'PUPPY';
+        face.dataset.mood = mood || 'welcome';
+        face.src = PUPPY_BASE + 'papel_' + puppyColour() + '_' + face.dataset.mood + '.gif';
+        row.appendChild(face);
+        row.appendChild(div);
+        container.appendChild(row);
+    } else {
+        container.appendChild(div);
+    }
     container.scrollTop = container.scrollHeight;
     return div.id;
 }
@@ -7114,6 +7255,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     document.getElementById('chat-button').addEventListener('click', toggleChat);
+
+    // Colour follows the model, so the pick is visible on the dog itself.
+    const puppyModelSel = document.getElementById('chatModelSelect');
+    if (puppyModelSel) puppyModelSel.addEventListener('change', function () {
+        setPuppyState('welcome');
+        repaintMessageAvatars();
+    });
 
     // Chat form submit
     document.getElementById('chatForm').addEventListener('submit', function(e) {
