@@ -35,6 +35,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
      csrf_verify() so the message lands in $error with the others. */
   if (!csrf_valid()) {
     $error = 'That form had been open too long. Please try again.';
+  } elseif (!recaptcha_verify($_POST['g-recaptcha-response'] ?? null)) {
+    // Before the credentials are touched, and counted as a failure so a bot
+    // that ignores the widget still runs into the lockout.
+    if ($username !== '') login_throttle_record_failure($username);
+    $error = recaptcha_error_message();
   } elseif ($locked !== null) {
     // Counted across both sign-in surfaces, so this one cannot be used to
     // sidestep a lock earned on the other.
@@ -944,10 +949,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               </div>
             </div>
 
-            <button type="submit" class="btn btn-sign-in" id="signInBtn">
+            <?= recaptcha_field() ?>
+
+            <button type="submit" class="btn btn-sign-in" id="signInBtn" data-recaptcha-gate>
               <span>ENTER ARCHIVE</span>
             </button>
           </form>
+          <?= recaptcha_scripts() ?>
 
           <div class="divider">
             <span>OR</span>

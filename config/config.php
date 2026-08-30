@@ -55,6 +55,12 @@ date_default_timezone_set('Asia/Manila');
 
 define('APP_NAME', 'PAPEL');
 define('BASE_URL', $_ENV['BASE_URL'] ?? 'http://localhost/capstone');
+
+/* The sign-in robot check. Blank until a site is registered at
+   google.com/recaptcha/admin; see includes/recaptcha.php for why blank has to
+   mean "switched off" rather than "blocked". */
+define('RECAPTCHA_SITE_KEY',   $_ENV['RECAPTCHA_SITE_KEY']   ?? '');
+define('RECAPTCHA_SECRET_KEY', $_ENV['RECAPTCHA_SECRET_KEY'] ?? '');
 define('ROOT_PATH', dirname(__DIR__));
 
 // MySQL

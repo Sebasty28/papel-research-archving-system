@@ -26,6 +26,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
          a date of birth is not a secret, so it was never adding much. */
       if ($id === '' || $pw === '') { flash('login_error','Enter your ID and password.'); header('Location: '.$error_redirect); exit; }
 
+      /* Checked before the password is looked at, so a bot cannot use this
+         endpoint to test credentials at all. Inert until keys are configured. */
+      if (!recaptcha_verify($_POST['g-recaptcha-response'] ?? null)) {
+          login_throttle_record_failure($id);
+          flash('login_error', recaptcha_error_message());
+          header('Location: '.$error_redirect); exit;
+      }
+
       /* Guessing is cheap without this: the IDs follow a pattern, so the only
          thing standing between an attacker and an account was the password
          rule, which allows six characters. */

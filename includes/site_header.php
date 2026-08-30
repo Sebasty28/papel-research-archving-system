@@ -327,8 +327,11 @@ if ($u) {
                 <a class="lf-forgot" href="<?= e(BASE_URL) ?>/pages/help_center.php#forgot-password">Forgot password?</a>
             </div>
 
-            <button type="submit" class="btn-panel-login">Sign In</button>
+            <?= recaptcha_field() ?>
+
+            <button type="submit" class="btn-panel-login" data-recaptcha-gate>Sign In</button>
         </form>
+        <?= recaptcha_scripts() ?>
 
         <p class="panel-footer-text">
             By continuing you agree to our

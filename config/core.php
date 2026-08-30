@@ -4,18 +4,27 @@ require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/error_handler.php';
 require_once __DIR__ . '/workflow.php';
 require_once __DIR__ . '/../app/helpers/UploadHelper.php';
+require_once __DIR__ . '/../includes/recaptcha.php';
 
 function csp_nonce(): string {
     static $nonce = null;
     if ($nonce === null) {
         $nonce = base64_encode(random_bytes(16));
+        /* reCAPTCHA is fetched from google.com and framed from google.com, so
+           those origins are opened only while the feature actually has keys —
+           an unused allowance is still an allowance. */
+        $rc      = (defined('RECAPTCHA_SITE_KEY') && RECAPTCHA_SITE_KEY !== ''
+                 && defined('RECAPTCHA_SECRET_KEY') && RECAPTCHA_SECRET_KEY !== '');
+        $rcScript = $rc ? ' https://www.google.com https://www.gstatic.com' : '';
+        $rcFrame  = $rc ? ' https://www.google.com' : '';
+
         $csp = "default-src 'self'; " .
-               "script-src 'self' 'nonce-{$nonce}' https://cdn.jsdelivr.net https://unpkg.com; " .
+               "script-src 'self' 'nonce-{$nonce}' https://cdn.jsdelivr.net https://unpkg.com{$rcScript}; " .
                "style-src 'self' 'nonce-{$nonce}' https://cdn.jsdelivr.net https://fonts.googleapis.com; " .
                "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; " .
                "img-src 'self' data: blob: https://lh3.googleusercontent.com; " .
                "connect-src 'self' https://api.groq.com https://www.googleapis.com; " .
-               "frame-src 'self' https://drive.google.com; " .
+               "frame-src 'self' https://drive.google.com{$rcFrame}; " .
                "frame-ancestors 'self'; " .
                "form-action 'self'; " .
                "base-uri 'self'; " .
