@@ -61,17 +61,11 @@
 
 <div class="tw-card" id="themeWelcome" role="dialog" aria-labelledby="twTitle" aria-modal="false">
     <h2 id="twTitle">Make it yours</h2>
-    <p>Pick a colour and a theme. You can change these any time from Quick&nbsp;Settings.</p>
+    <p>Pick a theme colour. Two of them are dark. You can change it any time
+       from Quick&nbsp;Settings.</p>
 
-    <span class="tw-label">Colour</span>
+    <span class="tw-label">Theme Colour</span>
     <div class="tw-swatches" id="twSwatches"></div>
-
-    <span class="tw-label">Theme</span>
-    <div class="tw-modes">
-        <button type="button" class="tw-mode" data-mode="light">Light</button>
-        <button type="button" class="tw-mode" data-mode="dark">Dark</button>
-        <button type="button" class="tw-mode" data-mode="system">System</button>
-    </div>
 
     <div class="tw-foot">
         <button type="button" class="btn-sm-outline" id="twSkip">Keep defaults</button>
@@ -89,17 +83,19 @@ document.addEventListener('DOMContentLoaded', function () {
     var set = function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} };
 
     // Asked once. Anyone who has already chosen is not a first-timer either.
-    if (get(KEY, '') || get('papel_color', '') || get('papel_theme', '')) return;
+    if (get(KEY, '') || get('papel_color', '')) return;
 
     var COLOURS = [
-        ['maroon', '#820707', 'PUP Maroon'],
-        ['green', '#14532D', 'Dark Green'],
-        ['blue', '#14487F', 'Dark Blue'],
-        ['white', '#3B3B3B', 'PUP White Modern'],
-        ['classic', '#6B0F0F', 'PUP Old Classic']
+        ['maroon', '#820707', 'Maroon'],
+        ['classic', '#6B0F0F', 'Old Classic'],
+        ['quiet-light', '#705697', 'Quiet Light'],
+        ['modern-light', '#005FB8', 'Modern Light'],
+        ['modern-dark', '#0078D4', 'Modern Dark'],
+        ['quiet-dark', '#C4B0E4', 'Quiet Dark']
     ];
+    var DARK_COLOURS = { 'modern-dark': 1, 'quiet-dark': 1 };
+    function modeFor(c) { return DARK_COLOURS[c] ? 'dark' : 'light'; }
     var chosenColour = 'maroon';
-    var chosenTheme  = 'light';
 
     var host = document.getElementById('twSwatches');
     COLOURS.forEach(function (c) {
@@ -114,28 +110,12 @@ document.addEventListener('DOMContentLoaded', function () {
             chosenColour = c[0];
             host.querySelectorAll('.tw-swatch').forEach(function (s) { s.classList.remove('is-on'); });
             b.classList.add('is-on');
-            // Show it straight away — choosing blind is not much of a choice.
+            /* Show it straight away — choosing blind is not much of a
+               choice — and that includes going dark, since two of these are. */
             document.documentElement.setAttribute('data-color', chosenColour);
+            document.documentElement.setAttribute('data-mode', modeFor(chosenColour));
         });
         host.appendChild(b);
-    });
-
-    function resolveMode(t) {
-        if (t === 'dark' || t === 'light') return t;
-        return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
-            ? 'dark' : 'light';
-    }
-
-    var modes = card.querySelectorAll('.tw-mode');
-    modes.forEach(function (m) {
-        if (m.dataset.mode === chosenTheme) m.classList.add('is-on');
-        m.addEventListener('click', function () {
-            chosenTheme = m.dataset.mode;
-            modes.forEach(function (x) { x.classList.remove('is-on'); });
-            m.classList.add('is-on');
-            document.documentElement.setAttribute('data-theme', chosenTheme);
-            document.documentElement.setAttribute('data-mode', resolveMode(chosenTheme));
-        });
     });
 
     function close() {
@@ -145,7 +125,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.getElementById('twSave').addEventListener('click', function () {
         set('papel_color', chosenColour);
-        set('papel_theme', chosenTheme);
         if (window.papelSyncQuickSettings) window.papelSyncQuickSettings();
         close();
     });
@@ -154,7 +133,6 @@ document.addEventListener('DOMContentLoaded', function () {
        so the page ends up as maroon and light, which is what was offered. */
     document.getElementById('twSkip').addEventListener('click', function () {
         document.documentElement.setAttribute('data-color', 'maroon');
-        document.documentElement.setAttribute('data-theme', 'light');
         document.documentElement.setAttribute('data-mode', 'light');
         close();
     });

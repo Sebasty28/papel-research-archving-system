@@ -9,12 +9,21 @@
  * every page, including ones written long before this existed, follows along
  * without being touched.
  *
- * Two attributes on <html> carry it:
- *   data-color  maroon | green | blue | white | classic
- *   data-mode   light | dark        (resolved; "system" is worked out in JS)
+ * There is one choice, not two. A separate light/dark switch sat beside the
+ * palette and the two could disagree — "Dark Green" in dark mode was a third
+ * thing nobody had designed. Now the palette says whether it is light or dark,
+ * and Modern Dark and Quiet Dark are simply palettes that happen to be dark.
  *
- * The script below runs before anything is painted, so a reader who chose dark
- * never sees a white page flash first.
+ * Two attributes on <html> carry it:
+ *   data-color  maroon | classic | quiet-light | modern-light
+ *               | modern-dark | quiet-dark
+ *   data-mode   light | dark        (derived from the palette, never chosen)
+ *
+ * data-mode is kept because every dark rule on the site keys off it. It is now
+ * a consequence of the palette rather than a setting of its own.
+ *
+ * The script below runs before anything is painted, so a reader who chose a
+ * dark palette never sees a white page flash first.
  *
  * Include inside <head>, immediately after the base tokens.
  */
@@ -25,21 +34,35 @@
     var el = document.documentElement;
     var get = function (k, d) { try { return localStorage.getItem(k) || d; } catch (e) { return d; } };
 
+    /* The palettes that are dark. Named here and in browse_console_js.php,
+       which is the only other place that has to know before the CSS does. */
+    var DARK = { 'modern-dark': 1, 'quiet-dark': 1 };
+
     var colour = get('papel_color', 'maroon');
-    /* Renamed when the palette became dark green. Without this, a reader who
-       had chosen it would silently land back on maroon. */
-    if (colour === 'lightblue') {
-        colour = 'green';
-        try { localStorage.setItem('papel_color', 'green'); } catch (e) {}
+    /* Palettes that no longer exist. Anyone still carrying one is moved to
+       maroon rather than left on an attribute no stylesheet answers to, which
+       would strand them on the bare :root defaults.
+         lightblue -> green   was an earlier rename;
+         green, blue, white   were withdrawn when the list was reworked. */
+    if (colour === 'lightblue' || colour === 'green' || colour === 'blue' ||
+        colour === 'white') {
+        colour = 'maroon';
+        try { localStorage.setItem('papel_color', colour); } catch (e) {}
     }
-    var theme  = get('papel_theme', 'light');    // PAPEL is a light site by default
-    var dark   = theme === 'dark' ||
-                 (theme === 'system' && window.matchMedia &&
-                  window.matchMedia('(prefers-color-scheme: dark)').matches);
+    /* The old light/dark preference is gone. Someone who had chosen dark keeps
+       a dark site by being moved to the palette that is its closest match,
+       rather than being silently returned to a white one. */
+    var oldTheme = get('papel_theme', '');
+    if (oldTheme) {
+        if (oldTheme === 'dark' && !DARK[colour]) {
+            colour = 'modern-dark';
+            try { localStorage.setItem('papel_color', colour); } catch (e) {}
+        }
+        try { localStorage.removeItem('papel_theme'); } catch (e) {}
+    }
 
     el.setAttribute('data-color', colour);
-    el.setAttribute('data-theme', theme);
-    el.setAttribute('data-mode', dark ? 'dark' : 'light');
+    el.setAttribute('data-mode', DARK[colour] ? 'dark' : 'light');
 })();
 </script>
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
@@ -65,37 +88,6 @@ html[data-color="maroon"] {
     --ink-base:     #330000;
     --border-base:  #E6D4D4;
 }
-/* Dark green. Chosen against the same bar the rest of the palette meets:
-   9.11:1 as text on white, and 9.11:1 for white text on it, so it works as
-   both a heading colour and a button fill. --accent-light is the lift for
-   dark mode, at 9.15:1 on the dark surface. */
-html[data-color="green"] {
-    --accent:       #14532D;
-    --accent-dark:  #0E3D21;
-    --accent-soft:  #8FB79E;
-    --accent-tint:  #F2FAF5;
-    --accent-light: #7FC79A;
-    --ink-base:     #0B2E1A;
-    --border-base:  #D6E7DC;
-}
-html[data-color="blue"] {
-    --accent:       #14487F;
-    --accent-dark:  #0D3159;
-    --accent-soft:  #93AFCD;
-    --accent-tint:  #F3F7FC;
-    --accent-light: #7FAEE0;
-    --ink-base:     #0B2540;
-    --border-base:  #D6E1EF;
-}
-html[data-color="white"] {
-    --accent:       #3B3B3B;
-    --accent-dark:  #1C1C1C;
-    --accent-soft:  #C4C4C4;
-    --accent-tint:  #F6F6F6;
-    --accent-light: #D8D8D8;
-    --ink-base:     #1A1A1A;
-    --border-base:  #E2E2E2;
-}
 html[data-color="classic"] {
     --accent:       #6B0F0F;
     --accent-dark:  #4A0A0A;
@@ -104,6 +96,70 @@ html[data-color="classic"] {
     --accent-light: #D8B472;
     --ink-base:     #2B1B0E;
     --border-base:  #E6D9BF;
+}
+
+/* ---------------------------------------------------------------
+   The four editor palettes, after VS Code's own.
+
+   They borrow the hue and the surface colours, not the syntax colours: an
+   editor tints twenty kinds of token, and a repository has one accent. Where
+   VS Code's own accent falls short of the contrast the rest of this site is
+   held to, the accent is darkened for text and the recognisable colour is
+   kept for the swatch — the dot in the picker is what makes it recognisable,
+   and the text is what has to be readable.
+   --------------------------------------------------------------- */
+
+/* Quiet Light. The muted purple on near-white that gives the theme its name;
+   #705697 in the editor is 5.8:1 on white, so text takes a deeper shade. */
+html[data-color="quiet-light"] {
+    --accent:       #574281;
+    --accent-dark:  #3E2E5D;
+    --accent-soft:  #B0A2C6;
+    --accent-tint:  #F7F5FB;
+    --accent-light: #C3B0E2;
+    --ink-base:     #2A2338;
+    --border-base:  #E2DCEC;
+}
+
+/* Light Modern. VS Code's current default light theme: the blue on white,
+   with its very pale grey panels. */
+html[data-color="modern-light"] {
+    --accent:       #00519E;
+    --accent-dark:  #003E78;
+    --accent-soft:  #9FB9D4;
+    --accent-tint:  #F3F7FB;
+    --accent-light: #6CB6FF;
+    --ink-base:     #14293F;
+    --border-base:  #DCE4EC;
+}
+
+/* Dark Modern. The accent is the lifted blue, because on a dark palette the
+   accent is read as text far more often than it is used as a fill. */
+html[data-color="modern-dark"] {
+    --accent:       #0078D4;
+    --accent-dark:  #005A9E;
+    --accent-soft:  #3A4655;
+    --accent-tint:  rgba(0, 120, 212, .12);
+    --accent-light: #6CB6FF;
+    --ink-base:     #CCCCCC;
+    --border-base:  #2B2B2B;
+}
+
+/* Quiet Dark. VS Code ships Quiet Light but no dark twin, so this is the
+   counterpart rather than a copy: the same muted purple, on the soft neutral
+   dark that theme's palette implies. */
+html[data-color="quiet-dark"] {
+    /* --accent fills buttons and the breadcrumb bar with white text on it, so
+       it is the deeper purple: the lavender the palette is known by sits at
+       3.82:1 under white, which fails. That lavender is --accent-light, where
+       it is read as text and clears 7:1. */
+    --accent:       #63508C;
+    --accent-dark:  #4E3F6E;
+    --accent-soft:  #4A4557;
+    --accent-tint:  rgba(196, 176, 228, .12);
+    --accent-light: #C4B0E4;
+    --ink-base:     #C9C7CF;
+    --border-base:  #34373D;
 }
 
 /* ---------------------------------------------------------------
@@ -228,6 +284,42 @@ html[data-mode="dark"] {
     color-scheme: dark;                    /* native controls follow */
 }
 html[data-mode="dark"] body { background: #14171E; }
+
+/* ---------------------------------------------------------------
+   3b. The dark palettes bring their own surfaces.
+
+   The block above is one dark scheme, written when dark was a switch that sat
+   on top of whichever colour was chosen. Now that a dark palette is a palette,
+   each carries the surfaces it is named after, so Modern Dark is VS Code's
+   neutral #1F1F1F and Quiet Dark is the softer one its lighter twin implies.
+   Only the surface tokens are restated; everything else still comes from the
+   block above.
+   --------------------------------------------------------------- */
+html[data-mode="dark"][data-color="modern-dark"] {
+    --white:        #1F1F1F;      /* VS Code's editor background          */
+    --cream:        rgba(255, 255, 255, .05);
+    --ink:          #E4E4E4;      /* 13.6:1 on the surface                */
+    --grey:         #B0B0B0;      /*  7.6:1, so AAA for secondary text    */
+    --border:       #2B2B2B;
+    --border-soft:  rgba(255, 255, 255, .11);
+    --header-frost:        rgba(24, 24, 24, .74);
+    --header-frost-solid:  rgba(24, 24, 24, .97);
+    --header-frost-edge:   rgba(255, 255, 255, .12);
+}
+html[data-mode="dark"][data-color="modern-dark"] body { background: #181818; }
+
+html[data-mode="dark"][data-color="quiet-dark"] {
+    --white:        #24262B;      /* softer and slightly warmer than above */
+    --cream:        rgba(255, 255, 255, .05);
+    --ink:          #E3E1E8;
+    --grey:         #B6B2C2;      /* 7.31:1, so secondary text clears AAA */
+    --border:       #34373D;
+    --border-soft:  rgba(255, 255, 255, .11);
+    --header-frost:        rgba(29, 31, 35, .74);
+    --header-frost-solid:  rgba(29, 31, 35, .97);
+    --header-frost-edge:   rgba(255, 255, 255, .12);
+}
+html[data-mode="dark"][data-color="quiet-dark"] body { background: #1D1F23; }
 
 /* A few places paint a literal white that would glare on a dark page. */
 html[data-mode="dark"] .doc-surface,

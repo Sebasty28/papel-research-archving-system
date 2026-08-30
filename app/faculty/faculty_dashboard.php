@@ -39,7 +39,9 @@ $student_count = $student_stmt->get_result()->fetch_assoc()['c'] ?? 0;
 body { font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif; background: var(--ivory); min-height: 100vh; display: flex; flex-direction: column; }
 
 .page-hero {
-  background: linear-gradient(135deg, var(--maroon) 0%, #5a0302 100%);
+  /* The hero carries white text across it, so both stops come from the
+     surface pair rather than the lifting accent. */
+  background: linear-gradient(135deg, var(--maroon-surface) 0%, var(--maroon-surface-hover) 100%);
   padding: 2.5rem 0 3.5rem;
   position: relative;
   overflow: hidden;
@@ -88,10 +90,10 @@ body { font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif; background: var(--i
   transition: transform .2s, box-shadow .2s;
 }
 .action-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.1); color: inherit; }
-.action-icon { width: 48px; height: 48px; border-radius: var(--r-control, 4px); display: flex; align-items: center; justify-content: center; font-size: 1.4rem; margin-bottom: 1rem; background: linear-gradient(135deg, var(--maroon), #5a0302); color: #fff; }
+.action-icon { width: 48px; height: 48px; border-radius: var(--r-control, 4px); display: flex; align-items: center; justify-content: center; font-size: 1.4rem; margin-bottom: 1rem; background: linear-gradient(135deg, var(--maroon-surface), var(--maroon-surface-hover)); color: #fff; }
 .action-title { font-weight: 600; font-size: 1rem; margin-bottom: 0.25rem; }
 .action-desc { color: #6b7280; font-size: 0.82rem; }
-.badge-pill { background: var(--maroon); color: #fff; border-radius: var(--r-badge, 2px); padding: 0.2rem 0.55rem; font-size: 0.72rem; font-weight: 600; }
+.badge-pill { background: var(--maroon-surface); color: #fff; border-radius: var(--r-badge, 2px); padding: 0.2rem 0.55rem; font-size: 0.72rem; font-weight: 600; }
 
 .notif-card { background: #fff; border-radius: var(--r-card, 8px); box-shadow: 0 4px 12px rgba(0,0,0,0.07); border: 1px solid #e8e6e3; border-top: 4px solid transparent; border-image: linear-gradient(90deg, #810403, #dca92c) 1; overflow: hidden; }
 .notif-header { padding: 1rem 1.25rem; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; justify-content: space-between; }

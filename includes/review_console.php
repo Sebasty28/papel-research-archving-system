@@ -450,12 +450,6 @@ ob_start();
                                 <label class="qs-radio"><input type="radio" name="qs_density" value="comfortable"> Comfortable</label>
                                 <label class="qs-radio"><input type="radio" name="qs_density" value="compact"> Compact</label>
                             </div>
-                            <div class="qs-section">
-                                <span class="qs-section-label">Theme</span>
-                                <label class="qs-radio"><input type="radio" name="qs_theme" value="system"> System</label>
-                                <label class="qs-radio"><input type="radio" name="qs_theme" value="light"> Light</label>
-                                <label class="qs-radio"><input type="radio" name="qs_theme" value="dark"> Dark</label>
-                            </div>
                         </div>
                     </div>
                 </div>

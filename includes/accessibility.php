@@ -35,7 +35,11 @@ body {
     padding: .75rem .5rem;
     border: none;
     border-radius: var(--r-control, 4px) 0 0 var(--r-control, 4px);
-    background: var(--maroon, #820707);
+    /* --maroon-surface, not --maroon. The plain token lifts on a dark
+       palette so it stays legible as text; a tab filled with it becomes a
+       bright band down the side of the page. The surface pair does not
+       lift - it is what the footer uses. */
+    background: var(--maroon-surface-hover, #630000);
     color: #fff;
     font-family: var(--font-body), 'Inter', sans-serif;
     font-size: .625rem;
@@ -46,7 +50,7 @@ body {
     position: relative;
     z-index: 1;
 }
-#a11y-toggle:hover { background: var(--dark-maroon, #630000); padding-right: .75rem; }
+#a11y-toggle:hover { background: var(--maroon-surface, #820707); padding-right: .75rem; }
 #a11y-toggle:focus-visible { outline: 2px solid #fff; outline-offset: -4px; }
 #a11y-toggle .a11y-tab-label { writing-mode: vertical-rl; text-orientation: mixed; }
 /* Whichever edge it is parked on, the curve faces into the page and the
@@ -86,7 +90,7 @@ body {
 #a11y-widget.anchor-left #a11y-menu  { left: 0; right: auto; }
 #a11y-widget.anchor-top  #a11y-menu  { top: calc(100% + 12px); bottom: auto; }
 /* Open state darkens the same accent rather than switching to another colour. */
-#a11y-toggle.panel-open { background: var(--dark-maroon, #630000); }
+#a11y-toggle.panel-open { background: var(--maroon-surface, #820707); }
 
 /* ===== Panel ===== */
 #a11y-menu {
@@ -500,11 +504,17 @@ body.a11y-big-cursor * { cursor: url("data:image/svg+xml;utf8,<svg xmlns='http:/
             widget.classList.remove('edge-left', 'edge-right', 'edge-top', 'edge-bottom');
             widget.classList.add('edge-' + edge);
 
-            // The class changes the tab's shape, so measure after applying it.
-            var s = widgetSize();
+            /* Measure last, not first. The class changes the tab's shape — down
+               one edge it is a narrow vertical strip, along the top or bottom a
+               wider horizontal one — and the offsets left over from wherever it
+               was before change it again. Measured before those are cleared,
+               the width came back short and the clamp below let the tab hang a
+               few pixels past the edge, which is how a saved position could
+               reopen looking cut off. */
             var style = widget.style;
             style.left = style.right = style.top = style.bottom = 'auto';
             style.transform = 'none';
+            var s = widgetSize();
 
             if (edge === 'left' || edge === 'right') {
                 offset = Math.min(Math.max(offset, 0), Math.max(0, window.innerHeight - s.h));
@@ -534,6 +544,10 @@ body.a11y-big-cursor * { cursor: url("data:image/svg+xml;utf8,<svg xmlns='http:/
             return best;
         }
 
+        /* Wherever it was last dragged to, on every page and on every visit.
+           The position lives in localStorage rather than the session, so it
+           survives closing the browser as well as moving between pages — the
+           tab someone put out of their way stays out of their way. */
         function restorePosition() {
             var saved = null;
             try { saved = JSON.parse(localStorage.getItem(DRAG_KEY) || 'null'); } catch (err) {}
@@ -616,9 +630,11 @@ body.a11y-big-cursor * { cursor: url("data:image/svg+xml;utf8,<svg xmlns='http:/
                 }
             }, true);
 
-            /* Keep it on the edge, and on screen, when the window is resized. */
-            window.addEventListener('resize', function () {
-                if (menu.classList.contains('visible')) positionPanel();
+            /* Put it back on its edge at the size it actually is. Passed
+               save:false, so a position squeezed to fit a small window is not
+               written back over the one the person chose — open the same page
+               on a big screen again and the tab returns to where they put it. */
+            function reclamp() {
                 var edge = ['left', 'right', 'top', 'bottom'].filter(function (e) {
                     return widget.classList.contains('edge-' + e);
                 })[0];
@@ -626,7 +642,22 @@ body.a11y-big-cursor * { cursor: url("data:image/svg+xml;utf8,<svg xmlns='http:/
                 var along = (edge === 'left' || edge === 'right')
                     ? parseFloat(widget.style.top) : parseFloat(widget.style.left);
                 placeWidget(edge, along || 0, false);
+            }
+
+            /* Keep it on the edge, and on screen, when the window is resized. */
+            window.addEventListener('resize', function () {
+                if (menu.classList.contains('visible')) positionPanel();
+                reclamp();
             });
+
+            /* And once the icon font has arrived. Until the glyph exists the
+               tab is measured with fallback metrics and comes out narrower
+               than it ends up, so a position clamped against that measurement
+               let it hang past the edge — which is how a saved position could
+               reopen looking cut off. */
+            if (document.fonts && document.fonts.ready) {
+                document.fonts.ready.then(reclamp).catch(function () {});
+            }
 
             toggle.title = 'Accessibility options — drag it to any edge';
             restorePosition();

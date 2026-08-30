@@ -358,24 +358,29 @@ html[data-mode="dark"] { --search-clear: #C3CAD4; }
 .sidebar-right {
     background: var(--cream);
     border-radius: var(--r-card, 8px);
-    padding: .75rem;
+    padding: .625rem;
 }
+/* No border. A white card on the tinted panel is already separated from it,
+   so the outline was a second frame around the same edge - which is most of
+   what made this column read as bulky. A hairline shadow does the lifting. */
 .sidebar-card {
     background: var(--white);
-    border: 1px solid rgba(177,125,125,.22);
     border-radius: var(--r-card, 8px);
-    margin-bottom: .75rem;
+    margin-bottom: .5rem;
     overflow: hidden;
+    box-shadow: 0 1px 2px rgba(51, 0, 0, .06);
 }
 .sidebar-card:last-child { margin-bottom: 0; }
 .sidebar-card-header {
     background: var(--white);
     color: var(--maroon);
-    padding: .5rem .75rem;
+    padding: .375rem .625rem;
     font-family: var(--font-head);
     font-size: .75rem;
-    font-weight: 500;
-    border-bottom: 1px solid var(--maroon);
+    font-weight: 600;
+    /* A hairline in the accent, not a full-weight rule: three of these stacked
+       down a narrow column was the loudest thing in it. */
+    border-bottom: 1px solid var(--soft-maroon);
 }
 .sidebar-card-body { padding: .125rem 0; }
 /* Collapsible card headers (member view) */
@@ -384,17 +389,17 @@ html[data-mode="dark"] { --search-clear: #C3CAD4; }
     align-items: center;
     justify-content: space-between;
     gap: .5rem;
-    padding: 0 .75rem 0 0;
+    padding: 0 .625rem 0 0;
 }
 .card-title-btn {
     flex: 1;
     background: none;
     border: none;
-    padding: .5rem .75rem;
+    padding: .375rem .625rem;
     text-align: left;
     font-family: var(--font-head);
     font-size: .75rem;
-    font-weight: 500;
+    font-weight: 600;
     color: var(--maroon);
     cursor: pointer;
 }
@@ -421,7 +426,7 @@ html[data-mode="dark"] { --search-clear: #C3CAD4; }
     display: block;
     width: 100%;
     text-align: left;
-    padding: .5rem .75rem;
+    padding: .375rem .625rem;
     font-size: .75rem;
     color: var(--ink);
     text-decoration: none;
@@ -435,20 +440,20 @@ html[data-mode="dark"] { --search-clear: #C3CAD4; }
 .sidebar-link.active { color: var(--maroon); font-weight: 700; }
 
 /* Filter groups flow continuously — no rules between them */
-.filter-section { padding: .5rem .75rem .25rem; }
-.filter-section:last-child { padding-bottom: .875rem; }
+.filter-section { padding: .5rem .625rem .125rem; }
+.filter-section:last-child { padding-bottom: .625rem; }
 .filter-section-label {
     display: block;
     font-size: .75rem;
-    font-weight: 500;
+    font-weight: 600;
     color: var(--maroon);
-    margin-bottom: .4rem;
+    margin-bottom: .3rem;
 }
 .filter-radio {
     display: flex;
     align-items: center;
     gap: .5rem;
-    margin-bottom: .35rem;
+    margin-bottom: .2rem;
     padding-left: .5rem;
     font-size: .75rem;
     color: var(--ink);
@@ -495,6 +500,21 @@ html[data-mode="dark"] { --search-clear: #C3CAD4; }
     background-position: right .75rem center;
 }
 .filter-select:focus { outline: none; border-color: var(--maroon); }
+
+/* The two dropdowns are the tallest thing in this column, and not because of
+   the rule above: select_skin.php hides the real <select> and draws its own
+   control, so .filter-select's padding never applies. At 38px each they set
+   the height of the whole Filter card. Scoped to this sidebar, so the same
+   control keeps its comfortable size on the analytics and management pages
+   where there is room for it. */
+.sidebar-right .sel-btn {
+    padding: .3rem .55rem;
+    font-size: .75rem;
+}
+.sidebar-right .sel-opt {
+    padding: .3rem .55rem;
+    font-size: .75rem;
+}
 /* Date group: year / month / day stacked, indented past the radio column */
 .date-stack {
     display: flex;

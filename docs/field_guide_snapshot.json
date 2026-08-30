@@ -1,0 +1,461 @@
+{
+ "built": "2026-08-30 14:39",
+ "files": {
+  "ai/ai_extract.php": {
+   "lines": 77
+  },
+  "ai/groq_config.php": {
+   "lines": 306
+  },
+  "ai/help_chatbot.php": {
+   "lines": 142
+  },
+  "ai/prompt_guard.php": {
+   "lines": 188
+  },
+  "ai/rate_limiter.php": {
+   "lines": 133
+  },
+  "analytics/analytics_dashboard.php": {
+   "lines": 1397
+  },
+  "analytics/dashboard.php": {
+   "lines": 19
+  },
+  "analytics/paper_analysis.php": {
+   "lines": 239
+  },
+  "app/admin/admin_manage_faculty.php": {
+   "lines": 531
+  },
+  "app/admin/admin_review_dashboard.php": {
+   "lines": 144
+  },
+  "app/admin/gdrive_settings.php": {
+   "lines": 326
+  },
+  "app/admin/super_admin_manage_admins.php": {
+   "lines": 508
+  },
+  "app/admin/super_admin_review_dashboard.php": {
+   "lines": 135
+  },
+  "app/auth/login.php": {
+   "lines": 1223
+  },
+  "app/auth/logout.php": {
+   "lines": 36
+  },
+  "app/faculty/faculty_dashboard.php": {
+   "lines": 214
+  },
+  "app/faculty/faculty_manage_students.php": {
+   "lines": 1130
+  },
+  "app/faculty/faculty_review_dashboard.php": {
+   "lines": 188
+  },
+  "app/faculty/head_review_dashboard.php": {
+   "lines": 91
+  },
+  "app/helpers/UploadHelper.php": {
+   "lines": 68
+  },
+  "app/librarian/librarian_manage_guests.php": {
+   "lines": 441
+  },
+  "app/models/AdminManagementService.php": {
+   "lines": 183
+  },
+  "app/models/AnalyticsService.php": {
+   "lines": 28
+  },
+  "app/models/ArchiveRepository.php": {
+   "lines": 140
+  },
+  "app/models/ArchiveService.php": {
+   "lines": 56
+  },
+  "app/models/FacultyManagementService.php": {
+   "lines": 146
+  },
+  "app/models/PaperRepository.php": {
+   "lines": 130
+  },
+  "app/models/PaperService.php": {
+   "lines": 71
+  },
+  "app/models/UserRepository.php": {
+   "lines": 144
+  },
+  "app/review_paper.php": {
+   "lines": 620
+  },
+  "app/student/paper_details.php": {
+   "lines": 510
+  },
+  "app/student/pdf_viewer.php": {
+   "lines": 204
+  },
+  "app/student/student_cancel_submission.php": {
+   "lines": 101
+  },
+  "app/student/student_chatbot.php": {
+   "lines": 151
+  },
+  "app/student/student_dashboard.php": {
+   "lines": 765
+  },
+  "app/student/student_draft_delete.php": {
+   "lines": 116
+  },
+  "app/student/student_submit.php": {
+   "lines": 26
+  },
+  "app/student/student_upload.php": {
+   "lines": 433
+  },
+  "app/student/student_upload_ai.php": {
+   "lines": 7518
+  },
+  "app/support_requests.php": {
+   "lines": 286
+  },
+  "archive/archive_handler.php": {
+   "lines": 15
+  },
+  "archive/guest_access.php": {
+   "lines": 38
+  },
+  "archive/home.php": {
+   "lines": 953
+  },
+  "archive/index.php": {
+   "lines": 895
+  },
+  "archive/login.php": {
+   "lines": 1054
+  },
+  "archive/view_paper.php": {
+   "lines": 424
+  },
+  "config/config.php": {
+   "lines": 115
+  },
+  "config/core.php": {
+   "lines": 1990
+  },
+  "config/error_handler.php": {
+   "lines": 169
+  },
+  "config/gdrive_config.php": {
+   "lines": 539
+  },
+  "config/groq_config.php": {
+   "lines": 522
+  },
+  "config/mail_config.php": {
+   "lines": 1
+  },
+  "config/sri_hashes.php": {
+   "lines": 19
+  },
+  "config/workflow.php": {
+   "lines": 231
+  },
+  "database/seeds/install_super_admin.php": {
+   "lines": 9
+  },
+  "includes/accessibility.php": {
+   "lines": 787
+  },
+  "includes/action_dialogs.php": {
+   "lines": 324
+  },
+  "includes/back_button.php": {
+   "lines": 5
+  },
+  "includes/browse_console.php": {
+   "lines": 562
+  },
+  "includes/browse_console_js.php": {
+   "lines": 261
+  },
+  "includes/card_collapse.php": {
+   "lines": 87
+  },
+  "includes/console_shell.php": {
+   "lines": 171
+  },
+  "includes/docx_writer.php": {
+   "lines": 230
+  },
+  "includes/flash_banner.php": {
+   "lines": 95
+  },
+  "includes/focus_ring.php": {
+   "lines": 132
+  },
+  "includes/loading_bar.php": {
+   "lines": 205
+  },
+  "includes/mail_config.php": {
+   "lines": 1
+  },
+  "includes/manage_console.php": {
+   "lines": 252
+  },
+  "includes/manage_page.php": {
+   "lines": 398
+  },
+  "includes/manage_save_confirm.php": {
+   "lines": 168
+  },
+  "includes/page_theme.php": {
+   "lines": 225
+  },
+  "includes/paper_record_css.php": {
+   "lines": 198
+  },
+  "includes/password_audit_tab.php": {
+   "lines": 201
+  },
+  "includes/password_generator.php": {
+   "lines": 140
+  },
+  "includes/password_once.php": {
+   "lines": 124
+  },
+  "includes/pdf_dock.php": {
+   "lines": 292
+  },
+  "includes/pdf_writer.php": {
+   "lines": 416
+  },
+  "includes/progress_tracker.php": {
+   "lines": 163
+  },
+  "includes/review_console.php": {
+   "lines": 1010
+  },
+  "includes/scroll_jump.php": {
+   "lines": 93
+  },
+  "includes/select_skin.php": {
+   "lines": 394
+  },
+  "includes/site_footer.php": {
+   "lines": 309
+  },
+  "includes/site_head.php": {
+   "lines": 867
+  },
+  "includes/site_header.php": {
+   "lines": 340
+  },
+  "includes/theme.php": {
+   "lines": 364
+  },
+  "includes/theme_welcome.php": {
+   "lines": 143
+  },
+  "includes/validation.php": {
+   "lines": 50
+  },
+  "includes/xlsx_writer.php": {
+   "lines": 334
+  },
+  "index.php": {
+   "lines": 12
+  },
+  "notifications/cron/auto_archive_papers.php": {
+   "lines": 23
+  },
+  "notifications/cron/send_notifications.php": {
+   "lines": 32
+  },
+  "notifications/notification_center.php": {
+   "lines": 263
+  },
+  "notifications/notifications_handler.php": {
+   "lines": 28
+  },
+  "pages/about_us.php": {
+   "lines": 210
+  },
+  "pages/contact_support.php": {
+   "lines": 625
+  },
+  "pages/error_page.php": {
+   "lines": 186
+  },
+  "pages/gdrive_callback.php": {
+   "lines": 37
+  },
+  "pages/help_center.php": {
+   "lines": 382
+  },
+  "pages/index.php": {
+   "lines": 15
+  },
+  "pages/privacy.php": {
+   "lines": 219
+  },
+  "pages/settings.php": {
+   "lines": 633
+  },
+  "pages/terms_and_conditions.php": {
+   "lines": 172
+  },
+  "pages/view_paper.php": {
+   "lines": 237
+  },
+  "reset_system_data.php": {
+   "lines": 157
+  },
+  "scripts/build_field_guide.py": {
+   "lines": 909
+  },
+  "scripts/field_guide_content.py": {
+   "lines": 855
+  },
+  "scripts/gdrive_keepalive.php": {
+   "lines": 82
+  },
+  "scripts/migrations/add_gdrive_token_column.php": {
+   "lines": 25
+  },
+  "scripts/migrations/run_account_expiry_migration.php": {
+   "lines": 63
+  },
+  "scripts/migrations/run_account_notice_migration.php": {
+   "lines": 54
+  },
+  "scripts/migrations/run_admin_level_migration.php": {
+   "lines": 40
+  },
+  "scripts/migrations/run_analytics_migration.php": {
+   "lines": 20
+  },
+  "scripts/migrations/run_checklist_migration.php": {
+   "lines": 29
+  },
+  "scripts/migrations/run_drive_only_cleanup.php": {
+   "lines": 107
+  },
+  "scripts/migrations/run_drop_plain_password_migration.php": {
+   "lines": 54
+  },
+  "scripts/migrations/run_faculty_guest_migration.php": {
+   "lines": 30
+  },
+  "scripts/migrations/run_gdrive_migration.php": {
+   "lines": 16
+  },
+  "scripts/migrations/run_guest_table_setup.php": {
+   "lines": 28
+  },
+  "scripts/migrations/run_login_throttle_migration.php": {
+   "lines": 49
+  },
+  "scripts/migrations/run_migration.php": {
+   "lines": 59
+  },
+  "scripts/migrations/run_notification_migration.php": {
+   "lines": 11
+  },
+  "scripts/migrations/run_password_audit_migration.php": {
+   "lines": 73
+  },
+  "scripts/migrations/run_password_changed_by_migration.php": {
+   "lines": 57
+  },
+  "scripts/migrations/run_password_reset_migration.php": {
+   "lines": 1
+  },
+  "scripts/migrations/run_relative_file_paths_migration.php": {
+   "lines": 90
+  },
+  "scripts/migrations/run_staff_id_column_migration.php": {
+   "lines": 86
+  },
+  "scripts/migrations/run_status_migration.php": {
+   "lines": 8
+  },
+  "scripts/migrations/run_student_cohort_migration.php": {
+   "lines": 49
+  },
+  "scripts/migrations/run_student_id_migration.php": {
+   "lines": 30
+  },
+  "scripts/migrations/run_support_requests_migration.php": {
+   "lines": 86
+  },
+  "scripts/migrations/run_upload_update_migration.php": {
+   "lines": 32
+  },
+  "scripts/setup.php": {
+   "lines": 265
+  },
+  "scripts/utilities/apply_sri_and_nonces.py": {
+   "lines": 83
+  },
+  "scripts/utilities/fix_nonces.py": {
+   "lines": 30
+  },
+  "scripts/utilities/migrate_gdrive.php": {
+   "lines": 17
+  },
+  "scripts/utilities/oauth_test_users.php": {
+   "lines": 475
+  },
+  "scripts/utilities/sweep_section_images.php": {
+   "lines": 73
+  },
+  "tests/_mail.php": {
+   "lines": 1
+  },
+  "tests/_mint.php": {
+   "lines": 1
+  },
+  "tests/fixtures.py": {
+   "lines": 200
+  },
+  "tests/harness.py": {
+   "lines": 299
+  },
+  "tests/m1_auth.py": {
+   "lines": 304
+  },
+  "tests/m3_dashboard.py": {
+   "lines": 135
+  },
+  "tests/m4_submission.py": {
+   "lines": 504
+  },
+  "tests/m5_review.py": {
+   "lines": 291
+  },
+  "tests/m6_archive.py": {
+   "lines": 469
+  },
+  "tests/m7_notify.py": {
+   "lines": 168
+  },
+  "tests/m8_security.py": {
+   "lines": 307
+  },
+  "tests/m9_ai.py": {
+   "lines": 290
+  },
+  "tests/make_artifact.py": {
+   "lines": 557
+  },
+  "tests/report.py": {
+   "lines": 150
+  },
+  "tests/run_all.py": {
+   "lines": 68
+  }
+ }
+}

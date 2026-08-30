@@ -1736,12 +1736,48 @@ function rich_text_to_plain(string $html): string {
 class UserFacingException extends Exception {}
 
 /**
+ * The paper types a student may choose, in the order the form offers them.
+ *
+ * Both upload forms build their dropdown from this and the submit handler
+ * checks what came back against it. The options and the whitelist used to be
+ * written out separately in three places, which is how a type could be offered
+ * on the form and then refused on submission.
+ */
+function paper_types(): array {
+    return [
+        'capstone'         => 'Capstone Project',
+        'thesis'           => 'Thesis',
+        'undergrad_thesis' => 'Undergraduate Thesis',
+        'conference'       => 'Conference Paper',
+        'journal'          => 'Journal Article',
+        'project'          => 'Feasibility Study',
+    ];
+}
+
+/**
+ * Types no longer offered, but still carried by papers already submitted.
+ *
+ * Dropping one from paper_types() stops anyone choosing it again. Its name has
+ * to stay here regardless: the archive holds papers filed under these, and
+ * without a name they would show a bare code on every page that displays them.
+ */
+function paper_types_retired(): array {
+    return [
+        'research' => 'Research Paper',
+        'article'  => 'Article',
+    ];
+}
+
+/**
  * Paper types that must be submitted with ethics clearance, a consent form and
  * a data-collection tool.
  *
  * These are the types that involve human participants and original data
  * gathering. A journal article, conference paper or write-up of existing work
  * may still attach the same documents, but is not blocked without them.
+ *
+ * 'research' is retired and cannot be chosen any more, but papers already
+ * filed under it are still read by this, so it stays.
  */
 function paper_type_needs_documents(?string $paperType): bool {
     return in_array(strtolower(trim((string)$paperType)), ['research', 'capstone'], true);
@@ -1749,15 +1785,7 @@ function paper_type_needs_documents(?string $paperType): bool {
 
 /** Human-readable name for a paper type, for use in messages. */
 function paper_type_label(?string $paperType): string {
-    $labels = [
-        'research'   => 'Research Paper',
-        'capstone'   => 'Capstone',
-        'thesis'     => 'Thesis',
-        'conference' => 'Conference Paper',
-        'journal'    => 'Journal Article',
-        'article'    => 'Article',
-        'project'    => 'Project',
-    ];
+    $labels = paper_types() + paper_types_retired();
     $key = strtolower(trim((string)$paperType));
     return $labels[$key] ?? ucwords(str_replace('_', ' ', (string)$paperType));
 }

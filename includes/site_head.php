@@ -633,6 +633,12 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
     transition: all .2s;
 }
 .panel-ctrl-btn .material-symbols-outlined { font-size: 24px; }
+/* The expand glyph runs corner to corner while the close X sits inside a
+   smaller square, so at a shared font-size it draws about a third larger —
+   18x18 against 14x14, measured. Sized down until the ink matches, so the two
+   controls beside each other finally read as one pair rather than a big
+   button and a small one. */
+#expandBtn .material-symbols-outlined { font-size: 18px; }
 .panel-ctrl-btn:hover { background: var(--cream); color: var(--maroon); }
 
 .panel-body {
@@ -796,7 +802,8 @@ select.lf-input {
 .btn-panel-login {
     width: 100%;
     padding: .875rem;
-    background: var(--maroon);
+    /* White text on it, so the token that does not lift. */
+    background: var(--maroon-surface);
     color: #fff;
     border: none;
     border-radius: var(--r-control, 4px);
@@ -807,7 +814,7 @@ select.lf-input {
     margin-top: .5rem;
     transition: background .2s;
 }
-.btn-panel-login:hover { background: var(--dark-maroon); }
+.btn-panel-login:hover { background: var(--maroon-surface-hover); }
 .panel-footer-text {
     font-family: var(--font-body);
     font-weight: 400;

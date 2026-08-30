@@ -1,0 +1,1 @@
+<?php $u = json_decode($argv[1], true);file_put_contents($argv[2], "user|" . serialize($u));

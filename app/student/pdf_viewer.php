@@ -38,7 +38,8 @@ body {
     gap: .5rem;
     height: 52px;
     padding: 0 1rem;
-    background: var(--maroon);
+    /* White text on it, so the non-lifting token. */
+    background: var(--maroon-surface);
     color: #fff;
 }
 .viewer-name {

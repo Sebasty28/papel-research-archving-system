@@ -243,10 +243,20 @@ ob_start();
 :root {
     --sidebar-w:    226px;
     --col-gap:      36px;
+    /* The rendered height of the search field: .75rem of padding above and
+       below its content. Named rather than left implicit because the sidebar
+       is aligned against it — see .sidebar-right. Change the field's padding
+       and this has to follow, or the two tops drift apart again. */
+    --search-h:     50px;
 }
 
-/* ===== 3. Breadcrumb strip ===== */
-.crumb-bar { background: var(--dark-maroon); }
+/* ===== 3. Breadcrumb strip =====
+   --maroon-surface-hover, not --dark-maroon. The two are the same colour on a
+   light palette, which is why this went unnoticed; on a dark one --dark-maroon
+   lifts so it can be read as text, and the strip came out as a bright band of
+   the accent instead of a dark one. The surface tokens are the ones that do
+   not lift. */
+.crumb-bar { background: var(--maroon-surface-hover); }
 .crumb-inner {
     display: flex;
     align-items: center;
@@ -345,8 +355,25 @@ ob_start();
     transition: color .2s;
 }
 .btn-banner-toggle:hover { color: var(--maroon); }
-.btn-banner-toggle .material-symbols-outlined { transition: transform .3s ease; }
-.btn-banner-toggle.is-collapsed .material-symbols-outlined { transform: rotate(180deg); }
+/* At rest the control is one glyph. The words are still there — collapsed to
+   no width rather than removed, so they are read out to anyone using a screen
+   reader and slide open the moment the button is pointed at or tabbed to.
+   A tooltip would do neither. */
+.btn-banner-label {
+    max-width: 0;
+    opacity: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    transition: max-width .25s ease, opacity .18s ease;
+}
+.btn-banner-toggle:hover .btn-banner-label,
+.btn-banner-toggle:focus-visible .btn-banner-label {
+    max-width: 8rem;
+    opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+    .btn-banner-label { transition: none; }
+}
 
 /* ===== 6. Main layout ===== */
 .layout {
@@ -356,6 +383,31 @@ ob_start();
     align-items: start;
     margin-top: -1.25rem;
     padding-bottom: 3rem;
+}
+/* The search field and the sidebar are in two different grids — the field in
+   .search-row, the sidebar in .layout — so nothing tied their tops together
+   and the sidebar sat 66px lower in both banner states.
+
+   66px is not arbitrary: the sidebar column starts where .search-band ends,
+   which is the search field (50px) plus the 1rem the layout is offset by.
+   Measured the same either way round, because hiding the banner shortens the
+   band by exactly as much as it lengthens the layout's margin — 86-20 and
+   50+16 both land on 66.
+
+   Only the sidebar rises; the results column keeps its place. Below 900px the
+   layout is a single column and the sidebar follows the content, so the pull
+   would drag it over the results — hence the media query. */
+@media (min-width: 901px) {
+    .sidebar-right {
+        margin-top: calc(-1 * (var(--search-h, 50px) + 1rem));
+        /* Raised to the search field's line, it now reaches 24px into the hero
+           photo — the same overlap the search card has. That card floats over
+           the photo on z-index 5; without the same treatment the sidebar is
+           static, so the hero paints across its top edge and clips the Browse
+           header. */
+        position: relative;
+        z-index: 5;
+    }
 }
 
 /* Section heading with red underline */
@@ -430,9 +482,17 @@ ob_start();
             </form>
         </div>
         <div class="banner-toggle-col">
-            <button type="button" class="btn-banner-toggle" id="bannerToggle">
-                <span id="bannerToggleLabel">Hide Banner</span>
-                <span class="material-symbols-outlined mi-18">expand_less</span>
+            <?php /* The eye follows the same rule as the password toggle in
+                     site_footer.php: it shows the action, not the state, so it
+                     always agrees with the words beside it. Banner on screen →
+                     "Hide Banner" and a struck-through eye. The words are kept
+                     in the markup rather than being a tooltip, so they are read
+                     out and can be revealed on keyboard focus as well as on
+                     hover. */ ?>
+            <button type="button" class="btn-banner-toggle" id="bannerToggle"
+                    aria-label="Hide Banner" title="Hide Banner" aria-pressed="false">
+                <span class="btn-banner-label" id="bannerToggleLabel">Hide Banner</span>
+                <span class="material-symbols-outlined mi-18" id="bannerToggleIcon">visibility_off</span>
             </button>
         </div>
     </div>
@@ -479,12 +539,6 @@ ob_start();
                             <label class="qs-radio"><input type="radio" name="qs_density" value="default"> Default</label>
                             <label class="qs-radio"><input type="radio" name="qs_density" value="comfortable"> Comfortable</label>
                             <label class="qs-radio"><input type="radio" name="qs_density" value="compact"> Compact</label>
-                        </div>
-                        <div class="qs-section">
-                            <span class="qs-section-label">Theme</span>
-                            <label class="qs-radio"><input type="radio" name="qs_theme" value="system"> System</label>
-                            <label class="qs-radio"><input type="radio" name="qs_theme" value="light"> Light</label>
-                            <label class="qs-radio"><input type="radio" name="qs_theme" value="dark"> Dark</label>
                         </div>
                     </div>
                 </div>
@@ -727,7 +781,15 @@ if (bannerToggle && heroBanner) {
     function applyBannerState(collapsed) {
         heroBanner.classList.toggle('collapsed', collapsed);
         bannerToggle.classList.toggle('is-collapsed', collapsed);
-        document.getElementById('bannerToggleLabel').textContent = collapsed ? 'Show Banner' : 'Hide Banner';
+        /* Words, icon and label move together. The eye names what pressing it
+           will do, so a hidden banner offers an open eye. */
+        var text = collapsed ? 'Show Banner' : 'Hide Banner';
+        document.getElementById('bannerToggleLabel').textContent = text;
+        var icon = document.getElementById('bannerToggleIcon');
+        if (icon) { icon.textContent = collapsed ? 'visibility' : 'visibility_off'; }
+        bannerToggle.setAttribute('aria-label', text);
+        bannerToggle.setAttribute('title', text);
+        bannerToggle.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
     }
     var stored = null;
     try { stored = localStorage.getItem('papel_banner_hidden'); } catch (err) {}

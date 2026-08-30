@@ -54,3 +54,7 @@ Thumbs.db
 
 # Local database backups
 backups/
+
+# Python bytecode from the field-guide build and the test suite
+__pycache__/
+*.pyc

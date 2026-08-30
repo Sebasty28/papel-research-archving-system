@@ -1,0 +1,587 @@
+<title>PAPEL Field Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700&family=JetBrains+Mono:wght@400;500;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+:root{
+  --paper:#F8F6F5;--surface:#FFFFFF;--sunk:#F0ECEA;--raise:#FBF9F8;
+  --ink:#1C1517;--ink-2:#594F51;--ink-3:#8B7E80;
+  --rule:#E4DCDA;--rule-2:#CEC3C0;
+  --accent:#8C1D2C;--accent-soft:#F7EAEB;
+  --k-page:#8C1D2C;--k-shared:#1B5E6E;--k-engine:#875711;
+  --k-model:#57467A;--k-test:#256242;--k-script:#6B5B4A;
+  --code-bg:#FBF8F7;
+  --shadow:0 1px 2px rgba(28,21,23,.05),0 12px 28px -20px rgba(28,21,23,.4);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#171214;--surface:#20191B;--sunk:#2A2225;--raise:#251E20;
+  --ink:#F1E9E7;--ink-2:#C2B6B4;--ink-3:#8F8281;
+  --rule:#362C2E;--rule-2:#493B3E;
+  --accent:#E78D97;--accent-soft:#36191E;
+  --k-page:#E78D97;--k-shared:#6FB6C6;--k-engine:#D9A85C;
+  --k-model:#AC9AD4;--k-test:#71C59A;--k-script:#B7A48D;
+  --code-bg:#1B1517;
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 14px 30px -22px rgba(0,0,0,.9);
+}}
+:root[data-theme="dark"]{
+  --paper:#171214;--surface:#20191B;--sunk:#2A2225;--raise:#251E20;
+  --ink:#F1E9E7;--ink-2:#C2B6B4;--ink-3:#8F8281;
+  --rule:#362C2E;--rule-2:#493B3E;
+  --accent:#E78D97;--accent-soft:#36191E;
+  --k-page:#E78D97;--k-shared:#6FB6C6;--k-engine:#D9A85C;
+  --k-model:#AC9AD4;--k-test:#71C59A;--k-script:#B7A48D;
+  --code-bg:#1B1517;
+  --shadow:0 1px 2px rgba(0,0,0,.5),0 14px 30px -22px rgba(0,0,0,.9);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);
+  font-family:"Source Sans 3",system-ui,-apple-system,sans-serif;
+  font-size:16px;line-height:1.62;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:0 clamp(1rem,4vw,3rem)}
+h1,h2,h3,h4{font-family:"Bricolage Grotesque",system-ui,sans-serif;
+  text-wrap:balance;margin:0}
+h1{font-size:clamp(2.3rem,5vw,3.4rem);font-weight:700;line-height:1.02;letter-spacing:-.02em}
+h2{font-size:clamp(1.5rem,3vw,2.05rem);font-weight:600;letter-spacing:-.015em;line-height:1.15}
+h3{font-size:1.14rem;font-weight:600}
+h4{font-size:.95rem;font-weight:600}
+p{margin:0 0 1rem}
+a{color:var(--accent)}
+.eyebrow{font-family:"JetBrains Mono",monospace;font-size:.7rem;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--ink-3);margin:0 0 .8rem}
+.lede{color:var(--ink-2);max-width:66ch}
+.big-lede{font-size:1.12rem;color:var(--ink-2);max-width:64ch}
+.mast{border-bottom:1px solid var(--rule);background:var(--surface)}
+.mast .wrap{padding-top:clamp(2.5rem,6vw,4.5rem);padding-bottom:2.2rem}
+.mast h1 em{font-style:normal;color:var(--accent)}
+.stats{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1.6rem}
+.stat{border:1px solid var(--rule);border-radius:2px;background:var(--raise);
+  padding:.55rem .85rem;min-width:96px}
+.stat b{display:block;font-family:"JetBrains Mono",monospace;font-size:1.3rem;
+  font-weight:500;line-height:1.2;font-variant-numeric:tabular-nums}
+.stat span{font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.built{margin-top:1rem;font-size:.85rem;color:var(--ink-3)}
+.shell{display:grid;grid-template-columns:212px minmax(0,1fr);
+  gap:clamp(1.5rem,4vw,3.5rem);padding-top:2.5rem;align-items:start}
+nav.toc{position:sticky;top:1.2rem;font-size:.86rem}
+nav.toc h4{color:var(--ink-3);font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;
+  margin:0 0 .6rem;font-family:"JetBrains Mono",monospace;font-weight:500}
+nav.toc ol{list-style:none;margin:0 0 1.4rem;padding:0;display:flex;flex-direction:column;gap:.14rem}
+nav.toc a{display:block;padding:.22rem .5rem;border-radius:2px;color:var(--ink-2);
+  text-decoration:none;border-left:2px solid transparent}
+nav.toc a:hover{background:var(--sunk);color:var(--ink);border-left-color:var(--accent)}
+main{min-width:0}
+section{margin:0 0 clamp(2.6rem,5vw,4rem);scroll-margin-top:1rem}
+.note{border-left:3px solid var(--accent);background:var(--accent-soft);
+  padding:.9rem 1.1rem;border-radius:0 2px 2px 0;margin:1.2rem 0;color:var(--ink-2)}
+.note strong{color:var(--ink)}
+code,.file{font-family:"JetBrains Mono",ui-monospace,monospace}
+.file{display:inline-flex;align-items:center;gap:.4rem;font-size:.78rem;
+  padding:.16rem .45rem;border-radius:2px;background:var(--sunk);
+  border:1px solid var(--rule);white-space:nowrap}
+.file::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--k-page);flex:none}
+.file.shared::before{background:var(--k-shared)}
+.file.engine::before{background:var(--k-engine)}
+.file.model::before{background:var(--k-model)}
+.file.test::before{background:var(--k-test)}
+.file.script::before{background:var(--k-script)}
+.meta{font-family:"JetBrains Mono",monospace;font-size:.72rem;color:var(--ink-3);
+  white-space:nowrap;font-variant-numeric:tabular-nums}
+.legend{display:flex;flex-wrap:wrap;gap:.4rem 1.1rem;margin:1rem 0 0;
+  font-size:.84rem;color:var(--ink-2)}
+.legend span{display:inline-flex;align-items:center;gap:.4rem}
+.legend i{width:8px;height:8px;border-radius:50%;display:inline-block}
+figure{margin:1.6rem 0;background:var(--surface);border:1px solid var(--rule);
+  border-radius:3px;padding:1.2rem;overflow-x:auto}
+figure svg{max-width:100%;height:auto;display:block;margin:0 auto;color:var(--ink-2)}
+figcaption{margin-top:.9rem;font-size:.86rem;color:var(--ink-3);text-align:center}
+.mods{display:flex;flex-direction:column;gap:1rem}
+.mod{background:var(--surface);border:1px solid var(--rule);border-radius:3px;
+  box-shadow:var(--shadow);overflow:hidden}
+.mod>header{display:flex;gap:.9rem;align-items:baseline;flex-wrap:wrap;
+  padding:1rem 1.2rem;border-bottom:1px solid var(--rule);background:var(--raise)}
+.mod .num{font-family:"JetBrains Mono",monospace;font-size:.72rem;color:var(--accent);
+  letter-spacing:.1em;flex:none}
+.mod>header p{margin:.15rem 0 0;flex-basis:100%;color:var(--ink-2);font-size:.94rem;max-width:72ch}
+.feat{padding:1rem 1.2rem;border-bottom:1px dashed var(--rule)}
+.feat:last-of-type{border-bottom:0}
+.feat h4{margin:0 0 .3rem}
+.feat>p{margin:0 0 .65rem;color:var(--ink-2);font-size:.93rem;max-width:74ch}
+.files{display:flex;flex-direction:column;gap:.5rem;margin:0;padding:0;list-style:none}
+.files li{display:grid;grid-template-columns:minmax(200px,auto) 1fr;
+  gap:.2rem .9rem;align-items:start;font-size:.9rem}
+.files .why{color:var(--ink-2)}
+.wires{padding:.75rem 1.2rem;background:var(--sunk);font-size:.85rem;color:var(--ink-2);
+  display:flex;gap:.5rem;flex-wrap:wrap;align-items:baseline}
+.wires b{font-family:"JetBrains Mono",monospace;font-size:.68rem;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-3);font-weight:500}
+.tours{display:flex;flex-direction:column;gap:1.4rem}
+.tour{background:var(--surface);border:1px solid var(--rule);border-radius:3px;
+  padding:1.2rem;box-shadow:var(--shadow)}
+.tour h3{margin:0 0 .35rem}
+.tour-intro{color:var(--ink-2);max-width:74ch;margin:0 0 .8rem}
+.src{margin:0 0 .5rem;display:flex;gap:.6rem;align-items:center;flex-wrap:wrap}
+pre.code{margin:0 0 .9rem;padding:.9rem 1rem;background:var(--code-bg);
+  border:1px solid var(--rule);border-radius:2px;overflow-x:auto;
+  font-family:"JetBrains Mono",monospace;font-size:.82rem;line-height:1.75;
+  color:var(--ink);white-space:pre}
+pre.code .ln{display:inline-block;width:2.6em;color:var(--ink-3);
+  user-select:none;font-variant-numeric:tabular-nums}
+.notes{margin:0 0 .9rem;padding:0 0 0 1.3rem;display:flex;flex-direction:column;gap:.5rem}
+.notes li{font-size:.92rem;color:var(--ink-2)}
+.notes code{display:inline-block;background:var(--sunk);border:1px solid var(--rule);
+  border-radius:2px;padding:.05em .35em;font-size:.8rem;color:var(--ink);
+  margin-right:.4rem;max-width:100%;overflow-wrap:anywhere}
+.takeaway{margin:0;padding:.7rem .9rem;background:var(--accent-soft);
+  border-left:3px solid var(--accent);border-radius:0 2px 2px 0;
+  font-size:.93rem;color:var(--ink-2)}
+.takeaway b{color:var(--ink);margin-right:.4rem}
+.tablewrap{overflow-x:auto;border:1px solid var(--rule);border-radius:3px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:560px;font-size:.9rem}
+th{text-align:left;font-weight:600;font-size:.72rem;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink-3);padding:.7rem .95rem;border-bottom:1px solid var(--rule);background:var(--raise)}
+td{padding:.62rem .95rem;border-bottom:1px solid var(--rule);vertical-align:top;color:var(--ink-2)}
+tr:last-child td{border-bottom:0}
+td:first-child{color:var(--ink);font-family:"JetBrains Mono",monospace;font-size:.82rem;white-space:nowrap}
+.finder{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;margin:0 0 1.2rem}
+.finder input{font:inherit;font-size:.95rem;padding:.5rem .75rem;border-radius:2px;
+  border:1px solid var(--rule-2);background:var(--surface);color:var(--ink);min-width:min(320px,100%)}
+.finder input:focus-visible,nav.toc a:focus-visible,.finder button:focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px}
+.finder button{font:inherit;font-size:.85rem;cursor:pointer;padding:.5rem .8rem;
+  border:1px solid var(--rule-2);background:var(--surface);color:var(--ink-2);border-radius:2px}
+.finder .count{font-size:.85rem;color:var(--ink-3)}
+.mod[hidden]{display:none}
+.glos{display:grid;gap:.9rem;grid-template-columns:repeat(auto-fit,minmax(268px,1fr))}
+.gl{border-top:2px solid var(--rule-2);padding-top:.7rem}
+.gl h4{margin:0 0 .25rem;font-family:"JetBrains Mono",monospace;font-size:.85rem;color:var(--accent)}
+.gl p{margin:0;font-size:.9rem;color:var(--ink-2)}
+footer.end{border-top:1px solid var(--rule);margin-top:3rem;padding:1.5rem 0 3.5rem;
+  color:var(--ink-3);font-size:.86rem}
+@media (max-width:900px){
+  .shell{grid-template-columns:1fr}
+  nav.toc{position:static;border-bottom:1px solid var(--rule);padding-bottom:1rem}
+  nav.toc ol{flex-direction:row;flex-wrap:wrap}
+  .files li{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<header class="mast">
+  <div class="wrap">
+    <p class="eyebrow">Architecture field guide &middot; generated from the code</p>
+    <h1>How <em>PAPEL</em> actually works</h1>
+    <p class="big-lede">Every module, every feature, and the file that does the
+      work &mdash; plus 7 pieces of the real code, explained line by
+      line. Written for someone who does not read PHP.</p>
+    <div class="stats">
+      <div class="stat"><b>135</b><span>PHP files</span></div>
+      <div class="stat"><b>13</b><span>Modules</span></div>
+      <div class="stat"><b>51</b><span>Pages</span></div>
+      <div class="stat"><b>33</b><span>Shared parts</span></div>
+      <div class="stat"><b>20</b><span>Tables</span></div>
+      <div class="stat"><b>15</b><span>Test files</span></div>
+    </div>
+    <p class="built">Rebuilt 30 August 2026 by <code>scripts/build_field_guide.py</code>,
+      which measures the codebase every time it runs and refuses to publish a
+      page that names a file no longer there.</p>
+  </div>
+</header>
+
+<div class="wrap shell">
+<nav class="toc" aria-label="Contents">
+  <h4>Start</h4>
+  <ol>
+    <li><a href="#request">What a page load is</a></li>
+    <li><a href="#spine">The spine</a></li>
+    <li><a href="#map">The module map</a></li>
+    <li><a href="#chain">The approval chain</a></li>
+  </ol>
+  <h4>Read the code</h4>
+  <ol><li><a href="#c1">The first four lines of almost every page</a></li><li><a href="#c2">A complete action, from button to database</a></li><li><a href="#c3">The door itself</a></li><li><a href="#c4">Why forms carry a hidden token</a></li><li><a href="#c5">A message that survives exactly one page</a></li><li><a href="#c6">PHP and HTML woven together</a></li><li><a href="#c7">Moving a paper along the chain</a></li></ol>
+  <h4>Modules</h4>
+  <ol><li><a href="#m1">1 &middot; Foundation</a></li><li><a href="#m2">2 &middot; Look and feel</a></li><li><a href="#m3">3 &middot; Signing in</a></li><li><a href="#m4">4 &middot; Accounts</a></li><li><a href="#m5">5 &middot; Submitting a paper</a></li><li><a href="#m6">6 &middot; Review and approval</a></li><li><a href="#m7">7 &middot; Reading</a></li><li><a href="#m8">8 &middot; Messages</a></li><li><a href="#m9">9 &middot; Analytics and exports</a></li><li><a href="#m10">10 &middot; The AI assistant</a></li><li><a href="#m11">11 &middot; Storage</a></li><li><a href="#m12">12 &middot; The test suite</a></li><li><a href="#m13">13 &middot; Dashboards and everyday pages</a></li></ol>
+  <h4>Reference</h4>
+  <ol>
+    <li><a href="#db">The database</a></li>
+    <li><a href="#dead">Dead files</a></li>
+    <li><a href="#glossary">PHP in ten terms</a></li>
+    <li><a href="#upkeep">Keeping this current</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<section id="request">
+  <p class="eyebrow">Start here</p>
+  <h2>What actually happens when someone opens a page</h2>
+  <p class="lede">This is the one idea that makes the rest of the system
+    readable. PHP is not like the JavaScript in a browser. <strong>Every single
+    page view runs the whole program again from scratch</strong>, builds a
+    finished HTML page as text, sends it, and then forgets everything.</p>
+
+  <figure>
+    <svg viewBox="0 0 940 300" role="img" aria-label="A page request travels from the browser to Apache, into one PHP file, which pulls in core.php for session, permission and database, queries MySQL, then prints HTML through the three shared layout files and sends it back.">
+      <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker></defs>
+      <g font-family="JetBrains Mono, monospace" font-size="11.5" fill="currentColor">
+        <rect x="10" y="112" width="112" height="52" rx="2" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <text x="66" y="133" text-anchor="middle" font-size="12">Browser</text>
+        <text x="66" y="150" text-anchor="middle" font-size="10" opacity=".7">clicks a link</text>
+        <line x1="122" y1="138" x2="186" y2="138" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"/>
+        <text x="154" y="130" text-anchor="middle" font-size="9.5" opacity=".75">HTTP</text>
+        <rect x="188" y="112" width="104" height="52" rx="2" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <text x="240" y="133" text-anchor="middle" font-size="12">Apache</text>
+        <text x="240" y="150" text-anchor="middle" font-size="10" opacity=".7">XAMPP</text>
+        <line x1="292" y1="138" x2="356" y2="138" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"/>
+        <text x="324" y="130" text-anchor="middle" font-size="9.5" opacity=".75">runs</text>
+        <rect x="358" y="96" width="196" height="84" rx="2" fill="none" stroke="#8C1D2C" stroke-width="1.8"/>
+        <text x="456" y="120" text-anchor="middle" font-size="12" fill="#8C1D2C">one .php page</text>
+        <text x="456" y="139" text-anchor="middle" font-size="10" opacity=".8">student_dashboard.php</text>
+        <text x="456" y="157" text-anchor="middle" font-size="10" opacity=".8">admin_review_dashboard.php</text>
+        <text x="456" y="172" text-anchor="middle" font-size="9.5" opacity=".6">&hellip; one of 51</text>
+        <line x1="456" y1="96" x2="456" y2="58" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"/>
+        <text x="466" y="80" font-size="9.5" opacity=".75">line 1: require</text>
+        <rect x="330" y="14" width="252" height="44" rx="2" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="4 3"/>
+        <text x="456" y="32" text-anchor="middle" font-size="11.5">config/core.php</text>
+        <text x="456" y="48" text-anchor="middle" font-size="9.5" opacity=".75">session &middot; who are you &middot; may you &middot; database</text>
+        <line x1="456" y1="180" x2="456" y2="222" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"/>
+        <rect x="356" y="222" width="200" height="46" rx="2" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <text x="456" y="241" text-anchor="middle" font-size="11.5">MySQL</text>
+        <text x="456" y="257" text-anchor="middle" font-size="9.5" opacity=".75">20 tables &middot; asks, gets rows back</text>
+        <line x1="554" y1="138" x2="618" y2="138" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"/>
+        <text x="586" y="130" text-anchor="middle" font-size="9.5" opacity=".75">prints</text>
+        <rect x="620" y="96" width="180" height="84" rx="2" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <text x="710" y="118" text-anchor="middle" font-size="11.5">site_head.php</text>
+        <text x="710" y="136" text-anchor="middle" font-size="11.5">site_header.php</text>
+        <text x="710" y="154" text-anchor="middle" font-size="11.5">site_footer.php</text>
+        <text x="710" y="171" text-anchor="middle" font-size="9.5" opacity=".65">the same on every page</text>
+        <line x1="800" y1="138" x2="864" y2="138" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"/>
+        <rect x="866" y="112" width="64" height="52" rx="2" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <text x="898" y="133" text-anchor="middle" font-size="11">HTML</text>
+        <text x="898" y="150" text-anchor="middle" font-size="9.5" opacity=".7">plain text</text>
+        <path d="M898 112 C898 40, 120 40, 66 108" fill="none" stroke="currentColor" stroke-width="1.1" stroke-dasharray="4 3" marker-end="url(#ar)" opacity=".65"/>
+        <text x="150" y="60" font-size="9.5" opacity=".7">sent back, then the server forgets everything</text>
+      </g>
+    </svg>
+    <figcaption>One page view, start to finish. The dashed return is the whole
+      program ending &mdash; nothing stays in memory between two clicks.</figcaption>
+  </figure>
+
+  <div class="note">
+    <strong>Why that matters for reading the code.</strong> Because nothing is
+    remembered, every page has to re-establish everything at the top: who is
+    signed in, whether they are allowed here, and a fresh connection to the
+    database. That is why almost every file starts with the same few lines, and
+    why <code>core.php</code> is pulled in by 65 other files. It is
+    not duplication &mdash; it is the only way each page knows anything at all.
+  </div>
+
+  <p>The one thing that <em>does</em> survive between page loads is the
+    <strong>session</strong>: a small file on the server holding "this browser is
+    signed in as user 154". The browser carries a cookie with the session's id,
+    the server reads the matching file, and that is how the site knows you.</p>
+</section>
+
+<section id="spine">
+  <p class="eyebrow">The spine</p>
+  <h2>Four files that almost everything depends on</h2>
+  <p class="lede">If you learn only four files, learn these. Between them they
+    are pulled into virtually every page on the site.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>File</th><th>What it is for</th></tr></thead>
+    <tbody>
+      <tr><td>config/core.php</td><td>The toolbox. Opens the database, starts the
+        session, answers "who is signed in" and "may they be here", sends email,
+        writes notifications, and holds the shared rules.</td></tr>
+      <tr><td>includes/site_head.php</td><td>Everything inside &lt;head&gt;:
+        fonts, colours, the light and dark palettes. Change a colour here and it
+        changes everywhere.</td></tr>
+      <tr><td>includes/site_header.php</td><td>The bar across the top &mdash; the
+        wordmark, the menu that differs per role, the notification bell, the
+        avatar menu, the sign-in panel.</td></tr>
+      <tr><td>includes/site_footer.php</td><td>The foot of the page and the
+        shared JavaScript: the bell, the dropdowns, the confirm dialogs, the
+        loading bar.</td></tr>
+    </tbody>
+  </table></div>
+  <p class="legend">
+    <span><i style="background:var(--k-page)"></i> a page you can open</span>
+    <span><i style="background:var(--k-shared)"></i> shared piece</span>
+    <span><i style="background:var(--k-engine)"></i> engine / settings</span>
+    <span><i style="background:var(--k-model)"></i> database logic</span>
+    <span><i style="background:var(--k-test)"></i> Python test</span>
+    <span><i style="background:var(--k-script)"></i> command-line script</span>
+  </p>
+</section>
+
+<section id="map">
+  <p class="eyebrow">The map</p>
+  <h2>How the modules sit together</h2>
+  <p class="lede">The arrows are what one module hands to another &mdash; a
+    paper, a decision, a message. This draws the path work takes; the
+    dashboards and the everyday pages (module 13) sit across all of it rather
+    than at one point on it.</p>
+  <figure>
+    <svg viewBox="0 0 940 470" role="img" aria-label="A student submits a paper, which goes to the adviser then the coordinator for review, and once approved appears in the public repository. Storage, AI, messages and analytics attach to those steps, and every module rests on the foundation and the shared look.">
+      <defs>
+        <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker>
+        <marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#8C1D2C"/></marker>
+      </defs>
+      <g font-family="JetBrains Mono, monospace" font-size="11" fill="currentColor">
+        <rect x="24" y="150" width="150" height="56" rx="2" fill="none" stroke="#8C1D2C" stroke-width="1.7"/>
+        <text x="99" y="172" text-anchor="middle" font-size="11.5" fill="#8C1D2C">5 &middot; Submitting</text>
+        <text x="99" y="190" text-anchor="middle" font-size="9.5" opacity=".75">the student's 4 steps</text>
+        <line x1="174" y1="178" x2="242" y2="178" stroke="#8C1D2C" stroke-width="1.6" marker-end="url(#ar3)"/>
+        <text x="208" y="170" text-anchor="middle" font-size="9" fill="#8C1D2C">a paper</text>
+        <rect x="244" y="150" width="150" height="56" rx="2" fill="none" stroke="#8C1D2C" stroke-width="1.7"/>
+        <text x="319" y="172" text-anchor="middle" font-size="11.5" fill="#8C1D2C">6 &middot; Review</text>
+        <text x="319" y="190" text-anchor="middle" font-size="9.5" opacity=".75">adviser, then coordinator</text>
+        <line x1="394" y1="178" x2="462" y2="178" stroke="#8C1D2C" stroke-width="1.6" marker-end="url(#ar3)"/>
+        <text x="428" y="170" text-anchor="middle" font-size="9" fill="#8C1D2C">approved</text>
+        <rect x="464" y="150" width="150" height="56" rx="2" fill="none" stroke="#8C1D2C" stroke-width="1.7"/>
+        <text x="539" y="172" text-anchor="middle" font-size="11.5" fill="#8C1D2C">7 &middot; Reading</text>
+        <text x="539" y="190" text-anchor="middle" font-size="9.5" opacity=".75">public repository</text>
+        <line x1="614" y1="178" x2="682" y2="178" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar2)"/>
+        <text x="648" y="170" text-anchor="middle" font-size="9" opacity=".75">counts</text>
+        <rect x="684" y="150" width="150" height="56" rx="2" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <text x="759" y="172" text-anchor="middle" font-size="11.5">9 &middot; Analytics</text>
+        <text x="759" y="190" text-anchor="middle" font-size="9.5" opacity=".75">charts and exports</text>
+        <rect x="24" y="52" width="150" height="52" rx="2" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <text x="99" y="73" text-anchor="middle" font-size="11.5">11 &middot; Storage</text>
+        <text x="99" y="90" text-anchor="middle" font-size="9.5" opacity=".75">Google Drive</text>
+        <line x1="99" y1="150" x2="99" y2="108" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar2)"/>
+        <text x="107" y="132" font-size="9" opacity=".75">the PDF</text>
+        <rect x="244" y="52" width="150" height="52" rx="2" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <text x="319" y="73" text-anchor="middle" font-size="11.5">10 &middot; AI</text>
+        <text x="319" y="90" text-anchor="middle" font-size="9.5" opacity=".75">reads the PDF, answers</text>
+        <path d="M150 150 L246 106" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar2)"/>
+        <text x="196" y="122" font-size="9" opacity=".75">fills the form</text>
+        <rect x="244" y="256" width="150" height="52" rx="2" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <text x="319" y="277" text-anchor="middle" font-size="11.5">8 &middot; Messages</text>
+        <text x="319" y="294" text-anchor="middle" font-size="9.5" opacity=".75">bell and email</text>
+        <line x1="319" y1="206" x2="319" y2="252" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar2)"/>
+        <text x="327" y="232" font-size="9" opacity=".75">tells the student</text>
+        <rect x="24" y="256" width="150" height="52" rx="2" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <text x="99" y="277" text-anchor="middle" font-size="11.5">4 &middot; Accounts</text>
+        <text x="99" y="294" text-anchor="middle" font-size="9.5" opacity=".75">who exists</text>
+        <path d="M99 256 L99 212" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#ar2)"/>
+        <text x="20" y="236" font-size="9" opacity=".75">who advises whom</text>
+        <rect x="464" y="256" width="150" height="52" rx="2" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <text x="539" y="277" text-anchor="middle" font-size="11.5">3 &middot; Signing in</text>
+        <text x="539" y="294" text-anchor="middle" font-size="9.5" opacity=".75">ID + password</text>
+        <line x1="464" y1="282" x2="398" y2="282" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar2)"/>
+        <rect x="684" y="256" width="150" height="52" rx="2" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="4 3"/>
+        <text x="759" y="277" text-anchor="middle" font-size="11.5">12 &middot; Tests</text>
+        <text x="759" y="294" text-anchor="middle" font-size="9.5" opacity=".75">Python, drives the site</text>
+        <rect x="24" y="356" width="810" height="46" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/>
+        <text x="429" y="375" text-anchor="middle" font-size="11.5">1 &middot; Foundation &mdash; config/core.php</text>
+        <text x="429" y="392" text-anchor="middle" font-size="9.5" opacity=".75">session &middot; permissions &middot; database &middot; shared rules</text>
+        <rect x="24" y="410" width="810" height="42" rx="2" fill="none" stroke="currentColor" stroke-width="1.4"/>
+        <text x="429" y="428" text-anchor="middle" font-size="11.5">2 &middot; Look and feel &mdash; site_head / site_header / site_footer</text>
+        <text x="429" y="444" text-anchor="middle" font-size="9.5" opacity=".75">the same shell around every page</text>
+        <line x1="429" y1="356" x2="429" y2="322" stroke="currentColor" stroke-width="1.1" stroke-dasharray="3 3" opacity=".6"/>
+        <text x="437" y="342" font-size="9" opacity=".6">everything above rests on these two</text>
+      </g>
+    </svg>
+    <figcaption>Solid maroon is the path a paper takes. Everything else attaches
+      to that path; the two bands at the bottom are underneath all of it.</figcaption>
+  </figure>
+</section>
+
+<section id="chain">
+  <p class="eyebrow">The rule at the centre</p>
+  <h2>The approval chain, and the word <code>draft</code></h2>
+  <p class="lede">This is the business rule the whole system is arranged around,
+    and the one place the database column names will confuse you.</p>
+  <figure>
+    <svg viewBox="0 0 900 240" role="img" aria-label="A paper moves from draft to pending_faculty when submitted, to pending_admin when the adviser approves, to approved when the coordinator approves. A return from either reviewer sends it back to draft carrying feedback.">
+      <defs><marker id="ar4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker></defs>
+      <g font-family="JetBrains Mono, monospace" font-size="11" fill="currentColor">
+        <rect x="20" y="70" width="150" height="50" rx="2" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <text x="95" y="90" text-anchor="middle">draft</text>
+        <text x="95" y="107" text-anchor="middle" font-size="9.5" opacity=".7">student is writing</text>
+        <line x1="170" y1="95" x2="228" y2="95" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar4)"/>
+        <text x="199" y="87" text-anchor="middle" font-size="9" opacity=".75">submit</text>
+        <rect x="230" y="70" width="170" height="50" rx="2" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <text x="315" y="90" text-anchor="middle">pending_faculty</text>
+        <text x="315" y="107" text-anchor="middle" font-size="9.5" opacity=".7">on the adviser's desk</text>
+        <line x1="400" y1="95" x2="458" y2="95" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar4)"/>
+        <text x="429" y="87" text-anchor="middle" font-size="9" opacity=".75">approve</text>
+        <rect x="460" y="70" width="170" height="50" rx="2" fill="none" stroke="currentColor" stroke-width="1.2"/>
+        <text x="545" y="90" text-anchor="middle">pending_admin</text>
+        <text x="545" y="107" text-anchor="middle" font-size="9.5" opacity=".7">on the coordinator's desk</text>
+        <line x1="630" y1="95" x2="688" y2="95" stroke="#8C1D2C" stroke-width="1.6" marker-end="url(#ar4)"/>
+        <text x="659" y="87" text-anchor="middle" font-size="9" fill="#8C1D2C">approve</text>
+        <rect x="690" y="70" width="170" height="50" rx="2" fill="none" stroke="#8C1D2C" stroke-width="1.8"/>
+        <text x="775" y="90" text-anchor="middle" fill="#8C1D2C">approved</text>
+        <text x="775" y="107" text-anchor="middle" font-size="9.5" opacity=".75">public. the chain ends</text>
+        <path d="M315 120 C315 180, 95 180, 95 124" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="5 3" marker-end="url(#ar4)"/>
+        <path d="M545 120 C545 205, 95 205, 95 126" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="5 3" marker-end="url(#ar4)"/>
+        <text x="300" y="197" text-anchor="middle" font-size="9.5" opacity=".8">returned &mdash; goes back to draft, carrying the reviewer's reason</text>
+        <text x="775" y="150" text-anchor="middle" font-size="9.5" opacity=".7">the Head and the Director</text>
+        <text x="775" y="164" text-anchor="middle" font-size="9.5" opacity=".7">read this; they do not approve</text>
+      </g>
+    </svg>
+    <figcaption>Two approvals, not four. The chain was deliberately shortened.</figcaption>
+  </figure>
+  <div class="note">
+    <strong>The trap.</strong> A returned paper goes back to <code>draft</code>.
+    So <code>draft</code> means either "never submitted" <em>or</em> "sent
+    back" &mdash; two very different things wearing the same word. Anywhere the
+    code needs to tell them apart it asks a second question: is there a row in
+    <code>approval_workflow</code> for this paper? If yes, it was submitted once
+    and returned.
+  </div>
+</section>
+
+<section id="code">
+  <p class="eyebrow">Read the code</p>
+  <h2>7 pieces of the real thing, explained</h2>
+  <p class="lede">These are lifted out of the files every time this page is
+    built, so what you see below is the code as it is right now &mdash; not a
+    copy that has drifted. Learn these patterns and most of the project becomes
+    readable, because it repeats them.</p>
+  <div class="tours"><article class="tour" id="c1"><h3>The first four lines of almost every page</h3><p class="tour-intro">Open any page in the project and it starts like this. Once you can read these four lines you can open any file and know where you are.</p><p class="src"><span class="file page">app/faculty/faculty_manage_students.php</span> <span class="meta">line 1</span></p><pre class="code"><code><span class="ln">1</span>&lt;?php
+<span class="ln">2</span>require_once '../../config/core.php';
+<span class="ln">3</span>require_once '../../config/gdrive_config.php';
+<span class="ln">4</span>require_role(['faculty']); $conn=db(); $u=current_user();</code></pre><ol class="notes"><li><code>&lt;?php</code><span>Everything from here runs on the server. Nothing between these tags is ever sent to the browser — only whatever it prints.</span></li><li><code>require_once '../../config/core.php'</code><span>Pastes the toolbox in. The ../../ climbs two folders up to reach it, which is why the path differs between files at different depths.</span></li><li><code>require_role</code><span>The door. If your role is not in that list, the page stops right here and you never see it. Nothing below runs.</span></li><li><code>$conn=db()</code><span>Opens the database and keeps the connection in $conn. Every query on the page uses it.</span></li><li><code>$u=current_user()</code><span>Reads the session and puts your account in $u. From now on $u['user_id'] is who is looking at the page.</span></li></ol><p class="takeaway"><b>What to remember</b> Four lines, and the page now knows who you are, whether you are allowed, and how to reach the data.</p></article>
+<article class="tour" id="c2"><h3>A complete action, from button to database</h3><p class="tour-intro">This is the adviser archiving a student. It is fifteen lines, and it contains nearly every pattern the rest of the codebase uses. If you only read one piece of PHP here, read this one.</p><p class="src"><span class="file page">app/faculty/faculty_manage_students.php</span> <span class="meta">line 9</span></p><pre class="code"><code><span class="ln">9</span>if (isset($_POST['action']) &amp;&amp; $_POST['action'] === 'toggle_active') {
+<span class="ln">10</span>  $user_id = (int)($_POST['user_id'] ?? 0);
+<span class="ln">11</span>  if ($user_id&gt; 0) {
+<span class="ln">12</span>    /* Scoped like the list. Without this the narrowing above would be
+<span class="ln">13</span>       decoration: the id travels in a form field, and another adviser's
+<span class="ln">14</span>       student could be archived by posting theirs. */
+<span class="ln">15</span>    $stmt = $conn-&gt;prepare(&quot;UPDATE users SET is_active = NOT is_active
+<span class="ln">16</span>                             WHERE user_id=? AND user_role='student' AND created_by=?&quot;);
+<span class="ln">17</span>    $stmt-&gt;bind_param('ii', $user_id, $u['user_id']);
+<span class="ln">18</span>    if ($stmt-&gt;execute() &amp;&amp; $stmt-&gt;affected_rows&gt; 0) {
+<span class="ln">19</span>      flash('success', 'User status updated.');
+<span class="ln">20</span>    }
+<span class="ln">21</span>  }
+<span class="ln">22</span>  header('Location: faculty_manage_students.php'); exit;
+<span class="ln">23</span>}
+<span class="ln">24</span>&nbsp;</code></pre><ol class="notes"><li><code>$_POST['action']</code><span>What the form sent. One page handles several actions, so the first thing it does is ask which button was pressed.</span></li><li><code>(int)($_POST['user_id'] ?? 0)</code><span>Forces the value to a whole number, and uses 0 if it is missing. Anything that is not a number becomes 0, which then fails the check below.</span></li><li><code>$conn-&gt;prepare(</code><span>The safe way to query. The ? marks are holes, not text — the value goes in separately, so it can never be read as a command. This is what makes SQL injection fail.</span></li><li><code>created_by=?</code><span>The important half. Without it, the id arrives in a form field and an adviser could archive somebody else’s student by posting their number. The project’s own comment above says exactly this.</span></li><li><code>bind_param('ii'</code><span>Fills the two holes, in order. The &quot;ii&quot; says both are integers — one letter per hole, and a mismatch fails at run time, not when you save.</span></li><li><code>flash(</code><span>Leaves a message for the next page to show, once.</span></li><li><code>header('Location:</code><span>Sends the browser to a fresh page instead of printing one here. That is why refreshing after an action never repeats it — and exit stops the rest of the file running.</span></li></ol><p class="takeaway"><b>What to remember</b> Read the action, clean the input, run a prepared statement scoped to what this person owns, leave a message, redirect. Almost every write in the project is this shape.</p></article>
+<article class="tour" id="c3"><h3>The door itself</h3><p class="tour-intro">The whole permission system is one line. Everything that keeps a student out of the Coordinator’s desk is here.</p><p class="src"><span class="file engine">config/core.php</span> <span class="meta">line 383</span></p><pre class="code"><code><span class="ln">383</span>function require_role(array $roles): void { require_login(); $u=current_user(); if(!$u||!in_array($u['user_role'],$roles,true)){ http_response_code(403); exit('Forbidden'); } }</code></pre><ol class="notes"><li><code>require_login()</code><span>First: are you signed in at all? If not you are sent to the sign-in page and this stops.</span></li><li><code>in_array($u['user_role'], $roles, true)</code><span>Is your role one of the ones this page listed? The true means compare exactly — no loose matching.</span></li><li><code>http_response_code(403); exit</code><span>If not: refuse, and stop the program. Nothing after the require_role line in the page ever runs, so there is no way to reach the content.</span></li></ol><p class="takeaway"><b>What to remember</b> Permission is not a decoration on the page — it stops the program before the page exists. That is why it cannot be clicked around.</p></article>
+<article class="tour" id="c4"><h3>Why forms carry a hidden token</h3><p class="tour-intro">Every form in PAPEL has an invisible field in it. Without it, another website could quietly submit PAPEL’s forms using your signed-in browser.</p><p class="src"><span class="file engine">config/core.php</span> <span class="meta">line 160</span></p><pre class="code"><code><span class="ln">160</span>function csrf_field(): string { return '&lt;input type=&quot;hidden&quot; name=&quot;_token&quot; value=&quot;'.e(csrf_token()).'&quot;&gt;'; }</code></pre><ol class="notes"><li><code>csrf_token()</code><span>A long random string, generated once and kept in your session.</span></li><li><code>type=&quot;hidden&quot; name=&quot;_token&quot;</code><span>It rides along with every form you submit, where you never see it.</span></li><li><code>e(</code><span>The project’s escape helper. Anything printed into HTML goes through it, so text can never become markup.</span></li></ol><p class="takeaway"><b>What to remember</b> The form proves it came from your own session. At the other end csrf_verify() checks it and refuses the post if it does not match — which is why every POST handler starts with that call.</p></article>
+<article class="tour" id="c5"><h3>A message that survives exactly one page</h3><p class="tour-intro">The green and red banners. One small function, and a trap worth knowing about.</p><p class="src"><span class="file engine">config/core.php</span> <span class="meta">line 202</span></p><pre class="code"><code><span class="ln">202</span>function flash(string $key, string $msg = null): ?string {
+<span class="ln">203</span>  start_session_once();
+<span class="ln">204</span>  if ($msg === null) {
+<span class="ln">205</span>    if (!empty($_SESSION['flash'][$key])) { $m = $_SESSION['flash'][$key]; unset($_SESSION['flash'][$key]); return $m; }
+<span class="ln">206</span>    return null;
+<span class="ln">207</span>  }
+<span class="ln">208</span>  $_SESSION['flash'][$key] = $msg; return null;
+<span class="ln">209</span>}</code></pre><ol class="notes"><li><code>if ($msg === null)</code><span>The same function does both jobs. Called with a message it stores one; called without, it reads one.</span></li><li><code>unset($_SESSION['flash'][$key]); return $m;</code><span>Reading it deletes it. That is the trap: whichever page reads a flash first consumes it, so if a message appears on the wrong screen, something read it early.</span></li><li><code>$_SESSION['flash'][$key] = $msg</code><span>Storing it puts it in the session, which is the only thing that survives to the next page load.</span></li></ol><p class="takeaway"><b>What to remember</b> Store on the page that acted, read on the page that follows. It works because the session outlives the redirect.</p></article>
+<article class="tour" id="c6"><h3>PHP and HTML woven together</h3><p class="tour-intro">This is the pattern that looks strangest if you have not seen PHP before: code and markup in the same file, taking turns. It is the Academic Program dropdown.</p><p class="src"><span class="file page">app/student/student_upload_ai.php</span> <span class="meta">line 3127</span></p><pre class="code"><code><span class="ln">3127</span>         their own, so a student saw their degree named one
+<span class="ln">3128</span>         way on their account and another way on this form. */ ?&gt;
+<span class="ln">3129</span>&lt;?php foreach (programs_map() as $progName =&gt; $progCode): ?&gt;
+<span class="ln">3130</span>  &lt;option value=&quot;&lt;?= e($progName) ?&gt;&quot;&lt;?= $myProgram === $progName ? ' selected' : '' ?&gt;&gt;&lt;?= e($progCode) ?&gt;: &lt;?= e($progName) ?&gt;&lt;/option&gt;</code></pre><ol class="notes"><li><code>&lt;?php foreach (</code><span>Start a loop. It runs once for every programme in the shared list.</span></li><li><code>&lt;option value=</code><span>Plain HTML, sent to the browser as it is — once per turn of the loop.</span></li><li><code>&lt;?= e($progName) ?&gt;</code><span>&lt;?= means &quot;print this here&quot;. So the loop prints ten &lt;option&gt; lines, each with a different programme in it.</span></li><li><code>endforeach</code><span>Close the loop. Everything between it and the foreach was repeated.</span></li></ol><p class="takeaway"><b>What to remember</b> PHP does not build the page in memory and hand it over. It prints text as it goes, and the browser receives finished HTML with no idea a loop was involved.</p></article>
+<article class="tour" id="c7"><h3>Moving a paper along the chain</h3><p class="tour-intro">When an adviser approves, two things are written: the history, and the paper’s new position. This is the history half — the row that later lets the system tell a returned paper from one that was never submitted.</p><p class="src"><span class="file engine">config/core.php</span> <span class="meta">line 1288</span></p><pre class="code"><code><span class="ln">1288</span>function add_workflow(int $paper_id, int $reviewer_id, string $level, string $status, string $feedback=''): void {
+<span class="ln">1289</span>  $conn = db();
+<span class="ln">1290</span>  $stmt=$conn-&gt;prepare(&quot;INSERT INTO approval_workflow (paper_id,reviewer_id,review_level,status,feedback,reviewed_at) VALUES (?,?,?,?,?, CASE WHEN ? IN ('approved','declined') THEN NOW() ELSE NULL END)&quot;);
+<span class="ln">1291</span>  $stmt-&gt;bind_param('iissss',$paper_id,$reviewer_id,$level,$status,$feedback,$status);
+<span class="ln">1292</span>  $stmt-&gt;execute();
+<span class="ln">1293</span>}</code></pre><ol class="notes"><li><code>INSERT INTO approval_workflow</code><span>A new row every time somebody decides something. Nothing is overwritten, so the full history of a paper survives.</span></li><li><code>CASE WHEN ? IN ('approved','declined') THEN NOW() ELSE NULL END</code><span>The timestamp is only set for a real decision. A row that merely records &quot;this is waiting on you&quot; has no reviewed_at, which is how the code tells the two apart.</span></li><li><code>bind_param('iissss'</code><span>Six holes, six letters: two integers then four strings. Count them — a wrong count here fails only when the code actually runs.</span></li></ol><p class="takeaway"><b>What to remember</b> The paper’s current_status says where it is now; approval_workflow says how it got there. Both are needed, which is why every decision writes twice.</p></article></div>
+</section>
+
+<section id="modules">
+  <p class="eyebrow">The modules</p>
+  <h2>Every group, and every file in it</h2>
+  <p class="lede">Each card is a module. Inside are its features, and under each
+    feature the files that do the work &mdash; with why that file exists.</p>
+  <div class="finder">
+    <input id="q" type="search" placeholder="Search a filename or a feature&hellip;" autocomplete="off" aria-label="Search files and features">
+    <button type="button" id="clear">Show all</button>
+    <span class="count" id="count"></span>
+  </div>
+  <div class="mods" id="mods"><article class="mod" id="m1"><header><span class="num">MODULE 1</span><h3>Foundation — what runs before your page does</h3><p>Pulled in by the first line of nearly every file. If this breaks, everything breaks at once.</p></header><div class="feat"><h4>The toolbox every page uses</h4><p>Opens the database, starts the session, and defines the shared helpers so the same rule is never written twice.</p><ul class="files"><li><span class="file engine">config/core.php</span><span class="why">Holds db() (the database connection), current_user(), require_role(), send_email(), create_notification(), and the rules: the programme list, the paper types, how long a student account lives. <span class="meta">1,990 lines, used by 65</span></span></li><li><span class="file engine">config/config.php</span><span class="why">Constants and paths. Reads the secrets out of .env so passwords and API keys are never written in the code. <span class="meta">115 lines, used by 2</span></span></li></ul></div><div class="feat"><h4>Turning a crash into a reference number</h4><p>When something fails the visitor sees ERR-B09E2179 rather than a stack trace. The detail goes to the server log, where that same code can be looked up.</p><ul class="files"><li><span class="file engine">config/error_handler.php</span><span class="why">Catches every uncaught error, generates the reference, writes the detail to Apache’s log and shows a safe page. This is why a code can be traced back to an exact line. <span class="meta">169 lines, used by 1</span></span></li><li><span class="file page">pages/error_page.php</span><span class="why">The card the visitor sees. Deliberately has no navigation, because the failure may be in the navigation. <span class="meta">186 lines</span></span></li></ul></div><div class="feat"><h4>The approval rules, in one place</h4><ul class="files"><li><span class="file engine">config/workflow.php</span><span class="why">Which statuses count as still in progress, which are final, and whether a paper may still be withdrawn. Kept apart from core.php because it is the business rule, not the plumbing. <span class="meta">231 lines, used by 7</span></span></li></ul></div><div class="wires"><b>wiring</b>talks to everything — MySQL, and every page in every other module</div></article>
+<article class="mod" id="m2"><header><span class="num">MODULE 2</span><h3>Look and feel — the shell around every page</h3><p>A page that hand-rolls its own header is a bug, not a style choice: change these and the whole site changes.</p></header><div class="feat"><h4>The three-part shell</h4><p>Every page is a sandwich: head, header, your content, footer.</p><ul class="files"><li><span class="file shared">includes/site_head.php</span><span class="why">Fonts, the colour tokens (--maroon, --ink and the rest) and the shared stylesheet. It pulls in the theme, the focus rings and the dropdown skin. <span class="meta">867 lines, used by 26</span></span></li><li><span class="file shared">includes/site_header.php</span><span class="why">The top bar. The menu it draws depends on your role, so a student never sees Review Submissions. <span class="meta">340 lines, used by 25</span></span></li><li><span class="file shared">includes/site_footer.php</span><span class="why">The foot of the page, plus the shared JavaScript: the notification bell, the avatar menu, the login panel, the loading bar. <span class="meta">309 lines, used by 25</span></span></li></ul></div><div class="feat"><h4>Theme, light and dark</h4><ul class="files"><li><span class="file shared">includes/theme.php</span><span class="why">Both palettes, applied before the page paints so it never flashes white and then turns dark. <span class="meta">364 lines, used by 1</span></span></li><li><span class="file shared">includes/focus_ring.php</span><span class="why">The outline that follows the keyboard, and the themed scrollbar. <span class="meta">132 lines, used by 4</span></span></li><li><span class="file shared">includes/select_skin.php</span><span class="why">Replaces the browser’s grey dropdown with one matching the site, while keeping the real control underneath so forms still work. <span class="meta">394 lines, used by 1</span></span></li><li><span class="file shared">includes/page_theme.php</span><span class="why">Per-page colour tweaks for the consoles. <span class="meta">225 lines, used by 6</span></span></li></ul></div><div class="feat"><h4>Things that talk to the visitor</h4><ul class="files"><li><span class="file shared">includes/action_dialogs.php</span><span class="why">The site-styled &quot;are you sure?&quot;. Put data-confirm on a button and this handles it — which is why the code never calls the browser’s own confirm(). <span class="meta">324 lines, used by 6</span></span></li><li><span class="file shared">includes/flash_banner.php</span><span class="why">The green and red messages after an action, with the dismiss X. <span class="meta">95 lines, used by 6</span></span></li><li><span class="file shared">includes/loading_bar.php</span><span class="why">The bar along the bottom while the site is busy. It wraps the browser’s own request functions, so every existing request reports without being edited. <span class="meta">205 lines, used by 1</span></span></li><li><span class="file shared">includes/accessibility.php</span><span class="why">The accessibility widget — text size, contrast, spacing. <span class="meta">787 lines, used by 5</span></span></li><li><span class="file shared">includes/scroll_jump.php</span><span class="why">The jump-to-top button on long pages. <span class="meta">93 lines, used by 8</span></span></li><li><span class="file shared">includes/theme_welcome.php</span><span class="why">The one-time note introducing the theme switcher to a new visitor. <span class="meta">143 lines, used by 1</span></span></li><li><span class="file shared">includes/back_button.php</span><span class="why">Five lines. The back link, kept shared so it looks the same everywhere. <span class="meta">5 lines, used by 1</span></span></li></ul></div><div class="wires"><b>wiring</b>used by every page · needs core.php for the CSP nonce</div></article>
+<article class="mod" id="m3"><header><span class="num">MODULE 3</span><h3>Signing in</h3><p>ID and password. No usernames, no birthdate, no OTP — all three were removed, though the OTP code is still there, commented out.</p></header><div class="feat"><h4>The sign-in itself</h4><p>One ID box. It matches against four columns, because which one holds your ID depends on who created your account.</p><ul class="files"><li><span class="file page">app/auth/login.php</span><span class="why">Checks the password, counts failed attempts, refuses an expired student account, makes sure the account matches the tab you used, then sends you to your own dashboard. <span class="meta">1,223 lines</span></span></li><li><span class="file page">app/auth/logout.php</span><span class="why">Empties the session. Small on purpose. <span class="meta">36 lines</span></span></li><li><span class="file page">archive/login.php</span><span class="why">The standalone sign-in page, used by the link in the guest credentials email. <span class="meta">1,054 lines</span></span></li></ul></div><div class="feat"><h4>Guessing protection</h4><p>The IDs follow a predictable pattern, so without this the only defence would be the password rule.</p><ul class="files"><li><span class="file engine">config/core.php</span><span class="why">The login_throttle_* helpers: five failures per account and twenty per machine inside fifteen minutes, then a lockout. Counted in the login_attempts table. <span class="meta">1,990 lines, used by 65</span></span></li></ul></div><div class="wires"><b>wiring</b>reads users, login_attempts, guest_sessions · then hands you to the right desk</div></article>
+<article class="mod" id="m4"><header><span class="num">MODULE 4</span><h3>Accounts — who exists, and who advises whom</h3><p>Nobody registers themselves. Every account is created by someone one step above, and that link is what routes papers later.</p></header><div class="feat"><h4>The chain of who creates whom</h4><p>Director → Coordinator → Adviser → Student. The created_by column records it, and that single column is how a submitted paper knows which adviser’s desk to land on.</p><ul class="files"><li><span class="file page">app/faculty/faculty_manage_students.php</span><span class="why">The adviser’s roll: create, edit, archive a student, reset a password. Everything here is filtered by created_by so one adviser never sees another’s students. <span class="meta">1,130 lines</span></span></li><li><span class="file page">app/admin/admin_manage_faculty.php</span><span class="why">The Coordinator creating advisers. <span class="meta">531 lines</span></span></li><li><span class="file page">app/admin/super_admin_manage_admins.php</span><span class="why">The Director creating coordinators, heads and librarians. <span class="meta">508 lines</span></span></li><li><span class="file page">app/librarian/librarian_manage_guests.php</span><span class="why">Guest passes — a temporary username and password valid 1 to 24 hours, emailed to a visitor. <span class="meta">441 lines</span></span></li></ul></div><div class="feat"><h4>The shared console look</h4><p>Three management pages that look identical because they share their parts.</p><ul class="files"><li><span class="file shared">includes/manage_page.php</span><span class="why">The layout and stylesheet for all three. <span class="meta">398 lines, used by 5</span></span></li><li><span class="file shared">includes/manage_console.php</span><span class="why">The list, the tabs and the row actions. <span class="meta">252 lines, used by 4</span></span></li><li><span class="file shared">includes/manage_save_confirm.php</span><span class="why">&quot;Save these changes?&quot; with a field-by-field list of what you altered. <span class="meta">168 lines, used by 3</span></span></li><li><span class="file shared">includes/password_generator.php</span><span class="why">The Generate button. Builds a password from the name and ID already typed. <span class="meta">140 lines, used by 3</span></span></li><li><span class="file shared">includes/password_once.php</span><span class="why">Shows a new password exactly once. Nothing stores it afterwards. <span class="meta">124 lines, used by 4</span></span></li><li><span class="file shared">includes/password_audit_tab.php</span><span class="why">The record of password changes, scoped to your own students. <span class="meta">201 lines, used by 3</span></span></li></ul></div><div class="feat"><h4>The rules behind the forms</h4><ul class="files"><li><span class="file model">app/models/FacultyManagementService.php</span><span class="why">Validates and creates an adviser: name has no digits, valid email, password rules, ID not already taken. <span class="meta">146 lines, used by 1</span></span></li><li><span class="file model">app/models/AdminManagementService.php</span><span class="why">The same for staff accounts, and it maps a job title to a role and level. <span class="meta">183 lines, used by 1</span></span></li><li><span class="file model">app/models/UserRepository.php</span><span class="why">The actual database queries about users, kept apart from the rules above. <span class="meta">144 lines, used by 1</span></span></li></ul></div><div class="feat"><h4>Student accounts expire</h4><p>An account’s life comes from the section: a first year gets five years, a fourth year two. Moving a student up a year is how you renew them.</p><ul class="files"><li><span class="file engine">config/core.php</span><span class="why">student_account_years() and student_expiry_date(). Recalculated on every create and edit, so the renewal is automatic. <span class="meta">1,990 lines, used by 65</span></span></li><li><span class="file page">pages/settings.php</span><span class="why">What each person can change about their own account. <span class="meta">633 lines</span></span></li></ul></div><div class="wires"><b>wiring</b>writes users, password_changes · feeds the review desks</div></article>
+<article class="mod" id="m5"><header><span class="num">MODULE 5</span><h3>Submitting a paper</h3><p>The biggest single thing in the project, and the hardest file to work in.</p></header><div class="feat"><h4>The four-step wizard</h4><p>Details, then the PDF and the writing, then supporting documents, then review and submit. All four steps live in one file; only one is visible at a time.</p><ul class="files"><li><span class="file page">app/student/student_upload_ai.php</span><span class="why">The form, the AI extraction, the draft saving, the validation and the submit handler all in one file. The one most worth splitting up. <span class="meta">7,518 lines</span></span></li><li><span class="file page">app/student/student_upload.php</span><span class="why">An older, simpler upload form. Nothing links to it any more. <span class="meta">433 lines</span></span></li></ul></div><div class="feat"><h4>What it refuses, and why</h4><p>Checked on the server, not just in the browser, because anything checked only in the browser can be walked around.</p><ul class="files"><li><span class="file model">app/helpers/UploadHelper.php</span><span class="why">The PDF check: it reads the file’s actual content type rather than trusting the .pdf on the end, and rejects an empty file or one over the limit. <span class="meta">68 lines, used by 1</span></span></li><li><span class="file shared">includes/validation.php</span><span class="why">Shared field checks used by the forms. <span class="meta">50 lines, used by 1</span></span></li><li><span class="file engine">config/core.php</span><span class="why">rich_text_sanitize() — the written sections arrive as HTML from the editors, and this is where untrusted markup stops. <span class="meta">1,990 lines, used by 65</span></span></li></ul></div><div class="feat"><h4>Drafts, and changing your mind</h4><ul class="files"><li><span class="file page">app/student/student_draft_delete.php</span><span class="why">Throws away a draft the student no longer wants. <span class="meta">116 lines</span></span></li><li><span class="file page">app/student/student_cancel_submission.php</span><span class="why">Withdraws a submission, but only inside a time window — once the reviewer has had it a while, the button is gone. <span class="meta">101 lines</span></span></li><li><span class="file page">app/student/student_submit.php</span><span class="why">Hands a finished draft to the adviser. <span class="meta">26 lines</span></span></li></ul></div><div class="wires"><b>wiring</b>needs Google Drive (the PDF goes there first) · hands to the review desks</div></article>
+<article class="mod" id="m6"><header><span class="num">MODULE 6</span><h3>Review and approval</h3><p>Four different desks that are all the same file, configured differently.</p></header><div class="feat"><h4>One review desk, four roles</h4><p>Rather than four near-identical pages drifting apart, each role’s page sets a few options and includes the shared console.</p><ul class="files"><li><span class="file shared">includes/review_console.php</span><span class="why">The whole review desk: the list, the filters, the tabs, the paper cards. Four pages configure it with an $RC array. <span class="meta">1,010 lines, used by 4</span></span></li><li><span class="file page">app/faculty/faculty_review_dashboard.php</span><span class="why">The Research Adviser’s desk. Approving here also records the checklist of what the adviser confirmed was present. <span class="meta">188 lines</span></span></li><li><span class="file page">app/admin/admin_review_dashboard.php</span><span class="why">The Research Coordinator’s desk. Approving here publishes the paper — this is the end of the chain. <span class="meta">144 lines</span></span></li><li><span class="file page">app/faculty/head_review_dashboard.php</span><span class="why">The Head of Academic Programs. Reads; does not approve. <span class="meta">91 lines</span></span></li><li><span class="file page">app/admin/super_admin_review_dashboard.php</span><span class="why">The Director. Reads, and can archive a published paper. <span class="meta">135 lines</span></span></li><li><span class="file page">app/review_paper.php</span><span class="why">One paper opened in full, with the PDF beside the decision form. <span class="meta">620 lines</span></span></li></ul></div><div class="feat"><h4>Recording the decision</h4><ul class="files"><li><span class="file model">app/models/PaperService.php</span><span class="why">Approve and decline: writes the history row, moves the status on, notifies the next person. <span class="meta">71 lines, used by 1</span></span></li><li><span class="file model">app/models/PaperRepository.php</span><span class="why">The paper queries themselves. <span class="meta">130 lines, used by 1</span></span></li><li><span class="file engine">config/workflow.php</span><span class="why">Which status follows which, and whether a paper can still be withdrawn. <span class="meta">231 lines, used by 7</span></span></li></ul></div><div class="wires"><b>wiring</b>writes approval_workflow, paper_checklist, research_papers · triggers the notifications</div></article>
+<article class="mod" id="m7"><header><span class="num">MODULE 7</span><h3>Reading — the public repository</h3><p>The only part a visitor sees without an account. There is no download anywhere: a paper is read in place.</p></header><div class="feat"><h4>Browsing and searching</h4><ul class="files"><li><span class="file page">archive/index.php</span><span class="why">The public repository: search, filter by programme and year, paginate. Only papers with status approved appear. <span class="meta">895 lines</span></span></li><li><span class="file shared">includes/browse_console.php</span><span class="why">The search and filter interface, shared with the signed-in browsing pages. <span class="meta">562 lines, used by 3</span></span></li><li><span class="file shared">includes/browse_console_js.php</span><span class="why">The type-ahead suggestions. It escapes the text first and then highlights the match — never the other way round. <span class="meta">261 lines, used by 3</span></span></li></ul></div><div class="feat"><h4>Reading one paper</h4><ul class="files"><li><span class="file page">archive/view_paper.php</span><span class="why">A single paper. The old ?download=1 endpoint was removed, which is what stops a guest taking a copy. <span class="meta">424 lines</span></span></li><li><span class="file shared">includes/pdf_dock.php</span><span class="why">The PDF panel that slides in beside the text, so the reader keeps their place. <span class="meta">292 lines, used by 3</span></span></li><li><span class="file page">app/student/pdf_viewer.php</span><span class="why">The viewer itself. <span class="meta">204 lines</span></span></li><li><span class="file page">pages/view_paper.php</span><span class="why">The same paper reached from the Resources menu rather than the repository listing. <span class="meta">237 lines</span></span></li><li><span class="file page">archive/archive_handler.php</span><span class="why">Fifteen lines. A small shared piece the archive pages lean on. <span class="meta">15 lines, used by 3</span></span></li><li><span class="file model">app/models/ArchiveRepository.php</span><span class="why">The queries behind the archive. <span class="meta">140 lines, used by 1</span></span></li><li><span class="file model">app/models/ArchiveService.php</span><span class="why">The rules on top of them — what may be shown, and to whom. <span class="meta">56 lines, used by 1</span></span></li></ul></div><div class="feat"><h4>Visitors without an account</h4><ul class="files"><li><span class="file page">archive/guest_access.php</span><span class="why">The guest entrance. <span class="meta">38 lines</span></span></li><li><span class="file engine">config/core.php</span><span class="why">guest_pass_still_valid() re-checks the pass on every page, so revoking one ends the session immediately rather than whenever it would have expired. <span class="meta">1,990 lines, used by 65</span></span></li></ul></div><div class="wires"><b>wiring</b>reads research_papers (approved only), papers_archive</div></article>
+<article class="mod" id="m8"><header><span class="num">MODULE 8</span><h3>Messages — the bell, email, and asking for help</h3></header><div class="feat"><h4>Notifications</h4><p>Written whenever something happens to your paper. The bell is in the shared header, so it is on every page at once.</p><ul class="files"><li><span class="file page">notifications/notifications_handler.php</span><span class="why">Marks them read, in the background, without reloading the page. <span class="meta">28 lines</span></span></li><li><span class="file page">notifications/notification_center.php</span><span class="why">The full list. <span class="meta">263 lines</span></span></li><li><span class="file engine">config/core.php</span><span class="why">create_notification() — one function called from everywhere, so every notification has the same shape. <span class="meta">1,990 lines, used by 65</span></span></li></ul></div><div class="feat"><h4>Email</h4><ul class="files"><li><span class="file engine">config/core.php</span><span class="why">send_email() and the layout helpers, so every message the system sends looks the same. Goes out through Gmail’s SMTP using the credentials in .env. <span class="meta">1,990 lines, used by 65</span></span></li></ul></div><div class="feat"><h4>Forgotten password, and account problems</h4><p>There is no self-service reset. You say who set up your account, the site checks that is really your adviser, and the request lands on that person’s desk.</p><ul class="files"><li><span class="file page">pages/contact_support.php</span><span class="why">The form. It verifies the requester exists and that the person named really is their adviser, so a request cannot be aimed at a stranger. <span class="meta">625 lines</span></span></li><li><span class="file page">app/support_requests.php</span><span class="why">The desk that answers them. A request disappears once actioned. <span class="meta">286 lines</span></span></li></ul></div><div class="wires"><b>wiring</b>writes notifications, support_requests · triggered by submitting, reviewing and account changes</div></article>
+<article class="mod" id="m9"><header><span class="num">MODULE 9</span><h3>Analytics and exports</h3></header><div class="feat"><h4>The charts</h4><ul class="files"><li><span class="file page">analytics/analytics_dashboard.php</span><span class="why">Submissions over time, by programme, by status. The chart colours are read from the theme at draw time and rebuilt when the theme changes, so they survive dark mode. <span class="meta">1,397 lines</span></span></li><li><span class="file page">analytics/paper_analysis.php</span><span class="why">One paper in detail. <span class="meta">239 lines</span></span></li><li><span class="file model">app/models/AnalyticsService.php</span><span class="why">The counting queries. <span class="meta">28 lines, used by 3</span></span></li><li><span class="file page">analytics/dashboard.php</span><span class="why">Nineteen lines, and all of them a redirect. There used to be two analytics pages for two audiences; they were merged, and this stays as a signpost so old links still arrive somewhere. <span class="meta">19 lines</span></span></li></ul></div><div class="feat"><h4>Export to a file</h4><p>Written by hand, because the usual libraries were not available. A spreadsheet and a Word file are both a zip of XML underneath.</p><ul class="files"><li><span class="file shared">includes/pdf_writer.php</span><span class="why">Builds a PDF byte by byte, including the charts as images. <span class="meta">416 lines, used by 1</span></span></li><li><span class="file shared">includes/xlsx_writer.php</span><span class="why">Builds an Excel file. <span class="meta">334 lines, used by 1</span></span></li><li><span class="file shared">includes/docx_writer.php</span><span class="why">Builds a Word file. <span class="meta">230 lines, used by 1</span></span></li></ul></div><div class="wires"><b>wiring</b>reads research_papers, approval_workflow, analytics, users</div></article>
+<article class="mod" id="m10"><header><span class="num">MODULE 10</span><h3>The AI assistant</h3><p>Two separate jobs: reading a student’s PDF to fill the form, and answering questions about the system.</p></header><div class="feat"><h4>Reading the uploaded PDF</h4><p>Pulls out the title, authors, year, abstract and keywords so the student does not retype them. It extracts what the paper says; it does not invent what is missing.</p><ul class="files"><li><span class="file engine">config/groq_config.php</span><span class="why">Which model, and extract_pdf_text() — pulls the text out of the PDF before the AI sees it. A scan with no text layer is refused with an explanation. This is the copy every page actually uses. <span class="meta">522 lines, used by 7</span></span></li><li><span class="file page">ai/ai_extract.php</span><span class="why">The extraction endpoint. <span class="meta">77 lines</span></span></li></ul></div><div class="feat"><h4>The chatbot</h4><ul class="files"><li><span class="file page">ai/help_chatbot.php</span><span class="why">Answers questions about using PAPEL. Each question is answered on its own; nothing is remembered between them. <span class="meta">142 lines</span></span></li><li><span class="file page">app/student/student_chatbot.php</span><span class="why">The chat window. <span class="meta">151 lines</span></span></li></ul></div><div class="feat"><h4>Keeping it in bounds</h4><ul class="files"><li><span class="file page">ai/prompt_guard.php</span><span class="why">Blocks attempts to talk the assistant out of its instructions. <span class="meta">188 lines, used by 3</span></span></li><li><span class="file page">ai/rate_limiter.php</span><span class="why">Counts each person’s use in ai_rate_limits and refuses once the allowance is spent, so one student cannot exhaust the account. <span class="meta">133 lines, used by 3</span></span></li></ul></div><div class="wires"><b>wiring</b>called from the upload form · talks to Groq over the internet · falls back to typing it in by hand</div></article>
+<article class="mod" id="m11"><header><span class="num">MODULE 11</span><h3>Storage — Google Drive</h3><p>The PDFs do not live on the server. They go to a Google account, and the database keeps only the file’s id.</p></header><div class="feat"><h4>Uploading and filing</h4><ul class="files"><li><span class="file engine">config/gdrive_config.php</span><span class="why">Signs in to Google, refreshes the access token, creates the folder for the programme and year, uploads the file and returns its id. <span class="meta">539 lines, used by 19</span></span></li><li><span class="file page">app/admin/gdrive_settings.php</span><span class="why">Where the Director connects the Google account and names the destination folder. <span class="meta">326 lines</span></span></li><li><span class="file page">pages/gdrive_callback.php</span><span class="why">Where Google sends the browser back after you approve access. <span class="meta">37 lines</span></span></li></ul></div><div class="feat"><h4>Keeping the connection alive</h4><ul class="files"><li><span class="file script">scripts/gdrive_keepalive.php</span><span class="why">Run weekly. Google throws away a refresh token that goes six months unused, and expires one every seven days while the app is in Testing mode. This refreshes it deliberately and says plainly when it cannot. <span class="meta">82 lines</span></span></li></ul></div><div class="wires"><b>wiring</b>used when submitting and when reading · when it fails, submission stops dead — the upload happens before the database row is written</div></article>
+<article class="mod" id="m12"><header><span class="num">MODULE 12</span><h3>The test suite — Python, not PHP</h3><p>Uses the site the way a person would: sign in, click, submit, and check what actually happened.</p></header><div class="feat"><h4>The machinery</h4><ul class="files"><li><span class="file test">tests/harness.py</span><span class="why">A pretend browser: keeps cookies, signs in through the real form, sends the security token with every post, and can read the database to check the result. <span class="meta">299 lines</span></span></li><li><span class="file test">tests/fixtures.py</span><span class="why">Creates a test adviser and two test students through the real consoles, then deletes them at the end. Every test address ends in @example.com, which cannot receive mail, so a test can never email a real person. <span class="meta">200 lines</span></span></li><li><span class="file test">tests/run_all.py</span><span class="why">Runs everything and clears up afterwards. <span class="meta">68 lines</span></span></li></ul></div><div class="feat"><h4>The tests themselves</h4><ul class="files"><li><span class="file test">tests/m1_auth.py</span><span class="why">Signing in, and creating accounts. <span class="meta">304 lines</span></span></li><li><span class="file test">tests/m3_dashboard.py</span><span class="why">Each role reaches its own desk. <span class="meta">135 lines</span></span></li><li><span class="file test">tests/m4_submission.py</span><span class="why">Submitting, including building a real PDF in memory to upload. <span class="meta">504 lines</span></span></li><li><span class="file test">tests/m5_review.py</span><span class="why">The approval chain end to end. <span class="meta">291 lines</span></span></li><li><span class="file test">tests/m6_archive.py</span><span class="why">Guests, the repository, search, files. <span class="meta">469 lines</span></span></li><li><span class="file test">tests/m7_notify.py</span><span class="why">Notifications and email. <span class="meta">168 lines</span></span></li><li><span class="file test">tests/m8_security.py</span><span class="why">Injection, cross-site scripting, role separation, reading someone else’s paper. <span class="meta">307 lines</span></span></li><li><span class="file test">tests/m9_ai.py</span><span class="why">The assistant. <span class="meta">290 lines</span></span></li><li><span class="file test">tests/report.py</span><span class="why">Turns the run into the spreadsheet format of the tracker. <span class="meta">150 lines</span></span></li></ul></div><div class="wires"><b>wiring</b>drives the whole site over HTTP · touches only rows it created</div></article>
+<article class="mod" id="m13"><header><span class="num">MODULE 13</span><h3>Dashboards and everyday pages</h3><p>Where each person actually lands, and the pages anyone can read. These sit on top of every other module rather than beside them.</p></header><div class="feat"><h4>The front door</h4><p>The first decision the site makes about you.</p><ul class="files"><li><span class="file page">index.php</span><span class="why">Twelve lines, and the most-used file in the project: if you are signed in it sends you to your own desk, and if you are not it sends you to the public repository. Nothing else. <span class="meta">12 lines</span></span></li><li><span class="file page">pages/index.php</span><span class="why">The same idea for the Resources area. <span class="meta">15 lines</span></span></li></ul></div><div class="feat"><h4>Each role’s desk</h4><p>The page you see after signing in. Which one you get is decided by role_home() in core.php.</p><ul class="files"><li><span class="file page">app/student/student_dashboard.php</span><span class="why">The student’s home: their papers in four tabs — approved, in process, returned, drafts — with the progress tracker. The tabs matter: a paper under review is not on the default view. <span class="meta">765 lines</span></span></li><li><span class="file page">app/faculty/faculty_dashboard.php</span><span class="why">The adviser’s overview, separate from their review desk. <span class="meta">214 lines</span></span></li><li><span class="file page">app/student/paper_details.php</span><span class="why">One of the student’s own papers in full, including the reviewer’s feedback if it was returned. <span class="meta">510 lines</span></span></li></ul></div><div class="feat"><h4>The shared dashboard furniture</h4><p>Why every dashboard looks like the others.</p><ul class="files"><li><span class="file shared">includes/console_shell.php</span><span class="why">The card layout and the progress tracker that shows how far along the chain a paper has got. Used by every dashboard. <span class="meta">171 lines, used by 7</span></span></li><li><span class="file shared">includes/card_collapse.php</span><span class="why">The fold-away sections on a long card. <span class="meta">87 lines, used by 5</span></span></li><li><span class="file shared">includes/paper_record_css.php</span><span class="why">The styling for a paper record, shared by the pages that show one. <span class="meta">198 lines, used by 3</span></span></li></ul></div><div class="feat"><h4>Pages anyone can read</h4><ul class="files"><li><span class="file page">pages/help_center.php</span><span class="why">How to use the system. <span class="meta">382 lines</span></span></li><li><span class="file page">pages/about_us.php</span><span class="why">About the project. <span class="meta">210 lines</span></span></li><li><span class="file page">pages/terms_and_conditions.php</span><span class="why">Terms. <span class="meta">172 lines</span></span></li><li><span class="file page">pages/privacy.php</span><span class="why">Privacy. <span class="meta">219 lines</span></span></li></ul></div><div class="feat"><h4>One dangerous tool</h4><ul class="files"><li><span class="file page">reset_system_data.php</span><span class="why">Director-only, and exactly what it sounds like: it empties the system’s data. Worth knowing it exists so it is never run by accident. <span class="meta">157 lines</span></span></li></ul></div><div class="wires"><b>wiring</b>uses every other module · role_home() in core.php decides which desk you land on</div></article></div>
+</section>
+
+<section id="db">
+  <p class="eyebrow">Reference</p>
+  <h2>The database, table by table</h2>
+  <p class="lede">The first four are where nearly everything happens; the rest
+    support them.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Table</th><th>What it holds</th></tr></thead>
+    <tbody><tr><td>users</td><td>Every account of every kind. created_by is the link that decides whose desk a paper reaches.</td></tr><tr><td>research_papers</td><td>The papers, including the written sections and the Google Drive file id. current_status moves along the chain.</td></tr><tr><td>approval_workflow</td><td>The history: who decided what, when, and the reason given. Also how &quot;draft&quot; is told apart from &quot;returned&quot;.</td></tr><tr><td>notifications</td><td>What the bell shows.</td></tr><tr><td>papers_archive</td><td>Copies kept after a paper is removed. Meant to outlive its paper — rows here with no matching paper are correct, not orphans.</td></tr><tr><td>paper_checklist</td><td>What the adviser ticked when approving.</td></tr><tr><td>supporting_documents</td><td>Ethics clearance, consent form and the rest.</td></tr><tr><td>guest_sessions</td><td>Temporary visitor passes. Note it also keeps the password in plain text so the Librarian can re-show it.</td></tr><tr><td>support_requests</td><td>Forgotten passwords and account corrections, waiting on someone’s desk.</td></tr><tr><td>password_changes</td><td>The audit of who reset whose password.</td></tr><tr><td>login_attempts</td><td>Failed sign-ins, for the lockout.</td></tr><tr><td>analytics</td><td>Pre-computed figures for the dashboard.</td></tr><tr><td>system_settings</td><td>Site-wide settings, including the Google Drive destination folder.</td></tr><tr><td>gdrive_settings</td><td>The stored Google token.</td></tr><tr><td>ai_rate_limits</td><td>How much AI each person has used.</td></tr><tr><td>ai_processing_log</td><td>Intended to record what the AI was asked. Currently never written to.</td></tr><tr><td>imrad_checklist</td><td>Section-by-section checks. Currently empty.</td></tr><tr><td>paper_favorites</td><td>Saved papers. Currently empty.</td></tr><tr><td>storage_usage</td><td>How much Drive space is used.</td></tr><tr><td>notification_schedule</td><td>Groundwork for reminder emails. Unused.</td></tr></tbody>
+  </table></div>
+</section>
+
+<section id="dead">
+  <h2>Files nothing uses</h2>
+  <p class="lede">No other file refers to these. Knowing they are dead saves you
+    reading them &mdash; and one of them is a trap.</p>
+  <ul class="files" style="gap:.6rem"><li><span class="file page">archive/home.php</span><span class="why">The largest dead file in the project. An earlier version of the public repository; nothing links to it and archive/index.php replaced it. <span class="meta">953 lines</span></span></li><li><span class="file page">ai/groq_config.php</span><span class="why">The trap: a near-copy of config/groq_config.php, right down to the same function names. Nothing includes it. Every AI page uses the copy in config/, so editing this one changes nothing and will cost you an afternoon. <span class="meta">306 lines</span></span></li><li><span class="file shared">includes/progress_tracker.php</span><span class="why">The real progress tracker lives in console_shell.php; this is an earlier version left behind. <span class="meta">163 lines</span></span></li><li><span class="file engine">config/sri_hashes.php</span><span class="why">Security hashes for the CDN scripts, no longer referenced. <span class="meta">19 lines</span></span></li><li><span class="file engine">config/mail_config.php</span><span class="why">Empty file. The mail settings moved into core.php and .env. <span class="meta">1 lines</span></span></li><li><span class="file shared">includes/mail_config.php</span><span class="why">Also empty, for the same reason. <span class="meta">1 lines</span></span></li></ul>
+</section>
+
+<section id="glossary">
+  <h2>PHP in ten terms</h2>
+  <p class="lede">Enough to read almost any file in this project.</p>
+  <div class="glos"><div class="gl"><h4>require / include</h4><p>Paste this other file in here, right now. It is how one file uses another; there is no import system.</p></div><div class="gl"><h4>&lt;?php … ?&gt;</h4><p>Everything between these runs on the server. Everything outside them is sent to the browser as-is. That is why HTML and code are interleaved.</p></div><div class="gl"><h4>&lt;?= $x ?&gt;</h4><p>Shorthand for "print this value here". You will see it inside HTML constantly.</p></div><div class="gl"><h4>$_POST / $_GET</h4><p>What arrived from the browser. $_POST is a submitted form; $_GET is the part after the ? in the address.</p></div><div class="gl"><h4>$_SESSION</h4><p>The one thing that survives between page loads. It is where "you are signed in as user 154" is kept.</p></div><div class="gl"><h4>Prepared statement</h4><p>Sending a query and its values separately, so a value can never be read as a command. It is what makes injection fail.</p></div><div class="gl"><h4>CSRF token</h4><p>A secret in every form proving the form came from your own session, so another site cannot post on your behalf.</p></div><div class="gl"><h4>CSP nonce</h4><p>A one-time password for a &lt;style&gt; or &lt;script&gt; block. Without it the browser refuses to run it. This is why style="…" attributes silently do nothing here.</p></div><div class="gl"><h4>e( )</h4><p>This project’s escape helper. Anything a person typed goes through it before being printed, so typed text can never become markup.</p></div><div class="gl"><h4>Flash message</h4><p>A message stored for exactly one page load — the green or red banner after an action. Reading it consumes it.</p></div></div>
+</section>
+
+<section id="upkeep">
+  <h2>Keeping this current</h2>
+  <p class="lede">This page is generated, not written by hand, so it can be
+    rebuilt whenever the code changes.</p>
+  <div class="note">
+    <strong>To rebuild it:</strong> <code>python scripts/build_field_guide.py</code>
+  </div>
+  <p>The script re-counts the files, re-reads every code sample from the file it
+    came from, and then checks itself. It will tell you, and refuse to finish
+    quietly, when:</p>
+  <ul>
+    <li>the guide names a file that no longer exists &mdash; so a rename cannot
+      leave this page lying to you;</li>
+    <li>a code sample's anchor line has been edited away;</li>
+    <li>a file listed as dead has come back into use;</li>
+    <li>a file exists that the guide has never mentioned &mdash; new work to
+      write up.</li>
+  </ul>
+  <p>It also prints what changed since the last build, so you can see at a glance
+    whether the explanations need revisiting. The wording lives in
+    <code>scripts/field_guide_content.py</code>; that is the only file to edit
+    when a feature changes.</p>
+</section>
+
+<footer class="end">
+  <p>Generated 30 August 2026 from the codebase at <code>c:\xampp\htdocs\capstone</code>.
+    File counts, line counts, the include graph and every code sample were
+    measured or lifted from source, not recalled.
+    PHP 8.0 &middot; MariaDB 10.4 &middot; XAMPP &middot; no framework, no build step.</p>
+</footer>
+
+</main>
+</div>
+
+<script>
+(function () {
+  var q = document.getElementById('q');
+  var clear = document.getElementById('clear');
+  var count = document.getElementById('count');
+  var mods = Array.prototype.slice.call(document.querySelectorAll('#mods .mod'));
+  function apply() {
+    var term = q.value.trim().toLowerCase();
+    var shown = 0;
+    mods.forEach(function (m) {
+      var hit = !term || m.textContent.toLowerCase().indexOf(term) > -1;
+      m.hidden = !hit;
+      if (hit) { shown++; }
+    });
+    count.textContent = term ? shown + ' of ' + mods.length + ' modules' : '';
+  }
+  q.addEventListener('input', apply);
+  clear.addEventListener('click', function () { q.value = ''; apply(); q.focus(); });
+})();
+</script>

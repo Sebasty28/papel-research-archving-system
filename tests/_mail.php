@@ -1,0 +1,1 @@
+<?php require_once "c:/xampp/htdocs/capstone/config/core.php"; try { $ok = send_email($argv[1], $argv[2], $argv[3]); echo $ok ? "SENT" : "REFUSED"; } catch (Throwable $e) { echo "THREW: ", substr($e->getMessage(),0,120); }

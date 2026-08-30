@@ -260,13 +260,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                             <label class="form-label fw-bold">Paper Type</label>
                             <select class="form-select" name="paper_type" required>
                                 <option value="">Select Type...</option>
-                                <option value="research">Research Paper</option>
-                                <option value="capstone">Capstone</option>
-                                <option value="thesis">Thesis</option>
-                                <option value="project">Project</option>
-                                <option value="journal">Journal Article</option>
-                                <option value="conference">Conference Paper</option>
-                                <option value="article">Article</option>
+                                <?php foreach (paper_types() as $ptCode => $ptLabel): ?>
+                                    <option value="<?= e($ptCode) ?>"><?= e($ptLabel) ?></option>
+                                <?php endforeach; ?>
                             </select>
                         </div>
 

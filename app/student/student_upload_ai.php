@@ -485,10 +485,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
   try {
     csrf_verify();
     
-    // Validate paper type
+    /* Validate paper type against the same list the dropdown was built from,
+       so the form can never offer something the handler then refuses. A
+       retired type is rejected here on purpose: it may still sit on an older
+       paper, but nothing new may be filed under one. */
     $paperType = trim($_POST['paper_type'] ?? '');
-    $validTypes = ['article','capstone','conference','journal','project','research','thesis']; // Sorted for binary search
-    if (!binary_search_exists($paperType, $validTypes)) {
+    if (!array_key_exists($paperType, paper_types())) {
       throw new Exception('Invalid paper type');
     }
     
@@ -1688,7 +1690,7 @@ body.doc-expanded.chat-docked-right { padding-right: 0; }
 }
 
 .form-control::file-selector-button {
-  background: var(--maroon);
+  background: var(--maroon-surface);
   color: #fff;
   border: none;
   padding: .4rem 1rem;
@@ -1701,7 +1703,7 @@ body.doc-expanded.chat-docked-right { padding-right: 0; }
   transition: background .2s;
 }
 
-.form-control::file-selector-button:hover { background: var(--dark-maroon); }
+.form-control::file-selector-button:hover { background: var(--maroon-surface-hover); }
 
 .text-danger {
   color: var(--maroon) !important;
@@ -3118,16 +3120,17 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
                     <?php else: ?>
                     <select class="form-select" name="program_category" id="programSelect" required>
                       <option value="">Select Program...</option>
-                      <option value="Bachelor of Science in Information Technology"<?= $myProgram === 'Bachelor of Science in Information Technology' ? ' selected' : '' ?>>BS Information Technology</option>
-                      <option value="Bachelor of Science in Industrial Engineering"<?= $myProgram === 'Bachelor of Science in Industrial Engineering' ? ' selected' : '' ?>>BS Industrial Engineering</option>
-                      <option value="Bachelor of Science in Computer Engineering"<?= $myProgram === 'Bachelor of Science in Computer Engineering' ? ' selected' : '' ?>>BS Computer Engineering</option>
-                      <option value="Bachelor of Secondary Education major in English"<?= $myProgram === 'Bachelor of Secondary Education major in English' ? ' selected' : '' ?>>BSEd English</option>
-                      <option value="Bachelor of Secondary Education major in Social Studies"<?= $myProgram === 'Bachelor of Secondary Education major in Social Studies' ? ' selected' : '' ?>>BSEd Social Studies</option>
-                      <option value="Bachelor of Elementary Education"<?= $myProgram === 'Bachelor of Elementary Education' ? ' selected' : '' ?>>BEEd</option>
-                      <option value="Bachelor of Science in Psychology"<?= $myProgram === 'Bachelor of Science in Psychology' ? ' selected' : '' ?>>BS Psychology</option>
-                      <option value="Diploma in Information Technology"<?= $myProgram === 'Diploma in Information Technology' ? ' selected' : '' ?>>Diploma IT</option>
-                      <option value="Diploma in Computer Engineering Technology"<?= $myProgram === 'Diploma in Computer Engineering Technology' ? ' selected' : '' ?>>Diploma Computer Engineering</option>
-                      <option value="Bachelor of Science in Business Administration major in Human Resource Management"<?= $myProgram === 'Bachelor of Science in Business Administration major in Human Resource Management' ? ' selected' : '' ?>>BSBA HRM</option>
+                      <?php /* Read from programs_map() and written the way the
+                               Manage Students console writes it — "BSIT: Bachelor
+                               of Science in Information Technology". The ten
+                               programmes were spelled out here in a shorthand of
+                               their own, so a student saw their degree named one
+                               way on their account and another way on this form. */ ?>
+                      <?php foreach (programs_map() as $progName => $progCode): ?>
+                        <option value="<?= e($progName) ?>"<?= $myProgram === $progName ? ' selected' : '' ?>><?= e($progCode) ?>: <?= e($progName) ?></option>
+                      <?php endforeach; ?>
+                      <?php /* Not programmes, and not in the map: kept so an
+                               account already carrying one still matches. */ ?>
                       <option value="Faculty Member"<?= $myProgram === 'Faculty Member' ? ' selected' : '' ?>>Faculty Member</option>
                       <option value="Other"<?= $myProgram === 'Other' ? ' selected' : '' ?>>Others</option>
                     </select>
@@ -3138,13 +3141,9 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
                     <label class="form-label">Paper / Research Type <span class="text-danger">*</span></label>
                     <select class="form-select" name="paper_type" required>
                       <option value="">Select paper type...</option>
-                      <option value="research">Research Paper</option>
-                      <option value="capstone">Capstone</option>
-                      <option value="thesis">Thesis</option>
-                      <option value="conference">Conference Paper</option>
-                      <option value="journal">Journal Article</option>
-                      <option value="article">Article</option>
-                      <option value="project">Project</option>
+                      <?php foreach (paper_types() as $ptCode => $ptLabel): ?>
+                        <option value="<?= e($ptCode) ?>"><?= e($ptLabel) ?></option>
+                      <?php endforeach; ?>
                     </select>
                   </div>
 
@@ -3598,12 +3597,13 @@ const PAPEL_PDF_VIEWER_URL = <?= json_encode(BASE_URL . '/app/student/pdf_viewer
    types that involve human participants and original data gathering. The list
    mirrors paper_type_needs_documents() in config/core.php — the server decides,
    this only keeps the form honest about what it is going to ask for. */
-const DOCS_REQUIRED_FOR = ['research', 'capstone'];
-const PAPER_TYPE_LABELS = {
-    research: 'Research Paper', capstone: 'Capstone', thesis: 'Thesis',
-    conference: 'Conference Paper', journal: 'Journal Article',
-    article: 'Article', project: 'Project'
-};
+const DOCS_REQUIRED_FOR = <?= json_encode(array_values(array_filter(
+    array_keys(paper_types() + paper_types_retired()),
+    'paper_type_needs_documents'))) ?>;
+/* Retired types are included so a draft filed under one still shows its name
+   rather than a bare code; only paper_types() is offered in the dropdown. */
+const PAPER_TYPE_LABELS = <?= json_encode(paper_types() + paper_types_retired(),
+    JSON_UNESCAPED_UNICODE) ?>;
 const REQUIRED_DOCS = [
     { name: 'ethics_clearance', label: 'Ethics Clearance' },
     { name: 'consent_form',     label: 'Consent Form' },
@@ -6324,7 +6324,14 @@ function goToStep(step) {
                 papelAlert('Please select a paper type');
                 return;
             }
-            const program = document.querySelector('select[name="program_category"]').value;
+            /* By name, not by tag. A student picks a programme from a select;
+               staff belong to the faculty rather than to a degree, so for them
+               the field is a read-only box with a hidden input behind it. This
+               looked only for a select, found nothing, and threw on .value —
+               which killed the click handler, so the button appeared dead
+               rather than complaining about anything. */
+            const programEl = document.querySelector('[name="program_category"]');
+            const program = programEl ? String(programEl.value).trim() : '';
             if (!program) {
                 papelAlert('Please select an Academic Program');
                 return;

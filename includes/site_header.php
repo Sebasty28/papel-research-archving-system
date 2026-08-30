@@ -254,8 +254,14 @@ if ($u) {
         <div class="panel-topbar-brand">
             <a href="<?= e(BASE_URL.'/archive/index.php') ?>"><span><?= e(APP_NAME) ?></span></a>
         </div>
-        <button class="panel-ctrl-btn" id="expandBtn" type="button" title="Full screen" aria-label="Full screen">
-            <span class="material-symbols-outlined" id="expandIcon">fullscreen</span>
+        <?php /* open_in_full / close_fullscreen, the pair the upload wizard's
+                 expand button already uses. The screen-corners icon reads as
+                 "make the browser full screen", which is not what this does —
+                 it widens the panel and leaves the page where it is. The label
+                 changes with the state, so a screen reader hears which way the
+                 button will go rather than what it is called. */ ?>
+        <button class="panel-ctrl-btn" id="expandBtn" type="button" title="Expand" aria-label="Expand" aria-pressed="false">
+            <span class="material-symbols-outlined" id="expandIcon">open_in_full</span>
         </button>
         <button class="panel-ctrl-btn" id="closeModalBtn" type="button" title="Close" aria-label="Close">
             <span class="material-symbols-outlined">close</span>

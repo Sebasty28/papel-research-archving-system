@@ -26,20 +26,38 @@
     /* The palettes, in the order they are offered. The swatch is drawn from
        the same colour the palette actually uses, so the dot in the menu is a
        true sample rather than an approximation kept in step by hand. */
+    /* The swatch is the colour people recognise the palette by, which is not
+       always the one used for text - Light Modern is known by VS Code's
+       #005FB8 while its text runs darker to clear the contrast bar. */
     var COLOURS = [
-        { id: 'maroon',    label: 'PUP Maroon',       swatch: '#820707' },
-        { id: 'green',     label: 'Dark Green',       swatch: '#14532D' },
-        { id: 'blue',      label: 'Dark Blue',        swatch: '#14487F' },
-        { id: 'white',     label: 'PUP White Modern', swatch: '#3B3B3B' },
-        { id: 'classic',   label: 'PUP Old Classic',  swatch: '#6B0F0F' }
+        { id: 'maroon',        label: 'Maroon',        swatch: '#820707' },
+        { id: 'classic',       label: 'Old Classic',   swatch: '#6B0F0F' },
+        { id: 'quiet-light',   label: 'Quiet Light',   swatch: '#705697' },
+        { id: 'modern-light',  label: 'Modern Light',  swatch: '#005FB8' },
+        { id: 'modern-dark',   label: 'Modern Dark',   swatch: '#0078D4' },
+        { id: 'quiet-dark',    label: 'Quiet Dark',    swatch: '#C4B0E4' }
     ];
+    /* Which of them are dark. The same list is in theme.php, which has to know
+       before this file has loaded so the first paint is already right. */
+    var DARK_COLOURS = { 'modern-dark': 1, 'quiet-dark': 1 };
+    var PALETTES = {};
+    COLOURS.forEach(function (c) { PALETTES[c.id] = 1; });
 
-    // "System" is a preference, not a colour scheme — it has to be resolved
-    // against the device before any CSS can key off it.
-    function resolveMode(theme) {
-        if (theme === 'dark' || theme === 'light') return theme;
-        return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
-            ? 'dark' : 'light';
+    /* Light or dark is no longer asked; it follows from the palette. */
+    function modeFor(colour) { return DARK_COLOURS[colour] ? 'dark' : 'light'; }
+
+    /* Anyone still holding a palette that was withdrawn is moved to maroon,
+       and anyone who had chosen dark keeps a dark site. theme.php does the
+       same before first paint; this repeats it for the stored value read here. */
+    function currentColour() {
+        var colour = getStored('papel_color', 'maroon');
+        if (!PALETTES[colour]) {
+            colour = (getStored('papel_theme', '') === 'dark') ? 'modern-dark'
+                                                               : 'maroon';
+            try { localStorage.setItem('papel_color', colour); } catch (e) {}
+        }
+        try { localStorage.removeItem('papel_theme'); } catch (e) {}
+        return colour;
     }
 
     /* The Quick Settings panel is written into four different pages. Rather
@@ -54,7 +72,7 @@
 
             var label = document.createElement('span');
             label.className = 'qs-section-label';
-            label.textContent = 'Colour';
+            label.textContent = 'Theme Colour';
             section.appendChild(label);
 
             var list = document.createElement('div');
@@ -79,42 +97,33 @@
             });
             section.appendChild(list);
 
-            // Above Theme, since the theme is a variation of the colour.
-            var themeSection = panel.querySelector('.qs-section:last-child');
-            panel.insertBefore(section, themeSection);
+            /* Appended, so it follows Density. This used to insert itself
+               above the last section, which was the Theme rows; with those
+               gone that rule would have put the colours above Density
+               instead. */
+            panel.appendChild(section);
         });
     }
 
     // Reflect saved preferences onto <html> and tick the matching controls.
     function syncQuickSettings() {
         var density = getStored('papel_density', 'default');
-        var theme   = getStored('papel_theme', 'light');
-        var colour  = getStored('papel_color', 'maroon');
+        var colour  = currentColour();
         var el      = document.documentElement;
 
         el.setAttribute('data-density', density);
-        el.setAttribute('data-theme', theme);
         el.setAttribute('data-color', colour);
-        el.setAttribute('data-mode', resolveMode(theme));
+        el.setAttribute('data-mode', modeFor(colour));
 
         buildColourSection();
         document.querySelectorAll('input[name="qs_density"]').forEach(function (i) { i.checked = (i.value === density); });
-        document.querySelectorAll('input[name="qs_theme"]').forEach(function (i) { i.checked = (i.value === theme); });
         document.querySelectorAll('input[name="qs_color"]').forEach(function (i) { i.checked = (i.value === colour); });
     }
     window.papelSyncQuickSettings = syncQuickSettings;
 
-    /* On "System", the page follows the device changing its mind mid-visit. */
-    if (window.matchMedia) {
-        var mq = window.matchMedia('(prefers-color-scheme: dark)');
-        var onSchemeChange = function () {
-            if (getStored('papel_theme', 'light') === 'system') {
-                document.documentElement.setAttribute('data-mode', resolveMode('system'));
-            }
-        };
-        if (mq.addEventListener) mq.addEventListener('change', onSchemeChange);
-        else if (mq.addListener) mq.addListener(onSchemeChange);
-    }
+    /* Nothing listens to the device's colour scheme any more. The palette is
+       an explicit choice, so a laptop switching to night mode no longer
+       changes a repository someone deliberately set to Maroon. */
 
     document.addEventListener('click', function (e) {
         // Collapsible sidebar cards
@@ -148,12 +157,10 @@
         if (e.target.name === 'qs_density') {
             document.documentElement.setAttribute('data-density', e.target.value);
             try { localStorage.setItem('papel_density', e.target.value); } catch (err) {}
-        } else if (e.target.name === 'qs_theme') {
-            document.documentElement.setAttribute('data-theme', e.target.value);
-            document.documentElement.setAttribute('data-mode', resolveMode(e.target.value));
-            try { localStorage.setItem('papel_theme', e.target.value); } catch (err) {}
         } else if (e.target.name === 'qs_color') {
             document.documentElement.setAttribute('data-color', e.target.value);
+            // Dark is a property of the palette, so it changes with it.
+            document.documentElement.setAttribute('data-mode', modeFor(e.target.value));
             try { localStorage.setItem('papel_color', e.target.value); } catch (err) {}
         }
     });

@@ -364,21 +364,10 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
             </div>
             <div class="option-row">
                 <div class="option-text">
-                    <strong>Colour</strong>
-                    <span>The palette the whole site is drawn in. Light and dark apply to each one.</span>
+                    <strong>Theme Colour</strong>
+                    <span>The palette the whole site is drawn in. Two of them are dark; choosing one is how the site goes dark.</span>
                 </div>
                 <div class="segmented" id="colourChoices"></div>
-            </div>
-            <div class="option-row">
-                <div class="option-text">
-                    <strong>Theme</strong>
-                    <span>Light, dark, or whatever this device is set to.</span>
-                </div>
-                <div class="segmented">
-                    <input type="radio" name="qs_theme" id="theme_system" value="system"><label for="theme_system">System</label>
-                    <input type="radio" name="qs_theme" id="theme_light" value="light"><label for="theme_light">Light</label>
-                    <input type="radio" name="qs_theme" id="theme_dark" value="dark"><label for="theme_dark">Dark</label>
-                </div>
             </div>
             <div class="option-row">
                 <div class="option-text">
@@ -513,13 +502,6 @@ document.addEventListener('DOMContentLoaded', function () {
         try { return localStorage.getItem(key) || fallback; } catch (err) { return fallback; }
     }
 
-    // "System" has to be resolved against the device before CSS can use it.
-    function resolveMode(theme) {
-        if (theme === 'dark' || theme === 'light') return theme;
-        return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
-            ? 'dark' : 'light';
-    }
-
     // Appearance — shares the same storage keys as the browse page's
     // Quick Settings panel, so the two stay in sync.
     /* Show or hide one password field. Each eye names its own field, so the
@@ -545,20 +527,28 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     var density = getStored('papel_density', 'default');
-    var theme = getStored('papel_theme', 'light');
     document.documentElement.setAttribute('data-density', density);
-    document.documentElement.setAttribute('data-theme', theme);
-    document.documentElement.setAttribute('data-mode', resolveMode(theme));
     document.querySelectorAll('input[name="qs_density"]').forEach(function (i) { i.checked = (i.value === density); });
-    document.querySelectorAll('input[name="qs_theme"]').forEach(function (i) { i.checked = (i.value === theme); });
 
-    /* Colour. The same five palettes and the same storage key the Quick
-       Settings panel uses, so changing it in either place is the same act. */
+    /* Theme colour. The same six palettes and the same storage key the Quick
+       Settings panel uses, so changing it in either place is the same act.
+       Whether the site is light or dark follows from which one is chosen -
+       there is no separate switch. */
     var COLOURS = [
-        ['maroon', 'PUP Maroon'], ['green', 'Dark Green'], ['blue', 'Dark Blue'],
-        ['white', 'PUP White Modern'], ['classic', 'PUP Old Classic']
+        ['maroon', 'Maroon'], ['classic', 'Old Classic'],
+        ['quiet-light', 'Quiet Light'], ['modern-light', 'Modern Light'],
+        ['modern-dark', 'Modern Dark'], ['quiet-dark', 'Quiet Dark']
     ];
+    var DARK_COLOURS = { 'modern-dark': 1, 'quiet-dark': 1 };
+    function modeFor(c) { return DARK_COLOURS[c] ? 'dark' : 'light'; }
+
     var colour = getStored('papel_color', 'maroon');
+    // A withdrawn palette, or an old dark preference, lands somewhere sensible.
+    if (!COLOURS.some(function (c) { return c[0] === colour; })) {
+        colour = (getStored('papel_theme', '') === 'dark') ? 'modern-dark' : 'maroon';
+        try { localStorage.setItem('papel_color', colour); } catch (err) {}
+    }
+    try { localStorage.removeItem('papel_theme'); } catch (err) {}
     var host = document.getElementById('colourChoices');
     if (host) {
         COLOURS.forEach(function (c) {
@@ -578,18 +568,16 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
     document.documentElement.setAttribute('data-color', colour);
+    document.documentElement.setAttribute('data-mode', modeFor(colour));
 
     document.addEventListener('change', function (e) {
         var input = e.target;
         if (input.name === 'qs_density') {
             document.documentElement.setAttribute('data-density', input.value);
             try { localStorage.setItem('papel_density', input.value); } catch (err) {}
-        } else if (input.name === 'qs_theme') {
-            document.documentElement.setAttribute('data-theme', input.value);
-            document.documentElement.setAttribute('data-mode', resolveMode(input.value));
-            try { localStorage.setItem('papel_theme', input.value); } catch (err) {}
         } else if (input.name === 'qs_color') {
             document.documentElement.setAttribute('data-color', input.value);
+            document.documentElement.setAttribute('data-mode', modeFor(input.value));
             try { localStorage.setItem('papel_color', input.value); } catch (err) {}
         } else if (input.classList.contains('js-pref-toggle')) {
             try { localStorage.setItem('papel_' + input.dataset.pref, input.checked ? '1' : '0'); } catch (err) {}

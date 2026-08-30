@@ -212,7 +212,17 @@ document.addEventListener('DOMContentLoaded', function () {
         updateExpandIcon();
     }
     function updateExpandIcon() {
-        if (expandIcon) expandIcon.textContent = loginPanel.classList.contains('expanded') ? 'fullscreen_exit' : 'fullscreen';
+        if (!expandIcon) { return; }
+        var open = loginPanel.classList.contains('expanded');
+        expandIcon.textContent = open ? 'close_fullscreen' : 'open_in_full';
+        /* Named for what pressing it will do, not for the state it is in, so
+           it reads correctly whichever way round the panel is. */
+        var btn = expandIcon.closest('button');
+        if (btn) {
+            btn.title = open ? 'Collapse' : 'Expand';
+            btn.setAttribute('aria-label', btn.title);
+            btn.setAttribute('aria-pressed', open ? 'true' : 'false');
+        }
     }
     /* A guest signs in with the username printed on their pass, not an ID.
        Calling it "Guest ID" sent people looking for a number they were never
@@ -291,4 +301,8 @@ document.addEventListener('DOMContentLoaded', function () {
    whichever of the two runs first. */
 require_once ROOT_PATH.'/includes/action_dialogs.php';
 require ROOT_PATH.'/includes/theme_welcome.php';
+/* The busy bar wraps fetch and XMLHttpRequest, so only one copy of it may run:
+   a second would wrap the wrappers and count every request twice, and the bar
+   would never reach zero. require_once, like the dialogs above. */
+require_once ROOT_PATH.'/includes/loading_bar.php';
 require ROOT_PATH.'/includes/accessibility.php'; ?>

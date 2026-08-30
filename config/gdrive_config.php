@@ -147,12 +147,69 @@ function get_gdrive_client($userId = null): Google_Client
         if ($client->isAccessTokenExpired() && $client->getRefreshToken()) {
             $newToken = $client->fetchAccessTokenWithRefreshToken($client->getRefreshToken());
             if (!isset($newToken['error'])) {
+                /* The library puts the refresh token back into the array when
+                   Google does not return one, so saving the whole thing keeps
+                   the connection alive indefinitely. */
                 save_system_gdrive_token($client->getAccessToken());
+                gdrive_note_refresh('ok', '');
+            } else {
+                /* Why it failed is the whole story, and it used to be thrown
+                   away. Google answers `invalid_grant` when the refresh token
+                   itself is dead — revoked, password changed, or expired
+                   because the OAuth consent screen is still in Testing, where
+                   refresh tokens last seven days. Anything else is usually the
+                   network, and reconnecting would not have helped. */
+                gdrive_note_refresh(
+                    (string)($newToken['error'] ?? 'unknown'),
+                    (string)($newToken['error_description'] ?? ''));
             }
         }
     }
 
     return $client;
+}
+
+/**
+ * Remember how the last token refresh went.
+ *
+ * Stored rather than logged, so the Storage Folder page can say what happened
+ * instead of showing "not connected" with no reason. A refresh that fails at
+ * two in the morning is not something anybody is watching a log for.
+ */
+function gdrive_note_refresh(string $result, string $detail): void
+{
+    try {
+        $conn = db();
+        $value = json_encode([
+            'result' => $result,
+            'detail' => substr($detail, 0, 300),
+            'at'     => date('Y-m-d H:i:s'),
+        ]);
+        $stmt = $conn->prepare(
+            "INSERT INTO system_settings (setting_key, setting_value, description)
+             VALUES ('gdrive_last_refresh', ?, 'How the last Google Drive token refresh went')
+             ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
+        $stmt->bind_param('s', $value);
+        $stmt->execute();
+        $stmt->close();
+    } catch (Throwable $e) {
+        // Never let bookkeeping break an upload.
+    }
+}
+
+/** What the last refresh did, for the Storage Folder page. */
+function gdrive_last_refresh(): ?array
+{
+    try {
+        $conn = db();
+        $res = $conn->query(
+            "SELECT setting_value FROM system_settings WHERE setting_key='gdrive_last_refresh' LIMIT 1");
+        if ($res && ($row = $res->fetch_assoc())) {
+            $v = json_decode($row['setting_value'], true);
+            if (is_array($v)) return $v;
+        }
+    } catch (Throwable $e) {}
+    return null;
 }
 
 /**
