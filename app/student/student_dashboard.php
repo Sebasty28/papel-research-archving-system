@@ -174,12 +174,6 @@ $years_res = $conn->prepare("SELECT DISTINCT COALESCE(YEAR(research_date), year)
 $years_res->bind_param('i', $u['user_id']); $years_res->execute();
 $years = array_column($years_res->get_result()->fetch_all(MYSQLI_ASSOC), 'year');
 
-$type_labels = [
-    'research' => 'Research Paper', 'capstone' => 'Capstone Project', 'thesis' => 'Thesis',
-    'conference' => 'Conference Paper', 'journal' => 'Journal Article',
-    'article' => 'Article', 'project' => 'Project',
-];
-
 // Query string carried across pagination / tab links
 function dash_qs(array $over = []) {
     $base = [
@@ -234,7 +228,11 @@ ob_start();
 </div>
 
 <main class="wrap layout">
-    <div class="main-col" id="mainCol">
+    <?php /* Marks this as a page whose #mainCol renders .paper-card items —
+             see includes/review_console.php's own copy of this comment for
+             why browse_console_js.php needs it rather than checking for
+             .paper-card directly. */ ?>
+    <div class="main-col" id="mainCol" data-card-console="1">
         <?php ob_start(); ?>
 
         <div class="dash-shell">
@@ -360,7 +358,7 @@ ob_start();
                                     <span><?= e(paper_date_display($r['research_date'] ?? null, $r['year'] ?? null)) ?></span>
                                     <?php if (!empty($r['paper_type'])): ?>
                                         <span class="sep">•</span>
-                                        <span><?= e($type_labels[$r['paper_type']] ?? ucfirst($r['paper_type'])) ?></span>
+                                        <span><?= e(paper_type_label($r['paper_type'])) ?></span>
                                     <?php endif; ?>
                                     <?php if (!empty($r['publication_status'])): ?>
                                         <span class="sep">•</span>
@@ -499,21 +497,11 @@ ob_start();
     </div>
 
     <!-- Right sidebar -->
+    <?php require_once ROOT_PATH.'/includes/browse_card.php'; ?>
     <aside class="sidebar-right" id="sidebarCol">
         <?php ob_start(); ?>
-        <div class="sidebar-card" id="browseCard">
-            <div class="sidebar-card-header is-toggle">
-                <button class="card-title-btn js-card-toggle" type="button" data-card="browseCard">Browse</button>
-                <span class="card-header-tools">
-                    <button class="card-tool card-chevron js-card-toggle" type="button" data-card="browseCard" aria-label="Collapse Browse"><span class="material-symbols-outlined">expand_more</span></button>
-                </span>
-            </div>
-            <div class="sidebar-card-body">
-                <a href="<?= e(BASE_URL) ?>/archive/index.php?browse=1" class="sidebar-link">Public Repository</a>
-                <a href="student_upload_ai.php" class="sidebar-link">Upload Paper</a>
-                <a href="student_dashboard.php?tab=drafts" class="sidebar-link <?= $tab === 'drafts' ? 'active' : '' ?>">View Drafts</a>
-            </div>
-        </div>
+        <?= browse_card_html($u ?? null) ?>
+        <?= quick_action_card_html($u ?? null) ?>
 
         <div class="sidebar-card" id="filterCard">
             <div class="sidebar-card-header is-toggle">
@@ -542,7 +530,7 @@ ob_start();
                     <?php foreach (['capstone', 'research', 'thesis'] as $tv): ?>
                         <label class="filter-radio">
                             <input type="radio" name="type" value="<?= e($tv) ?>" <?= $filter_type === $tv ? 'checked' : '' ?>>
-                            <?= e($type_labels[$tv] ?? ucfirst($tv)) ?>
+                            <?= e(paper_type_label($tv)) ?>
                         </label>
                     <?php endforeach; ?>
                 </div>

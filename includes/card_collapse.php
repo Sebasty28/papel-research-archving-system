@@ -12,6 +12,9 @@
  * Usage, before the include:
  *   $CARD_COLLAPSE_SELECTOR = '.pd-card, .set-card';
  *   require ROOT_PATH.'/includes/card_collapse.php';
+ *
+ * A card marked data-collapse-default="closed" starts folded instead of open
+ * — for a card whose content is useful but not what the page is chiefly for.
  */
 $CARD_COLLAPSE_SELECTOR = $CARD_COLLAPSE_SELECTOR ?? '.pd-card';
 ?>
@@ -63,23 +66,27 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         card.appendChild(body);
 
+        var startClosed = card.getAttribute('data-collapse-default') === 'closed';
+        var label = head.textContent.trim();
+
         var btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'card-collapse-btn';
-        btn.setAttribute('aria-expanded', 'true');
-        btn.title = 'Hide this section';
-        btn.setAttribute('aria-label', 'Hide ' + head.textContent.trim());
+        btn.setAttribute('aria-expanded', startClosed ? 'false' : 'true');
+        btn.title = startClosed ? 'Show this section' : 'Hide this section';
+        btn.setAttribute('aria-label', (startClosed ? 'Show ' : 'Hide ') + label);
         btn.innerHTML = '<span class="material-symbols-outlined">expand_more</span>';
         head.appendChild(btn);
 
         card.setAttribute('data-collapse-host', '');
-        card.setAttribute('data-collapsed', '0');
+        card.setAttribute('data-collapsed', startClosed ? '1' : '0');
 
         btn.addEventListener('click', function () {
             var closed = card.getAttribute('data-collapsed') === '1';
             card.setAttribute('data-collapsed', closed ? '0' : '1');
             btn.setAttribute('aria-expanded', closed ? 'true' : 'false');
             btn.title = closed ? 'Hide this section' : 'Show this section';
+            btn.setAttribute('aria-label', (closed ? 'Hide ' : 'Show ') + label);
         });
     });
 });

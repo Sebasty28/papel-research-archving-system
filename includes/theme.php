@@ -15,9 +15,12 @@
  * and Modern Dark and Quiet Dark are simply palettes that happen to be dark.
  *
  * Two attributes on <html> carry it:
- *   data-color  maroon | classic | quiet-light | modern-light
+ *   data-color  maroon | classic | google-light | quiet-light | modern-light
  *               | modern-dark | quiet-dark
  *   data-mode   light | dark        (derived from the palette, never chosen)
+ *
+ * classic ("Old Classic") is the default — a first-time reader with nothing
+ * in storage yet lands there, not on maroon.
  *
  * data-mode is kept because every dark rule on the site keys off it. It is now
  * a consequence of the palette rather than a setting of its own.
@@ -38,7 +41,7 @@
        which is the only other place that has to know before the CSS does. */
     var DARK = { 'modern-dark': 1, 'quiet-dark': 1 };
 
-    var colour = get('papel_color', 'maroon');
+    var colour = get('papel_color', 'classic');
     /* Palettes that no longer exist. Anyone still carrying one is moved to
        maroon rather than left on an attribute no stylesheet answers to, which
        would strand them on the bare :root defaults.
@@ -77,7 +80,6 @@
      --accent-tint   the pale wash behind cards and hovers
      --accent-light  the accent lifted for legibility on a dark surface
    --------------------------------------------------------------- */
-:root,
 html[data-color="maroon"] {
     --accent:       #820707;
     --accent-dark:  #630000;
@@ -88,6 +90,10 @@ html[data-color="maroon"] {
     --ink-base:     #330000;
     --border-base:  #E6D4D4;
 }
+/* Old Classic is the default palette — bundled onto the bare :root so a
+   reader whose browser never runs the script above (data-color absent
+   entirely) still lands here rather than on maroon. */
+:root,
 html[data-color="classic"] {
     --accent:       #6B0F0F;
     --accent-dark:  #4A0A0A;
@@ -96,6 +102,23 @@ html[data-color="classic"] {
     --accent-light: #D8B472;
     --ink-base:     #2B1B0E;
     --border-base:  #E6D9BF;
+}
+
+/* Light — the chrome of a Google search page itself, not the blue of its
+   links: near-black icons and the selected tab's underline, grey secondary
+   text, a hairline grey border round the search box. The tokens are
+   Google's own Material grey scale (google-grey-100/300/800/900) rather
+   than an approximation, and #3C4043 as an accent is 10.46:1 on white
+   without needing a separate darker shade for text the way a brand colour
+   would. */
+html[data-color="google-light"] {
+    --accent:       #3C4043;
+    --accent-dark:  #202124;
+    --accent-soft:  #DADCE0;
+    --accent-tint:  #F1F3F4;
+    --accent-light: #80868B;
+    --ink-base:     #202124;
+    --border-base:  #DADCE0;
 }
 
 /* ---------------------------------------------------------------

@@ -243,7 +243,15 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
     display: flex;
     align-items: center;
     gap: 2rem;
-    height: 60px;
+    /* .wrap-wide caps this at 1328px and centres it, which on a wide screen
+       left the wordmark and the controls floating a long way in from either
+       edge. The bar itself now runs the full width; only its padding holds
+       them off the glass. */
+    max-width: none;
+    /* The same height as the breadcrumb strip directly beneath it, so the two
+       bars read as one band of chrome rather than a thick one sitting on a
+       thin one. 36px is what .crumb-bar comes out at. */
+    height: 36px;
 }
 .brand {
     display: inline-block;
@@ -276,6 +284,28 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
 }
 .main-nav a:hover,
 .main-nav a.active { color: var(--dark-maroon); background: var(--cream); }
+
+/* The phone menu button. Hidden until the bar runs out of room for the links
+   themselves; the rule that shows it lives with the rest of the narrow layout
+   at the foot of this file. */
+.nav-burger {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    flex-shrink: 0;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--r-control, 4px);
+    background: none;
+    color: var(--maroon);
+    cursor: pointer;
+}
+.nav-burger:hover { background: var(--cream); }
+.nav-burger .burger-open { display: none; }
+html.nav-open .nav-burger .burger-shut { display: none; }
+html.nav-open .nav-burger .burger-open { display: inline-flex; }
 
 .nav-more { position: relative; }
 .nav-more-btn {
@@ -349,12 +379,12 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
 .btn-login-nav:hover { color: var(--dark-maroon); background: var(--cream); }
 
 .user-avatar-btn {
-    width: 34px; height: 34px;
+    width: 28px; height: 28px;
     border-radius: 50%;
     background: var(--maroon-surface);
     color: #fff;
     font-weight: 700;
-    font-size: .875rem;
+    font-size: .8125rem;
     border: none;
     cursor: pointer;
     display: flex;
@@ -433,7 +463,8 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
     top: calc(100% + 10px);
     right: 0;
     background: var(--white);
-    border: 1px solid var(--border);
+    /* No border. The shadow already lifts the card off the page, and the two
+       together read as an outline drawn twice. */
     border-radius: var(--r-control, 4px);
     box-shadow: var(--shadow-md);
     width: 340px;
@@ -465,7 +496,6 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
     color: rgba(255,255,255,.85);
     font-size: .6875rem;
     cursor: pointer;
-    text-decoration: underline;
     font-family: inherit;
 }
 .notif-mark-all:hover { color: #fff; }
@@ -492,7 +522,10 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
     cursor: pointer;
 }
 .notif-tab:hover { color: var(--maroon); }
-.notif-tab.is-on { background: var(--cream); border-color: var(--soft-maroon); color: var(--maroon); font-weight: 500; }
+/* No outline. Which tab is on is already said three times over — the cream
+   pill, the accent text and the heavier weight — so the border was the one
+   part that could go without taking the state with it. */
+.notif-tab.is-on { background: var(--cream); color: var(--maroon); font-weight: 500; }
 
 .notif-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 
@@ -539,6 +572,42 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
     font-weight: 500;
 }
 .notif-view-all:hover { background: var(--soft-maroon); color: #fff; }
+
+/* Shown once, centred, right after signing in — everything inside it is the
+   same .notif-dropdown-header / .notif-item / .notif-view-all vocabulary
+   above, just no longer pinned under the bell. Not .modal-backdrop: that name
+   collides with one Bootstrap generates for its own dialogs (see
+   .login-backdrop's own note on this), so every overlay in this codebase
+   gets its own name instead. */
+.notif-popup-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(51,0,0,.40);
+    backdrop-filter: blur(3px);
+    z-index: 1150;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+.notif-popup-card {
+    background: var(--white);
+    border-radius: var(--r-card, 8px);
+    box-shadow: var(--shadow-md);
+    width: 100%;
+    max-width: 24rem;
+    max-height: min(30rem, 80vh);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: notifPopupIn .2s ease;
+}
+@keyframes notifPopupIn {
+    from { opacity: 0; transform: translateY(10px) scale(.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.notif-popup-card .notif-dropdown-header { border-radius: var(--r-card, 8px) var(--r-card, 8px) 0 0; }
+.notif-popup-card .notif-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 
 /* ===== Site footer ===== */
 .site-footer {
@@ -845,7 +914,74 @@ select.lf-input {
 .panel-alert.success { background: #e7f6ed; color: #1b5e35; }
 
 @media (max-width: 900px) {
-    .main-nav { display: none; }
+    /* These links used to be thrown away at this width — display:none and
+       nothing in their place — so a phone had no way to reach About, Help
+       Center, Contact Support, or, signed in, any role page at all. They drop
+       into a sheet under the bar instead.
+
+       The header is sticky and therefore a positioned ancestor, so the sheet
+       hangs off it and the row above keeps its height whether it is open or
+       shut. */
+    .nav-burger { display: inline-flex; }
+    /* A phone keeps the taller bar: the menu button is a 42px touch target and
+       a 48px bar leaves it almost no room either side. */
+    .header-inner { gap: .75rem; height: 60px; }
+
+    .main-nav {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        flex-direction: column;
+        align-items: stretch;
+        justify-content: flex-start;
+        flex: none;
+        gap: 0;
+        padding: .375rem 0 .625rem;
+        /* Opaque on purpose: once the page scrolls the bar turns frosted, and
+           a sheet that inherited that would have the page showing through the
+           menu it is covering. */
+        background: var(--white);
+        border-bottom: 1px solid var(--border);
+        box-shadow: 0 14px 28px rgba(51, 0, 0, .16);
+        max-height: calc(100vh - 60px);
+        overflow-y: auto;
+        z-index: 950;
+    }
+    html.nav-open .main-nav { display: flex; }
+
+    .main-nav a {
+        padding: .8rem 1.25rem;   /* ~46px tall — sized for a fingertip */
+        border-radius: 0;
+        font-size: .9375rem;
+    }
+
+    /* No menu inside a menu on a phone. The Resources group is flattened into
+       the list and its button, which exists only to open the thing that is now
+       already open, steps aside. */
+    .nav-more { width: 100%; }
+    .nav-more-btn { display: none; }
+    .nav-more-dropdown {
+        display: block;
+        position: static;
+        /* The desktop rule centres this under its button with left:50% and a
+           -50% translate. Going static drops the offset but NOT the transform,
+           which then shifted the links half the sheet's width off the left
+           edge — space reserved, nothing painted in it. */
+        transform: none;
+        left: auto;
+        top: auto;
+        min-width: 0;
+        margin-top: .375rem;
+        padding-top: .375rem;
+        border: 0;
+        border-top: 1px solid var(--border);
+        border-radius: 0;
+        box-shadow: none;
+    }
+    .nav-more-dropdown a { padding: .8rem 1.25rem; }
+
     .login-panel { width: 100%; }
 }
 @media (max-width: 600px) {
@@ -858,7 +994,32 @@ select.lf-input {
     .role-icon { width: 64px; height: 64px; }
     .role-icon .material-symbols-outlined { font-size: 28px; }
 }
+/* The narrowest phones still in use — an SE, or an Android held in a case that
+   reports 320. Every element in the bar has to give up a little for the row to
+   stay on one line. */
+@media (max-width: 380px) {
+    .wrap, .wrap-wide { padding: 0 .75rem; }
+    .brand { font-size: 1.25rem; }
+    .header-inner { gap: .5rem; }
+    .header-right { gap: .375rem; }
+    .nav-burger { width: 38px; height: 38px; }
+    .btn-login-nav { font-size: .8125rem; }
+}
 </style>
+<?php /* Which side the sidebar sits on, read before anything is painted — the
+         same reason the palette is read here rather than at the foot of the
+         page. Restored late, the column would draw on one side and jump to the
+         other, which reads as a bug rather than a preference. Harmless on the
+         pages that have no sidebar: nothing there matches the class. */ ?>
+<script nonce="<?= csp_nonce() ?>">
+(function () {
+    try {
+        if (localStorage.getItem('papel_sidebar_side') === 'left') {
+            document.documentElement.classList.add('sidebar-left');
+        }
+    } catch (e) {}
+})();
+</script>
 <?php /* Palettes and light/dark. Included last so its :root wins over the
         literal token values above, without editing them. */ ?>
 <?php require_once __DIR__ . '/theme.php'; ?>

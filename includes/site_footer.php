@@ -60,56 +60,68 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         var handlerUrl = <?= json_encode(BASE_URL.'/notifications/notifications_handler.php') ?>;
+        /* The handler refuses a post it cannot trace to this application — it
+           can delete now, so an untraceable one must not be enough. */
+        var notifToken = <?= json_encode(csrf_token()) ?>;
 
         /* A notification is about a paper, so clicking one goes there. Marking
            it read is sent first and the browser follows the link either way —
            a failed bookkeeping call should not strand someone on the page they
-           just tried to leave. */
-        notifDropdown.querySelectorAll('.notif-item').forEach(function (item) {
-            item.addEventListener('click', function (e) {
-                var id = item.getAttribute('data-notif-id');
+           just tried to leave. Shared between the corner dropdown and the
+           centred "what's new" popup below, since both list the same rows in
+           the same .notif-item shape. */
+        function wireNotifItems(container) {
+            container.querySelectorAll('.notif-item').forEach(function (item) {
+                item.addEventListener('click', function (e) {
+                    var id = item.getAttribute('data-notif-id');
 
-                /* An account notice has nowhere to go: what it is about is the
-                   message itself, so it opens where it is rather than sending
-                   the reader to a page that would only repeat it. */
-                var popup = item.getAttribute('data-notif-popup');
-                if (popup && window.papelShow) {
-                    e.preventDefault();
-                    var lines = [popup];
-                    (item.getAttribute('data-notif-detail') || '').split('\n')
-                        .forEach(function (row) {
-                            if (!row.trim()) return;
-                            var at = row.indexOf(':');
-                            lines.push(at === -1
-                                ? row
-                                : [row.slice(0, at).trim(), row.slice(at + 1).trim()]);
-                        });
-                    window.papelShow('Your account was updated', lines);
-                }
-
-                if (!item.classList.contains('unread')) return;
-                item.classList.remove('unread');
-                try {
-                    if (navigator.sendBeacon) {
-                        navigator.sendBeacon(handlerUrl,
-                            new Blob(['action=mark_read&notification_id=' + encodeURIComponent(id)],
-                                     { type: 'application/x-www-form-urlencoded' }));
-                    } else {
-                        fetch(handlerUrl, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                            body: 'action=mark_read&notification_id=' + encodeURIComponent(id),
-                            keepalive: true
-                        });
+                    /* An account notice has nowhere to go: what it is about is
+                       the message itself, so it opens where it is rather than
+                       sending the reader to a page that would only repeat it. */
+                    var popup = item.getAttribute('data-notif-popup');
+                    if (popup && window.papelShow) {
+                        e.preventDefault();
+                        var lines = [popup];
+                        (item.getAttribute('data-notif-detail') || '').split('\n')
+                            .forEach(function (row) {
+                                if (!row.trim()) return;
+                                var at = row.indexOf(':');
+                                lines.push(at === -1
+                                    ? row
+                                    : [row.slice(0, at).trim(), row.slice(at + 1).trim()]);
+                            });
+                        window.papelShow('Your account was updated', lines);
                     }
-                } catch (err) { /* the link still opens */ }
+
+                    if (!item.classList.contains('unread')) return;
+                    item.classList.remove('unread');
+                    try {
+                        if (navigator.sendBeacon) {
+                            navigator.sendBeacon(handlerUrl,
+                                new Blob(['action=mark_read&notification_id=' + encodeURIComponent(id)
+                                          + '&_token=' + encodeURIComponent(notifToken)],
+                                         { type: 'application/x-www-form-urlencoded' }));
+                        } else {
+                            fetch(handlerUrl, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                                body: 'action=mark_read&notification_id=' + encodeURIComponent(id)
+                                      + '&_token=' + encodeURIComponent(notifToken),
+                                keepalive: true
+                            });
+                        }
+                    } catch (err) { /* the link still opens */ }
+                });
             });
-        });
+        }
+        wireNotifItems(notifDropdown);
 
         /* All / Unread. The rows are already here, so this is a filter rather
            than another request. */
         var notifList = document.getElementById('notifList');
         var noUnread  = document.getElementById('notifNoUnread');
+        // Shown only when there is nothing at all, and only on the All tab.
+        var noneYet   = document.getElementById('notifNone');
         notifDropdown.querySelectorAll('.notif-tab').forEach(function (tab) {
             tab.addEventListener('click', function () {
                 var unreadOnly = tab.dataset.filter === 'unread';
@@ -123,6 +135,11 @@ document.addEventListener('DOMContentLoaded', function () {
                     if (show) shown++;
                 });
                 if (noUnread) noUnread.hidden = !(unreadOnly && shown === 0);
+                /* With no notifications at all both empty states matched and
+                   the panel said "No notifications yet" and "Nothing unread"
+                   one above the other. On the Unread tab only the second one
+                   is the answer to what was asked. */
+                if (noneYet) noneYet.hidden = unreadOnly;
             });
         });
 
@@ -141,7 +158,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 fetch(handlerUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: 'action=mark_all_read'
+                    body: 'action=mark_all_read&_token=' + encodeURIComponent(notifToken)
                 }).then(function () {
                     notifDropdown.querySelectorAll('.notif-item.unread').forEach(function (i) { i.classList.remove('unread'); });
                     var badge = notifToggle.querySelector('.notif-badge');
@@ -151,6 +168,65 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
             });
         }
+
+        /* The one-shot "what's new" card site_header.php pops in the centre
+           of the page right after signing in, when something is unread. Its
+           rows are wired the same way the dropdown's are; only closing it is
+           new — a click on the dimmed backdrop, the X, or Escape all just
+           remove it, without marking anything read that was not clicked. */
+        var notifPopup = document.getElementById('notifPopupBackdrop');
+        if (notifPopup) {
+            wireNotifItems(notifPopup);
+            var closePopup = function () { notifPopup.remove(); };
+            var notifPopupClose = document.getElementById('notifPopupClose');
+            if (notifPopupClose) notifPopupClose.addEventListener('click', closePopup);
+            notifPopup.addEventListener('click', function (e) {
+                if (e.target === notifPopup) closePopup();
+            });
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape' && document.body.contains(notifPopup)) closePopup();
+            });
+        }
+    }
+
+    /* The phone menu. The sheet it opens is the same <nav> the wide layout
+       shows in the bar, so there is one set of links and one set of active
+       states — only the painting changes with the width. */
+    var navToggle = document.getElementById('navToggle');
+    if (navToggle) {
+        var root = document.documentElement;
+        var setNav = function (on) {
+            root.classList.toggle('nav-open', on);
+            navToggle.setAttribute('aria-expanded', on ? 'true' : 'false');
+        };
+        navToggle.addEventListener('click', function (e) {
+            e.stopPropagation();
+            setNav(!root.classList.contains('nav-open'));
+            if (userDropdown) userDropdown.classList.remove('open');
+            var nd = document.getElementById('notifDropdown');
+            if (nd) nd.classList.remove('open');
+        });
+        /* Following a link leaves the page anyway, but an in-page one would
+           otherwise leave the sheet sitting open over the destination. */
+        var mainNav = document.getElementById('mainNav');
+        if (mainNav) {
+            mainNav.addEventListener('click', function (e) {
+                if (e.target.closest('a')) setNav(false);
+            });
+        }
+        document.addEventListener('click', function (e) {
+            if (root.classList.contains('nav-open') &&
+                !e.target.closest('#mainNav, #navToggle')) setNav(false);
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') setNav(false);
+        });
+        /* Turned to landscape or opened on a tablet, the links are back in the
+           bar and the sheet is meaningless — but the open class would still be
+           swapping the button's glyph to a close icon. */
+        window.addEventListener('resize', function () {
+            if (window.innerWidth > 900) setNav(false);
+        });
     }
 
     // "Resources" nav dropdown (About/Help/Contact, shown for logged-in users)
@@ -305,4 +381,13 @@ require ROOT_PATH.'/includes/theme_welcome.php';
    a second would wrap the wrappers and count every request twice, and the bar
    would never reach zero. require_once, like the dialogs above. */
 require_once ROOT_PATH.'/includes/loading_bar.php';
+/* Arrow-key movement between links and boxes. Last on purpose: the skinned
+   dropdown, the search suggestions and the PDF panel all listen for arrows on
+   the document too, and listeners fire in the order they were added. Going in
+   after them means they get first refusal, and this one stands down when it
+   sees the key was already handled. */
+require_once ROOT_PATH.'/includes/key_nav.php';
+/* Right-click actions for the notification lists. Only for someone signed in:
+   there is no bell, and no notification centre, for anybody else. */
+if (current_user()) { require_once ROOT_PATH.'/includes/notif_actions.php'; }
 require ROOT_PATH.'/includes/accessibility.php'; ?>

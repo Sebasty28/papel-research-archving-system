@@ -11,7 +11,10 @@
  * being the desk of last resort when a request lands on the wrong one.
  */
 require_once __DIR__ . '/../config/core.php';
-require_role(['faculty', 'admin', 'super_admin', 'head_academic', 'librarian']);
+/* Not librarian: support_handler_roles() never offers them as a handler for
+   anyone's request, so this page would only ever have shown them an empty
+   list. */
+require_role(['faculty', 'admin', 'super_admin', 'head_academic']);
 
 $conn = db();
 $u    = current_user();

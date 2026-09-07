@@ -175,17 +175,6 @@ $result = $stmt->get_result();
 $years_res    = $conn->query("SELECT DISTINCT COALESCE(YEAR(research_date), year) AS year FROM research_papers WHERE $base_where ORDER BY year DESC");
 $types_res    = $conn->query("SELECT DISTINCT paper_type FROM research_papers WHERE $base_where AND paper_type IS NOT NULL AND paper_type != '' ORDER BY paper_type ASC");
 
-// Human-readable labels for paper types
-$type_labels = [
-    'research'   => 'Research Paper',
-    'capstone'   => 'Capstone Project',
-    'thesis'     => 'Thesis',
-    'conference' => 'Conference Paper',
-    'journal'    => 'Journal Article',
-    'article'    => 'Article',
-    'project'    => 'Project',
-];
-
 $program_options = [
     'Bachelor of Science in Information Technology'              => 'BS Information Technology',
     'Bachelor of Science in Industrial Engineering'             => 'BS Industrial Engineering',
@@ -234,6 +223,7 @@ ob_start();
 <title>Public Repository · <?= e(APP_NAME) ?></title>
 <?php require_once ROOT_PATH.'/includes/site_head.php'; ?>
 <?php require_once ROOT_PATH.'/includes/browse_console.php'; ?>
+<?php require_once ROOT_PATH.'/includes/browse_card.php'; ?>
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 /* =========================================================
    PAPEL — Public Repository landing page
@@ -331,7 +321,18 @@ ob_start();
     grid-row: 2;
     display: flex;
     justify-content: flex-end;
-    margin-right: calc(((var(--wrap-wide) - var(--wrap)) / -2) - 20px);
+}
+/* The button lines up with the hero's wider edge rather than the text column,
+   and the pull that does it is exactly 100px: half the 160px the wide wrap
+   adds, plus 20. It only has anywhere to go once the window is wider than the
+   wrap plus that pull on both sides — 1168 + 200. Applied unconditionally, as
+   it was, it dragged the button past the right of the page on every laptop
+   below that, and took a horizontal scrollbar with it: 76px of it at 1024,
+   25px at 1280. */
+@media (min-width: 1369px) {
+    .banner-toggle-col {
+        margin-right: calc(((var(--wrap-wide) - var(--wrap)) / -2) - 20px);
+    }
 }
 /* Banner hidden: no photo to clear, so the chip moves up beside the search
    field. That collapses the grid to a single row and reclaims the gap. */
@@ -410,6 +411,27 @@ ob_start();
     }
 }
 
+/* ===== The sidebar on either side — this page's share of it =====
+   The column swap itself lives in includes/browse_console.php, with the rest
+   of the sidebar. What stays here is the search row, which only this page has:
+   it carries the banner eye in the column above the sidebar, so it has to
+   mirror too or the eye is left stranded over the results. */
+@media (min-width: 901px) {
+    html.sidebar-left .search-row { grid-template-columns: var(--sidebar-w) 1fr; }
+    html.sidebar-left .search-shell      { grid-column: 2; }
+    html.sidebar-left .banner-toggle-col { grid-column: 1; justify-content: flex-start; }
+}
+
+/* The pull that lines the eye up with the hero's wider edge now has to reach
+   the other way. Same width rule as the right-hand version: it only has room
+   once the window is wider than the wrap plus the pull on both sides. */
+@media (min-width: 1369px) {
+    html.sidebar-left .banner-toggle-col {
+        margin-right: 0;
+        margin-left: calc(((var(--wrap-wide) - var(--wrap)) / -2) - 20px);
+    }
+}
+
 /* Section heading with red underline */
 .section-heading {
     font-family: var(--font-head);
@@ -426,11 +448,109 @@ ob_start();
 /* Site header/footer/login-modal CSS now live in includes/site_head.php */
 
 /* ===== 10. Responsive (page-specific layout only) ===== */
+/* ===== The sidebar as a drawer, on a phone =====
+   In one column the Browse and Filter cards land underneath every result —
+   a long scroll from the search box they belong to, which is where the eye
+   is. On a narrow screen they become a drawer instead, opened by a button
+   beside the search field.
+
+   The <aside> is not moved in the DOM to do this. An AJAX filter replaces
+   its innerHTML in place, so the element has to stay exactly where the
+   script goes looking for it; only its painting changes. */
+.btn-tools-toggle,
+.tools-backdrop,
+.btn-tools-close { display: none; }
+
 @media (max-width: 900px) {
-    .layout { grid-template-columns: 1fr; gap: 2rem; }
+    /* The lift tucks the results up beside the sidebar column on a wide
+       screen, where the eye and this row sit off to the right. In one column
+       that row is directly above the heading, and the lift dragged the
+       heading up underneath it. */
+    .layout { grid-template-columns: 1fr; gap: 2rem; margin-top: .75rem; }
     .search-row { grid-template-columns: 1fr; gap: .5rem; }
     .banner-toggle-col { grid-column: 1; }
     .hero { height: 190px; }
+
+    /* Whichever state the banner is in, this row follows the search field
+       rather than being pinned to a row number: pinned to row 1, which is
+       what the collapsed-banner rule does on a wide screen, it would land on
+       top of the search field once there is only one column. */
+    .banner-toggle-col {
+        grid-row: auto;
+        align-items: center;
+        gap: .5rem;
+    }
+    .hero.collapsed + .search-band .banner-toggle-col { grid-row: auto; }
+    .btn-tools-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: .35rem;
+        padding: .45rem .85rem;
+        border: 1px solid var(--border);
+        border-radius: var(--r-control, 4px);
+        background: var(--white);
+        color: var(--maroon);
+        font-family: var(--font-body);
+        font-size: .875rem;
+        cursor: pointer;
+    }
+    .btn-tools-toggle:hover { background: var(--cream); }
+
+    .sidebar-right {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: min(88vw, 360px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        margin: 0;
+        padding: 3rem 1rem 2rem;
+        background: var(--cream);
+        box-shadow: -4px 0 24px rgba(51, 0, 0, .18);
+        transform: translateX(100%);
+        transition: transform .3s cubic-bezier(.4, 0, .2, 1);
+        /* Under the login slide-in (1200) on purpose: signing in should still
+           come out on top of a drawer left open behind it. */
+        z-index: 1090;
+    }
+    html.tools-open .sidebar-right { transform: translateX(0); }
+
+    .tools-backdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: rgba(51, 0, 0, .40);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .3s;
+        z-index: 1085;
+    }
+    html.tools-open .tools-backdrop { opacity: 1; pointer-events: auto; }
+
+    /* Outside the <aside>, because everything inside it is replaced whenever
+       a filter is applied and a close button in there would be swept away. */
+    html.tools-open .btn-tools-close {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        position: fixed;
+        top: .5rem;
+        right: .5rem;
+        width: 38px;
+        height: 38px;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        color: var(--maroon);
+        cursor: pointer;
+        z-index: 1095;
+    }
+    html.tools-open { overflow: hidden; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sidebar-right, .tools-backdrop { transition: none; }
 }
 @media (max-width: 600px) {
     .hero { height: 150px; }
@@ -482,6 +602,18 @@ ob_start();
             </form>
         </div>
         <div class="banner-toggle-col">
+            <?php /* Shares the row the eye already sits on rather than taking
+                     one of its own, which pushed the band down over the
+                     heading below it. Only ever seen on a narrow screen; the
+                     stylesheet hides it the moment the sidebar is a column
+                     again. Worded for what it opens rather than drawn as a
+                     hamburger — a hamburger reads as "the site's menu", and
+                     this is the filters for the list underneath. */ ?>
+            <button type="button" class="btn-tools-toggle" id="toolsToggle"
+                    aria-controls="sidebarCol" aria-expanded="false">
+                <span class="material-symbols-outlined mi-18">tune</span>
+                <span>Browse &amp; Filters</span>
+            </button>
             <?php /* The eye follows the same rule as the password toggle in
                      site_footer.php: it shows the action, not the state, so it
                      always agrees with the words beside it. Banner on screen →
@@ -566,7 +698,7 @@ ob_start();
                             <span><?= e(paper_date_display($r['research_date'] ?? null, $r['year'] ?? null)) ?></span>
                             <?php if ($r['paper_type']): ?>
                                 <span class="sep">•</span>
-                                <span><?= e($type_labels[$r['paper_type']] ?? ucfirst($r['paper_type'])) ?></span>
+                                <span><?= e(paper_type_label($r['paper_type'])) ?></span>
                             <?php endif; ?>
                             <?php if ($r['publication_status']): ?>
                                 <span class="sep">•</span>
@@ -608,27 +740,8 @@ ob_start();
     <!-- Right sidebar -->
     <aside class="sidebar-right" id="sidebarCol">
         <?php ob_start(); ?>
-        <div class="sidebar-card" id="browseCard">
-            <div class="sidebar-card-header is-toggle">
-                <button class="card-title-btn js-card-toggle" type="button" data-card="browseCard">Browse</button>
-                <span class="card-header-tools">
-                    <button class="card-tool card-chevron js-card-toggle" type="button" data-card="browseCard" aria-label="Collapse Browse"><span class="material-symbols-outlined">expand_more</span></button>
-                </span>
-            </div>
-            <?php /* A guest is signed in but has nowhere else to go: this page
-                      is their home, so they get the visitor's link and its
-                      active state rather than a link back to here labelled as a
-                      dashboard. */ ?>
-            <?php if ($is_member && ($u['user_role'] ?? '') !== 'guest'): ?>
-            <div class="sidebar-card-body">
-                <a href="<?= e(role_home($u['user_role'])) ?>" class="sidebar-link"><?= e(role_home_label($u['user_role'])) ?></a>
-            </div>
-            <?php else: ?>
-            <div class="sidebar-card-body">
-                <a href="index.php?browse=1" class="sidebar-link <?= !$has_filters ? 'active' : '' ?>">Public Repository</a>
-            </div>
-            <?php endif; ?>
-        </div>
+        <?= browse_card_html($u ?? null) ?>
+        <?= quick_action_card_html($u ?? null) ?>
 
         <div class="sidebar-card" id="filterCard">
             <div class="sidebar-card-header is-toggle">
@@ -653,7 +766,7 @@ ob_start();
                     $types_res->data_seek(0);
                     while ($t = $types_res->fetch_assoc()):
                         $tv = $t['paper_type'];
-                        $tl = $type_labels[$tv] ?? ucfirst($tv);
+                        $tl = paper_type_label($tv);
                     ?>
                     <label class="filter-radio">
                         <input type="radio" name="type" value="<?= e($tv) ?>" <?= $filter_type === $tv ? 'checked' : '' ?>>
@@ -888,6 +1001,54 @@ document.addEventListener('contextmenu', function(e) { e.preventDefault(); });
 
 }); // end DOMContentLoaded
 </script>
+<script nonce="<?= csp_nonce() ?>">
+/* The Browse & Filters drawer. Everything here is delegated or bound to
+   elements outside the <aside>, because applying a filter replaces the whole
+   inside of it and any listener attached in there would go with it. */
+(function () {
+    var root = document.documentElement;
+    var btn  = document.getElementById('toolsToggle');
+    if (!btn) { return; }
+
+    function setOpen(on) {
+        root.classList.toggle('tools-open', on);
+        btn.setAttribute('aria-expanded', on ? 'true' : 'false');
+    }
+    function isOpen() { return root.classList.contains('tools-open'); }
+
+    btn.addEventListener('click', function () { setOpen(!isOpen()); });
+
+    ['toolsBackdrop', 'toolsClose'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) { el.addEventListener('click', function () { setOpen(false); }); }
+    });
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && isOpen()) { setOpen(false); }
+    });
+
+    /* Choosing a filter refreshes the list behind the drawer, so get out of
+       the way and let the results be the thing on screen. */
+    document.addEventListener('change', function (e) {
+        if (isOpen() && e.target.closest('#sidebarCol')) { setOpen(false); }
+    });
+    document.addEventListener('click', function (e) {
+        if (isOpen() && e.target.closest('#sidebarCol a[href]')) { setOpen(false); }
+    });
+
+    /* Back on a wide screen the sidebar is a column again and the drawer means
+       nothing — but the open class would still be holding the page's scroll. */
+    window.addEventListener('resize', function () {
+        if (window.innerWidth > 900 && isOpen()) { setOpen(false); }
+    });
+})();
+</script>
+
+<div class="tools-backdrop" id="toolsBackdrop"></div>
+<button type="button" class="btn-tools-close" id="toolsClose" aria-label="Close Browse and Filters">
+    <span class="material-symbols-outlined">close</span>
+</button>
+
 <?php require ROOT_PATH.'/includes/browse_console_js.php'; ?>
 <?php require ROOT_PATH.'/includes/site_footer.php'; ?>
 </body>

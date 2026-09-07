@@ -52,37 +52,6 @@ class PaperRepository {
         return $docs;
     }
 
-    public function getProgramAnalytics($approvedOnly = false) {
-        /* Approval ends at the Research Coordinator, so 'approved' is the only
-           status that means approved. This used to count pending_super_admin
-           and pending_head_academic as well — stages the chain no longer has —
-           which overstated the rate the moment a paper carried one. */
-        $cond = "rp.current_status='approved'";
-        $sql = "SELECT u.program, COUNT(rp.paper_id) as total_papers";
-        if (!$approvedOnly) {
-            /* A returned paper is back in 'draft' but has been reviewed; one
-               nobody has looked at is also 'draft'. Only the first is a
-               revision, which is what the workflow row distinguishes. */
-            $sql .= ", SUM(CASE WHEN $cond THEN 1 ELSE 0 END) as approved,"
-                  . " SUM(CASE WHEN rp.current_status='draft' AND EXISTS ("
-                  . "     SELECT 1 FROM approval_workflow aw"
-                  . "      WHERE aw.paper_id = rp.paper_id AND aw.status = 'declined')"
-                  . "   THEN 1 ELSE 0 END) as revisions";
-        }
-        $sql .= " FROM research_papers rp JOIN users u ON rp.uploaded_by=u.user_id WHERE u.user_role='student' AND u.program IS NOT NULL ";
-        if ($approvedOnly) $sql .= "AND rp.current_status='approved' ";
-        $sql .= "GROUP BY u.program";
-        
-        $res = $this->conn->query($sql);
-        $data = []; if ($res) while($row = $res->fetch_assoc()) $data[] = $row; return $data;
-    }
-
-    public function getPaperTypeStats($approvedOnly = false) {
-        $cond = $approvedOnly ? "rp.current_status='approved'" : "u.user_role='student' AND u.program IS NOT NULL";
-        $res = $this->conn->query("SELECT rp.paper_type, COUNT(*) as count FROM research_papers rp JOIN users u ON u.user_id=rp.uploaded_by WHERE $cond GROUP BY rp.paper_type ORDER BY count DESC");
-        $data = []; if ($res) while($row = $res->fetch_assoc()) $data[] = $row; return $data;
-    }
-
     public function getTimelineData($approvedOnly = false) {
         $cond = $approvedOnly ? "rp.current_status='approved'" : "u.user_role='student'";
         $res = $this->conn->query("SELECT DATE_FORMAT(rp.upload_date, '%Y-%m') as month, COUNT(*) as count FROM research_papers rp JOIN users u ON u.user_id=rp.uploaded_by WHERE $cond AND rp.upload_date>= DATE_SUB(NOW(), INTERVAL 6 MONTH) GROUP BY month ORDER BY month");

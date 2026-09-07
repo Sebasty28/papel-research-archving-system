@@ -82,9 +82,36 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
 .paper-card .paper-title a { color: inherit; text-decoration: none; }
 .paper-card .paper-title a:hover { color: var(--maroon); text-decoration: underline; }
 .card-head { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 1rem; align-items: start; }
-.card-status { text-align: right; font-size: .6875rem; line-height: 1.7; white-space: nowrap; }
+/* The toggle lives in the padding-right gutter reserved here, positioned on
+   its own rather than sitting inline after the status text — so its width
+   never enters into how far right "Status: ..." or "View Details" sit, and
+   .card-people below (same gutter, no toggle of its own) lines up with them
+   both at the same edge instead of the toggle shifting only the first line. */
+.card-status {
+    text-align: right; font-size: .6875rem; line-height: 1.7; white-space: nowrap;
+    position: relative; padding-right: 1.625rem;
+}
 .card-status .status-value { color: var(--maroon); }
 .card-status .paper-action { display: block; }
+
+/* Folds everything under .card-head away — the tracker, who is on it, any
+   files and the approve/return buttons — leaving the plain title/authors/
+   status row the public repository's own list shows. Built by
+   browse_console_js.php, which wraps that "everything else" into
+   .paper-card-body the same way includes/card_collapse.php does. */
+.paper-card-toggle {
+    position: absolute; top: 0; right: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 0; border: none; border-radius: var(--r-control, 4px);
+    background: none; color: var(--maroon); cursor: pointer;
+    transition: background .15s;
+}
+.paper-card-toggle:hover { background: var(--cream); }
+.paper-card-toggle:focus-visible { outline: 2px solid var(--maroon); outline-offset: 1px; }
+.paper-card-toggle .material-symbols-outlined { font-size: 18px; transition: transform .18s ease; }
+/* Collapsed reads "›", the same convention card_collapse.php uses. */
+.paper-card[data-collapsed="1"] .paper-card-toggle .material-symbols-outlined { transform: rotate(-90deg); }
+.paper-card[data-collapsed="1"] .paper-card-body { display: none; }
 /* ===== Progress tracker ===== */
 .card-track { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 1.5rem; align-items: center; margin-top: 1rem; }
 .track { display: flex; align-items: flex-start; position: relative; --steps: 3; --dot: 26px; }
@@ -116,7 +143,11 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
 /* ---- Card actions, small buttons and the confirmation dialog ----
    Shared vocabulary: every console uses the same two button sizes and the
    same dialog, so a destructive action looks the same wherever it is. */
-.card-people { font-size: .6875rem; color: var(--ink); line-height: 1.8; text-align: left; white-space: nowrap; }
+/* Same reserved gutter width as .card-status, even though there's no toggle
+   here to put in it — it's what keeps this text's right edge lined up with
+   "Status: ..." above instead of running past it into the toggle's own
+   column. */
+.card-people { font-size: .6875rem; color: var(--ink); line-height: 1.8; text-align: right; white-space: nowrap; padding-right: 1.625rem; }
 .card-people .who { color: var(--maroon); }
 .card-feedback {
     margin-top: .875rem; padding: .625rem .875rem;

@@ -333,7 +333,17 @@ function login_throttle_message(int $seconds): string {
        . $mins . ' minute' . ($mins === 1 ? '' : 's') . '.';
 }
 
-function login_user(array $u): void { start_session_once(); session_regenerate_id(true); $_SESSION['user'] = $u; }
+/* just_logged_in is read once, by the very next page this session renders
+   (includes/site_header.php), to decide whether to pop the "what's new"
+   notification card in the centre of the screen rather than leaving it
+   folded into the bell's corner dropdown. site_header.php unsets it the
+   moment it reads it, so it never shows again until the next sign-in. */
+function login_user(array $u): void {
+    start_session_once();
+    session_regenerate_id(true);
+    $_SESSION['user'] = $u;
+    $_SESSION['just_logged_in'] = true;
+}
 /**
  * Is the guest pass behind this session still issued?
  *
@@ -922,6 +932,55 @@ function support_console_for(string $requesterRole): string {
         return BASE_URL . '/app/admin/admin_manage_faculty.php';
     }
     return BASE_URL . '/app/admin/super_admin_manage_admins.php';
+}
+
+/**
+ * Whether a student currently holds an open grant on one paper's manuscript.
+ *
+ * Lazy expiry: a lapsed grant's row is left exactly as it was written and
+ * simply stops counting once expires_at is in the past, rather than being
+ * flipped or deleted by a job that has to run on schedule. guest_sessions and
+ * student_expiry_date() both work the same way.
+ */
+function student_manuscript_access(int $studentUserId, int $paperId): bool {
+    $conn = db();
+    $stmt = $conn->prepare(
+        "SELECT 1 FROM manuscript_requests
+          WHERE student_user_id = ? AND paper_id = ? AND status = 'granted' AND expires_at > NOW()
+          LIMIT 1");
+    $stmt->bind_param('ii', $studentUserId, $paperId);
+    $stmt->execute();
+    $found = (bool)$stmt->get_result()->fetch_row();
+    $stmt->close();
+    return $found;
+}
+
+/** How many manuscripts a student currently holds open access to, across every paper. */
+function student_manuscript_active_count(int $studentUserId): int {
+    $conn = db();
+    $stmt = $conn->prepare(
+        "SELECT COUNT(*) FROM manuscript_requests
+          WHERE student_user_id = ? AND status = 'granted' AND expires_at > NOW()");
+    $stmt->bind_param('i', $studentUserId);
+    $stmt->execute();
+    $stmt->bind_result($n);
+    $stmt->fetch();
+    $stmt->close();
+    return (int)$n;
+}
+
+/** The most recent request a student has made for one paper's manuscript, or null. */
+function student_manuscript_request(int $studentUserId, int $paperId): ?array {
+    $conn = db();
+    $stmt = $conn->prepare(
+        "SELECT * FROM manuscript_requests
+          WHERE student_user_id = ? AND paper_id = ?
+          ORDER BY created_at DESC LIMIT 1");
+    $stmt->bind_param('ii', $studentUserId, $paperId);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc() ?: null;
+    $stmt->close();
+    return $row;
 }
 
 /**
@@ -1755,7 +1814,6 @@ class UserFacingException extends Exception {}
 function paper_types(): array {
     return [
         'capstone'         => 'Capstone Project',
-        'thesis'           => 'Thesis',
         'undergrad_thesis' => 'Undergraduate Thesis',
         'conference'       => 'Conference Paper',
         'journal'          => 'Journal Article',
@@ -1770,10 +1828,46 @@ function paper_types(): array {
  * to stay here regardless: the archive holds papers filed under these, and
  * without a name they would show a bare code on every page that displays them.
  */
+/**
+ * The manuscript formats a paper can be handed in as.
+ *
+ * Both may be chosen: a paper submitted in both forms is one paper with two
+ * files, not two papers.
+ */
+function manuscript_types(): array
+{
+    return ['IMRAD', 'Full Manuscript'];
+}
+
+/**
+ * What the manuscript_type column should hold for a given submission.
+ *
+ * The form posts an array now, and the column is a varchar holding the chosen
+ * names separated by a comma. Anything not on the list is dropped rather than
+ * stored, so a hand-made post cannot put arbitrary text on the record.
+ */
+function manuscript_types_posted($posted): string
+{
+    $allowed = manuscript_types();
+    $picked  = [];
+    foreach ((array)$posted as $one) {
+        $one = trim((string)$one);
+        if (in_array($one, $allowed, true) && !in_array($one, $picked, true)) {
+            $picked[] = $one;
+        }
+    }
+    /* Papers filed before this was a choice of two carry a single older name;
+       leaving an unrecognised value alone would be kinder than blanking it,
+       but nothing posts one, so an empty result here means nothing was ticked
+       and the caller refuses the submission. */
+    return implode(', ', $picked);
+}
+
 function paper_types_retired(): array {
     return [
         'research' => 'Research Paper',
         'article'  => 'Article',
+        'thesis'   => 'Thesis',
     ];
 }
 
@@ -1823,6 +1917,75 @@ function paper_section_labels(): array {
 }
 
 /**
+ * An APA 7th-edition reference for a paper, built from what was filed.
+ *
+ * The archive is the paper's only publisher, so this always cites it as an
+ * institutional record rather than guessing at a journal entry — even a paper
+ * whose own "Paper Status" field says Published was never issued a DOI or a
+ * volume/issue here, so there is nothing to cite it as except the archive.
+ *
+ * Names are stored "Given Middle. Surname" (Filipino order), one string per
+ * author separated by a comma, semicolon or "and"/"&" — the same split
+ * archive/index.php already uses for its author-suggestion search. APA wants
+ * "Surname, G. M.", so the last space-separated token is taken as the surname
+ * and everything before it is reduced to initials.
+ */
+function paper_apa_citation(array $paper, string $url = ''): string {
+    $rawNames = trim((string)($paper['author_names'] ?? ''));
+    $names = array_values(array_filter(array_map('trim',
+        preg_split('/\s*(?:,|;|\band\b|&)\s*/i', $rawNames)
+    )));
+
+    $authors = array_map(function (string $name): string {
+        $parts = preg_split('/\s+/', trim($name));
+        if (count($parts) < 2) return $name;
+        $surname = array_pop($parts);
+        $initials = array_filter(array_map(function (string $p): string {
+            $p = trim($p, '.');
+            return $p === '' ? '' : mb_strtoupper(mb_substr($p, 0, 1)) . '.';
+        }, $parts));
+        return $initials ? $surname . ', ' . implode(' ', $initials) : $surname;
+    }, $names);
+
+    $authorList = '';
+    $n = count($authors);
+    if ($n === 1) {
+        $authorList = $authors[0];
+    } elseif ($n === 2) {
+        $authorList = $authors[0] . ' & ' . $authors[1];
+    } elseif ($n > 2) {
+        $last = array_pop($authors);
+        $authorList = implode(', ', $authors) . ', & ' . $last;
+    }
+
+    $year = '';
+    if (!empty($paper['research_date']) && $paper['research_date'] !== '0000-00-00') {
+        $ts = strtotime((string)$paper['research_date']);
+        if ($ts) $year = date('Y', $ts);
+    }
+    if ($year === '' && !empty($paper['year'])) $year = (string)(int)$paper['year'];
+    if ($year === '') $year = 'n.d.';
+
+    $title = trim((string)($paper['title'] ?? ''));
+    $typeLabel = !empty($paper['paper_type']) ? paper_type_label((string)$paper['paper_type']) : 'Thesis';
+    $status = strtolower(trim((string)($paper['publication_status'] ?? '')));
+    $bracket = (strpos($status, 'unpublish') !== false || $status === '')
+        ? 'Unpublished ' . $typeLabel
+        : $typeLabel;
+
+    $institution = 'Polytechnic University of the Philippines – Biñan Campus';
+
+    $citation = ($authorList !== '' ? $authorList . ' ' : '')
+        . '(' . $year . '). '
+        . ($title !== '' ? $title . ' ' : '')
+        . '[' . $bracket . ']. '
+        . $institution . '.';
+    if ($url !== '') $citation .= ' ' . $url;
+
+    return $citation;
+}
+
+/**
  * Where a notification takes you when you click it.
  *
  * A notification is always about a paper, and every role has its own place to
@@ -1834,6 +1997,35 @@ function paper_section_labels(): array {
  * Falls back to the reader's own dashboard when the notification carries no
  * paper — a reminder, say — so a click is never a dead end.
  */
+/**
+ * Split a notification into the line the list shows and the detail behind it.
+ *
+ * An account notice carries its detail from the second line on — which can hold
+ * a freshly issued password — so the list shows the first line only and the
+ * rest opens in a dialog. There is no paper to send the reader to for one of
+ * these, which is the other reason it opens where it is.
+ *
+ * Both lists ask this rather than each splitting the message its own way; they
+ * disagreed before, and the full-screen one printed the password inline.
+ *
+ * @return array{summary:string, detail:string, is_account:bool}
+ */
+function notification_parts(array $n): array
+{
+    $isAccount = ($n['notification_type'] ?? '') === 'account';
+    $message   = (string)($n['message'] ?? '');
+    if (!$isAccount) {
+        return ['summary' => $message, 'detail' => '', 'is_account' => false];
+    }
+    $lines   = preg_split('/\r\n|\r|\n/', $message);
+    $summary = (string)array_shift($lines);
+    return [
+        'summary'    => $summary,
+        'detail'     => implode("\n", $lines),
+        'is_account' => true,
+    ];
+}
+
 function notification_link(?int $paperId, string $role, string $type = ''): string {
     /* A notice about an account, not a paper. It goes to the roll the reader
        supervises, opened on the tab that lists password changes, because the
@@ -1852,6 +2044,16 @@ function notification_link(?int $paperId, string $role, string $type = ''): stri
         if ($role === 'faculty')     return BASE_URL . '/app/faculty/faculty_manage_students.php?tab=passwords';
         if ($role === 'super_admin') return BASE_URL . '/app/admin/super_admin_manage_admins.php?tab=passwords';
         if ($role === 'admin' && $level !== 2) return BASE_URL . '/app/admin/admin_manage_faculty.php?tab=passwords';
+        return role_home($role);
+    }
+
+    /* A manuscript request is about a published paper somebody else wrote, not
+       the reader's own submission — the student case below sends to
+       paper_details.php, which is for a student's own papers and would be the
+       wrong page here, so this has to be checked first. */
+    if ($type === 'manuscript') {
+        if ($role === 'librarian') return BASE_URL . '/app/librarian/manuscript_requests.php';
+        if ($role === 'student' && $paperId) return BASE_URL . '/archive/view_paper.php?id=' . $paperId;
         return role_home($role);
     }
 

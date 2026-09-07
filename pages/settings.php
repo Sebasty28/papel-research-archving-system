@@ -536,16 +536,19 @@ document.addEventListener('DOMContentLoaded', function () {
        there is no separate switch. */
     var COLOURS = [
         ['maroon', 'Maroon'], ['classic', 'Old Classic'],
+        ['google-light', 'Light'],
         ['quiet-light', 'Quiet Light'], ['modern-light', 'Modern Light'],
         ['modern-dark', 'Modern Dark'], ['quiet-dark', 'Quiet Dark']
     ];
     var DARK_COLOURS = { 'modern-dark': 1, 'quiet-dark': 1 };
     function modeFor(c) { return DARK_COLOURS[c] ? 'dark' : 'light'; }
 
-    var colour = getStored('papel_color', 'maroon');
+    // Old Classic is the default — a first-time reader with nothing stored
+    // yet lands there, not on maroon.
+    var colour = getStored('papel_color', 'classic');
     // A withdrawn palette, or an old dark preference, lands somewhere sensible.
     if (!COLOURS.some(function (c) { return c[0] === colour; })) {
-        colour = (getStored('papel_theme', '') === 'dark') ? 'modern-dark' : 'maroon';
+        colour = (getStored('papel_theme', '') === 'dark') ? 'modern-dark' : 'classic';
         try { localStorage.setItem('papel_color', colour); } catch (err) {}
     }
     try { localStorage.removeItem('papel_theme'); } catch (err) {}

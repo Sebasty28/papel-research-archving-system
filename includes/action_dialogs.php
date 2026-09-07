@@ -64,7 +64,9 @@
     padding: .5rem 1.1rem; border-radius: var(--r-control, 4px); font-family: var(--font-body);
     font-size: .8125rem; cursor: pointer; border: 1px solid transparent;
 }
-.ad-btn-keep { background: none; color: var(--maroon); border-color: var(--soft-maroon); }
+/* No outline. The border stays in the box at `transparent` from .ad-btn above,
+   so the button keeps exactly the size it had and nothing beside it shifts. */
+.ad-btn-keep { background: none; color: var(--maroon); }
 .ad-btn-keep:hover { background: var(--cream); }
 .ad-btn-go { background: var(--maroon-surface); color: #fff; }
 .ad-btn-go:hover { background: var(--maroon-surface-hover); }
@@ -313,8 +315,23 @@
         setTimeout(function () { toast.classList.remove('is-open'); }, 4000);
     };
 
-    // The page's own flash banner is the message; echo it once as a note too.
-    var flash = document.querySelector('.alert-success, .alert-danger');
+    /* The page's own flash banner is the message; echo it once as a note too.
+       Only one that is actually on screen, though: a hidden alert is not a
+       message to anybody. The upload wizard keeps a "Ready to Submit" card
+       inside its last step, and matching that one announced it on arrival at
+       step 1, on every visit, before the reader had filled in anything. */
+    var flash = null;
+    Array.prototype.some.call(
+        document.querySelectorAll('.alert-success, .alert-danger'),
+        function (a) {
+            var seen = a.checkVisibility
+                ? a.checkVisibility({ opacityProperty: true,
+                                      visibilityProperty: true })
+                : (a.getBoundingClientRect().width > 0 &&
+                   a.getBoundingClientRect().height > 0);
+            if (seen) { flash = a; }
+            return seen;
+        });
     if (flash) {
         var text = flash.textContent.replace(/\s+/g, ' ').trim();
         if (text) window.papelNote(text, flash.classList.contains('alert-success'));

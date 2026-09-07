@@ -58,8 +58,14 @@ if (!$u) {
             ];
             break;
         case 'librarian':
+            /* Support Requests used to sit here too, but support_handler_roles()
+               only ever offers faculty/admin/super_admin as a handler — a
+               librarian could never actually be routed one, so that page was
+               permanently empty for this role. Manuscript Requests is the
+               librarian's real inbox. */
             $nav_links = [
-                ['label' => 'Guest Passes', 'href' => BASE_URL.'/app/librarian/librarian_manage_guests.php', 'match' => ['librarian_manage_guests.php']],
+                ['label' => 'Guest Passes',        'href' => BASE_URL.'/app/librarian/librarian_manage_guests.php', 'match' => ['librarian_manage_guests.php']],
+                ['label' => 'Manuscript Requests', 'href' => BASE_URL.'/app/librarian/manuscript_requests.php',      'match' => ['manuscript_requests.php']],
             ];
             break;
         default:
@@ -85,12 +91,26 @@ if ($u) {
     $uc_stmt->close();
 
     $n_stmt = $conn->prepare("SELECT notification_id, message, is_read, created_at, paper_id, notification_type
-         FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 8");
+         FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 20");
     $n_stmt->bind_param('i', $u['user_id']);
     $n_stmt->execute();
     $recent_notifs = $n_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $n_stmt->close();
 }
+
+/* Shown once, on whichever page this session lands on right after signing
+   in — unset immediately so a later page in the same session never shows it
+   again, the same one-shot pattern flash() uses for a message set by one
+   page and read by the next. Nothing to show if nothing is unread: a login
+   with a clean slate should not still greet the reader with an empty card. */
+$show_login_notif_popup = false;
+if (!empty($_SESSION['just_logged_in'])) {
+    unset($_SESSION['just_logged_in']);
+    $show_login_notif_popup = $unread_count > 0;
+}
+$login_notif_popup_items = $show_login_notif_popup
+    ? array_slice(array_values(array_filter($recent_notifs, function ($n) { return !$n['is_read']; })), 0, 5)
+    : [];
 ?>
 <header class="site-header" id="siteHeader">
     <div class="wrap-wide header-inner">
@@ -98,7 +118,7 @@ if ($u) {
                  role — the role dashboard is reached via the nav links and the
                  avatar menu instead. */ ?>
         <a href="<?= e(BASE_URL.'/archive/index.php') ?>" class="brand"><?= e(APP_NAME) ?></a>
-        <nav class="main-nav">
+        <nav class="main-nav" id="mainNav">
             <?php foreach ($nav_links as $link): ?>
                 <?php $is_active = !empty($link['match']) && in_array($current_script, $link['match'], true); ?>
                 <a href="<?= e($link['href']) ?>" class="<?= $is_active ? 'active' : '' ?>"<?= !empty($link['external']) ? ' target="_blank" rel="noopener"' : '' ?>><?= e($link['label']) ?></a>
@@ -120,8 +140,10 @@ if ($u) {
                 /* Anyone who can be asked for a password or a correction needs a
                    standing way back to what has been asked. The notification is
                    the first route to it, but a notification is read once and
-                   gone, and the request outlives it. */
-                if (in_array($u['user_role'] ?? '', ['faculty', 'admin', 'super_admin', 'head_academic', 'librarian'], true)) {
+                   gone, and the request outlives it. Librarian is deliberately
+                   not in this list: support_handler_roles() never offers them
+                   as a handler, so the page would never have anything on it. */
+                if (in_array($u['user_role'] ?? '', ['faculty', 'admin', 'super_admin', 'head_academic'], true)) {
                     array_unshift($info_links, [
                         'label' => 'Support Requests',
                         'href'  => BASE_URL.'/app/support_requests.php',
@@ -182,20 +204,15 @@ if ($u) {
                                 <?php /* A link, not a button: it goes to the paper the
                                          notification is about, and middle-click works. */ ?>
                                 <?php
-                                /* An account notice carries its detail on the
-                                   second line and after: the list shows the
-                                   first line only, and the rest opens in a
-                                   dialog, because there is no page to send the
-                                   reader to and the detail can hold a password. */
-                                $isAccount = ($n['notification_type'] ?? '') === 'account';
-                                $lines   = preg_split('/\r\n|\r|\n/', (string)$n['message']);
-                                $summary = $isAccount ? array_shift($lines) : (string)$n['message'];
+                                // Split the same way the full-screen list does.
+                                $parts   = notification_parts($n);
+                                $summary = $parts['summary'];
                                 ?>
                                 <a class="notif-item<?= $n['is_read'] ? '' : ' unread' ?>"
                                    href="<?= e(notification_link(isset($n['paper_id']) ? (int)$n['paper_id'] : null, $u['user_role'], (string)($n['notification_type'] ?? ''))) ?>"
-                                   <?php if ($isAccount && $lines): ?>
+                                   <?php if ($parts['is_account'] && $parts['detail'] !== ''): ?>
                                        data-notif-popup="<?= e($summary) ?>"
-                                       data-notif-detail="<?= e(implode("\n", $lines)) ?>"
+                                       data-notif-detail="<?= e($parts['detail']) ?>"
                                    <?php endif; ?>
                                    data-notif-id="<?= (int)$n['notification_id'] ?>">
                                     <span class="notif-dot" aria-hidden="true"></span>
@@ -206,13 +223,55 @@ if ($u) {
                                 </a>
                             <?php endforeach; ?>
                         <?php else: ?>
-                            <div class="notif-empty">No notifications yet</div>
+                            <div class="notif-empty" id="notifNone">No notifications yet</div>
                         <?php endif; ?>
                         <div class="notif-empty" id="notifNoUnread" hidden>Nothing unread</div>
                     </div>
 
                     <a class="notif-view-all" href="<?= e(BASE_URL.'/notifications/notification_center.php') ?>">See More Notifications</a>
                 </div>
+                <?php if ($show_login_notif_popup): ?>
+                    <?php /* Same vocabulary the corner dropdown uses
+                             (.notif-item, .notif-dot, .notif-view-all) — this
+                             only adds the overlay that centres it instead, so
+                             it reads as the same feature shown two ways
+                             rather than a second one. */ ?>
+                    <div class="notif-popup-backdrop" id="notifPopupBackdrop">
+                        <div class="notif-popup-card" role="dialog" aria-modal="true" aria-labelledby="notifPopupTitle">
+                            <div class="notif-dropdown-header">
+                                <span id="notifPopupTitle">
+                                    <?= (int)$unread_count ?> new notification<?= $unread_count === 1 ? '' : 's' ?>
+                                </span>
+                                <button class="notif-close" id="notifPopupClose" type="button" aria-label="Close">
+                                    <span class="material-symbols-outlined mi-18">close</span>
+                                </button>
+                            </div>
+                            <div class="notif-list">
+                                <?php foreach ($login_notif_popup_items as $n): ?>
+                                    <?php $parts = notification_parts($n); ?>
+                                    <a class="notif-item unread"
+                                       href="<?= e(notification_link(isset($n['paper_id']) ? (int)$n['paper_id'] : null, $u['user_role'], (string)($n['notification_type'] ?? ''))) ?>"
+                                       <?php if ($parts['is_account'] && $parts['detail'] !== ''): ?>
+                                           data-notif-popup="<?= e($parts['summary']) ?>"
+                                           data-notif-detail="<?= e($parts['detail']) ?>"
+                                       <?php endif; ?>
+                                       data-notif-id="<?= (int)$n['notification_id'] ?>">
+                                        <span class="notif-dot" aria-hidden="true"></span>
+                                        <span class="notif-body">
+                                            <span class="notif-text"><?= e($parts['summary']) ?></span>
+                                            <small><?= e(date('M j, Y g:i A', strtotime($n['created_at']))) ?></small>
+                                        </span>
+                                    </a>
+                                <?php endforeach; ?>
+                            </div>
+                            <?php if ($unread_count > count($login_notif_popup_items)): ?>
+                                <a class="notif-view-all" href="<?= e(BASE_URL.'/notifications/notification_center.php') ?>">
+                                    See all <?= (int)$unread_count ?> notifications
+                                </a>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
                 <button class="avatar-group" id="userAvatarBtn" type="button" title="<?= e($display_name) ?>">
                     <span class="user-avatar-btn"><?= e($initial) ?></span>
                     <span class="material-symbols-outlined">expand_more</span>
@@ -242,6 +301,18 @@ if ($u) {
                 </button>
             <?php endif; ?>
         </div>
+        <?php /* On a phone the bar has no room for the links, and until now
+                 they were simply hidden — which left no route at all to About,
+                 Help Center, Contact Support or any role page. They fold into
+                 this instead. Last in the row so the wordmark keeps the left
+                 edge, and it is the only control here that changes what it
+                 shows rather than where it goes, so it carries both glyphs and
+                 the stylesheet swaps them. */ ?>
+        <button class="nav-burger" id="navToggle" type="button"
+                aria-controls="mainNav" aria-expanded="false" aria-label="Menu">
+            <span class="material-symbols-outlined burger-shut">menu</span>
+            <span class="material-symbols-outlined burger-open">close</span>
+        </button>
     </div>
 </header>
 

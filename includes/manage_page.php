@@ -208,6 +208,11 @@
     border-bottom: 1px solid var(--border);
 }
 .mgmt-table td { padding: .7rem .625rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+/* A plain <a> inside a cell (a paper title linking out, say) otherwise renders
+   in the browser's default link blue, which reads as broken next to a page
+   built entirely from the theme's own palette. */
+.mgmt-table td a { color: var(--maroon); }
+.mgmt-table td a:hover { color: var(--dark-maroon); text-decoration-thickness: 2px; }
 /* Actions hug the right edge; everything else takes the room it needs.
    The alignment lives on the header and on the button row, not on the cell —
    the reset dialog is rendered inside that cell, and a cell-wide text-align

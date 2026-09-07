@@ -207,7 +207,7 @@ $fill  = count($steps) > 1 ? max(0, min(100, ($done - 1) / (count($steps) - 1) *
 </div>
 
 <main class="wrap">
-    <div class="pd-wrap">
+    <div class="pd-wrap has-rail">
 
         <div class="pd-top">
             <a class="pd-back" href="student_dashboard.php">
@@ -233,6 +233,11 @@ $fill  = count($steps) > 1 ? max(0, min(100, ($done - 1) / (count($steps) - 1) *
                 <span class="pd-badge <?= $needsRevision ? 'is-warn' : '' ?>">
                     <?= e(workflow_status_badge_text($status, (bool)$returned)) ?>
                 </span>
+                <br>
+                <button type="button" class="pd-rail-toggle" id="pdRailToggle"
+                        title="Hide the contents panel" aria-label="Hide the contents panel" aria-pressed="false">
+                    <span class="material-symbols-outlined" id="pdRailToggleIcon">right_panel_close</span>
+                </button>
             </div>
         </div>
 
@@ -283,8 +288,11 @@ $fill  = count($steps) > 1 ? max(0, min(100, ($done - 1) / (count($steps) - 1) *
             </div>
         <?php endif; ?>
 
+        <div class="pd-layout" id="pdLayout">
+        <div class="pd-main">
+
         <!-- Where it stands -->
-        <div class="pd-card">
+        <div class="pd-card" id="pd-sec-progress">
             <div class="card-track" style="grid-template-columns: 1fr auto;">
                 <div class="track">
                     <div class="track-line"><div class="track-line-fill" style="width: <?= (int)round($fill) ?>%"></div></div>
@@ -302,14 +310,14 @@ $fill  = count($steps) > 1 ? max(0, min(100, ($done - 1) / (count($steps) - 1) *
                     <?php endforeach; ?>
                 </div>
                 <div class="pd-people">
-                    <div>Research Adviser: <span class="who"><?= e($reviewers['faculty'] ?? 'Not yet reviewed') ?></span></div>
-                    <div>Research Coordinator: <span class="who"><?= e($reviewers['admin'] ?? 'Not yet reviewed') ?></span></div>
+                    <div id="pd-sub-adviser">Research Adviser: <span class="who"><?= e($reviewers['faculty'] ?? 'Not yet reviewed') ?></span></div>
+                    <div id="pd-sub-coordinator">Research Coordinator: <span class="who"><?= e($reviewers['admin'] ?? 'Not yet reviewed') ?></span></div>
                 </div>
             </div>
         </div>
 
         <!-- Step 1 -->
-        <div class="pd-card">
+        <div class="pd-card" id="pd-sec-info">
             <h2><span class="material-symbols-outlined">description</span> Basic Information</h2>
             <div class="pd-facts">
                 <?php
@@ -333,47 +341,8 @@ $fill  = count($steps) > 1 ? max(0, min(100, ($done - 1) / (count($steps) - 1) *
             </div>
         </div>
 
-        <?php if ($keywords): ?>
-        <div class="pd-card">
-            <h2><span class="material-symbols-outlined">sell</span> Keywords</h2>
-            <div class="pd-chips">
-                <?php foreach ($keywords as $kw): ?>
-                    <span class="pd-chip"><?= e($kw) ?></span>
-                <?php endforeach; ?>
-            </div>
-        </div>
-        <?php endif; ?>
-
-        <!-- Step 2 -->
-        <div class="pd-card">
-            <h2><span class="material-symbols-outlined">article</span> Written Sections</h2>
-            <?php if (!$sections): ?>
-                <div class="pd-note">
-                    <span class="material-symbols-outlined">info</span>
-                    <span>No written sections were saved with this submission.</span>
-                </div>
-            <?php else: ?>
-                <?php if ($sectionsAreLegacy): ?>
-                    <div class="pd-note">
-                        <span class="material-symbols-outlined">info</span>
-                        <span>This paper was submitted before the separate section boxes existed,
-                              so only the abstract was kept as written text.</span>
-                    </div>
-                <?php endif; ?>
-                <?php foreach ($sectionLabels as $key => $label): ?>
-                    <?php if (empty($sections[$key])) continue; ?>
-                    <div class="pd-section">
-                        <h3><?= e($label) ?></h3>
-                        <?php /* Stored through rich_text_sanitize() on submit, so the markup
-                                 here is already limited to the allowed tags. */ ?>
-                        <div class="pd-prose pd-prose-scroll"><?= $sections[$key] ?></div>
-                    </div>
-                <?php endforeach; ?>
-            <?php endif; ?>
-        </div>
-
         <!-- Step 3 -->
-        <div class="pd-card">
+        <div class="pd-card" id="pd-sec-files">
             <h2><span class="material-symbols-outlined">folder_open</span> Uploaded Files</h2>
 
             <?php if (!$docsRequired): ?>
@@ -415,7 +384,7 @@ $fill  = count($steps) > 1 ? max(0, min(100, ($done - 1) / (count($steps) - 1) *
         </div>
 
         <!-- The checklist -->
-        <div class="pd-card">
+        <div class="pd-card" id="pd-sec-checklist">
             <h2><span class="material-symbols-outlined">checklist</span> Review Checklist</h2>
 
             <?php if (!$checklist): ?>
@@ -486,6 +455,45 @@ $fill  = count($steps) > 1 ? max(0, min(100, ($done - 1) / (count($steps) - 1) *
             <?php endif; ?>
         </div>
 
+        <?php if ($keywords): ?>
+        <div class="pd-card" id="pd-sec-keywords">
+            <h2><span class="material-symbols-outlined">sell</span> Keywords</h2>
+            <div class="pd-chips">
+                <?php foreach ($keywords as $kw): ?>
+                    <span class="pd-chip"><?= e($kw) ?></span>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <!-- Step 2 -->
+        <div class="pd-card" id="pd-sec-paper">
+            <h2><span class="material-symbols-outlined">article</span> Written Sections</h2>
+            <?php if (!$sections): ?>
+                <div class="pd-note">
+                    <span class="material-symbols-outlined">info</span>
+                    <span>No written sections were saved with this submission.</span>
+                </div>
+            <?php else: ?>
+                <?php if ($sectionsAreLegacy): ?>
+                    <div class="pd-note">
+                        <span class="material-symbols-outlined">info</span>
+                        <span>This paper was submitted before the separate section boxes existed,
+                              so only the abstract was kept as written text.</span>
+                    </div>
+                <?php endif; ?>
+                <?php foreach ($sectionLabels as $key => $label): ?>
+                    <?php if (empty($sections[$key])) continue; ?>
+                    <div class="pd-section" id="pd-sub-<?= e($key) ?>">
+                        <h3><?= e($label) ?></h3>
+                        <?php /* Stored through rich_text_sanitize() on submit, so the markup
+                                 here is already limited to the allowed tags. */ ?>
+                        <div class="pd-prose pd-prose-scroll"><?= $sections[$key] ?></div>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
+        </div>
+
         <?php if ($status === 'approved'): ?>
             <div class="pd-note">
                 <span class="material-symbols-outlined">public</span>
@@ -494,6 +502,61 @@ $fill  = count($steps) > 1 ? max(0, min(100, ($done - 1) / (count($steps) - 1) *
                     where readers see the version above without your checklist or supporting documents.</span>
             </div>
         <?php endif; ?>
+
+        </div><!-- /.pd-main -->
+
+        <aside class="pd-side">
+            <?php
+            /* One entry per card actually on the page, plus one per written
+               section inside "Written Sections" — mirrors the public paper
+               view's table of contents (archive/view_paper.php), minus the
+               "Cite This Paper" card, which has no place on a student's own
+               working copy of an unpublished submission. Order matches the
+               cards on the page: what was filed and whether it is complete
+               comes before the words themselves. */
+            $toc = [
+                ['id' => 'pd-sec-progress', 'label' => 'Where It Stands', 'children' => [
+                    ['id' => 'pd-sub-adviser',     'label' => 'Research Adviser'],
+                    ['id' => 'pd-sub-coordinator', 'label' => 'Research Coordinator'],
+                ]],
+                ['id' => 'pd-sec-info',      'label' => 'Basic Information', 'children' => []],
+                ['id' => 'pd-sec-files',     'label' => 'Uploaded Files',    'children' => []],
+                ['id' => 'pd-sec-checklist', 'label' => 'Review Checklist',  'children' => []],
+            ];
+            if ($keywords) {
+                $toc[] = ['id' => 'pd-sec-keywords', 'label' => 'Keywords', 'children' => []];
+            }
+            if ($sections) {
+                $children = [];
+                foreach ($sectionLabels as $key => $label) {
+                    if (empty($sections[$key])) continue;
+                    $children[] = ['id' => 'pd-sub-' . $key, 'label' => $label];
+                }
+                $toc[] = ['id' => 'pd-sec-paper', 'label' => 'Written Sections', 'children' => $children];
+            }
+            ?>
+            <div class="pd-card pd-toc">
+                <h2><span class="material-symbols-outlined">toc</span><span class="pd-card-title"> Table of Contents</span></h2>
+                <nav class="pd-toc-nav" aria-label="Sections on this page">
+                    <ul class="pd-toc-list">
+                        <?php foreach ($toc as $item): ?>
+                            <li>
+                                <a href="#<?= e($item['id']) ?>" class="pd-toc-link" data-toc-target="<?= e($item['id']) ?>"><?= e($item['label']) ?></a>
+                                <?php if ($item['children']): ?>
+                                    <ul class="pd-toc-sublist">
+                                        <?php foreach ($item['children'] as $child): ?>
+                                            <li><a href="#<?= e($child['id']) ?>" class="pd-toc-link pd-toc-sublink" data-toc-target="<?= e($child['id']) ?>"><?= e($child['label']) ?></a></li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                <?php endif; ?>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                </nav>
+            </div>
+        </aside>
+
+        </div><!-- /.pd-layout -->
 
     </div>
 </main>
@@ -505,5 +568,114 @@ $CARD_COLLAPSE_SELECTOR = '.pd-card';
 require ROOT_PATH.'/includes/card_collapse.php';
 require ROOT_PATH.'/includes/site_footer.php';
 ?>
+<script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
+document.addEventListener('DOMContentLoaded', function () {
+    var HEADER_OFFSET = 76;   // clears the sticky site header once the crumb bar has scrolled away
+
+    /* ----- Show/hide the contents rail ----- */
+    var railToggle = document.getElementById('pdRailToggle');
+    var railIcon   = document.getElementById('pdRailToggleIcon');
+    var layout     = document.getElementById('pdLayout');
+    if (railToggle && layout) {
+        railToggle.addEventListener('click', function () {
+            var collapsed = layout.classList.toggle('is-rail-collapsed');
+            railIcon.textContent = collapsed ? 'right_panel_open' : 'right_panel_close';
+            railToggle.title = collapsed ? 'Show the contents panel' : 'Hide the contents panel';
+            railToggle.setAttribute('aria-label', railToggle.title);
+            railToggle.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
+        });
+    }
+
+    /* ----- Move the rail to the other side, same control and stored
+       preference as the public paper view's own panel-side tool, so a choice
+       made on either page carries over to this one. ----- */
+    var SIDE_KEY = 'papel_sidebar_side';
+    var htmlEl = document.documentElement;
+
+    function labelSwap(btn) {
+        var to = htmlEl.classList.contains('sidebar-left') ? 'right' : 'left';
+        btn.title = 'Move panel to the ' + to;
+        btn.setAttribute('aria-label', btn.title);
+    }
+
+    document.querySelectorAll('.pd-toc > h2').forEach(function (head) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'pd-side-swap';
+        btn.setAttribute('aria-controls', 'pdLayout');
+        ['side-icon-left:dock_to_right', 'side-icon-right:dock_to_left'].forEach(function (pair) {
+            var bits = pair.split(':');
+            var i = document.createElement('span');
+            i.className = 'material-symbols-outlined ' + bits[0];
+            i.textContent = bits[1];
+            btn.appendChild(i);
+        });
+        labelSwap(btn);
+        var chevron = head.querySelector('.card-collapse-btn');
+        head.insertBefore(btn, chevron || null);
+    });
+
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('.pd-side-swap');
+        if (!btn) return;
+        var left = !htmlEl.classList.contains('sidebar-left');
+        htmlEl.classList.toggle('sidebar-left', left);
+        document.querySelectorAll('.pd-side-swap').forEach(labelSwap);
+        try { localStorage.setItem(SIDE_KEY, left ? 'left' : 'right'); } catch (err) {}
+    });
+
+    /* ----- Table of contents: smooth-scroll + scroll-spy ----- */
+    var tocLinks = Array.prototype.slice.call(document.querySelectorAll('.pd-toc-link'));
+
+    tocLinks.forEach(function (link) {
+        link.addEventListener('click', function (e) {
+            var target = document.getElementById(link.getAttribute('data-toc-target'));
+            if (!target) return;
+            e.preventDefault();
+            var top = target.getBoundingClientRect().top + window.pageYOffset - HEADER_OFFSET;
+            window.scrollTo({ top: top, behavior: 'smooth' });
+            history.replaceState(null, '', '#' + target.id);
+        });
+    });
+
+    /* Scroll-spy only tracks the finest-grained heading on the page — a
+       parent entry that has its own sub-list would otherwise stay "active"
+       for as long as any of its children are, since it spans all of them. */
+    var spyLinks = tocLinks.filter(function (link) {
+        var li = link.closest('li');
+        return !(li && li.querySelector('ul.pd-toc-sublist'));
+    });
+    var spyTargets = spyLinks.map(function (link) {
+        return document.getElementById(link.getAttribute('data-toc-target'));
+    }).filter(Boolean);
+
+    if (spyTargets.length && 'IntersectionObserver' in window) {
+        var visible = {};
+        function paintActive() {
+            var activeId = null;
+            for (var i = 0; i < spyTargets.length; i++) {
+                if (visible[spyTargets[i].id]) { activeId = spyTargets[i].id; break; }
+            }
+            /* The last section can be shorter than the gap the rootMargin
+               below leaves at the bottom of the viewport, so once the page is
+               scrolled as far as it goes, that section's top never rises into
+               the observer's narrow "active" band and it is never reported as
+               intersecting. Being at the bottom of the page wins outright. */
+            if (window.innerHeight + window.pageYOffset >= document.documentElement.scrollHeight - 2) {
+                activeId = spyTargets[spyTargets.length - 1].id;
+            }
+            tocLinks.forEach(function (l) {
+                l.classList.toggle('is-active', l.getAttribute('data-toc-target') === activeId);
+            });
+        }
+        var observer = new IntersectionObserver(function (entries) {
+            entries.forEach(function (entry) { visible[entry.target.id] = entry.isIntersecting; });
+            paintActive();
+        }, { rootMargin: '-' + HEADER_OFFSET + 'px 0px -70% 0px', threshold: 0 });
+        spyTargets.forEach(function (t) { observer.observe(t); });
+        window.addEventListener('scroll', paintActive, { passive: true });
+    }
+});
+</script>
 </body>
 </html>

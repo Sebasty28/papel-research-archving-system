@@ -327,7 +327,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
     $keywords    = trim($_POST['keywords'] ?? '');
     $paperType   = trim($_POST['paper_type'] ?? '');
     $researchTy  = trim($_POST['research_type'] ?? '');
-    $manuscript  = trim($_POST['manuscript_type'] ?? '');
+    $manuscript  = manuscript_types_posted($_POST['manuscript_type'] ?? []);
     $statusArr   = $_POST['paper_status'] ?? [];
     $pubStatus   = is_array($statusArr) ? implode(', ', $statusArr) : '';
     $pubLocation = trim($_POST['publication_location'] ?? '');
@@ -587,8 +587,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     
     // New Fields
     $researchType = trim($_POST['research_type'] ?? '');
-    $manuscriptType = trim($_POST['manuscript_type'] ?? '');
+    $manuscriptType = manuscript_types_posted($_POST['manuscript_type'] ?? []);
     
+    /* The browser refuses to leave step 1 without one of these, but the browser
+       is not the thing being trusted. */
+    if ($manuscriptType === '') {
+        throw new Exception('Please choose at least one manuscript type.');
+    }
+
     // Handle paper status
     $paperStatusArr = $_POST['paper_status'] ?? [];
     if (empty($paperStatusArr)) {
@@ -1171,6 +1177,84 @@ body {
   background: linear-gradient(135deg, var(--cream) 0%, var(--soft-maroon) 100%);
   color: #92400e;
 }
+
+/* ===== The "what is this for?" icon beside a label =====
+   The card hangs off the icon rather than being placed by script: the wrapper
+   is the positioned ancestor, so the card follows the icon wherever the row
+   ends up and nothing has to be measured. */
+.label-row {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  margin-bottom: .35rem;
+}
+.field-help-wrap { position: relative; display: inline-flex; }
+.field-help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--grey);
+  cursor: pointer;
+  transition: color .15s;
+}
+.field-help:hover,
+.field-help[aria-expanded="true"] { color: var(--maroon); }
+.field-help .material-symbols-outlined { font-size: 17px; }
+
+/* Fixed, not absolute. The card it opens inside carries overflow:hidden to keep
+   its children inside its rounded corners, and that clipped the help card off
+   at the card's bottom edge mid-sentence. Fixed positioning answers to the
+   viewport instead, so no ancestor can crop it; the cost is that the placing
+   has to be done from script, just below. */
+.help-card {
+  position: fixed;
+  z-index: 1200;
+  display: block;
+  width: 24rem;
+  max-width: 80vw;
+  padding: .8rem .95rem;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card, 8px);
+  box-shadow: var(--shadow-md);
+  color: var(--ink);
+  font-size: .8125rem;
+  font-weight: 400;
+  line-height: 1.55;
+  text-align: left;
+  white-space: normal;
+  /* On a short window the card could be taller than the screen, and no amount
+     of placing fixes that — so it scrolls inside itself instead. */
+  max-height: calc(100vh - 1.5rem);
+  overflow-y: auto;
+}
+.help-card[hidden] { display: none; }
+.help-lede { margin: 0 0 .6rem; }
+.help-card dl { margin: 0; }
+.help-card dt { font-weight: 600; color: var(--maroon); }
+.help-card dd { margin: 0 0 .55rem; }
+.help-card dd:last-child { margin-bottom: 0; }
+
+
+/* Checkboxes read across rather than down: three of them stacked took as much
+   height as the rest of the step put together, for three words each. Wrapping
+   is left on so a narrow window folds them instead of pushing the card wide. */
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: .5rem 1.75rem;
+  min-height: 38px;      /* what .form-select comes out at here */
+  flex-wrap: wrap;
+}
+.check-row .form-check { margin-bottom: 0; }
+/* A journal name is a short thing; the full width of the card overstated it. */
+.pub-location { max-width: 32rem; }
 
 .form-label {
   font-family: var(--font-body);
@@ -3137,7 +3221,7 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
                     <?php endif; ?>
                   </div>
 
-                  <div class="col-md-6">
+                  <div class="col-12">
                     <label class="form-label">Paper / Research Type <span class="text-danger">*</span></label>
                     <select class="form-select" name="paper_type" required>
                       <option value="">Select paper type...</option>
@@ -3147,18 +3231,64 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
                     </select>
                   </div>
 
-                  <div class="col-md-6">
-                    <label class="form-label">Manuscript Type <span class="text-danger">*</span></label>
-                    <select class="form-select" name="manuscript_type" required>
-                      <option value="">Select Format...</option>
-                      <option value="Manuscript">Manuscript</option>
-                      <option value="IMRAD">IMRAD</option>
-                    </select>
+                  <div class="col-12">
+                    <?php /* Two boxes rather than a list, because a paper can be
+                             handed in as both. Ticking both asks for both files
+                             in step 2. */ ?>
+                    <div class="label-row">
+                      <label class="form-label mb-0">Manuscript Type <span class="text-danger">*</span></label>
+                      <span class="field-help-wrap">
+                        <button type="button" class="field-help js-help" aria-expanded="false"
+                                aria-label="What is manuscript type?">
+                          <span class="material-symbols-outlined">help</span>
+                        </button>
+                        <span class="help-card" role="note" hidden>
+                          <p class="help-lede">How the paper is written up. Tick both if you are handing it in both ways, and you will be asked for two files in the next step, one of each.</p>
+                          <dl>
+                            <dt>IMRAD</dt>
+                            <dd>Introduction, Methodology, Results and Discussion, written straight through with no numbered chapters. Your adviser is not asked about chapters when reviewing one.</dd>
+                            <dt>Full Manuscript</dt>
+                            <dd>The complete write-up, with its numbered chapters.</dd>
+                          </dl>
+                        </span>
+                      </span>
+                    </div>
+                    <div class="check-row">
+                      <div class="form-check mb-0">
+                        <input class="form-check-input js-manuscript" type="checkbox"
+                               name="manuscript_type[]" id="mt_imrad" value="IMRAD">
+                        <label class="form-check-label" for="mt_imrad">IMRAD</label>
+                      </div>
+                      <div class="form-check mb-0">
+                        <input class="form-check-input js-manuscript" type="checkbox"
+                               name="manuscript_type[]" id="mt_full" value="Full Manuscript">
+                        <label class="form-check-label" for="mt_full">Full Manuscript</label>
+                      </div>
+                    </div>
                   </div>
 
-                  <div class="col-md-6">
-                      <label class="form-label">Paper Status</label>
-                      <div class="d-flex flex-column gap-2 mt-2">
+                  <div class="col-12">
+                      <div class="label-row">
+                        <label class="form-label mb-0">Paper Status</label>
+                        <span class="field-help-wrap">
+                          <button type="button" class="field-help js-help" aria-expanded="false"
+                                  aria-label="What is paper status?">
+                            <span class="material-symbols-outlined">help</span>
+                          </button>
+                          <span class="help-card" role="note" hidden>
+                            <p class="help-lede">Where the paper stands. Published and Unpublished are opposites, so ticking one clears the other. Presented can go with either.</p>
+                            <dl>
+                              <dt>Published Paper</dt>
+                              <dd>It has appeared in a journal or in conference proceedings. You will be asked where.</dd>
+                              <dt>Unpublished Paper</dt>
+                              <dd>Finished, but not published anywhere.</dd>
+                              <dt>Presented Paper</dt>
+                              <dd>It has been presented at a conference or forum.</dd>
+                            </dl>
+                          </span>
+                        </span>
+                      </div>
+                      <div class="check-row">
                           <div class="form-check">
                               <input class="form-check-input" type="checkbox" name="paper_status[]" id="status_published" value="Published Paper">
                               <label class="form-check-label" for="status_published">Published Paper</label>
@@ -3172,7 +3302,7 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
                               <label class="form-check-label" for="status_presented">Presented Paper</label>
                           </div>
                       </div>
-                      <div class="mt-2" id="pubLocationDiv">
+                      <div class="mt-3 pub-location" id="pubLocationDiv">
                           <input type="text" class="form-control" name="publication_location" placeholder="Enter publication location/journal" list="pub_locations_list" autocomplete="off">
                           <datalist id="pub_locations_list"></datalist>
                       </div>
@@ -3665,6 +3795,77 @@ function syncSupportingDocs() {
 
 // Step navigation
 let currentStep = 1;
+
+/* ===== The help cards beside Manuscript Type and Paper Status =====
+   Delegated from the document, so it does not matter that these sit inside a
+   step which is hidden when the page loads. */
+(function () {
+    function cardOf(btn) { return btn.parentElement.querySelector('.help-card'); }
+
+    function closeAll(except) {
+        document.querySelectorAll('.js-help').forEach(function (b) {
+            if (b === except) { return; }
+            b.setAttribute('aria-expanded', 'false');
+            var c = cardOf(b);
+            if (c) { c.hidden = true; }
+        });
+    }
+
+    /* Put the card under its icon, then pull it back inside the window: it is
+       fixed, so nothing else will do that for it. If there is no room below —
+       which is the usual case for the lower of the two — it opens upward. */
+    function place(btn, card) {
+        var GAP = 8, EDGE = 8;
+        var b = btn.getBoundingClientRect();
+        var vw = document.documentElement.clientWidth;
+        var vh = document.documentElement.clientHeight;
+        var cr = card.getBoundingClientRect();
+        var w = cr.width, h = cr.height;
+        if (!w || !h) { return; }        // not laid out yet; the rAF pass will
+
+        var left = Math.min(Math.max(EDGE, b.left), vw - w - EDGE);
+        var top  = b.bottom + GAP;
+        if (top + h > vh - EDGE) {
+            var above = b.top - GAP - h;
+            top = above >= EDGE ? above : Math.max(EDGE, vh - h - EDGE);
+        }
+        card.style.left = Math.round(left) + 'px';
+        card.style.top  = Math.round(top) + 'px';
+    }
+
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('.js-help');
+        if (!btn) {
+            // A click anywhere else puts the open one away, unless it landed
+            // inside the card itself.
+            if (!e.target.closest('.help-card')) { closeAll(null); }
+            return;
+        }
+        e.preventDefault();
+        var card = cardOf(btn);
+        if (!card) { return; }
+        var opening = card.hidden;
+        closeAll(btn);
+        card.hidden = !opening;
+        btn.setAttribute('aria-expanded', opening ? 'true' : 'false');
+
+        if (opening) {
+            place(btn, card);
+            /* Again once the browser has laid it out. The first call can run
+               before the card has a height, and a height of zero always looks
+               like it fits below — which is how it ended up hanging off the
+               bottom of a short window. */
+            requestAnimationFrame(function () { place(btn, card); });
+        }
+    });
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') { closeAll(null); }
+    });
+    /* A fixed card would sit still while the page moved out from under it. */
+    window.addEventListener('scroll', function () { closeAll(null); }, true);
+    window.addEventListener('resize', function () { closeAll(null); });
+})();
 
 function handleStatusChange(checkbox) {
     const published = document.getElementById('status_published');
@@ -6124,11 +6325,24 @@ const papelDraft = (function () {
 
         Object.keys(data.fields).forEach(function (name) {
             const value = data.fields[name];
-            const nodes = f.querySelectorAll('[name="' + CSS.escape(name) + '"]');
+            /* Two shapes arrive here. The copy saved in this browser uses the
+               input's own name, "manuscript_type[]", and a real array. A draft
+               reopened from the dashboard comes from the database, so it is
+               named after the column, "manuscript_type", and the ticked ones
+               are one comma-separated string. Accepting only the first shape
+               is why a reopened draft came back with nothing ticked. */
+            let nodes = f.querySelectorAll('[name="' + CSS.escape(name) + '"]');
+            if (!nodes.length) {
+                nodes = f.querySelectorAll('[name="' + CSS.escape(name + '[]') + '"]');
+            }
+            const ticked = Array.isArray(value)
+                ? value
+                : String(value === null || value === undefined ? '' : value)
+                    .split(',').map(function (v) { return v.trim(); });
             nodes.forEach(function (el) {
                 if (el.type === 'file') return;
                 if (el.type === 'checkbox' || el.type === 'radio') {
-                    el.checked = Array.isArray(value) && value.indexOf(el.value) !== -1;
+                    el.checked = ticked.indexOf(el.value) !== -1;
                 } else {
                     el.value = value;
                 }
@@ -6334,6 +6548,12 @@ function goToStep(step) {
             const program = programEl ? String(programEl.value).trim() : '';
             if (!program) {
                 papelAlert('Please select an Academic Program');
+                return;
+            }
+            /* `required` on a checkbox means that one box, not one of the
+               group, so the "at least one" rule is made here. */
+            if (!document.querySelectorAll('.js-manuscript:checked').length) {
+                papelAlert('Please choose at least one manuscript type');
                 return;
             }
         }

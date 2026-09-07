@@ -18,7 +18,9 @@ $conn = db();
 $u    = current_user();
 $SELF = 'super_admin_review_dashboard.php';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+// A POST carrying 'export' is a document download, not a paper decision —
+// let it fall through untouched to review_console.php's own export handling.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['export'])) {
     csrf_verify();
     $paper_id = (int)($_POST['paper_id'] ?? 0);
     $action   = $_POST['action'] ?? '';
@@ -32,31 +34,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             flash('error', 'That paper could not be archived.');
         }
-
-    } elseif ($action === 'export_analytics') {
-        $analytics = $conn->query(
-            "SELECT u.program, COUNT(rp.paper_id) AS total_papers
-             FROM research_papers rp JOIN users u ON rp.uploaded_by = u.user_id
-             WHERE rp.current_status = 'approved' AND u.program IS NOT NULL
-             GROUP BY u.program");
-        $ptStats = $conn->query(
-            "SELECT paper_type, COUNT(*) AS count FROM research_papers
-             WHERE current_status = 'approved' GROUP BY paper_type ORDER BY count DESC");
-
-        while (ob_get_level() > 0) { ob_end_clean(); }
-        header('Content-Type: text/csv; charset=utf-8');
-        header('Content-Disposition: attachment; filename=director_analytics_' . date('Y-m-d') . '.csv');
-        $out = fopen('php://output', 'w');
-        fputs($out, "\xEF\xBB\xBF");
-        fputcsv($out, ['PROGRAM PERFORMANCE (APPROVED PAPERS)']);
-        fputcsv($out, ['Program', 'Approved Papers Count']);
-        while ($row = $analytics->fetch_assoc()) fputcsv($out, [$row['program'], $row['total_papers']]);
-        fputcsv($out, []);
-        fputcsv($out, ['PAPER TYPE DISTRIBUTION']);
-        fputcsv($out, ['Type', 'Count']);
-        while ($row = $ptStats->fetch_assoc()) fputcsv($out, [$row['paper_type'], $row['count']]);
-        fclose($out);
-        exit;
     }
 
     header("Location: $SELF");
@@ -68,16 +45,6 @@ $admin_count = (int)($ac->fetch_assoc()['n'] ?? 0);
 
 $arc = $conn->query("SELECT COUNT(*) AS n FROM papers_archive");
 $archived_count = $arc ? (int)($arc->fetch_assoc()['n'] ?? 0) : 0;
-
-/* ---- The Director's own cards ------------------------------------------ */
-ob_start(); ?>
-<form method="post" action="<?= e($SELF) ?>">
-    <?= csrf_field() ?>
-    <input type="hidden" name="action" value="export_analytics">
-    <button type="submit" class="sidebar-link"
-            title="Approved papers by program and paper type, as a spreadsheet.">Export CSV</button>
-</form>
-<?php $export_card = ob_get_clean();
 
 $RC = [
     'self'  => $SELF,
@@ -105,9 +72,6 @@ $RC = [
          'desc' => 'Where uploaded papers are kept in Google Drive'],
         ['href' => BASE_URL.'/notifications/notification_center.php', 'icon' => 'notifications', 'label' => 'Notifications',
          'desc' => 'Every alert sent to you'],
-    ],
-    'cards' => [
-        ['id' => 'exportCard', 'title' => 'Export', 'html' => $export_card],
     ],
     // Archiving applies to what is published, so the control only appears there.
     'card_extra' => function (array $r) use ($SELF): string {

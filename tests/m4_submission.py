@@ -362,8 +362,13 @@ window.addEventListener('load', function () {
     if not os.path.isfile(chrome):
         R.record('ID-036', 'UNTESTED', 'Chrome not available to drive the page')
         return
+    # A dedicated profile dir, not the user's default one: pointing
+    # --headless=new at a profile that a real Chrome window already has open
+    # forces that window closed so this process can take the profile lock.
+    profile = os.path.join(os.environ.get('TEMP', H.HERE), 'papel_test_chrome_profile')
     dom = subprocess.check_output(
         [chrome, '--headless=new', '--disable-gpu', '--virtual-time-budget=9000',
+         '--user-data-dir=' + profile,
          '--dump-dom', 'file:///' + page.replace('\\', '/')],
         stderr=subprocess.DEVNULL).decode('utf-8', 'replace')
     i = dom.find('<title>') + 7

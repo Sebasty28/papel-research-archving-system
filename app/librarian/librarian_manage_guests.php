@@ -241,6 +241,10 @@ function guest_table(array $rows, string $which): void {
     gap: .375rem;
     flex: 0 0 auto;
     text-decoration: none;
+    /* .btn-sm-outline's border reads as a second frame here — this sits
+       beside the plain page title rather than in a row of other buttons it
+       needs to be told apart from. */
+    border: none;
 }
 
 /* Both of these were style attributes until it turned out the page's CSP drops

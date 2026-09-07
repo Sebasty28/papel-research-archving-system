@@ -3,9 +3,9 @@
  * The one-time question: which colour, and light or dark.
  *
  * Shown on a reader's first visit only. Everything already works without it —
- * PAPEL opens in maroon and light — so this is an offer, not a gate: dismissing
- * it keeps those defaults and it never asks again. That is why it is a small
- * card rather than a modal that blocks the page.
+ * PAPEL opens in Old Classic and light — so this is an offer, not a gate:
+ * dismissing it keeps those defaults and it never asks again. That is why it
+ * is a small card rather than a modal that blocks the page.
  *
  * The choice is stored under the same keys as Quick Settings and the settings
  * page, so all three are the same setting seen from different places.
@@ -88,6 +88,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var COLOURS = [
         ['maroon', '#820707', 'Maroon'],
         ['classic', '#6B0F0F', 'Old Classic'],
+        ['google-light', '#3C4043', 'Light'],
         ['quiet-light', '#705697', 'Quiet Light'],
         ['modern-light', '#005FB8', 'Modern Light'],
         ['modern-dark', '#0078D4', 'Modern Dark'],
@@ -95,7 +96,7 @@ document.addEventListener('DOMContentLoaded', function () {
     ];
     var DARK_COLOURS = { 'modern-dark': 1, 'quiet-dark': 1 };
     function modeFor(c) { return DARK_COLOURS[c] ? 'dark' : 'light'; }
-    var chosenColour = 'maroon';
+    var chosenColour = 'classic';   // the site's own default, shown pre-picked
 
     var host = document.getElementById('twSwatches');
     COLOURS.forEach(function (c) {
@@ -130,9 +131,9 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     /* Keeping the defaults still counts as an answer — the preview is undone
-       so the page ends up as maroon and light, which is what was offered. */
+       so the page ends up as classic and light, which is what was offered. */
     document.getElementById('twSkip').addEventListener('click', function () {
-        document.documentElement.setAttribute('data-color', 'maroon');
+        document.documentElement.setAttribute('data-color', 'classic');
         document.documentElement.setAttribute('data-mode', 'light');
         close();
     });

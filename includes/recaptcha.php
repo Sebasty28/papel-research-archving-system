@@ -57,11 +57,42 @@ function recaptcha_scripts(): string
     $n = csp_nonce();
     return <<<HTML
 <style nonce="{$n}">
-.papel-recaptcha { display: flex; justify-content: center; margin: .875rem 0 .25rem; }
-/* The widget is a fixed 304px and does not shrink; on a narrow modal it is
-   scaled down rather than allowed to push the panel wider than the screen. */
-@media (max-width: 360px) {
-    .papel-recaptcha { transform: scale(.88); transform-origin: center; }
+/* Google ships the tick box at a fixed 304x78 and will not resize it, so
+   scaling is the only lever there is. The wrapper's height is brought in to
+   match, because a transform leaves the original box behind in the layout and
+   the form would otherwise keep a band of empty space under the widget. */
+.papel-recaptcha {
+    display: flex;
+    justify-content: center;
+    overflow: hidden;
+    height: 66px;                 /* 78 * .85 */
+    margin: .75rem 0 .25rem;
+    transition: height .2s ease, margin .2s ease, opacity .2s ease;
+}
+.papel-recaptcha .g-recaptcha {
+    transform: scale(.85);
+    transform-origin: center top;
+}
+
+/* Out of the way until there is something to protect. Clipped to nothing
+   rather than display:none on purpose: Google measures the container when it
+   builds the frame, and one that was never laid out gets a widget of zero
+   size that stays zero when it is shown again. */
+.papel-recaptcha.is-gated {
+    height: 0;
+    margin: 0;
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* The narrowest phones: 304px plus the panel's own padding is wider than the
+   screen, so it comes down again. */
+@media (max-width: 380px) {
+    .papel-recaptcha { height: 59px; }        /* 78 * .76 */
+    .papel-recaptcha .g-recaptcha { transform: scale(.76); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .papel-recaptcha { transition: none; }
 }
 [data-recaptcha-gate][disabled] { opacity: .55; cursor: not-allowed; }
 </style>
@@ -84,6 +115,48 @@ function recaptcha_scripts(): string
        scoped inside this closure. */
     window.papelRecaptchaSolved  = function () { lock(false); };
     window.papelRecaptchaExpired = function () { lock(true); };
+
+    /* The tick box waits until both fields have something in them. Asking
+       somebody to prove they are human before they have typed anything put the
+       slowest step of signing in first, and an empty form cannot be submitted
+       in any case. Both sign-in surfaces name their fields the same way, so
+       this finds them without either page having to say where they are. */
+    function wireReveal() {
+        document.querySelectorAll('.papel-recaptcha').forEach(function (box) {
+            var form = box.closest('form');
+            if (!form) { return; }
+            /* The two surfaces disagree on what the first field is called —
+               the slide-in posts "identifier", the standalone page posts
+               "username" — so both are accepted rather than the widget
+               silently staying put on whichever one was not named here. */
+            var id = form.querySelector(
+                'input[name="identifier"], input[name="username"]');
+            var pw = form.querySelector('input[name="password"]');
+            // Not a sign-in form: leave the widget alone rather than hide
+            // something that nothing will ever bring back.
+            if (!id || !pw) { return; }
+
+            function sync() {
+                var ready = id.value.trim() !== '' && pw.value !== '';
+                box.classList.toggle('is-gated', !ready);
+            }
+            ['input', 'change', 'paste', 'blur'].forEach(function (ev) {
+                id.addEventListener(ev, sync);
+                pw.addEventListener(ev, sync);
+            });
+            box.classList.add('is-gated');
+            sync();
+            /* A password manager can fill both fields without firing any of
+               the events above, and it often lands after this runs. */
+            setTimeout(sync, 400);
+            setTimeout(sync, 1200);
+        });
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', wireReveal);
+    } else {
+        wireReveal();
+    }
 })();
 </script>
 <script src="https://www.google.com/recaptcha/api.js" async defer nonce="{$n}"></script>

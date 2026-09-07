@@ -11,7 +11,6 @@ require_once '../../config/core.php';
 require_role(['admin']);
 require_once '../../app/models/PaperRepository.php';
 require_once '../../app/models/PaperService.php';
-require_once '../../app/models/AnalyticsService.php';
 
 $conn = db();
 $u    = current_user();
@@ -28,7 +27,9 @@ if (($u['admin_level'] ?? 1) == 2) { header('Location: '.BASE_URL.'/app/faculty/
 $SELF = 'admin_review_dashboard.php';
 
 /* ---- Decisions --------------------------------------------------------- */
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+// A POST carrying 'export' is a document download, not a paper decision —
+// let it fall through untouched to review_console.php's own export handling.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['export'])) {
     csrf_verify();
     $paper_id = (int)($_POST['paper_id'] ?? 0);
     $action   = $_POST['action'] ?? '';
@@ -36,12 +37,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $paperRepo    = new PaperRepository($conn);
     $paperService = new PaperService();
-
-    if ($action === 'export_analytics') {
-        (new AnalyticsService())->exportAnalytics(
-            $paperRepo->getProgramAnalytics(), $paperRepo->getPaperTypeStats(), 'analytics_report');
-        exit;
-    }
 
     if ($paper_id <= 0) { header("Location: $SELF"); exit; }
 
@@ -87,15 +82,6 @@ $declined_exists = "EXISTS (SELECT 1 FROM approval_workflow aw WHERE aw.paper_id
 $fc = $conn->query("SELECT COUNT(*) AS n FROM users WHERE user_role = 'faculty'");
 $faculty_count = (int)($fc->fetch_assoc()['n'] ?? 0);
 
-ob_start(); ?>
-<form method="post" action="<?= e($SELF) ?>">
-    <?= csrf_field() ?>
-    <input type="hidden" name="action" value="export_analytics">
-    <button type="submit" class="sidebar-link"
-            title="Every submission by program and paper type, as a spreadsheet.">Export CSV</button>
-</form>
-<?php $export_card = ob_get_clean();
-
 $RC = [
     'self'  => $SELF,
     'title' => 'Review Desk',
@@ -133,9 +119,6 @@ $RC = [
          'desc' => 'What readers see once you approve'],
         ['href' => BASE_URL.'/notifications/notification_center.php', 'icon' => 'notifications', 'label' => 'Notifications',
          'desc' => 'Every alert sent to you'],
-    ],
-    'cards' => [
-        ['id' => 'exportCard', 'title' => 'Export', 'html' => $export_card],
     ],
     'empty' => ['icon' => 'inbox', 'text' => 'Nothing here right now.'],
 ];

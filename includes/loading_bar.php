@@ -154,8 +154,25 @@
     /* Leaving the page. This covers every kind of navigation — a link, a form
        post, the Back button, a typed address — so no click handler has to be
        attached to anything. The bar then runs on the old page for as long as
-       the next one takes to answer, which is exactly the wait being reported. */
-    window.addEventListener('beforeunload', start);
+       the next one takes to answer, which is exactly the wait being reported.
+
+       A form whose response turns out to be a file download (Export CSV, on
+       the review desks) fires this exactly the same as a real navigation —
+       the browser commits to leaving before it has seen the response's
+       Content-Disposition header — and then cancels the navigation once it
+       finds out, downloading the file and leaving this same page, and this
+       same script, running. Nothing tells this page that happened, so the
+       start() this fired never gets the done() it is owed and the bar runs
+       forever — which is the bug this was reported as. The timeout below is
+       the fallback for exactly that case: a real navigation destroys this
+       whole page, and the timer with it, well before six seconds are up, so
+       it never fires there — only a cancelled one runs long enough to reach
+       it, and the bar was never entitled to keep running past that point
+       anyway. */
+    window.addEventListener('beforeunload', function () {
+        start();
+        setTimeout(done, 6000);
+    });
 
     /* Coming back to a page the browser had parked keeps the old counter, and
        a bar left running from the navigation that took us away would never

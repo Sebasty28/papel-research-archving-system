@@ -101,12 +101,24 @@ if (isset($_GET['ajax_search'])) {
 $rc_tabs = $RC['tabs'];
 $tab     = isset($_GET['tab']) && isset($rc_tabs[$_GET['tab']]) ? $_GET['tab'] : array_key_first($rc_tabs);
 
+// Shared by the filter bar's own select and the export's "filtered by" line
+// further down, so the two can never disagree about what a type is called.
+$rcTypeLabels = ['capstone' => 'Capstone Project', 'research' => 'Research Paper', 'thesis' => 'Thesis'];
+
 $search        = trim($_GET['q'] ?? '');
 $filter_type   = trim($_GET['type'] ?? '');
 $filter_prog   = trim($_GET['program'] ?? '');
 $filter_year   = (int)($_GET['year'] ?? 0);
 $filter_month  = (int)($_GET['month'] ?? 0);
 $filter_day    = (int)($_GET['day'] ?? 0);
+// The student's own year-and-section string (e.g. "4-1"), not the paper's
+// research year above — a free-text match rather than a dropdown, since
+// there is no fixed list of sections to offer.
+$filter_section = trim($_GET['section'] ?? '');
+// The school year the student's section was for (e.g. "26-27") — a
+// different thing from $filter_year above, which is when the paper itself
+// was completed. Its own parameter, so the two never fight over one.
+$filter_ay = trim($_GET['ay'] ?? '');
 // Whitelisted, so it is safe to drop straight into ORDER BY.
 $sort_dir   = (($_GET['sort'] ?? '') === 'asc') ? 'ASC' : 'DESC';
 $sort_param = $sort_dir === 'ASC' ? 'asc' : 'desc';
@@ -126,8 +138,10 @@ if ($search) {
     $where .= " AND (rp.title LIKE ? OR rp.keywords LIKE ? OR rp.abstract LIKE ? OR u.full_name LIKE ?)";
     $t = "%$search%"; array_push($params, $t, $t, $t, $t); $types .= 'ssss';
 }
-if ($filter_type) { $where .= " AND rp.paper_type = ?"; $params[] = $filter_type; $types .= 's'; }
-if ($filter_prog) { $where .= " AND u.program = ?";     $params[] = $filter_prog; $types .= 's'; }
+if ($filter_type)    { $where .= " AND rp.paper_type = ?"; $params[] = $filter_type; $types .= 's'; }
+if ($filter_prog)    { $where .= " AND u.program = ?";     $params[] = $filter_prog; $types .= 's'; }
+if ($filter_section) { $where .= " AND u.section LIKE ?";  $params[] = "%$filter_section%"; $types .= 's'; }
+if ($filter_ay)      { $where .= " AND u.academic_year = ?"; $params[] = $filter_ay; $types .= 's'; }
 if ($filter_year) { $where .= " AND COALESCE(YEAR(rp.research_date), rp.year) = ?"; $params[] = $filter_year; $types .= 'i'; }
 if ($filter_month >= 1 && $filter_month <= 12) { $where .= " AND MONTH(rp.research_date) = ?"; $params[] = $filter_month; $types .= 'i'; }
 if ($filter_day   >= 1 && $filter_day   <= 31) { $where .= " AND DAY(rp.research_date) = ?";   $params[] = $filter_day;   $types .= 'i'; }
@@ -146,6 +160,142 @@ if ($row = $cs->get_result()->fetch_assoc()) {
     foreach ($counts as $k => $_) $counts[$k] = (int)($row[$k] ?? 0);
 }
 $cs->close();
+
+/* ---- Export: CSV, Excel, Word, PDF — the same four formats and the same
+   includes/*_writer.php classes analytics/analytics_dashboard.php exports
+   with, applied to a desk's own papers instead of the whole repository's
+   figures. There are no charts to carry here, which is what let the other
+   three formats stay a plain POST rather than analytics' canvas-capturing
+   one.
+
+   $where is exactly what built the list above — this tab, this search,
+   these filters — so export always means what is currently in view, never
+   the whole desk, the same promise analytics' own CSV link makes. CSV is a
+   plain GET link for the same reason analytics' is: reading data out is not
+   a state change, so it does not need a token and can be right-clicked,
+   opened in a new tab, or bookmarked. The other three post, since a
+   database export several kilobytes wide belongs behind CSRF the way any
+   other POST-only action here does. */
+$rcExportFormat = $_GET['export'] ?? ($_POST['export'] ?? '');
+if (in_array($rcExportFormat, ['csv', 'xlsx', 'docx', 'pdf'], true)) {
+    if ($rcExportFormat !== 'csv') csrf_verify();
+
+    $exq = $conn->prepare("SELECT rp.title, rp.paper_type, rp.current_status, rp.upload_date,
+                                   u.full_name AS student, u.program AS student_program,
+                                   u.section AS student_section, u.academic_year AS student_ay
+                            $rc_from WHERE $where
+                            ORDER BY COALESCE(rp.research_date, rp.upload_date) DESC");
+    if ($types !== '') $exq->bind_param($types, ...$params);
+    $exq->execute();
+    $exportRows = $exq->get_result()->fetch_all(MYSQLI_ASSOC);
+    $exq->close();
+
+    $filterBits = [];
+    if ($filter_type)    $filterBits[] = $rcTypeLabels[$filter_type] ?? $filter_type;
+    if ($filter_prog)    $filterBits[] = function_exists('program_code') ? program_code($filter_prog) : $filter_prog;
+    if ($filter_section) $filterBits[] = 'Section ' . $filter_section;
+    if ($filter_ay)      $filterBits[] = 'A.Y. ' . $filter_ay;
+    if ($filter_year)    $filterBits[] = (string)$filter_year;
+    if ($search)          $filterBits[] = 'matching "' . $search . '"';
+    $filterLine = $filterBits
+        ? 'Filtered by ' . implode(' · ', $filterBits)
+        : 'Everything under ' . ($rc_tabs[$tab]['label'] ?? 'this view');
+
+    $summaryRows = [];
+    foreach ($rc_tabs as $k => $def) $summaryRows[] = [$def['label'], $counts[$k] ?? 0];
+
+    $exportTitle = 'PAPEL ' . ($RC['role'] ?: $RC['title'] ?: 'Review Desk');
+    $when  = date('j F Y, g:i A');
+    $stamp = date('Y-m-d');
+    $slug  = preg_replace('/[^a-z0-9]+/i', '_', strtolower($RC['role'] ?: 'review_desk'));
+
+    $tableRows = array_map(function ($r) {
+        return [
+            substr((string)$r['upload_date'], 0, 10),
+            $r['title'],
+            $r['student'],
+            function_exists('program_code') ? program_code((string)$r['student_program']) : (string)$r['student_program'],
+            (string)$r['student_section'],
+            (string)$r['student_ay'],
+            ucwords(str_replace('_', ' ', (string)$r['current_status'])),
+        ];
+    }, $exportRows);
+    $tableHead = ['Submitted', 'Title', 'Student', 'Course', 'Grade and Section', 'Academic Year', 'Status'];
+
+    if ($rcExportFormat === 'csv') {
+        while (ob_get_level() > 0) { ob_end_clean(); }
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $slug . '_' . $stamp . '.csv"');
+        $out = fopen('php://output', 'w');
+        fputs($out, "\xEF\xBB\xBF");
+        fputcsv($out, [$exportTitle . ' — ' . $when]);
+        fputcsv($out, [$filterLine]);
+        fputcsv($out, []);
+        fputcsv($out, ['SUMMARY']);
+        foreach ($summaryRows as $r) fputcsv($out, $r);
+        fputcsv($out, []);
+        fputcsv($out, ['PAPERS']);
+        fputcsv($out, $tableHead);
+        foreach ($tableRows as $r) fputcsv($out, $r);
+        fclose($out);
+        exit;
+    }
+
+    if ($rcExportFormat === 'xlsx') {
+        require_once ROOT_PATH . '/includes/xlsx_writer.php';
+        $x = new XlsxWriter('Review Desk');
+        $x->widths([14, 42, 22, 12, 16, 12, 16]);
+        $x->title($exportTitle, $filterLine . '  ·  ' . $when);
+        $x->section('Summary');
+        $x->headRow(['Status', 'Papers']);
+        foreach ($summaryRows as $r) $x->row($r);
+        $x->section('Papers');
+        $x->headRow($tableHead);
+        foreach ($tableRows as $r) $x->row($r);
+        $bytes = $x->output();
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment; filename="' . $slug . '_' . $stamp . '.xlsx"');
+        header('Content-Length: ' . strlen($bytes));
+        echo $bytes;
+        exit;
+    }
+
+    if ($rcExportFormat === 'docx') {
+        require_once ROOT_PATH . '/includes/docx_writer.php';
+        $d = new DocxWriter();
+        $d->title($exportTitle, $filterLine . '  ·  ' . $when);
+        $d->heading('Summary');
+        $d->table([['Status', 3, 'left'], ['Papers', 1, 'right']], $summaryRows);
+        $d->heading('Papers');
+        $d->table([
+            ['Submitted', 2, 'left'], ['Title', 6, 'left'], ['Student', 3, 'left'],
+            ['Course', 2, 'left'], ['Section', 2, 'left'], ['A.Y.', 2, 'left'], ['Status', 2, 'left'],
+        ], $tableRows);
+        $bytes = $d->output();
+        header('Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        header('Content-Disposition: attachment; filename="' . $slug . '_' . $stamp . '.docx"');
+        header('Content-Length: ' . strlen($bytes));
+        echo $bytes;
+        exit;
+    }
+
+    // pdf
+    require_once ROOT_PATH . '/includes/pdf_writer.php';
+    $pdf = new PdfWriter($exportTitle, $filterLine . '  -  ' . $when);
+    $pdf->heading('Summary');
+    $pdf->table([['Status', 320, 'l'], ['Papers', 179, 'r']], $summaryRows);
+    $pdf->heading('Papers');
+    $pdf->table([
+        ['Submitted', 60, 'l'], ['Title', 160, 'l'], ['Student', 90, 'l'],
+        ['Course', 55, 'l'], ['Section', 45, 'l'], ['A.Y.', 40, 'l'], ['Status', 49, 'l'],
+    ], $tableRows);
+    $bytes = $pdf->output();
+    header('Content-Type: application/pdf');
+    header('Content-Disposition: attachment; filename="' . $slug . '_' . $stamp . '.pdf"');
+    header('Content-Length: ' . strlen($bytes));
+    echo $bytes;
+    exit;
+}
 
 /* ---- Total for the active view ----------------------------------------- */
 $ct = $conn->prepare("SELECT COUNT(*) AS total $rc_from WHERE $where");
@@ -229,6 +379,14 @@ $pq->execute();
 $programs = array_column($pq->get_result()->fetch_all(MYSQLI_ASSOC), 'p');
 $pq->close();
 
+$ayq = $conn->prepare("SELECT DISTINCT u.academic_year AS ay $rc_from
+                      WHERE ({$rc_scope['sql']}) AND u.academic_year IS NOT NULL AND u.academic_year <> ''
+                      ORDER BY ay DESC LIMIT 30");
+if ($rc_scope['types'] !== '') $ayq->bind_param($rc_scope['types'], ...$rc_scope['params']);
+$ayq->execute();
+$academicYears = array_column($ayq->get_result()->fetch_all(MYSQLI_ASSOC), 'ay');
+$ayq->close();
+
 /** The query string carried across tabs, filters and pagination. */
 function rc_qs(array $over = []): string {
     $base = [
@@ -236,7 +394,8 @@ function rc_qs(array $over = []): string {
         'type' => $_GET['type'] ?? null, 'program' => $_GET['program'] ?? null,
         'year' => $_GET['year'] ?? null, 'month'   => $_GET['month']   ?? null,
         'day'  => $_GET['day']  ?? null, 'sort'    => $_GET['sort']    ?? null,
-        'page' => $_GET['page'] ?? null,
+        'page' => $_GET['page'] ?? null, 'section' => $_GET['section'] ?? null,
+        'ay'   => $_GET['ay']   ?? null,
     ];
     return http_build_query(array_filter(array_merge($base, $over), fn($v) => $v !== null && $v !== ''));
 }
@@ -267,28 +426,89 @@ ob_start();
 }
 .rc-intro p { font-size: .8125rem; color: var(--grey); margin: 0; line-height: 1.6; }
 
-/* ---- Counters, doubling as tab shortcuts ----
-   The number a reviewer opens the page for is the size of their queue, so it is
-   the first thing on the page and clicking it is how you get there. */
-.rc-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr)); gap: .75rem; margin-bottom: 1.25rem; }
-.rc-stat {
-    display: flex; align-items: center; gap: .625rem;
-    padding: .75rem .875rem; background: var(--white); border: 1px solid var(--border);
-    border-radius: var(--r-card, 8px); text-decoration: none; transition: border-color .15s, box-shadow .15s, background .15s;
+/* ---- Filter bar, above the search field ----
+   Styled after analytics/analytics_dashboard.php's own .an-filters — same
+   layout, same rounded cream strip — so a reviewer who has used one has
+   already used the other. It differs in one way on purpose: there is no
+   Apply button. Analytics is a report someone sits and studies, so batching
+   several changes before re-running it is normal; a desk is scanned in
+   passing, and every change here is meant to be seen immediately, so each
+   one submits itself (see the change/submit handlers a little further down,
+   which route this the same way the sidebar's own #filterForm already does
+   — an AJAX swap of #mainCol and #sidebarCol, not a full reload). */
+.rc-filters { background: var(--cream); border-radius: var(--r-card, 8px); padding: .75rem .875rem; margin-bottom: 1.25rem; }
+.rc-filter-row { display: flex; flex-wrap: wrap; gap: .625rem; align-items: flex-end; }
+/* Un-boxes the <form> so its .rc-filter fields sit directly in the flex row
+   above, as though the form were never there — form-ness (submission, field
+   association) is unaffected, only its own box is. */
+.rc-filter-form { display: contents; }
+/* Each field grows to fill the row instead of sitting at its minimum width
+   with the leftover space going nowhere — "maximize the size of this". */
+.rc-filter { display: flex; flex-direction: column; gap: .2rem; min-width: 9rem; flex: 1 1 9rem; }
+.rc-filter-section { flex: 1 1 12rem; }
+/* The one field that does not grow, and the reason any of the others can:
+   free space goes to their flex-basis instead of sitting after this one.
+   Held to the row's own bottom edge like the others, but pinned to its
+   right end rather than following the last field in from the left. */
+.rc-filter-action { flex: 0 0 auto; margin-left: auto; }
+.rc-filter label {
+    font-size: .625rem; text-transform: uppercase; letter-spacing: .04em; color: var(--grey);
 }
-.rc-stat:hover { border-color: var(--soft-maroon); box-shadow: 0 2px 10px rgba(51,0,0,.06); }
-.rc-stat.active { background: var(--cream); border-color: var(--maroon); }
-.rc-stat-ico {
-    width: 2rem; height: 2rem; flex: 0 0 2rem; border-radius: var(--r-card, 8px);
-    display: inline-flex; align-items: center; justify-content: center;
-    background: var(--cream); color: var(--maroon);
+/* One fixed height for every control in the bar — field or button — so nothing
+   reads as slightly taller or shorter than its neighbours. */
+.rc-filter select, .rc-filter input, .rc-filter-action button {
+    height: 2.375rem; box-sizing: border-box;
 }
-.rc-stat.active .rc-stat-ico { background: var(--maroon-surface); color: #fff; }
-.rc-stat-ico .material-symbols-outlined { font-size: 18px; }
-/* The number sits above its label, so the text half of the tile is a block. */
-.rc-stat > span:last-child { display: block; min-width: 0; }
-.rc-stat-num { display: block; font-family: var(--font-head); font-size: 1.125rem; font-weight: 600; color: var(--maroon); line-height: 1.1; }
-.rc-stat-label { display: block; font-size: .6875rem; color: var(--grey); line-height: 1.3; }
+.rc-filter select, .rc-filter input {
+    border: 1px solid var(--border); border-radius: var(--r-control, 4px);
+    padding: .4rem .6rem; font-family: var(--font-body); font-size: .8125rem;
+    color: var(--ink); background: var(--white); width: 100%;
+}
+.rc-filter select {
+    appearance: none; -webkit-appearance: none; cursor: pointer; padding-right: 2rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23820707' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right .75rem center;
+}
+.rc-filter input:focus, .rc-filter select:focus { border-color: var(--maroon); outline: none; }
+/* What is currently narrowing the list, and how to undo it. */
+.rc-active {
+    display: flex; flex-wrap: wrap; align-items: center; gap: .375rem;
+    margin-top: .625rem; padding-top: .625rem; border-top: 1px solid var(--border);
+    font-size: .6875rem; color: var(--grey);
+}
+.rc-chip {
+    display: inline-flex; align-items: center; gap: .25rem;
+    background: var(--white); border: 1px solid var(--maroon); border-radius: var(--r-control, 4px);
+    padding: .15rem .5rem; font-size: .6875rem; color: var(--maroon);
+}
+.rc-chip a { color: var(--maroon); text-decoration: none; font-weight: 600; line-height: 1; }
+.rc-clear { margin-left: auto; color: var(--maroon); font-size: .6875rem; }
+
+/* ---- Export dropdown ----
+   Styled after analytics/analytics_dashboard.php's own .an-export, so the
+   two controls behave and look like one feature rather than two that
+   happen to share a name. */
+.rc-export { position: relative; }
+.rc-export-menu {
+    position: absolute; top: calc(100% + 6px); right: 0; z-index: 1100;
+    width: 15rem; padding: .35rem;
+    background: var(--white); border: 1px solid var(--border); border-radius: var(--r-card, 8px);
+    box-shadow: var(--shadow-md, 0 6px 18px rgba(51,0,0,.14));
+}
+.rc-export-menu[hidden] { display: none; }
+.rc-export-menu > a,
+.rc-export-menu > button {
+    display: flex; align-items: center; gap: .5rem; width: 100%;
+    padding: .5rem .6rem; border: none; border-radius: var(--r-control, 4px);
+    background: none; font-family: inherit; text-align: left; text-decoration: none;
+    color: var(--ink); cursor: pointer;
+}
+.rc-export-menu > a:hover,
+.rc-export-menu > button:hover { background: var(--cream); }
+.rc-export-menu .material-symbols-outlined { color: var(--maroon); flex: 0 0 auto; }
+.rc-export-menu strong { display: block; font-weight: 600; }
+.rc-export-menu small { display: block; font-size: .6875rem; color: var(--grey); margin-top: .05rem; }
+.rc-export.is-busy #rcExportBtn { opacity: .65; pointer-events: none; }
 
 /* ---- Review controls on a card ---- */
 .rc-actions { margin-top: .875rem; display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
@@ -342,7 +562,10 @@ ob_start();
 .sidebar-card-body .filter-select { width: calc(100% - 1.5rem); margin: .25rem .75rem; }
 
 @media (max-width: 600px) {
-    .rc-stats { grid-template-columns: repeat(2, 1fr); }
+    /* One field per line — the same reason .rc-filter-action drops its
+       margin-left:auto here: a right-pinned button on a row of its own
+       would just leave the same wasted space on the left instead. */
+    .rc-filter, .rc-filter-action { flex: 1 1 100%; margin-left: 0; min-width: 0; }
     .rc-actions .rc-spacer { margin-left: 0; }
 }
 </style>
@@ -362,7 +585,14 @@ ob_start();
 </div>
 
 <main class="wrap layout">
-    <div class="main-col" id="mainCol">
+    <?php /* data-card-console marks a page whose #mainCol renders .paper-card
+             items, for browse_console_js.php's buildCardDetailSection() —
+             this div itself survives every AJAX swap (only its innerHTML is
+             replaced), unlike .paper-card, which vanishes on whatever tab
+             the current filters happen to return zero results for. Without
+             a marker that survives that, "Card Details" would flicker out
+             of Quick Settings on an empty tab like Waiting for you. */ ?>
+    <div class="main-col" id="mainCol" data-card-console="1">
         <?php ob_start(); ?>
 
         <?php /* Forwarding, returning and approving all set a message and land
@@ -378,17 +608,128 @@ ob_start();
         </div>
         <?php endif; ?>
 
-        <div class="rc-stats">
-            <?php foreach ($rc_tabs as $key => $def): ?>
-                <a class="rc-stat <?= $tab === $key ? 'active' : '' ?>"
-                   href="<?= e($rc_self) ?>?<?= rc_qs(['tab' => $key, 'page' => null]) ?>">
-                    <span class="rc-stat-ico"><span class="material-symbols-outlined"><?= e($def['icon'] ?? 'description') ?></span></span>
-                    <span>
-                        <span class="rc-stat-num"><?= (int)$counts[$key] ?></span>
-                        <span class="rc-stat-label"><?= e($def['label']) ?></span>
-                    </span>
-                </a>
-            <?php endforeach; ?>
+        <?php
+        /* Program / Paper Type / Grade and Section / Academic Year, styled
+           after Analytics — see the .rc-filters rule above for why this
+           applies itself instead of waiting for an Apply click. The Paper
+           Type options are the same three the sidebar Filter card already
+           offers (both post to the same 'type' parameter), so the two stay
+           interchangeable rather than drifting into two different ideas of
+           what a paper type is.
+
+           The paper's own research year (what the sidebar's Date section
+           still filters by) is not offered here any more — Academic Year,
+           beside Grade and Section, is the year that actually pairs with a
+           section: the year the student was in when they were in it, not
+           the year their paper happened to be finished. It is carried as a
+           hidden field below so it survives a change made here instead of
+           being silently cleared. */
+        ?>
+        <div class="rc-filters">
+            <div class="rc-filter-row">
+            <?php /* display:contents on the form itself (see .rc-filter-form
+                     below) puts its fields directly into this flex row, so
+                     the export control — its own <form>, since Excel/Word/PDF
+                     post — can sit beside them as an ordinary sibling. Forms
+                     cannot nest, which ruled out the simpler option of just
+                     dropping that markup inside this one. */ ?>
+            <form class="rc-filter-form js-rc-filter-form" id="rcFiltersForm" action="<?= e($rc_self) ?>" method="get">
+                <input type="hidden" name="tab" value="<?= e($tab) ?>">
+                <?php if ($filter_year): ?><input type="hidden" name="year" value="<?= e($filter_year) ?>"><?php endif; ?>
+                <?php if ($sort_param === 'asc'): ?><input type="hidden" name="sort" value="asc"><?php endif; ?>
+                <?php if ($filter_month): ?><input type="hidden" name="month" value="<?= e($filter_month) ?>"><?php endif; ?>
+                <?php if ($filter_day): ?><input type="hidden" name="day" value="<?= e($filter_day) ?>"><?php endif; ?>
+
+                <div class="rc-filter">
+                    <label for="rcType">Paper type</label>
+                    <select name="type" id="rcType">
+                        <option value="">All types</option>
+                        <?php foreach ($rcTypeLabels as $tv => $tl): ?>
+                            <option value="<?= e($tv) ?>" <?= $filter_type === $tv ? 'selected' : '' ?>><?= e($tl) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <?php if ($programs): ?>
+                <div class="rc-filter">
+                    <label for="rcProgram">Course</label>
+                    <select name="program" id="rcProgram">
+                        <option value="">All courses</option>
+                        <?php foreach ($programs as $p): ?>
+                            <option value="<?= e($p) ?>" <?= $filter_prog === $p ? 'selected' : '' ?>>
+                                <?= e(function_exists('program_code') ? program_code($p) : $p) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <?php endif; ?>
+                <div class="rc-filter rc-filter-section">
+                    <label for="rcSection">Grade and Section</label>
+                    <input type="search" name="section" id="rcSection" value="<?= e($filter_section) ?>" placeholder="e.g. 4-1">
+                </div>
+                <div class="rc-filter">
+                    <label for="rcAy">Academic Year</label>
+                    <select name="ay" id="rcAy">
+                        <option value="">All years</option>
+                        <?php foreach ($academicYears as $ay): ?>
+                            <option value="<?= e($ay) ?>" <?= $filter_ay === $ay ? 'selected' : '' ?>><?= e($ay) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </form>
+            <?php /* CSV is a plain link — see the export block above for why —
+                     so it needs nothing from JS. The other three are posted by
+                     the click handler further down, onto the hidden form that
+                     follows this widget. */ ?>
+            <div class="rc-export rc-filter-action" id="rcExport">
+                <button type="button" class="btn-sm-outline" id="rcExportBtn"
+                        aria-haspopup="menu" aria-expanded="false">
+                    <span class="material-symbols-outlined mi-18">download</span>
+                    Export
+                    <span class="material-symbols-outlined mi-18">expand_more</span>
+                </button>
+                <div class="rc-export-menu" id="rcExportMenu" role="menu" hidden>
+                    <a role="menuitem" href="<?= e($rc_self) ?>?<?= rc_qs(['export' => 'csv']) ?>">
+                        <span class="material-symbols-outlined mi-18">table_view</span>
+                        <span><strong>CSV</strong><small>Plain table, opens anywhere</small></span>
+                    </a>
+                    <button type="button" role="menuitem" data-export="xlsx">
+                        <span class="material-symbols-outlined mi-18">grid_on</span>
+                        <span><strong>Excel</strong><small>Styled sheet, ready to filter</small></span>
+                    </button>
+                    <button type="button" role="menuitem" data-export="docx">
+                        <span class="material-symbols-outlined mi-18">description</span>
+                        <span><strong>Word</strong><small>A written report</small></span>
+                    </button>
+                    <button type="button" role="menuitem" data-export="pdf">
+                        <span class="material-symbols-outlined mi-18">picture_as_pdf</span>
+                        <span><strong>PDF</strong><small>Ready to print or hand in</small></span>
+                    </button>
+                </div>
+            </div>
+            </div>
+            <form method="post" id="rcExportForm" action="<?= e($rc_self) ?>?<?= rc_qs() ?>" hidden>
+                <?= csrf_field() ?>
+                <input type="hidden" name="export" id="rcExportFormat" value="">
+            </form>
+
+            <?php
+            $rcChips = [];
+            if ($filter_prog)    $rcChips[] = ['label' => (function_exists('program_code') ? program_code($filter_prog) : $filter_prog), 'href' => e($rc_self) . '?' . rc_qs(['program' => null, 'page' => null])];
+            if ($filter_type)    $rcChips[] = ['label' => $rcTypeLabels[$filter_type] ?? $filter_type, 'href' => e($rc_self) . '?' . rc_qs(['type' => null, 'page' => null])];
+            if ($filter_section) $rcChips[] = ['label' => 'Section ' . $filter_section, 'href' => e($rc_self) . '?' . rc_qs(['section' => null, 'page' => null])];
+            if ($filter_ay)      $rcChips[] = ['label' => 'A.Y. ' . $filter_ay, 'href' => e($rc_self) . '?' . rc_qs(['ay' => null, 'page' => null])];
+            if ($filter_year)    $rcChips[] = ['label' => (int)$filter_year, 'href' => e($rc_self) . '?' . rc_qs(['year' => null, 'page' => null])];
+            if ($search)          $rcChips[] = ['label' => '"' . $search . '"', 'href' => e($rc_self) . '?' . rc_qs(['q' => null, 'page' => null])];
+            ?>
+            <?php if ($rcChips): ?>
+            <div class="rc-active">
+                <span>Filtered by</span>
+                <?php foreach ($rcChips as $chip): ?>
+                    <span class="rc-chip"><?= e($chip['label']) ?> <a href="<?= $chip['href'] ?>" aria-label="Remove this filter">&times;</a></span>
+                <?php endforeach; ?>
+                <a class="rc-clear" href="<?= e($rc_self) ?>?tab=<?= e($tab) ?>">Clear all</a>
+            </div>
+            <?php endif; ?>
         </div>
 
         <div class="dash-shell">
@@ -611,6 +952,12 @@ ob_start();
 
     <aside class="sidebar-right" id="sidebarCol">
         <?php ob_start(); ?>
+        <?php /* First, and the same card the repository and the student
+                 dashboard show, so moving between a desk and the archive does
+                 not change what the sidebar offers. */ ?>
+        <?php require_once ROOT_PATH.'/includes/browse_card.php'; ?>
+        <?= browse_card_html($u ?? current_user()) ?>
+
         <?php if ($RC['quick']): ?>
         <div class="sidebar-card" id="quickCard">
             <div class="sidebar-card-header is-toggle">
@@ -624,7 +971,25 @@ ob_start();
                          dashboard and the public repository — a sidebar list reads
                          faster without an icon beside every line. The longer
                          description stays on hover. */ ?>
-                <?php foreach ($RC['quick'] as $q): ?>
+                <?php
+                /* The Browse card above now carries the repository link on
+                   every console, so a desk that also lists it here would show
+                   it twice. Filtered rather than removed from the four desks'
+                   own lists, so this keeps holding if one of them changes. */
+                $browse_seen = [];
+                foreach (browse_card_links($u ?? current_user()) as $bl) {
+                    $browse_seen[strtolower(trim($bl['label']))] = true;
+                    $path = (string)parse_url($bl['href'], PHP_URL_PATH);
+                    $browse_seen[strtolower(basename($path))] = true;
+                }
+                foreach ($RC['quick'] as $q):
+                    $qLabel = strtolower(trim((string)($q['label'] ?? '')));
+                    $qFile  = strtolower(basename((string)parse_url((string)($q['href'] ?? ''), PHP_URL_PATH)));
+                    if (empty($q['external'])
+                        && (isset($browse_seen[$qLabel]) || isset($browse_seen[$qFile]))) {
+                        continue;
+                    }
+                ?>
                     <a class="sidebar-link" href="<?= e($q['href']) ?>"
                        <?= !empty($q['desc']) ? 'title="'.e($q['desc']).'"' : '' ?>
                        <?= !empty($q['external']) ? ' target="_blank" rel="noopener"' : '' ?>><?= e($q['label']) ?></a>
@@ -653,7 +1018,7 @@ ob_start();
                     <button class="card-tool card-chevron js-card-toggle" type="button" data-card="filterCard" aria-label="Collapse Filter"><span class="material-symbols-outlined">expand_more</span></button>
                 </span>
             </div>
-            <form id="filterForm" action="<?= e($rc_self) ?>" method="get">
+            <form id="filterForm" class="js-rc-filter-form" action="<?= e($rc_self) ?>" method="get">
                 <?php if ($search): ?><input type="hidden" name="q" value="<?= e($search) ?>"><?php endif; ?>
                 <input type="hidden" name="tab" value="<?= e($tab) ?>">
 
@@ -861,20 +1226,63 @@ document.addEventListener('click', function (e) {
 });
 
 document.addEventListener('submit', function (e) {
-    var form = e.target.closest('#searchForm');
+    // #searchForm is the field beside the primary button; .js-rc-filter-form
+    // is both filter bars (the top one has a search box of its own, whose
+    // Enter key would otherwise submit a real GET and leave the AJAX path).
+    var form = e.target.closest('#searchForm, .js-rc-filter-form');
     if (!form) return;
     e.preventDefault();
     loadResults(SELF + '?' + new URLSearchParams(new FormData(form)).toString());
 });
 
 document.addEventListener('change', function (e) {
-    var form = e.target.closest('#filterForm');
+    var form = e.target.closest('.js-rc-filter-form');
     if (!form) return;
-    if (e.target.matches('input[type="radio"], select')) {
+    if (e.target.matches('input[type="radio"], input[type="search"], select')) {
         loadResults(SELF + '?' + new URLSearchParams(new FormData(form)).toString());
     }
 });
 window.addEventListener('popstate', function () { loadResults(window.location.href, false); });
+
+// ===== Export dropdown =====
+// Same open/close/outside-click behaviour as analytics_dashboard.php's own
+// #anExport — Excel/Word/PDF simply set the hidden form's format and submit
+// it, with none of that page's canvas-to-image work, since a review desk has
+// no charts to carry along.
+(function () {
+    var wrap = document.getElementById('rcExport');
+    var btn  = document.getElementById('rcExportBtn');
+    var menu = document.getElementById('rcExportMenu');
+    var form = document.getElementById('rcExportForm');
+    if (!wrap || !btn || !menu || !form) return;
+
+    function shut() { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); }
+
+    btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        menu.hidden = !menu.hidden;
+        btn.setAttribute('aria-expanded', menu.hidden ? 'false' : 'true');
+    });
+    document.addEventListener('click', function (e) {
+        if (!wrap.contains(e.target)) shut();
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') shut();
+    });
+
+    menu.querySelectorAll('button[data-export]').forEach(function (item) {
+        item.addEventListener('click', function () {
+            shut();
+            wrap.classList.add('is-busy');
+            document.getElementById('rcExportFormat').value = item.getAttribute('data-export');
+            form.submit();
+            // The page never navigates for a download, so nothing else would
+            // bring the button back — the same reason includes/loading_bar.php
+            // gives its own beforeunload counter a timed fallback.
+            setTimeout(function () { wrap.classList.remove('is-busy'); }, 2500);
+        });
+    });
+})();
 
 // ===== Confirm-before-submit, for anything a role can do to a paper =====
 var cfg   = document.getElementById('rcConfirm');

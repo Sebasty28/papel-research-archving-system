@@ -11,42 +11,19 @@ require_once '../../config/core.php';
 require_once '../../includes/validation.php';
 require_role(['faculty']);
 require_once '../../config/gdrive_config.php';
-require_once '../../app/models/AnalyticsService.php';
 
 $conn = db();
 $u    = current_user();
 $SELF = 'faculty_review_dashboard.php';
 
 /* ---- Decisions --------------------------------------------------------- */
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+// A POST carrying 'export' is a document download, not a paper decision —
+// let it fall through untouched to review_console.php's own export handling.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['export'])) {
     csrf_verify();
     $paper_id = (int)($_POST['paper_id'] ?? 0);
     $action   = $_POST['action'] ?? '';
     $feedback = trim($_POST['feedback'] ?? '');
-
-    if ($action === 'export_analytics') {
-        $exp_s = $conn->prepare(
-            "SELECT u.program, COUNT(rp.paper_id) AS total_papers,
-                    SUM(CASE WHEN rp.current_status IN ('approved','pending_admin') THEN 1 ELSE 0 END) AS approved,
-                    SUM(CASE WHEN rp.current_status='draft' THEN 1 ELSE 0 END) AS revisions
-             FROM research_papers rp JOIN users u ON rp.uploaded_by = u.user_id
-             WHERE u.user_role='student' AND u.program IS NOT NULL AND u.created_by = ?
-             GROUP BY u.program");
-        $exp_s->bind_param('i', $u['user_id']);
-        $exp_s->execute();
-        $exp_stats = $exp_s->get_result()->fetch_all(MYSQLI_ASSOC);
-
-        $exp_p = $conn->prepare(
-            "SELECT rp.paper_type, COUNT(*) AS count
-             FROM research_papers rp JOIN users u ON u.user_id = rp.uploaded_by
-             WHERE u.created_by = ? GROUP BY rp.paper_type ORDER BY count DESC");
-        $exp_p->bind_param('i', $u['user_id']);
-        $exp_p->execute();
-        $exp_pt = $exp_p->get_result()->fetch_all(MYSQLI_ASSOC);
-
-        (new AnalyticsService())->exportAnalytics($exp_stats, $exp_pt, 'faculty_analytics');
-        exit;
-    }
 
     if ($paper_id <= 0) { header("Location: $SELF"); exit; }
 
@@ -131,15 +108,6 @@ $sc->execute();
 $student_count = (int)($sc->get_result()->fetch_assoc()['n'] ?? 0);
 $sc->close();
 
-ob_start(); ?>
-<form method="post" action="<?= e($SELF) ?>">
-    <?= csrf_field() ?>
-    <input type="hidden" name="action" value="export_analytics">
-    <button type="submit" class="sidebar-link"
-            title="A spreadsheet of your students' submissions by program and paper type.">Export CSV</button>
-</form>
-<?php $export_card = ob_get_clean();
-
 $RC = [
     'self'  => $SELF,
     'title' => 'Review Desk',
@@ -177,9 +145,6 @@ $RC = [
          'desc' => 'Everything published so far'],
         ['href' => BASE_URL.'/notifications/notification_center.php', 'icon' => 'notifications', 'label' => 'Notifications',
          'desc' => 'Every alert sent to you'],
-    ],
-    'cards' => [
-        ['id' => 'exportCard', 'title' => 'Export', 'html' => $export_card],
     ],
     'empty' => ['icon' => 'inbox', 'text' => 'Nothing here right now.'],
 ];

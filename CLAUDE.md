@@ -98,6 +98,23 @@ PHP 7.3+ strips the closing marker's indentation from every line. If the closing
 Some upload paths exceed 260 characters and git warns "Filename too long".
 `git config --global core.longpaths true` if it becomes a problem.
 
+### Headless Chrome closes the real browser — two separate ways
+
+`chrome.exe --headless=new` with no `--user-data-dir` opens the *default*
+profile — the same one the human's everyday Chrome window is signed into.
+Chrome allows only one process per profile; a second process (even headless)
+takes the lock by closing the window that already held it. Every verification
+run under **Testing** below must pass its own `--user-data-dir` pointing at a
+throwaway folder (the scratchpad is fine), or it will force-close whatever the
+human has open, every time.
+
+Cleaning up afterwards with `taskkill /F /IM chrome.exe /T` is a second,
+unconditional way to cause the same symptom — it matches every `chrome.exe`
+process on the machine by image name, including the human's real windows,
+*regardless* of `--user-data-dir`. Track the PID of a launch you backgrounded
+and kill only that PID, or let a one-shot `--dump-dom`/`--screenshot` process
+exit on its own.
+
 ---
 
 ## Shared includes — use these, do not re-invent
@@ -233,7 +250,8 @@ There is no test framework. Changes are verified against the running app:
 1. Sign in over HTTP with a real account and fetch the page.
 2. For behaviour, inject a probe script into the fetched HTML and run it in
    headless Chrome (`--headless=new --dump-dom`), writing results into
-   `document.title`.
+   `document.title`. Always pass `--user-data-dir=<scratch folder>` — see
+   the trap above; without it, this closes the human's actual browser.
 3. For layout, take a screenshot and measure with `getBoundingClientRect()`.
 
 **Verify against the running site, not by reading code.** Several bugs in this

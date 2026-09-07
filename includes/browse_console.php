@@ -418,6 +418,37 @@ html[data-mode="dark"] { --search-clear: #C3CAD4; }
 }
 .card-tool:hover { color: var(--dark-maroon); }
 .card-tool .material-symbols-outlined { font-size: 16px; }
+/* ===== The sidebar on either side =====
+   A control in the top sidebar card sends the whole column across the page.
+   Left is a mirror of right rather than a move: the two grid tracks trade
+   places and the columns trade order.
+
+   Every console that has this sidebar gets it — the public repository, the
+   student dashboard, and the four review desks that share review_console.php.
+   The order properties do the work rather than anything moving in the DOM,
+   because applying a filter replaces the inside of both columns from script
+   and the elements have to stay where that code expects them.
+
+   The sidebar width is read with the same fallback console_shell.php uses, so
+   this one rule fits both layouts that define .layout. */
+.js-side-swap .side-icon-right { display: none; }
+html.sidebar-left .js-side-swap .side-icon-left { display: none; }
+html.sidebar-left .js-side-swap .side-icon-right { display: inline-flex; }
+
+@media (min-width: 901px) {
+    html.sidebar-left .layout {
+        grid-template-columns: var(--sidebar-w, 226px) 1fr;
+    }
+    html.sidebar-left #sidebarCol { order: 1; }
+    html.sidebar-left #mainCol    { order: 2; }
+}
+
+/* Below the breakpoint the sidebar is a drawer, or stacked under the results,
+   and there are no sides to choose between. */
+@media (max-width: 900px) {
+    .js-side-swap { display: none; }
+}
+
 .card-chevron { transition: transform .25s ease; }
 .sidebar-card.collapsed .card-chevron { transform: rotate(-90deg); }
 .sidebar-card.collapsed .sidebar-card-body,
@@ -558,4 +589,90 @@ html[data-mode="dark"] { --search-clear: #C3CAD4; }
 }
 .suggestion-item:last-child { border-bottom: none; }
 .suggestion-item:hover, .suggestion-item.active { background: var(--cream); color: var(--maroon); }
+
+/* ===== Phones and small tablets =====
+   Everything above this point was sized for a pointer on a large screen: 11px
+   metadata, 26px buttons, and two columns of detail under each title. On a
+   phone that reads as a desktop table that has been squeezed rather than a
+   page built for the device. Nothing here applies above 900px, so the wide
+   layout is exactly as it was.
+
+   The density rules further up carry an attribute selector, so these repeat it
+   — otherwise they lose the cascade and silently do nothing. */
+@media (max-width: 900px) {
+    /* A result becomes a card you can hit with a thumb, rather than a row
+       separated from the next one by a hairline. */
+    [data-density] .paper-item,
+    .paper-item {
+        margin: 0 0 .625rem;
+        padding: .875rem 1rem;
+        border: 1px solid var(--border-soft);
+        border-radius: var(--r-card, 8px);
+        background: var(--white);
+    }
+    .paper-item::after { display: none; }   /* the card edge separates them now */
+
+    [data-density] .paper-item .paper-title,
+    .paper-item .paper-title {
+        font-size: 1rem;
+        line-height: 1.4;
+        margin-bottom: .45rem;
+    }
+
+    /* One column. Two columns of 11px text on a 360px screen left roughly
+       fourteen characters per line in each of them. */
+    .paper-foot {
+        grid-template-columns: 1fr;
+        gap: .5rem;
+    }
+
+    /* 13px is the floor for body text on a phone; 11px was set for a screen
+       held at arm's length on a desk. */
+    [data-density] .paper-authors,
+    [data-density] .paper-meta,
+    [data-density] .paper-side,
+    .paper-authors, .paper-meta, .paper-side { font-size: .8125rem; }
+    .paper-authors { margin-bottom: .25rem; }
+    .paper-meta { gap: .3rem .5rem; }
+
+    /* The action was an 11px link in a line of other text — a target a finger
+       cannot reliably find. It becomes the card's own button. */
+    .paper-side {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: .25rem .75rem;
+        margin-top: .5rem;
+        padding-top: .625rem;
+        border-top: 1px solid var(--border-soft);
+    }
+    .paper-action {
+        display: inline-flex;
+        align-items: center;
+        min-height: 40px;
+        padding: 0 .875rem;
+        border: 1px solid var(--border);
+        border-radius: var(--r-control, 4px);
+        font-size: .8125rem;
+    }
+    .paper-action:hover { background: var(--cream); text-decoration: none; }
+    .paper-program { display: inline; }
+
+    /* Apple and Google both publish 44px as the smallest reliable target;
+       these were 26. */
+    .browse-toolbar {
+        font-size: .8125rem;
+        gap: .5rem;
+        padding: .25rem 0 .5rem;
+    }
+    .toolbar-left, .toolbar-right { gap: .125rem; }
+    .toolbar-btn { width: 40px; height: 40px; }
+    .toolbar-btn .material-symbols-outlined { font-size: 20px; }
+
+    .suggestion-item { padding: .8rem 1rem; font-size: .9375rem; }
+
+    /* The magnifier is the form's submit button, so it has to be reachable in
+       its own right and not only by the field beside it. */
+    .btn-search-icon { padding: 0 .875rem; min-height: 44px; }
+}
 </style>

@@ -110,6 +110,10 @@ MODULES = [
         'reports without being edited.'),
        ('includes/accessibility.php',
         'The accessibility widget — text size, contrast, spacing.'),
+       ('includes/key_nav.php',
+        'Arrow keys move between links and boxes, the same way Tab does. '
+        'It steps aside wherever the arrows already mean something — '
+        'inside a text box, a dropdown, or a group of radio buttons.'),
        ('includes/scroll_jump.php', 'The jump-to-top button on long pages.'),
        ('includes/theme_welcome.php',
         'The one-time note introducing the theme switcher to a new visitor.'),
@@ -132,6 +136,8 @@ MODULES = [
         'Checks the password, counts failed attempts, refuses an expired '
         'student account, makes sure the account matches the tab you used, '
         'then sends you to your own dashboard.'),
+       ('includes/recaptcha.php',
+        'The “I’m not a robot” box on both sign-in forms. It stays out of the way entirely unless both Google keys are set, so a machine without them still signs in normally.'),
        ('app/auth/logout.php', 'Empties the session. Small on purpose.'),
        ('archive/login.php',
         'The standalone sign-in page, used by the link in the guest '

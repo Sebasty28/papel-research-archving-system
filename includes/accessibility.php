@@ -87,6 +87,36 @@ body {
 #a11y-widget.is-dragging { transition: none; }
 /* Once moved, the widget is positioned from the top-left, so the panel has
    to flip to whichever side has room. */
+/* ===== Phones =====
+   A 113px vertical tab down the side of a page whose text runs edge to edge
+   is always sitting on top of something to read. It becomes a round button in
+   the corner instead: the word goes, the icon stays, and it covers a fifth of
+   the area it used to. Above 900px the tab is unchanged. */
+@media (max-width: 900px) {
+    #a11y-toggle {
+        width: 48px;
+        height: 48px;
+        padding: 0;
+        justify-content: center;
+        border-radius: 50%;
+        box-shadow: 0 2px 12px rgba(51, 0, 0, .3);
+    }
+    #a11y-toggle .a11y-tab-label { display: none; }
+    #a11y-toggle:hover { padding-right: 0; }
+    /* The edge classes each round three corners flat to sit against a side;
+       nothing is against a side any more. */
+    #a11y-widget.edge-left #a11y-toggle,
+    #a11y-widget.edge-right #a11y-toggle,
+    #a11y-widget.edge-top #a11y-toggle,
+    #a11y-widget.edge-bottom #a11y-toggle { border-radius: 50%; }
+    #a11y-widget.edge-left #a11y-toggle:hover,
+    #a11y-widget.edge-right #a11y-toggle:hover,
+    #a11y-widget.edge-top #a11y-toggle:hover,
+    #a11y-widget.edge-bottom #a11y-toggle:hover {
+        padding: 0;
+    }
+}
+
 #a11y-widget.anchor-left #a11y-menu  { left: 0; right: auto; }
 #a11y-widget.anchor-top  #a11y-menu  { top: calc(100% + 12px); bottom: auto; }
 /* Open state darkens the same accent rather than switching to another colour. */
@@ -548,7 +578,31 @@ body.a11y-big-cursor * { cursor: url("data:image/svg+xml;utf8,<svg xmlns='http:/
            The position lives in localStorage rather than the session, so it
            survives closing the browser as well as moving between pages — the
            tab someone put out of their way stays out of their way. */
+        /* Below this the page is full-bleed, so there is no margin for the
+           tab to sit in and every position is over something. */
+        var NARROW = 900;
+        function isNarrow() { return window.innerWidth <= NARROW; }
+
+        /* A spot chosen on a desktop means nothing on a phone. A drag that
+           parked the tab halfway down a wide window leaves it sitting on top
+           of the reading once the text runs edge to edge — which is exactly
+           what it looked like. Narrow screens get their own resting place,
+           low on the right where the text has already ended, and the saved
+           desktop position is deliberately not overwritten, so it comes back
+           the next time the same person opens the site on a real screen. */
+        function dockForPhone() {
+            placeWidget('right', 0, false);          // measure in final shape
+            var s = widgetSize();
+            placeWidget('right',
+                Math.max(0, window.innerHeight - s.h - 88), false);
+            /* A circle flush against the edge looks clipped, and the thumb
+               reaching it drags along the screen edge where a browser reads
+               the gesture as a back-swipe. */
+            widget.style.right = '12px';
+        }
+
         function restorePosition() {
+            if (isNarrow()) { dockForPhone(); return; }
             var saved = null;
             try { saved = JSON.parse(localStorage.getItem(DRAG_KEY) || 'null'); } catch (err) {}
 
@@ -645,8 +699,17 @@ body.a11y-big-cursor * { cursor: url("data:image/svg+xml;utf8,<svg xmlns='http:/
             }
 
             /* Keep it on the edge, and on screen, when the window is resized. */
+            var wasNarrow = isNarrow();
             window.addEventListener('resize', function () {
                 if (menu.classList.contains('visible')) positionPanel();
+                /* Crossing the phone breakpoint changes which position is the
+                   right one, so re-decide rather than just re-clamping the
+                   old one. */
+                if (isNarrow() !== wasNarrow) {
+                    wasNarrow = isNarrow();
+                    restorePosition();
+                    return;
+                }
                 reclamp();
             });
 
