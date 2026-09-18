@@ -23,24 +23,20 @@
         if (btn) btn.setAttribute('aria-expanded', 'false');
     }
 
-    /* The palettes, in the order they are offered. The swatch is drawn from
-       the same colour the palette actually uses, so the dot in the menu is a
-       true sample rather than an approximation kept in step by hand. */
-    /* The swatch is the colour people recognise the palette by, which is not
-       always the one used for text - Light Modern is known by VS Code's
-       #005FB8 while its text runs darker to clear the contrast bar. */
+    /* The palettes, in the order they are offered: Old Classic, and Old Night,
+       its dark twin. The swatch is the colour people recognise the palette by.
+       Old Night's is its maroon against its own night surface, split
+       corner to corner, so it reads as Old Classic after dark rather than as
+       a second, unrelated maroon. */
     var COLOURS = [
-        { id: 'maroon',        label: 'Maroon',        swatch: '#820707' },
-        { id: 'classic',       label: 'Old Classic',   swatch: '#6B0F0F' },
-        { id: 'google-light',  label: 'Light',         swatch: '#3C4043' },
-        { id: 'quiet-light',   label: 'Quiet Light',   swatch: '#705697' },
-        { id: 'modern-light',  label: 'Modern Light',  swatch: '#005FB8' },
-        { id: 'modern-dark',   label: 'Modern Dark',   swatch: '#0078D4' },
-        { id: 'quiet-dark',    label: 'Quiet Dark',    swatch: '#C4B0E4' }
+        { id: 'classic',   label: 'Old Classic', swatch: '#6B0F0F' },
+        { id: 'old-night', label: 'Old Night',   swatch: 'linear-gradient(135deg, #6B0F0F 0 50%, #1E1813 50% 100%)' }
     ];
-    /* Which of them are dark. The same list is in theme.php, which has to know
+    /* Which of them is dark. The same list is in theme.php, which has to know
        before this file has loaded so the first paint is already right. */
-    var DARK_COLOURS = { 'modern-dark': 1, 'quiet-dark': 1 };
+    var DARK_COLOURS = { 'old-night': 1 };
+    /* Withdrawn palettes that were dark, whose owners keep a dark site. */
+    var WAS_DARK = { 'modern-dark': 1, 'quiet-dark': 1 };
     var PALETTES = {};
     COLOURS.forEach(function (c) { PALETTES[c.id] = 1; });
 
@@ -49,13 +45,13 @@
 
     /* Anyone still holding a palette that was withdrawn is moved to the
        default (Old Classic), and anyone who had chosen dark keeps a dark
-       site. theme.php does the same before first paint; this repeats it for
-       the stored value read here. */
+       site on Old Night. theme.php does the same before first paint; this
+       repeats it for the stored value read here. */
     function currentColour() {
         var colour = getStored('papel_color', 'classic');
         if (!PALETTES[colour]) {
-            colour = (getStored('papel_theme', '') === 'dark') ? 'modern-dark'
-                                                               : 'classic';
+            colour = (WAS_DARK[colour] || getStored('papel_theme', '') === 'dark')
+                ? 'old-night' : 'classic';
             try { localStorage.setItem('papel_color', colour); } catch (e) {}
         }
         try { localStorage.removeItem('papel_theme'); } catch (e) {}

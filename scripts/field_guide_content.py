@@ -328,9 +328,6 @@ MODULES = [
         'The PDF panel that slides in beside the text, so the reader keeps '
         'their place.'),
        ('app/student/pdf_viewer.php', 'The viewer itself.'),
-       ('pages/view_paper.php',
-        'The same paper reached from the Resources menu rather than the '
-        'repository listing.'),
        ('archive/archive_handler.php',
         'Fifteen lines. A small shared piece the archive pages lean on.'),
        ('app/models/ArchiveRepository.php',

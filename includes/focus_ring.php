@@ -50,11 +50,10 @@
        and not enough for the outline of a control. Dividers keep it. */
     --border-control: #A88A8A;
 }
-html[data-mode="dark"] { --border-control: #6B7688; }   /* 3.64:1 on #1A1E26 */
-html[data-color="green"] { --border-control: #6F9C82; }
-html[data-color="blue"]      { --border-control: #7A93B4; }
-html[data-color="white"]     { --border-control: #8C8C8C; }
 html[data-color="classic"]   { --border-control: #A4906A; }
+/* Old Night's surface is a warm espresso, so the outline is a muted gold
+   rather than the grey-blue the old blue-black dark used. */
+html[data-mode="dark"]       { --border-control: #8C7A5C; }   /* 4.23:1 on #1E1813 */
 
 /* Applied narrowly: the things you type into or choose from. */
 input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),

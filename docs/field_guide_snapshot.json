@@ -1,5 +1,5 @@
 {
- "built": "2026-09-07 13:15",
+ "built": "2026-09-18 23:19",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -41,7 +41,7 @@
    "lines": 99
   },
   "app/auth/login.php": {
-   "lines": 1231
+   "lines": 1240
   },
   "app/auth/logout.php": {
    "lines": 36
@@ -116,7 +116,7 @@
    "lines": 433
   },
   "app/student/student_upload_ai.php": {
-   "lines": 7738
+   "lines": 7779
   },
   "app/support_requests.php": {
    "lines": 289
@@ -131,19 +131,19 @@
    "lines": 953
   },
   "archive/index.php": {
-   "lines": 1056
+   "lines": 1228
   },
   "archive/login.php": {
-   "lines": 1062
+   "lines": 1074
   },
   "archive/view_paper.php": {
-   "lines": 772
+   "lines": 802
   },
   "config/config.php": {
    "lines": 121
   },
   "config/core.php": {
-   "lines": 2201
+   "lines": 2216
   },
   "config/error_handler.php": {
    "lines": 169
@@ -167,7 +167,7 @@
    "lines": 9
   },
   "includes/accessibility.php": {
-   "lines": 850
+   "lines": 853
   },
   "includes/action_dialogs.php": {
    "lines": 341
@@ -179,10 +179,10 @@
    "lines": 176
   },
   "includes/browse_console.php": {
-   "lines": 679
+   "lines": 680
   },
   "includes/browse_console_js.php": {
-   "lines": 491
+   "lines": 487
   },
   "includes/card_collapse.php": {
    "lines": 94
@@ -193,17 +193,20 @@
   "includes/docx_writer.php": {
    "lines": 230
   },
+  "includes/favicon.php": {
+   "lines": 46
+  },
   "includes/flash_banner.php": {
    "lines": 95
   },
   "includes/focus_ring.php": {
-   "lines": 132
+   "lines": 131
   },
   "includes/key_nav.php": {
    "lines": 160
   },
   "includes/loading_bar.php": {
-   "lines": 222
+   "lines": 401
   },
   "includes/mail_config.php": {
    "lines": 1
@@ -218,13 +221,13 @@
    "lines": 168
   },
   "includes/notif_actions.php": {
-   "lines": 210
+   "lines": 215
   },
   "includes/page_theme.php": {
    "lines": 225
   },
   "includes/paper_record_css.php": {
-   "lines": 317
+   "lines": 336
   },
   "includes/password_audit_tab.php": {
    "lines": 201
@@ -236,7 +239,7 @@
    "lines": 124
   },
   "includes/pdf_dock.php": {
-   "lines": 292
+   "lines": 309
   },
   "includes/pdf_writer.php": {
    "lines": 416
@@ -260,16 +263,19 @@
    "lines": 394
   },
   "includes/site_head.php": {
-   "lines": 1028
+   "lines": 1235
   },
   "includes/site_header.php": {
-   "lines": 414
+   "lines": 465
+  },
+  "includes/splash.php": {
+   "lines": 156
   },
   "includes/theme.php": {
-   "lines": 387
+   "lines": 308
   },
   "includes/theme_welcome.php": {
-   "lines": 144
+   "lines": 140
   },
   "includes/validation.php": {
    "lines": 50
@@ -299,7 +305,7 @@
    "lines": 625
   },
   "pages/error_page.php": {
-   "lines": 186
+   "lines": 190
   },
   "pages/gdrive_callback.php": {
    "lines": 37
@@ -314,13 +320,10 @@
    "lines": 219
   },
   "pages/settings.php": {
-   "lines": 636
+   "lines": 635
   },
   "pages/terms_and_conditions.php": {
    "lines": 172
-  },
-  "pages/view_paper.php": {
-   "lines": 237
   },
   "reset_system_data.php": {
    "lines": 157
@@ -329,7 +332,7 @@
    "lines": 909
   },
   "scripts/field_guide_content.py": {
-   "lines": 861
+   "lines": 858
   },
   "scripts/gdrive_keepalive.php": {
    "lines": 82

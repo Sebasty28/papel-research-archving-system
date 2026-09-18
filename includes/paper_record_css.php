@@ -133,21 +133,40 @@ html.sidebar-left .pd-side-swap .side-icon-right { display: inline-flex; }
    Stands". */
 .pd-card[id], .pd-section[id], [id^="pd-sec-"], [id^="pd-sub-"] { scroll-margin-top: 76px; }
 
-/* Header: back out the way you came in, title, status. */
-.pd-top { display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 1.25rem; }
-/* Sits out in the margin beside the record rather than boxed in next to the
-   title — it is a way back, not one of the page's own controls. */
+/* Header: back out the way you came in, title, status.
+
+   The title starts on the same line as the cards below it. The way back is
+   taken out of the row to allow that — in the row, even pulled part-way into
+   the margin, it pushed the title about 20px in from the cards' edge. Where
+   there is margin enough it sits out there, level with the title's first
+   line; where there is not, it takes a line of its own above the title, and
+   the title still starts on the cards' edge. */
+.pd-top {
+    position: relative;
+    display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 1.25rem;
+    padding-top: 2.25rem;           /* the line the way back sits on */
+}
+/* A way back, not one of the page's own controls — so it sits outside the
+   record rather than boxed in beside the title. */
 .pd-back {
-    display: inline-flex; align-items: center; gap: .3rem; flex: 0 0 auto;
+    position: absolute;
+    top: 0;
+    /* The arrow's ink lines up with the title and the cards: the link's own
+       left padding, plus the space the arrow glyph carries at its side. */
+    left: calc(-.3rem - 4px);
+    display: inline-flex; align-items: center; gap: .3rem;
     color: var(--maroon); text-decoration: none; font-size: .8125rem;
     padding: .35rem .5rem .35rem .3rem; border-radius: var(--r-card, 8px);
     border: none; background: none;
 }
 .pd-back:hover { background: var(--cream); }
-/* Only stepped out into the margin where there is margin to step into —
-   below this the page needs its full width and the button stays in line. */
-@media (min-width: 1100px) {
-    .pd-back { margin-left: -3.5rem; }
+/* Out in the margin, once there is margin to hold it. The record is capped at
+   the site's 1168px wrap, so the space to its left grows only past that;
+   at 1320px it is wide enough for the link and its gap with room to spare
+   from the window's edge. Below that it stays on its own line above. */
+@media (min-width: 1320px) {
+    .pd-top { padding-top: 0; }
+    .pd-back { left: auto; right: calc(100% + .75rem); }
 }
 .pd-heading { flex: 1 1 auto; min-width: 0; }
 .pd-heading h1 {

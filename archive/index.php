@@ -238,6 +238,11 @@ ob_start();
        is aligned against it — see .sidebar-right. Change the field's padding
        and this has to follow, or the two tops drift apart again. */
     --search-h:     50px;
+    /* The banner's own height, and how far the search field is pulled up into
+       it. Named because the photo's size is worked out from them in both
+       banner states — see .hero img. Both change at the breakpoints below. */
+    --hero-h:       240px;
+    --hero-overlap: 24px;
 }
 
 /* ===== 3. Breadcrumb strip =====
@@ -268,20 +273,154 @@ ob_start();
 }
 .crumb-current { color: #fff; font-weight: 500; }
 
-/* ===== 4. Hero banner ===== */
+/* ===== 4. Hero banner =====
+   The box stays the 240px it always was, so nothing below it moves; the photo
+   inside is what reaches past it. Upwards it runs to the top of the page, under
+   the navbar and the crumb strip, which are both made see-through over it (the
+   rules just below). Downwards it runs to the bottom edge of the search field
+   and fades out, gone by the field's bottom, so the photo melts into the page
+   instead of stopping on a hard line behind the field.
+
+   Neither the header nor the field is a fixed height: the header is 37px on a
+   wide screen and 61px once the nav wraps, and the field is 50px or 70px. The
+   script at the foot of the page measures both into these variables; the
+   values here are only what shows before it runs.
+
+   Hiding the banner does not take the photo away altogether. The strip of it
+   behind the navbar stays, so the navbar's glass still has something to show;
+   it stops at the top of the crumb strip, which goes back to solid maroon, and
+   everything below goes. The photo is not resized for that — it is clipped.
+   Its size is the same in both states, so the part behind the navbar is
+   exactly the part that was there before, and nothing slides or rescales as
+   it closes. */
 .hero {
+    --hero-lift: 0px;                             /* page top → top of this box */
+    --hero-nav: 0px;                              /* page top → top of the crumb strip */
+    --hero-fade: var(--search-h);                 /* the field's height */
+    /* Bottom of this box → bottom of the field, with the banner open. Worked
+       out rather than measured, because measured with the banner hidden it
+       would be a different number and the photo would change size. */
+    --hero-tail: calc(var(--hero-fade) - var(--hero-overlap));
+    /* How far the fade runs: twice the field's height, so it starts one field
+       above it. Over the field's height alone, as it first was, it read as a
+       hard band — too short a run to fade a photo that bright. */
+    --hero-fade-run: calc(var(--hero-fade) * 2);
     position: relative;
-    height: 240px;
-    overflow: hidden;
-    background: var(--dark-maroon);
-    transition: height .35s ease, opacity .3s ease;
+    height: var(--hero-h);
+    background: none;
+    transition: height .35s ease;
 }
-.hero.collapsed { height: 0; opacity: 0; }
+.hero.collapsed { height: 0; }
 .hero img {
+    position: absolute;
+    left: 0;
+    top: calc(-1 * var(--hero-lift));
     width: 100%;
-    height: 100%;
+    height: calc(var(--hero-h) + var(--hero-lift) + var(--hero-tail));
     object-fit: cover;
     display: block;
+    clip-path: inset(0);
+    transition: clip-path .35s ease;
+    /* A mask rather than a gradient laid over the photo: it fades to whatever
+       the page is painted in, so it needs no colour of its own and follows
+       the theme into dark mode.
+
+       Eased, not straight. A linear fade has a visible crease at each end,
+       where the rate of change jumps from nothing to full and back, and the
+       eye picks those out as the top and bottom of a band. These stops follow
+       a cosine ease-in-out (0.5 + 0.5·cos πt), so the photo starts to thin
+       imperceptibly and runs out just as gently. */
+    -webkit-mask-image: var(--hero-mask);
+            mask-image: var(--hero-mask);
+    --hero-mask: linear-gradient(to bottom,
+        black                  calc(100% - var(--hero-fade-run)),
+        rgba(0, 0, 0, .976)    calc(100% - var(--hero-fade-run) * .9),
+        rgba(0, 0, 0, .905)    calc(100% - var(--hero-fade-run) * .8),
+        rgba(0, 0, 0, .794)    calc(100% - var(--hero-fade-run) * .7),
+        rgba(0, 0, 0, .655)    calc(100% - var(--hero-fade-run) * .6),
+        rgba(0, 0, 0, .5)      calc(100% - var(--hero-fade-run) * .5),
+        rgba(0, 0, 0, .345)    calc(100% - var(--hero-fade-run) * .4),
+        rgba(0, 0, 0, .206)    calc(100% - var(--hero-fade-run) * .3),
+        rgba(0, 0, 0, .095)    calc(100% - var(--hero-fade-run) * .2),
+        rgba(0, 0, 0, .024)    calc(100% - var(--hero-fade-run) * .1),
+        transparent            100%);
+}
+/* Hidden: everything from the top of the crumb strip down is clipped away,
+   leaving the top --hero-nav of the photo — the part behind the navbar alone.
+   The edge it leaves is hard, but it falls exactly where the solid maroon
+   strip begins, so it reads as the strip's edge rather than the photo's. */
+.hero.collapsed img { clip-path: inset(0 0 calc(100% - var(--hero-nav)) 0); }
+
+/* The search field and the sidebar panel both sit on the photo, and a shadow
+   cast only downwards left their top edges to fend for themselves against a
+   bright wall. --shadow-up lifts them off it. Only while the banner is up:
+   with it hidden there is plain page above both, and nothing to lift from.
+   The focus state is restated because it replaces the whole shadow list. */
+.hero:not(.collapsed) + .search-band .search-form {
+    box-shadow: var(--shadow-up), var(--shadow-md);
+}
+.hero:not(.collapsed) + .search-band .search-form:focus-within {
+    box-shadow: var(--shadow-up), 0 0 0 3px rgba(177,125,125,.20);
+}
+/* Above 900px, where the panel rises onto the photo beside the field. Below
+   that it is a drawer and never touches the banner.
+
+   The panel's shadow wraps its top corners and runs a short way down each
+   side before fading, rather than sitting on the top edge alone. A box-shadow
+   on the panel itself can only do all of a side or none of it, and all of it
+   was a grey glow the full length of the column. So ::before, a strip across
+   the top 3rem, casts it instead; its sides are only that tall, and the blur
+   fades them out below. The part of its shadow that falls inside the panel
+   is covered by ::after, which carries the panel's cream — moved off the
+   panel because both pseudo-elements paint above the panel's own background,
+   and the strip's shadow would otherwise have smudged it. */
+@media (min-width: 901px) {
+    .hero:not(.collapsed) ~ .layout .sidebar-right { background: none; }
+    .hero:not(.collapsed) ~ .layout .sidebar-right::before,
+    .hero:not(.collapsed) ~ .layout .sidebar-right::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        border-radius: inherit;
+        pointer-events: none;
+    }
+    .hero:not(.collapsed) ~ .layout .sidebar-right::before {
+        height: 3rem;
+        box-shadow: var(--shadow-up-rim);
+        z-index: -2;
+    }
+    .hero:not(.collapsed) ~ .layout .sidebar-right::after {
+        bottom: 0;
+        background: var(--cream);
+        z-index: -1;
+    }
+}
+
+/* The photo now runs under the crumb strip. The strip comes before the banner
+   in the page and is not positioned, so without this the photo paints over
+   it. */
+.crumb-bar {
+    position: relative;
+    z-index: 1;
+    /* Eases between glass and solid alongside the banner closing, rather than
+       switching the instant the button is pressed. */
+    transition: background-color .35s ease;
+}
+
+/* The navbar is glass on every page (site_head.php). The crumb strip joins it
+   as tinted glass while the banner is up — solid, it cut the photo into two
+   with a maroon band. With the banner hidden the photo stops at the strip's
+   top edge, which is also how every other page looks, there is nothing behind
+   the strip to see, and it goes back to solid maroon. */
+body:has(.hero:not(.collapsed)) .crumb-bar {
+    background: color-mix(in srgb, var(--maroon-surface-hover) 82%, transparent);
+    -webkit-backdrop-filter: blur(10px) saturate(160%);
+    backdrop-filter: blur(10px) saturate(160%);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    body:has(.hero:not(.collapsed)) .crumb-bar { background: var(--maroon-surface-hover); }
 }
 
 /* ===== 5. Search band — sits over the lower edge of the hero,
@@ -289,7 +428,7 @@ ob_start();
 .search-band {
     position: relative;
     z-index: 5;
-    margin-top: -24px;
+    margin-top: calc(-1 * var(--hero-overlap));
     transition: margin-top .35s ease;
 }
 /* With the banner hidden there is no hero to overlap — drop the pull-up
@@ -312,36 +451,18 @@ ob_start();
     width: 100%;
     position: relative;
 }
-/* Second row, sidebar column: keeps the chip clear of the hero photo
-   while staying aligned to the bottom-right of the search block. Nudged
-   out by the wrap/wrap-wide gap so it lines up under "Login" in the
-   header, which sits in the wider wrap-wide container. */
-.banner-toggle-col {
-    grid-column: 2;
-    grid-row: 2;
-    display: flex;
-    justify-content: flex-end;
-}
-/* The button lines up with the hero's wider edge rather than the text column,
-   and the pull that does it is exactly 100px: half the 160px the wide wrap
-   adds, plus 20. It only has anywhere to go once the window is wider than the
-   wrap plus that pull on both sides — 1168 + 200. Applied unconditionally, as
-   it was, it dragged the button past the right of the page on every laptop
-   below that, and took a horizontal scrollbar with it: 76px of it at 1024,
-   25px at 1280. */
-@media (min-width: 1369px) {
-    .banner-toggle-col {
-        margin-right: calc(((var(--wrap-wide) - var(--wrap)) / -2) - 20px);
-    }
-}
-/* Banner hidden: no photo to clear, so the chip moves up beside the search
-   field. That collapses the grid to a single row and reclaims the gap. */
-.hero.collapsed + .search-band .banner-toggle-col {
-    grid-row: 1;
-    align-self: end;
-}
+/* The row under the search field. It held the banner eye as well once; the eye
+   lives in the crumb strip now, so all that is left here is the phone's
+   "Browse & Filters" button, and above 900px — where that button is hidden —
+   the row would be empty. It is taken out rather than left as a blank band,
+   and .layout's margin below is what makes up the difference. */
+.banner-toggle-col { display: none; }
 
-/* Banner visibility toggle */
+/* Banner visibility toggle — in the crumb strip, at the far right, on the
+   maroon. It sat in the search row until the banner started running up under
+   the navbar; there it was a grey glyph floating on the photo's fade, and it
+   moved to a different row whenever the banner was hidden. Here it has the
+   same place in both states. */
 .btn-banner-toggle {
     display: inline-flex;
     align-items: center;
@@ -356,6 +477,38 @@ ob_start();
     transition: color .2s;
 }
 .btn-banner-toggle:hover { color: var(--maroon); }
+/* Pinned to the strip rather than placed in the crumb row, so it lines up with
+   the navbar's own controls directly above it: the navbar runs full width and
+   holds them 1.5rem off the right edge at every width, while the crumbs sit
+   in the narrower centred .wrap. (.crumb-bar is already positioned, for the
+   banner — see the rule after .hero.) Anchored by its right edge, so the
+   words slide open leftwards, into the empty middle of the strip.
+
+   Lined up by what can be seen, not by the boxes. Every icon glyph carries
+   blank space at its sides, and different amounts: measured at 18px, the eye's
+   ink stops 2px inside its box, the avatar chevron's 6px inside its own plus
+   the 2px padding of the button around it, the Login icon's 3px plus that
+   button's 12px. Matching the boxes left the eye poking out past the chevron,
+   so each case steps it in by the difference. */
+.crumb-inner .btn-banner-toggle {
+    position: absolute;
+    right: calc(1.5rem + 6px);     /* signed in: under the chevron (2 + 6 − 2) */
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 0;
+    color: #fff;
+    /* Quiet at rest — it is a setting, not something to act on every visit —
+       and full strength the moment it is pointed at, pressed or reached from
+       the keyboard. */
+    opacity: .4;
+    transition: opacity .2s ease;
+}
+.crumb-inner .btn-banner-toggle.is-guest {
+    right: calc(1.5rem + 13px);    /* signed out: under the Login icon (12 + 3 − 2) */
+}
+.crumb-inner .btn-banner-toggle:hover,
+.crumb-inner .btn-banner-toggle:active,
+.crumb-inner .btn-banner-toggle:focus-visible { color: #fff; opacity: 1; }
 /* At rest the control is one glyph. The words are still there — collapsed to
    no width rather than removed, so they are read out to anyone using a screen
    reader and slide open the moment the button is pointed at or tabbed to.
@@ -382,7 +535,11 @@ ob_start();
     grid-template-columns: 1fr var(--sidebar-w);
     gap: var(--col-gap);
     align-items: start;
-    margin-top: -1.25rem;
+    /* 1rem below the search field, banner up or hidden alike. This was
+       -1.25rem while the banner eye had a row of its own under the field,
+       pulling the results back up over that row; with the row gone the two
+       land in the same place. */
+    margin-top: 1rem;
     padding-bottom: 3rem;
 }
 /* The search field and the sidebar are in two different grids — the field in
@@ -391,9 +548,6 @@ ob_start();
 
    66px is not arbitrary: the sidebar column starts where .search-band ends,
    which is the search field (50px) plus the 1rem the layout is offset by.
-   Measured the same either way round, because hiding the banner shortens the
-   band by exactly as much as it lengthens the layout's margin — 86-20 and
-   50+16 both land on 66.
 
    Only the sidebar rises; the results column keeps its place. Below 900px the
    layout is a single column and the sidebar follows the content, so the pull
@@ -414,22 +568,11 @@ ob_start();
 /* ===== The sidebar on either side — this page's share of it =====
    The column swap itself lives in includes/browse_console.php, with the rest
    of the sidebar. What stays here is the search row, which only this page has:
-   it carries the banner eye in the column above the sidebar, so it has to
-   mirror too or the eye is left stranded over the results. */
+   the field has to cross to the other column too, or it sits over the sidebar
+   instead of over the results it searches. */
 @media (min-width: 901px) {
     html.sidebar-left .search-row { grid-template-columns: var(--sidebar-w) 1fr; }
-    html.sidebar-left .search-shell      { grid-column: 2; }
-    html.sidebar-left .banner-toggle-col { grid-column: 1; justify-content: flex-start; }
-}
-
-/* The pull that lines the eye up with the hero's wider edge now has to reach
-   the other way. Same width rule as the right-hand version: it only has room
-   once the window is wider than the wrap plus the pull on both sides. */
-@media (min-width: 1369px) {
-    html.sidebar-left .banner-toggle-col {
-        margin-right: 0;
-        margin-left: calc(((var(--wrap-wide) - var(--wrap)) / -2) - 20px);
-    }
+    html.sidebar-left .search-shell { grid-column: 2; }
 }
 
 /* Section heading with red underline */
@@ -462,25 +605,21 @@ ob_start();
 .btn-tools-close { display: none; }
 
 @media (max-width: 900px) {
-    /* The lift tucks the results up beside the sidebar column on a wide
-       screen, where the eye and this row sit off to the right. In one column
-       that row is directly above the heading, and the lift dragged the
-       heading up underneath it. */
     .layout { grid-template-columns: 1fr; gap: 2rem; margin-top: .75rem; }
     .search-row { grid-template-columns: 1fr; gap: .5rem; }
-    .banner-toggle-col { grid-column: 1; }
-    .hero { height: 190px; }
+    :root { --hero-h: 190px; }
 
-    /* Whichever state the banner is in, this row follows the search field
-       rather than being pinned to a row number: pinned to row 1, which is
-       what the collapsed-banner rule does on a wide screen, it would land on
-       top of the search field once there is only one column. */
+    /* The row under the search field comes back here, to carry the
+       "Browse & Filters" button. It follows the field rather than being
+       pinned to a row number, so it can never land on top of it. */
     .banner-toggle-col {
+        display: flex;
+        justify-content: flex-end;
+        grid-column: 1;
         grid-row: auto;
         align-items: center;
         gap: .5rem;
     }
-    .hero.collapsed + .search-band .banner-toggle-col { grid-row: auto; }
     .btn-tools-toggle {
         display: inline-flex;
         align-items: center;
@@ -553,8 +692,7 @@ ob_start();
     .sidebar-right, .tools-backdrop { transition: none; }
 }
 @media (max-width: 600px) {
-    .hero { height: 150px; }
-    .search-band { margin-top: -32px; }
+    :root { --hero-h: 150px; --hero-overlap: 32px; }
     .section-heading { font-size: 1.375rem; }
     .paper-foot { grid-template-columns: 1fr; gap: .25rem; }
 }
@@ -562,6 +700,9 @@ ob_start();
 </head>
 <body>
 
+<?php /* This page's own banner runs up behind the navbar, so the header's
+         stand-in strip of the same photo is not wanted here. */
+      $hero_under_nav = true; ?>
 <?php require ROOT_PATH.'/includes/site_header.php'; ?>
 
 <!-- ===== 3. Breadcrumb ===== -->
@@ -570,6 +711,17 @@ ob_start();
         <a href="<?= e(BASE_URL) ?>/archive/index.php">Home</a>
         <span class="material-symbols-outlined crumb-arrow">chevron_right</span>
         <span class="crumb-current"><?= $has_filters ? 'Search Results' : 'Public Repository' ?></span>
+        <?php /* The eye follows the same rule as the password toggle in
+                 site_footer.php: it shows the action, not the state, so it
+                 always agrees with the words beside it. Banner on screen →
+                 "Hide Banner" and a struck-through eye. The words are kept in
+                 the markup rather than being a tooltip, so they are read out
+                 and can be revealed on keyboard focus as well as on hover. */ ?>
+        <button type="button" class="btn-banner-toggle<?= $u ? '' : ' is-guest' ?>" id="bannerToggle"
+                aria-label="Hide Banner" title="Hide Banner" aria-pressed="false">
+            <span class="btn-banner-label" id="bannerToggleLabel">Hide Banner</span>
+            <span class="material-symbols-outlined mi-18" id="bannerToggleIcon">visibility_off</span>
+        </button>
     </div>
 </div>
 
@@ -602,29 +754,15 @@ ob_start();
             </form>
         </div>
         <div class="banner-toggle-col">
-            <?php /* Shares the row the eye already sits on rather than taking
-                     one of its own, which pushed the band down over the
-                     heading below it. Only ever seen on a narrow screen; the
-                     stylesheet hides it the moment the sidebar is a column
-                     again. Worded for what it opens rather than drawn as a
-                     hamburger — a hamburger reads as "the site's menu", and
-                     this is the filters for the list underneath. */ ?>
+            <?php /* Only ever seen on a narrow screen; the stylesheet hides
+                     this row the moment the sidebar is a column again. Worded
+                     for what it opens rather than drawn as a hamburger — a
+                     hamburger reads as "the site's menu", and this is the
+                     filters for the list underneath. */ ?>
             <button type="button" class="btn-tools-toggle" id="toolsToggle"
                     aria-controls="sidebarCol" aria-expanded="false">
                 <span class="material-symbols-outlined mi-18">tune</span>
                 <span>Browse &amp; Filters</span>
-            </button>
-            <?php /* The eye follows the same rule as the password toggle in
-                     site_footer.php: it shows the action, not the state, so it
-                     always agrees with the words beside it. Banner on screen →
-                     "Hide Banner" and a struck-through eye. The words are kept
-                     in the markup rather than being a tooltip, so they are read
-                     out and can be revealed on keyboard focus as well as on
-                     hover. */ ?>
-            <button type="button" class="btn-banner-toggle" id="bannerToggle"
-                    aria-label="Hide Banner" title="Hide Banner" aria-pressed="false">
-                <span class="btn-banner-label" id="bannerToggleLabel">Hide Banner</span>
-                <span class="material-symbols-outlined mi-18" id="bannerToggleIcon">visibility_off</span>
             </button>
         </div>
     </div>
@@ -914,6 +1052,40 @@ if (bannerToggle && heroBanner) {
         try { localStorage.setItem('papel_banner_hidden', collapsed ? '1' : '0'); } catch (err) {}
     });
 }
+
+// ===== The banner photo's reach — up under the navbar, down to the bottom of
+// the search field. Measured, because neither the header nor the field is a
+// fixed size (see .hero). Both readings are the same with the banner open or
+// hidden — the top of the box never moves, only its height — so the photo
+// keeps one size in both states. =====
+(function () {
+    var hero  = document.getElementById('heroBanner');
+    var field = document.querySelector('.search-form');
+    var crumb = document.querySelector('.crumb-bar');
+    if (!hero || !field) return;
+    function fit() {
+        var h = hero.getBoundingClientRect();
+        hero.style.setProperty('--hero-lift', Math.max(0, Math.round(h.top + window.scrollY)) + 'px');
+        hero.style.setProperty('--hero-fade', Math.round(field.getBoundingClientRect().height) + 'px');
+        // Where the hidden banner is cut: the top of the crumb strip, which
+        // is the bottom of the navbar. Read off the strip because the navbar
+        // is sticky and its own position depends on the scroll.
+        if (crumb) {
+            hero.style.setProperty('--hero-nav',
+                Math.max(0, Math.round(crumb.getBoundingClientRect().top + window.scrollY)) + 'px');
+        }
+    }
+    fit();
+    window.addEventListener('resize', fit);
+    /* The header grows when the web fonts land and when the nav wraps, and the
+       field changes height at the narrow breakpoints — none of which is a
+       window resize on its own. */
+    if (window.ResizeObserver) {
+        var watch = new ResizeObserver(fit);
+        [field, document.querySelector('.site-header'), document.querySelector('.crumb-bar')]
+            .forEach(function (el) { if (el) watch.observe(el); });
+    }
+})();
 
 // ===== AJAX result loading — search, filters, and pagination update just
 // the results list instead of reloading the whole page. =====

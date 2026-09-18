@@ -148,6 +148,10 @@
         var body = 'action=' + encodeURIComponent(action)
                  + '&notification_id=' + encodeURIComponent(id)
                  + '&_token=' + encodeURIComponent(TOKEN);
+        // Deleting is one of the workflows that shows the logo pill; marking
+        // read or unread is a flick of a switch and does not.
+        var pill = action === 'delete' && window.papelLoading ? window.papelLoading.work : null;
+        if (pill) { pill.start(); }
         fetch(HANDLER, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -172,7 +176,8 @@
               if (window.papelNote) {
                   window.papelNote('That could not be saved.', false);
               }
-          });
+          })
+          .then(function () { if (pill) { pill.done(); } });
     }
 
     document.addEventListener('contextmenu', function (e) {

@@ -6420,6 +6420,9 @@ const papelDraft = (function () {
             ['ethics_clearance', 'consent_form', 'data_collection', 'copyright_doc', 'other_doc']
                 .forEach(function (n) { body.delete(n); });
 
+            // Only ever run because the student asked to save, so it earns the
+            // logo pill; a fetch is invisible to loading_bar.php's form hook.
+            if (window.papelLoading) window.papelLoading.work.start();
             try {
                 const res = await fetch('student_upload_ai.php', { method: 'POST', body: body });
                 const json = await res.json();
@@ -6429,6 +6432,7 @@ const papelDraft = (function () {
                     return draftId;
                 }
             } catch (err) { /* the local copy still holds everything */ }
+            finally { if (window.papelLoading) window.papelLoading.work.done(); }
             return 0;
         },
         draftId: function () { return draftId; },
@@ -6724,6 +6728,26 @@ function updateReview() {
                  : (docsNeeded ? 'Not attached yet' : 'Not applicable');
 }
 
+/* This page's overlay holds the middle of the window, which is where the logo
+   pill (includes/loading_bar.php) would otherwise land, one on top of the
+   other. These stack them instead: the pill sits just above the overlay's card
+   for as long as the overlay is up, and goes back to the middle afterwards. */
+function papelPillAboveOverlay() {
+    const card  = document.querySelector('#uploadOverlay .loading-content');
+    const badge = document.getElementById('papelWorkBadge');
+    if (!card || !badge) return;
+    /* Worked out from the heights rather than from the card's current box: the
+       card rises into place on an animation, and reading its position while
+       that is still running put the pill 30px too low, on top of it. The card
+       is centred, so where it will come to rest is known without waiting. */
+    const top = innerHeight / 2 - card.offsetHeight / 2 - 16 - badge.offsetHeight / 2;
+    document.documentElement.style.setProperty(
+        '--papel-pill-top', Math.max(badge.offsetHeight / 2 + 8, top) + 'px');
+}
+function papelPillRecentre() {
+    document.documentElement.style.removeProperty('--papel-pill-top');
+}
+
 // Extract AI button handler
 document.getElementById('btnExtract').addEventListener('click', function(){
   const pdfFile = document.getElementById('pdfFile').files[0];
@@ -6742,6 +6766,7 @@ document.getElementById('btnExtract').addEventListener('click', function(){
   const statusEl  = document.getElementById('uploadStatusMsg');
 
   overlay.classList.add('active');
+  papelPillAboveOverlay();
   fillEl.style.width  = '10%';
   labelEl.textContent = '10%';
   statusEl.textContent = 'Sending PDF to AI...';
@@ -6774,6 +6799,9 @@ document.getElementById('btnExtract').addEventListener('click', function(){
   const tokenInput = document.querySelector('input[name="csrf_token"]') || document.querySelector('input[name="_token"]');
   if(tokenInput) fd.append(tokenInput.name, tokenInput.value);
 
+  // Extraction is a background request, so the form-submit hook in
+  // loading_bar.php never sees it — the logo pill has to be asked for.
+  if (window.papelLoading) window.papelLoading.work.start();
   fetch('student_upload_ai.php', {method:'POST', body:fd})
   .then(r => r.json())
   .then(data => {
@@ -6828,8 +6856,10 @@ document.getElementById('btnExtract').addEventListener('click', function(){
     papelAlert('❌ Error connecting to server');
   })
   .finally(() => {
+    if (window.papelLoading) window.papelLoading.work.done();
     clearInterval(aiTimer);
     overlay.classList.remove('active');
+    papelPillRecentre();
     fillEl.style.width  = '0%';
     labelEl.textContent = '0%';
     btn.disabled = false;
@@ -6857,7 +6887,11 @@ document.getElementById('uploadForm').addEventListener('submit', function(e){
     const statusEl  = document.getElementById('uploadStatusMsg');
 
     overlay.classList.add('active');
+    papelPillAboveOverlay();
     btn.disabled = true;
+    // Sent by XHR, which the form-submit hook in loading_bar.php cannot see.
+    const pill = window.papelLoading ? window.papelLoading.work : null;
+    if (pill) pill.start();
 
     // Cycling status messages timed to feel alive
     const messages = [
@@ -6905,18 +6939,23 @@ document.getElementById('uploadForm').addEventListener('submit', function(e){
                 // The paper is filed; the local draft has done its job.
                 papelDraft.beginSubmit();
                 papelDraft.clear();
+                if (pill) pill.leave();
                 setTimeout(function() {
                     window.location.href = res.redirect || 'student_dashboard.php';
                 }, 600);
             } else {
                 papelAlert('❌ Upload failed: ' + (res.message || 'Unknown error'));
+                if (pill) pill.done();
                 overlay.classList.remove('active');
+                papelPillRecentre();
                 btn.disabled = false;
                 fillEl.style.width = '0%';
             }
         } catch(err) {
             papelAlert('❌ Server error: ' + xhr.responseText.substring(0, 100));
+            if (pill) pill.done();
             overlay.classList.remove('active');
+            papelPillRecentre();
             btn.disabled = false;
             fillEl.style.width = '0%';
         }
@@ -6925,7 +6964,9 @@ document.getElementById('uploadForm').addEventListener('submit', function(e){
     xhr.addEventListener('error', function(){
         clearInterval(msgTimer);
         papelAlert('❌ Network error');
+        if (pill) pill.done();
         overlay.classList.remove('active');
+        papelPillRecentre();
         btn.disabled = false;
         fillEl.style.width = '0%';
     });

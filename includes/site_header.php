@@ -112,12 +112,33 @@ $login_notif_popup_items = $show_login_notif_popup
     ? array_slice(array_values(array_filter($recent_notifs, function ($n) { return !$n['is_read']; })), 0, 5)
     : [];
 ?>
+<?php /* The campus photo behind the navbar's glass — see .nav-photo in
+         site_head.php. The Public Repository sets $hero_under_nav: its own
+         banner already runs up behind the navbar, and a second copy of the
+         photo under it would double it. A compressed copy of the banner's
+         picture: behind the blur and the frost a 1.7MB PNG on every page is
+         weight nobody can see, and the dimensions are the same, so the crop
+         is too. */ ?>
+<?php if (empty($hero_under_nav)): ?>
+<div class="nav-photo" aria-hidden="true">
+    <img src="<?= e(BASE_URL) ?>/assests/images/navbar-photo.jpg" alt="" decoding="async">
+</div>
+<?php endif; ?>
 <header class="site-header" id="siteHeader">
     <div class="wrap-wide header-inner">
-        <?php /* The wordmark always goes to the public repository, for every
-                 role — the role dashboard is reached via the nav links and the
-                 avatar menu instead. */ ?>
-        <a href="<?= e(BASE_URL.'/archive/index.php') ?>" class="brand"><?= e(APP_NAME) ?></a>
+        <?php /* The mark always goes to the public repository, for every role —
+                 the role dashboard is reached via the nav links and the avatar
+                 menu instead.
+
+                 .brand-word is the name, slid out past a thin rule beside the
+                 mark on hover or keyboard focus. The link carries the name in
+                 aria-label, and both parts are hidden from assistive
+                 technology, so it is announced once whatever state the word
+                 is in. */ ?>
+        <a href="<?= e(BASE_URL.'/archive/index.php') ?>" class="brand" aria-label="<?= e(APP_NAME) ?>">
+            <span class="brand-mark" aria-hidden="true"></span>
+            <span class="brand-word" aria-hidden="true"><?= e(APP_NAME) ?></span>
+        </a>
         <nav class="main-nav" id="mainNav">
             <?php foreach ($nav_links as $link): ?>
                 <?php $is_active = !empty($link['match']) && in_array($current_script, $link['match'], true); ?>
@@ -230,48 +251,6 @@ $login_notif_popup_items = $show_login_notif_popup
 
                     <a class="notif-view-all" href="<?= e(BASE_URL.'/notifications/notification_center.php') ?>">See More Notifications</a>
                 </div>
-                <?php if ($show_login_notif_popup): ?>
-                    <?php /* Same vocabulary the corner dropdown uses
-                             (.notif-item, .notif-dot, .notif-view-all) — this
-                             only adds the overlay that centres it instead, so
-                             it reads as the same feature shown two ways
-                             rather than a second one. */ ?>
-                    <div class="notif-popup-backdrop" id="notifPopupBackdrop">
-                        <div class="notif-popup-card" role="dialog" aria-modal="true" aria-labelledby="notifPopupTitle">
-                            <div class="notif-dropdown-header">
-                                <span id="notifPopupTitle">
-                                    <?= (int)$unread_count ?> new notification<?= $unread_count === 1 ? '' : 's' ?>
-                                </span>
-                                <button class="notif-close" id="notifPopupClose" type="button" aria-label="Close">
-                                    <span class="material-symbols-outlined mi-18">close</span>
-                                </button>
-                            </div>
-                            <div class="notif-list">
-                                <?php foreach ($login_notif_popup_items as $n): ?>
-                                    <?php $parts = notification_parts($n); ?>
-                                    <a class="notif-item unread"
-                                       href="<?= e(notification_link(isset($n['paper_id']) ? (int)$n['paper_id'] : null, $u['user_role'], (string)($n['notification_type'] ?? ''))) ?>"
-                                       <?php if ($parts['is_account'] && $parts['detail'] !== ''): ?>
-                                           data-notif-popup="<?= e($parts['summary']) ?>"
-                                           data-notif-detail="<?= e($parts['detail']) ?>"
-                                       <?php endif; ?>
-                                       data-notif-id="<?= (int)$n['notification_id'] ?>">
-                                        <span class="notif-dot" aria-hidden="true"></span>
-                                        <span class="notif-body">
-                                            <span class="notif-text"><?= e($parts['summary']) ?></span>
-                                            <small><?= e(date('M j, Y g:i A', strtotime($n['created_at']))) ?></small>
-                                        </span>
-                                    </a>
-                                <?php endforeach; ?>
-                            </div>
-                            <?php if ($unread_count > count($login_notif_popup_items)): ?>
-                                <a class="notif-view-all" href="<?= e(BASE_URL.'/notifications/notification_center.php') ?>">
-                                    See all <?= (int)$unread_count ?> notifications
-                                </a>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                <?php endif; ?>
                 <button class="avatar-group" id="userAvatarBtn" type="button" title="<?= e($display_name) ?>">
                     <span class="user-avatar-btn"><?= e($initial) ?></span>
                     <span class="material-symbols-outlined">expand_more</span>
@@ -315,6 +294,69 @@ $login_notif_popup_items = $show_login_notif_popup
         </button>
     </div>
 </header>
+<script nonce="<?= csp_nonce() ?>">
+/* The navbar's height, for the photo strip behind it (.nav-photo). Read from
+   the bar rather than assumed: it wraps taller on a phone, and grows a little
+   when the web fonts arrive after this runs. */
+(function () {
+    var bar = document.getElementById('siteHeader');
+    if (!bar) { return; }
+    function measure() {
+        document.documentElement.style.setProperty('--nav-h', bar.offsetHeight + 'px');
+    }
+    measure();
+    if (window.ResizeObserver) { new ResizeObserver(measure).observe(bar); }
+    else { window.addEventListener('resize', measure); }
+})();
+</script>
+
+<?php if ($u && $show_login_notif_popup): ?>
+    <?php /* Same vocabulary the corner dropdown uses (.notif-item, .notif-dot,
+             .notif-view-all) — this only adds the overlay that centres it
+             instead, so it reads as the same feature shown two ways rather
+             than a second one.
+
+             Outside <header> on purpose. Once the page scrolls, the header
+             gets a backdrop-filter, and that makes it the containing block for
+             every position:fixed element inside it — the overlay stopped being
+             pinned to the window and was squeezed into the header's strip,
+             riding up the page with it. */ ?>
+    <div class="notif-popup-backdrop" id="notifPopupBackdrop">
+        <div class="notif-popup-card" role="dialog" aria-modal="true" aria-labelledby="notifPopupTitle">
+            <div class="notif-dropdown-header">
+                <span id="notifPopupTitle">
+                    <?= (int)$unread_count ?> new notification<?= $unread_count === 1 ? '' : 's' ?>
+                </span>
+                <button class="notif-close" id="notifPopupClose" type="button" aria-label="Close">
+                    <span class="material-symbols-outlined mi-18">close</span>
+                </button>
+            </div>
+            <div class="notif-list">
+                <?php foreach ($login_notif_popup_items as $n): ?>
+                    <?php $parts = notification_parts($n); ?>
+                    <a class="notif-item unread"
+                       href="<?= e(notification_link(isset($n['paper_id']) ? (int)$n['paper_id'] : null, $u['user_role'], (string)($n['notification_type'] ?? ''))) ?>"
+                       <?php if ($parts['is_account'] && $parts['detail'] !== ''): ?>
+                           data-notif-popup="<?= e($parts['summary']) ?>"
+                           data-notif-detail="<?= e($parts['detail']) ?>"
+                       <?php endif; ?>
+                       data-notif-id="<?= (int)$n['notification_id'] ?>">
+                        <span class="notif-dot" aria-hidden="true"></span>
+                        <span class="notif-body">
+                            <span class="notif-text"><?= e($parts['summary']) ?></span>
+                            <small><?= e(date('M j, Y g:i A', strtotime($n['created_at']))) ?></small>
+                        </span>
+                    </a>
+                <?php endforeach; ?>
+            </div>
+            <?php if ($unread_count > count($login_notif_popup_items)): ?>
+                <a class="notif-view-all" href="<?= e(BASE_URL.'/notifications/notification_center.php') ?>">
+                    See all <?= (int)$unread_count ?> notifications
+                </a>
+            <?php endif; ?>
+        </div>
+    </div>
+<?php endif; ?>
 
 <?php if (!$u): ?>
 <!-- ===== Login Modal ===== -->
@@ -322,8 +364,14 @@ $login_notif_popup_items = $show_login_notif_popup
 
 <div class="login-panel" id="loginPanel">
     <div class="panel-topbar">
+        <?php /* The same mark as the navbar's — theme colour, the name sliding
+                 out past its rule on hover, the name in aria-label — all from
+                 the shared .brand rules. */ ?>
         <div class="panel-topbar-brand">
-            <a href="<?= e(BASE_URL.'/archive/index.php') ?>"><span><?= e(APP_NAME) ?></span></a>
+            <a href="<?= e(BASE_URL.'/archive/index.php') ?>" class="brand" aria-label="<?= e(APP_NAME) ?>">
+                <span class="brand-mark" aria-hidden="true"></span>
+                <span class="brand-word" aria-hidden="true"><?= e(APP_NAME) ?></span>
+            </a>
         </div>
         <?php /* open_in_full / close_fullscreen, the pair the upload wizard's
                  expand button already uses. The screen-corners icon reads as
@@ -373,7 +421,10 @@ $login_notif_popup_items = $show_login_notif_popup
         <div class="panel-alert success"><?= e($m) ?></div>
         <?php endif; ?>
 
-        <form class="login-form" id="loginModalForm" method="post" action="<?= e(BASE_URL) ?>/app/auth/login.php">
+        <?php /* data-splash: signing in shows the full-screen logo animation
+                 rather than the small pill the other workflows use — see
+                 includes/loading_bar.php. */ ?>
+        <form class="login-form" id="loginModalForm" method="post" data-splash action="<?= e(BASE_URL) ?>/app/auth/login.php">
             <?= csrf_field() ?>
             <input type="hidden" name="action" value="login">
             <input type="hidden" name="selected_role" id="selectedRoleInput" value="student">

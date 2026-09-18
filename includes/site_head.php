@@ -6,6 +6,8 @@
  * block, so page-specific rules can still override where needed.
  */
 ?>
+<?php require_once __DIR__ . '/favicon.php'; ?>
+<?php require_once __DIR__ . '/splash.php'; ?>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -28,6 +30,19 @@
     --border-soft:  rgba(177,125,125,.35);
     --shadow-sm:    0 1px 3px rgba(51,0,0,.07);
     --shadow-md:    0 6px 18px rgba(51,0,0,.10);
+    /* Cast upwards, for something sitting on a photo: the Public Repository's
+       search field and sidebar, whose top edges would otherwise have nothing
+       to separate them from the banner behind.
+       Top edge only. The spread pulls the shadow in by exactly its blur, and
+       the offset lifts it by the same, so the blur never reaches the sides:
+       with less spread than blur (it was -6px against 18px) it ran down the
+       whole length of the sidebar as a grey glow on both edges. */
+    --shadow-up:    0 -10px 10px -10px rgba(51,0,0,.16);
+    /* The same idea, reaching round the top corners and a little way down
+       the sides as well. A plain box-shadow cannot stop partway down a side,
+       so this one is cast by a short strip across the top of the element
+       rather than by the element — see .sidebar-right on the repository. */
+    --shadow-up-rim: 0 -3px 10px rgba(51,0,0,.12);
 
     --font-head:    'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     --font-body:    'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -171,30 +186,70 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
 .mi-20 { font-size: 20px; }
 .mi-fill { --mi-fill: 1; }
 
-/* ===== Site header ===== */
+/* ===== Site header =====
+   Glass from the start, on every page. There is always something behind it
+   now — the campus photo strip (.nav-photo, below) at the top of the page, and
+   the page itself once it scrolls — so a solid bar would only hide it. It used
+   to turn to glass only after 8px of scroll; .scrolled now adds just the
+   shadow that tells the bar apart from content passing under it. The frost is
+   a token, so dark mode gets the dark surface rather than washed-out white. */
 .site-header {
-    background: var(--white);
-    border-bottom: 1px solid var(--border-soft);
+    background: var(--header-frost, rgba(255,255,255,.72));
+    -webkit-backdrop-filter: blur(14px) saturate(180%);
+    backdrop-filter: blur(14px) saturate(180%);
+    border-bottom: 1px solid var(--header-frost-edge, rgba(177,125,125,.28));
     position: sticky;
     top: 0;
     z-index: 900;
     transition: background .3s ease, box-shadow .3s ease, border-color .3s ease;
 }
-/* The frosted state, which is applied by script once the page scrolls past
-   8px. The white here was literal, so in dark mode the header started
-   correctly dark and washed out to near-white as soon as you scrolled. It is
-   a token now, and dark mode gives it the dark surface instead. */
 .site-header.scrolled {
-    background: var(--header-frost, rgba(255,255,255,.72));
-    -webkit-backdrop-filter: blur(14px) saturate(180%);
-    backdrop-filter: blur(14px) saturate(180%);
-    border-bottom-color: var(--header-frost-edge, rgba(177,125,125,.28));
     box-shadow: 0 2px 16px var(--header-frost-shadow, rgba(51,0,0,.08));
 }
 /* Without backdrop-filter there is no blur to hide behind, so the same colour
    is used at nearly full opacity. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-    .site-header.scrolled { background: var(--header-frost-solid, rgba(255,255,255,.97)); }
+    .site-header { background: var(--header-frost-solid, rgba(255,255,255,.97)); }
+}
+
+/* ===== The photo behind the navbar =====
+   The Public Repository's campus banner, as it looks there with the banner
+   hidden: a strip of the photo behind the navbar and nothing below it. Every
+   other page carries that strip, so the bar looks the same wherever you are.
+   It sits at the top of the page and scrolls away with it, as it does there.
+
+   The crop has to match the repository's, or the photo behind the glass would
+   shift between pages. There the photo fills a box as tall as the banner
+   (240px, 190px, 150px at the breakpoints), plus the navbar, the 36px crumb
+   strip, and the part of the search field below the banner (26px, 46px,
+   38px); object-fit: cover then takes the middle of the picture. This box is
+   built from the same numbers — change the banner's height in
+   archive/index.php and these have to follow. --nav-h is the navbar's height,
+   measured by site_header.php, since the bar wraps taller on a phone. */
+:root {
+    --nav-h: 37px;
+    --nav-photo-h: 240px;
+    --nav-photo-tail: 26px;
+}
+@media (max-width: 900px) { :root { --nav-photo-h: 190px; --nav-photo-tail: 46px; } }
+@media (max-width: 600px) { :root { --nav-photo-h: 150px; --nav-photo-tail: 38px; } }
+.nav-photo {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--nav-h);
+    overflow: hidden;
+    pointer-events: none;
+}
+.nav-photo img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: calc(var(--nav-photo-h) + var(--nav-h) + 36px + var(--nav-photo-tail));
+    object-fit: cover;
+    display: block;
 }
 
 .nav-icon-btn {
@@ -254,18 +309,130 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
     height: 36px;
 }
 .brand {
-    display: inline-block;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
     text-decoration: none;
     flex-shrink: 0;
+}
+/* The logo is a raster wrapped in an SVG, so `fill` cannot touch it. It is
+   painted rather than drawn: the artwork supplies only the stencil, through
+   mask-image, and the colour underneath is the theme's own accent token — so
+   the mark follows every palette and dark mode alike, exactly as the wordmark
+   it replaced did. The mask is a 4KB alpha-only crop of
+   Logo-Papel-Transparent.svg; the SVG itself is 900KB, which is far too much
+   to send on every page for a mark this size.
+   Sized against .header-inner's 36px, so it sits in the bar with room to
+   spare, and shaped by the mask's own proportions rather than a second
+   hard-coded number that could drift out of step with it. */
+.brand-mark {
+    display: block;
+    height: 1.75rem;
+    aspect-ratio: 106 / 128;
+    background-color: var(--pup-maroon);
+    -webkit-mask: url('<?= e(BASE_URL) ?>/assests/images/Logo-Papel-mask.png') center / contain no-repeat;
+            mask: url('<?= e(BASE_URL) ?>/assests/images/Logo-Papel-mask.png') center / contain no-repeat;
+    transition: background-color .2s;
+}
+.brand:hover .brand-mark { background-color: var(--maroon); }
+/* The name, drawn out on hover from behind a thin rule set just right of the
+   mark, and put back behind it on the way out. Absolutely placed, so the
+   brand keeps the mark's width either way — were it in the flow, the link
+   would grow as it opened and the centred nav beside it would lurch sideways
+   on every pass of the mouse.
+
+   The rule is .brand::after: a 1.25rem strip hugging the mark with a 1px line
+   down its middle. It only fades — it is the fixed edge the word appears from.
+   The strip also bridges the gap between mark and word, so the pointer can
+   cross from one to the other without leaving the link and closing it. It
+   takes pointer events only while open; otherwise the empty space beside the
+   logo would open it.
+
+   The word's box starts on that line, padded clear of it. Its left edge is
+   clipped by exactly as much as the word is shifted, on the same timing, so
+   the visible edge stays on the line while the letters slide out from under
+   it. Change one of the two .75rems without the other and the letters show
+   left of the line; clip-path and transform must also keep the same duration
+   and easing, for the same reason. Hidden by clip-path because a clipped
+   region takes no pointer events. Out is quicker than in; leaving should not
+   make anyone wait.
+
+   The same mark and word open the expanded login panel, where it works at any
+   width: that panel's only other controls are pinned to its far edge. */
+.brand::after {
+    content: "";
+    position: absolute;
+    left: 100%;
+    top: 50%;
+    width: 1.25rem;
+    height: 1.75rem;
+    transform: translateY(-50%);
+    background: linear-gradient(var(--soft-maroon), var(--soft-maroon)) center / 1px 100% no-repeat;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .22s ease-in;
+}
+.brand:hover::after,
+.brand:focus-visible::after {
+    opacity: 1;
+    pointer-events: auto;
+    transition: opacity .3s ease-out;
+}
+.brand-word {
+    position: absolute;
+    left: calc(100% + .625rem);
+    top: 50%;
+    padding-left: .625rem;
     font-family: var(--font-head);
-    font-size: 1.75rem;
+    font-size: 1.5rem;
     font-weight: 800;
     line-height: 1;
     letter-spacing: .01em;
+    white-space: nowrap;
     color: var(--pup-maroon);
-    transition: color .2s;
+    clip-path: inset(-.25rem 100% -.25rem .75rem);
+    opacity: 0;
+    transform: translate(-.75rem, -50%);
+    transition: clip-path .22s ease-in, opacity .22s ease-in, transform .22s ease-in, color .2s;
 }
-.brand:hover { color: var(--maroon); }
+.brand:hover .brand-word,
+.brand:focus-visible .brand-word {
+    clip-path: inset(-.25rem -.25rem -.25rem 0);
+    opacity: 1;
+    transform: translate(0, -50%);
+    transition: clip-path .38s cubic-bezier(.2, .8, .2, 1), opacity .3s ease-out,
+                transform .38s cubic-bezier(.2, .8, .2, 1), color .2s;
+}
+.brand:hover .brand-word { color: var(--maroon); }
+/* The navbar's stays shut below 1100px. Being out of the flow, the word
+   overlays whatever is beside the mark rather than moving it, and in the bar
+   something is: under 900px the header's controls sit straight after the
+   mark, and just above it the Director's four-link nav, centred in the space
+   left over, starts under the word until roughly 1000px wide. 1100px leaves
+   room for a role to gain a link.
+   Held shut here rather than opened only above it, so the animation itself
+   is written once and the two logos cannot drift apart. */
+@media (max-width: 1099px) {
+    .site-header .brand:hover .brand-word,
+    .site-header .brand:focus-visible .brand-word {
+        clip-path: inset(-.25rem 100% -.25rem .75rem);
+        opacity: 0;
+        transform: translate(-.75rem, -50%);
+    }
+    .site-header .brand:hover::after,
+    .site-header .brand:focus-visible::after {
+        opacity: 0;
+        pointer-events: none;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .brand-word,
+    .brand:hover .brand-word,
+    .brand:focus-visible .brand-word {
+        transform: translate(0, -50%);
+        transition: opacity .15s linear;
+    }
+}
 .main-nav {
     display: flex;
     align-items: center;
@@ -273,17 +440,49 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
     flex: 1;
     justify-content: center;
 }
-.main-nav a {
+.main-nav > a {
+    position: relative;
     color: var(--maroon);
     text-decoration: none;
     font-size: .875rem;
     font-weight: 400;
     padding: .375rem .875rem;
     border-radius: var(--r-control, 4px);
-    transition: color .2s, background .2s;
+    transition: color .2s;
 }
-.main-nav a:hover,
-.main-nav a.active { color: var(--dark-maroon); background: var(--cream); }
+.main-nav > a:hover,
+.main-nav > a.active { color: var(--dark-maroon); }
+
+/* The current page, and the one being pointed at, are underlined rather than
+   boxed in cream: over the glass and the photo behind it, a solid cream tile
+   sat on the bar like a sticker. A bar drawn under the label rather than
+   text-decoration, so the links and the Resources button (whose chevron is a
+   glyph, and would be underlined along with the word) come out identical.
+   It spans the label only — inset by the item's own side padding — and grows
+   from the middle on hover; the current page's is solid and stays.
+   Direct children only: the Resources dropdown's own links sit inside
+   .main-nav too, and keep their menu-row highlight. */
+.main-nav > a::after,
+.nav-more-btn::after {
+    content: '';
+    position: absolute;
+    left: .875rem;
+    right: .875rem;
+    bottom: .125rem;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--soft-maroon);
+    transform: scaleX(0);
+    transition: transform .2s ease, background-color .2s ease;
+}
+.nav-more-btn::after { right: calc(.875rem + 18px + .125rem); }   /* not under the chevron */
+.main-nav > a:hover::after,
+.nav-more-btn:hover::after { transform: scaleX(1); }
+.main-nav > a.active::after,
+.nav-more-btn.active::after { transform: scaleX(1); background: var(--maroon); }
+@media (prefers-reduced-motion: reduce) {
+    .main-nav > a::after, .nav-more-btn::after { transition: none; }
+}
 
 /* The phone menu button. Hidden until the bar runs out of room for the links
    themselves; the rule that shows it lives with the rest of the narrow layout
@@ -309,6 +508,7 @@ html.nav-open .nav-burger .burger-open { display: inline-flex; }
 
 .nav-more { position: relative; }
 .nav-more-btn {
+    position: relative;
     display: inline-flex;
     align-items: center;
     gap: .125rem;
@@ -321,10 +521,10 @@ html.nav-open .nav-burger .burger-open { display: inline-flex; }
     padding: .375rem .875rem;
     border-radius: var(--r-control, 4px);
     cursor: pointer;
-    transition: color .2s, background .2s;
+    transition: color .2s;
 }
 .nav-more-btn:hover,
-.nav-more-btn.active { color: var(--dark-maroon); background: var(--cream); }
+.nav-more-btn.active { color: var(--dark-maroon); }
 .nav-more-btn .material-symbols-outlined { transition: transform .2s ease; }
 .nav-more-btn.open .material-symbols-outlined { transform: rotate(180deg); }
 .nav-more-dropdown {
@@ -677,18 +877,6 @@ html.nav-open .nav-burger .burger-open { display: inline-flex; }
 }
 .panel-topbar-brand { margin-right: auto; display: none; }
 .login-panel.expanded .panel-topbar-brand { display: flex; align-items: center; gap: .5rem; }
-.panel-topbar-brand a { text-decoration: none; }
-.panel-topbar-brand span {
-    font-family: var(--font-head);
-    /* The wordmark stays bold, matching the navbar brand — it is the one
-       exception to the panel's otherwise unbolded type. */
-    font-weight: 800;
-    font-size: 1.25rem;
-    letter-spacing: .01em;
-    color: var(--pup-maroon);
-    transition: color .2s;
-}
-.panel-topbar-brand a:hover span { color: var(--maroon); }
 .panel-ctrl-btn {
     width: 34px; height: 34px;
     border: none;
@@ -956,6 +1144,27 @@ select.lf-input {
         border-radius: 0;
         font-size: .9375rem;
     }
+    /* In the sheet each link is a full-width row, so the bar — which spans
+       the item between its side paddings — would run the width of the sheet.
+       The word itself is underlined instead, and the Resources links that
+       join the list here follow suit rather than keeping their cream rows. */
+    .main-nav > a::after { display: none; }
+    .main-nav > a:hover,
+    .nav-more-dropdown a:hover {
+        background: none;
+        text-decoration: underline;
+        text-decoration-thickness: 2px;
+        text-underline-offset: .4em;
+        text-decoration-color: var(--soft-maroon);
+    }
+    .main-nav > a.active,
+    .nav-more-dropdown a.active {
+        background: none;
+        text-decoration: underline;
+        text-decoration-thickness: 2px;
+        text-underline-offset: .4em;
+        text-decoration-color: var(--maroon);
+    }
 
     /* No menu inside a menu on a phone. The Resources group is flattened into
        the list and its button, which exists only to open the thing that is now
@@ -986,7 +1195,6 @@ select.lf-input {
 }
 @media (max-width: 600px) {
     .wrap, .wrap-wide { padding: 0 1rem; }
-    .brand { font-size: 1.375rem; }
     .notif-dropdown { width: 92vw; right: -2vw; }
     .panel-body { padding: .5rem 1.25rem 2rem; }
     .role-selector { gap: .5rem; }
@@ -999,7 +1207,6 @@ select.lf-input {
    stay on one line. */
 @media (max-width: 380px) {
     .wrap, .wrap-wide { padding: 0 .75rem; }
-    .brand { font-size: 1.25rem; }
     .header-inner { gap: .5rem; }
     .header-right { gap: .375rem; }
     .nav-burger { width: 38px; height: 38px; }

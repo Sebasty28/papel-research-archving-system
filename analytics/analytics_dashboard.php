@@ -757,7 +757,7 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
                     </button>
                 </div>
             </div>
-            <form method="post" id="anExportForm" hidden>
+            <form method="post" id="anExportForm" data-no-pill hidden>
                 <?= csrf_field() ?>
                 <input type="hidden" name="export" id="anExportFormat" value="">
             </form>

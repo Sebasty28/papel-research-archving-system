@@ -125,6 +125,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Archive Login · <?= e(APP_NAME) ?></title>
+  <?php /* This page draws its own split-screen layout instead of site_head.php,
+           so the shared icon has to be asked for by name. */ ?>
+  <?php require_once ROOT_PATH . '/includes/favicon.php'; ?>
+  <?php /* Likewise the start-up animation, which the sign-in form below puts
+           up as well. First in the head, so it decides before the first
+           paint. */ ?>
+  <?php require_once ROOT_PATH . '/includes/splash.php'; ?>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"
     integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -910,7 +917,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
           <?php endif; ?>
 
-          <form method="post" id="loginForm">
+          <?php /* data-splash: the full-screen logo animation stands in for the
+                   small pill here — see includes/loading_bar.php. */ ?>
+          <form method="post" id="loginForm" data-splash>
             <?= csrf_field() ?>
             <div class="form-group">
               <label class="form-label" for="username">Username / ID</label>
@@ -1055,6 +1064,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       usernameInput.focus();
     });
   </script>
+  <?php /* No site_footer.php here, so signing in — one of the workflows the
+           logo pill marks — has to ask for the loader itself. */ ?>
+  <?php require_once ROOT_PATH . '/includes/loading_bar.php'; ?>
   <?php include __DIR__ . '/../includes/accessibility.php'; ?>
 </body>
 

@@ -226,7 +226,7 @@ $kinds = [
                          button says that instead of sitting there greyed out or
                          disappearing. */ ?>
                 <?php $allRead = ($unread === 0); ?>
-                <form method="post" id="ncBulkForm">
+                <form method="post" id="ncBulkForm" data-no-pill>
                     <?= csrf_field() ?>
                     <input type="hidden" name="action"
                            value="<?= $allRead ? 'mark_all_unread' : 'mark_all_read' ?>">

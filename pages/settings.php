@@ -530,25 +530,24 @@ document.addEventListener('DOMContentLoaded', function () {
     document.documentElement.setAttribute('data-density', density);
     document.querySelectorAll('input[name="qs_density"]').forEach(function (i) { i.checked = (i.value === density); });
 
-    /* Theme colour. The same six palettes and the same storage key the Quick
+    /* Theme colour. The same two palettes and the same storage key the Quick
        Settings panel uses, so changing it in either place is the same act.
        Whether the site is light or dark follows from which one is chosen -
        there is no separate switch. */
     var COLOURS = [
-        ['maroon', 'Maroon'], ['classic', 'Old Classic'],
-        ['google-light', 'Light'],
-        ['quiet-light', 'Quiet Light'], ['modern-light', 'Modern Light'],
-        ['modern-dark', 'Modern Dark'], ['quiet-dark', 'Quiet Dark']
+        ['classic', 'Old Classic'], ['old-night', 'Old Night']
     ];
-    var DARK_COLOURS = { 'modern-dark': 1, 'quiet-dark': 1 };
+    var DARK_COLOURS = { 'old-night': 1 };
+    var WAS_DARK = { 'modern-dark': 1, 'quiet-dark': 1 };
     function modeFor(c) { return DARK_COLOURS[c] ? 'dark' : 'light'; }
 
     // Old Classic is the default — a first-time reader with nothing stored
-    // yet lands there, not on maroon.
+    // yet lands there.
     var colour = getStored('papel_color', 'classic');
-    // A withdrawn palette, or an old dark preference, lands somewhere sensible.
+    // A withdrawn palette, or an old dark preference, lands somewhere sensible:
+    // anyone who had a dark site keeps one.
     if (!COLOURS.some(function (c) { return c[0] === colour; })) {
-        colour = (getStored('papel_theme', '') === 'dark') ? 'modern-dark' : 'classic';
+        colour = (WAS_DARK[colour] || getStored('papel_theme', '') === 'dark') ? 'old-night' : 'classic';
         try { localStorage.setItem('papel_color', colour); } catch (err) {}
     }
     try { localStorage.removeItem('papel_theme'); } catch (err) {}

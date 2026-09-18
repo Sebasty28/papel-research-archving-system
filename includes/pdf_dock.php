@@ -2,7 +2,7 @@
 /**
  * A file opened beside the record rather than in another tab.
  *
- * Clicking a file in Uploaded Files slides a panel in from the left and shows
+ * Clicking a file in Uploaded Files slides a panel in from the right and shows
  * the PDF there, so the reader keeps the checklist, the sections and the
  * decision in view while they read. It is Google Drive's own viewer in an
  * iframe — the file already lives there, so nothing is downloaded, copied or
@@ -23,16 +23,20 @@
 
 .pdf-dock {
     position: fixed;
-    top: 60px;                      /* clears the site header */
-    left: 0;
+    /* Measured from the header itself when the panel opens, rather than the
+       60px this used to assume: the header is not that tall on every page or
+       at every width, and the difference showed as a band of blank page above
+       the panel. The fallback only matters if the header is missing. */
+    top: var(--pdf-dock-top, 57px);
+    right: 0;
     bottom: 0;
     width: var(--pdf-dock-w);
     z-index: 900;
     display: none;
     flex-direction: column;
     background: var(--white);
-    border-right: 1px solid var(--border);
-    box-shadow: 4px 0 24px rgba(51, 0, 0, .10);
+    border-left: 1px solid var(--border);
+    box-shadow: -4px 0 24px rgba(51, 0, 0, .10);
 }
 .pdf-dock.is-open { display: flex; }
 .pdf-dock-head {
@@ -64,11 +68,11 @@
     flex: 1 1 auto; width: 100%; border: 0; background: #525659;
 }
 
-/* The right edge is a handle. Only the width can be dragged — the panel is
+/* The inner edge is a handle. Only the width can be dragged — the panel is
    pinned top and bottom, so there is nothing else to change. */
 .pdf-dock-grip {
     position: absolute;
-    top: 0; right: -3px; bottom: 0;
+    top: 0; left: -3px; bottom: 0;
     width: 8px;
     cursor: col-resize;
     background: none;
@@ -100,56 +104,42 @@ body.pdf-resizing, body.pdf-resizing * {
 }
 /* Nothing animates while dragging, or the panel lags behind the cursor. */
 .pdf-dock.is-resizing,
-body.pdf-resizing .crumb-inner,
 body.pdf-resizing > main.wrap { transition: none !important; }
 
-/* The record slides out of the panel's way rather than hiding under it.
-   Only the content columns move. Padding the <body> was the first attempt and
-   it pushed the whole document sideways — the sticky header went with it, so
-   the brand ended up off the right edge, and the page grew a horizontal
-   scrollbar because a full-width layout plus that padding is wider than the
-   window. Shifting the wrappers instead leaves the header where it belongs. */
-body.pdf-docked .crumb-inner,
+/* The record makes room on its right rather than hiding under the panel, and
+   its left edge stays exactly where it was — the margin below is the one the
+   centred wrapper already had, worked out rather than replaced, so nothing
+   slides sideways as the panel opens. (Padding the <body> was the first
+   attempt: it moved the whole document, sticky header included, and grew a
+   horizontal scrollbar. Shifting the wrapper leaves the header alone.)
+
+   The crumb strip is deliberately left out of this. Its links sit at the far
+   left, the panel is at the far right, and the two cannot reach each other —
+   shifting it only moved "Home" away from where it belongs. */
 body.pdf-docked > main.wrap {
-    margin-left: calc(var(--pdf-dock-w) + 1.25rem);
-    margin-right: 1.25rem;
+    margin-left: max(0px, calc((100% - var(--wrap)) / 2));
+    margin-right: calc(var(--pdf-dock-w) + 1.25rem);
     max-width: none;
-    transition: margin-left .18s ease;
-}
-/* The margin alone was not enough, and the page grew a horizontal scrollbar
-   exactly as wide as the panel.
-
-   Two things conspire. `body > main { width: 100% }` gives the record an
-   explicit width, and with border-box that is the full width of the body; a
-   left margin then pushes it that far past the right edge instead of making it
-   narrower. And <body> is a flex container here, so the record is a flex item
-   with min-width:auto and will not shrink below its content either way.
-
-   Taking the panel out of the width is what actually makes room. min-width is
-   released so the flex item is allowed to be that narrow. */
-body.pdf-docked > main.wrap {
-    width: calc(100% - var(--pdf-dock-w) - 2.5rem);
+    /* The margins decide the width now. An explicit width (body > main is
+       width:100%) would be the full width of the body whatever the margins
+       say, and the page would grow a scrollbar exactly as wide as the panel.
+       min-width is released so this flex item may shrink that far. */
+    width: auto;
     min-width: 0;
-    transition: margin-left .18s ease, width .18s ease;
+    transition: margin-right .18s ease;
 }
 /* The panel already starts below the header, so nothing needs to move it. */
 
 /* Which file is being shown. */
 .pd-file.is-showing { border-color: var(--maroon); background: var(--cream); }
 
-/* The Back link is stepped out into the left margin on a wide screen, which is
-   the very space the panel takes. With the panel open it comes back in line so
-   the two cannot overlap. */
-body.pdf-docked .pd-back { margin-left: 0; }
-
 @media (max-width: 900px) {
     :root { --pdf-dock-w: 100vw; }
     .pdf-dock { max-width: none; }
-    /* The panel covers the page at this width, so there is nothing to shift,
-       and the width taken off above has to go back with it. */
-    body.pdf-docked .crumb-inner,
-    body.pdf-docked > main.wrap { margin-left: auto; margin-right: auto; }
-    body.pdf-docked > main.wrap { width: 100%; }
+    /* The panel covers the page at this width, so there is nothing to shift. */
+    body.pdf-docked > main.wrap {
+        margin-left: auto; margin-right: auto; width: 100%;
+    }
 }
 </style>
 
@@ -176,6 +166,27 @@ document.addEventListener('DOMContentLoaded', function () {
     var frame = document.getElementById('pdfDockFrame');
     var name  = document.getElementById('pdfDockName');
 
+    /* The panel starts where the header ends. The header is sticky at the top
+       of the window, so its bottom edge is its height and scrolling does not
+       move it; a resize can change it, and that is what is watched. */
+    var header = document.querySelector('.site-header');
+    function placeTop() {
+        if (!header) { return; }
+        var bottom = Math.max(0, Math.round(header.getBoundingClientRect().bottom));
+        document.documentElement.style.setProperty('--pdf-dock-top', bottom + 'px');
+    }
+    placeTop();
+    window.addEventListener('resize', placeTop);
+    /* Web fonts land after this runs and the header grows as they do, which
+       would leave the seam open on the one page load that matters. */
+    if (window.ResizeObserver && header) { new ResizeObserver(placeTop).observe(header); }
+
+    /* Announced so a page can get its own furniture out of the way — the
+       public paper view shuts its contents rail, which shares this side. */
+    function announce(name) {
+        document.dispatchEvent(new CustomEvent('papel:pdf-dock-' + name));
+    }
+
     function close() {
         dock.classList.remove('is-open');
         document.body.classList.remove('pdf-docked');
@@ -183,6 +194,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.querySelectorAll('.pd-file.is-showing').forEach(function (el) {
             el.classList.remove('is-showing');
         });
+        announce('close');
     }
 
     document.addEventListener('click', function (e) {
@@ -204,8 +216,10 @@ document.addEventListener('DOMContentLoaded', function () {
         var label = link.querySelector('.pd-file-name');
         name.textContent = label ? label.textContent.trim() : 'Document';
         frame.src = href;
+        placeTop();                       // in case the header has changed height
         dock.classList.add('is-open');
         document.body.classList.add('pdf-docked');
+        announce('open');
     });
 
     document.getElementById('pdfDockClose').addEventListener('click', close);
@@ -263,8 +277,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
     grip.addEventListener('pointermove', function (e) {
         if (!dragging) return;
-        // The panel starts at the left edge, so the cursor's x *is* the width.
-        setWidth(e.clientX, false);
+        // The panel ends at the right edge, so its width is what is left of
+        // the window from the cursor across.
+        setWidth(window.innerWidth - e.clientX, false);
     });
 
     function endDrag(e) {
@@ -283,8 +298,10 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!wide()) return;
         var step = e.shiftKey ? 64 : 16;
         var now  = dock.getBoundingClientRect().width;
-        if (e.key === 'ArrowLeft')       { setWidth(now - step, true); e.preventDefault(); }
-        else if (e.key === 'ArrowRight') { setWidth(now + step, true); e.preventDefault(); }
+        // Leftwards is wider now that the panel is on the right: the arrow
+        // moves the edge being dragged, not the panel's own measurement.
+        if (e.key === 'ArrowLeft')       { setWidth(now + step, true); e.preventDefault(); }
+        else if (e.key === 'ArrowRight') { setWidth(now - step, true); e.preventDefault(); }
         else if (e.key === 'Home')       { setWidth(MIN, true);        e.preventDefault(); }
     });
 });

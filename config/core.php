@@ -398,6 +398,21 @@ function current_user(): ?array {
 
   return $_SESSION['user'] ?? null;
 }
+/* Sends a blocked request to the sign-in panel on the public repository —
+   the role-tab modal (Student / Faculty-Admin / Guest), not the older
+   standalone form at archive/login.php. That standalone page was the target
+   briefly; it was moved here because the modal is the more complete
+   experience — Forgot password, Terms & Conditions, role-specific ID
+   labels — and duplicating that onto a second page would only drift out of
+   sync with it over time. The trade caught in making that move: the
+   repository sits behind the modal rather than being hidden entirely, so a
+   pasted link to a protected page is answered with the archive in view, not
+   a blank sign-in screen. See openLoginModal() in site_footer.php if that
+   needs to open already expanded to cover it — it does not today.
+
+   This is the one place this decision is made — require_role() calls this
+   before checking a role, so every protected page in the system already
+   goes through it without needing its own change. */
 function require_login(): void { if (!current_user()) { header('Location: '.BASE_URL.'/archive/index.php?login_modal=1'); exit; } }
 function require_role(array $roles): void { require_login(); $u=current_user(); if(!$u||!in_array($u['user_role'],$roles,true)){ http_response_code(403); exit('Forbidden'); } }
 function role_home(string $role): string {

@@ -707,7 +707,7 @@ ob_start();
                 </div>
             </div>
             </div>
-            <form method="post" id="rcExportForm" action="<?= e($rc_self) ?>?<?= rc_qs() ?>" hidden>
+            <form method="post" id="rcExportForm" data-no-pill action="<?= e($rc_self) ?>?<?= rc_qs() ?>" hidden>
                 <?= csrf_field() ?>
                 <input type="hidden" name="export" id="rcExportFormat" value="">
             </form>

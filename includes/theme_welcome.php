@@ -61,7 +61,7 @@
 
 <div class="tw-card" id="themeWelcome" role="dialog" aria-labelledby="twTitle" aria-modal="false">
     <h2 id="twTitle">Make it yours</h2>
-    <p>Pick a theme colour. Two of them are dark. You can change it any time
+    <p>Old Classic, or Old Night for a dark page. You can change it any time
        from Quick&nbsp;Settings.</p>
 
     <span class="tw-label">Theme Colour</span>
@@ -85,16 +85,12 @@ document.addEventListener('DOMContentLoaded', function () {
     // Asked once. Anyone who has already chosen is not a first-timer either.
     if (get(KEY, '') || get('papel_color', '')) return;
 
+    // The same two palettes, and the same swatches, as Quick Settings.
     var COLOURS = [
-        ['maroon', '#820707', 'Maroon'],
         ['classic', '#6B0F0F', 'Old Classic'],
-        ['google-light', '#3C4043', 'Light'],
-        ['quiet-light', '#705697', 'Quiet Light'],
-        ['modern-light', '#005FB8', 'Modern Light'],
-        ['modern-dark', '#0078D4', 'Modern Dark'],
-        ['quiet-dark', '#C4B0E4', 'Quiet Dark']
+        ['old-night', 'linear-gradient(135deg, #6B0F0F 0 50%, #1E1813 50% 100%)', 'Old Night']
     ];
-    var DARK_COLOURS = { 'modern-dark': 1, 'quiet-dark': 1 };
+    var DARK_COLOURS = { 'old-night': 1 };
     function modeFor(c) { return DARK_COLOURS[c] ? 'dark' : 'light'; }
     var chosenColour = 'classic';   // the site's own default, shown pre-picked
 
@@ -112,7 +108,7 @@ document.addEventListener('DOMContentLoaded', function () {
             host.querySelectorAll('.tw-swatch').forEach(function (s) { s.classList.remove('is-on'); });
             b.classList.add('is-on');
             /* Show it straight away — choosing blind is not much of a
-               choice — and that includes going dark, since two of these are. */
+               choice — and that includes going dark, which Old Night is. */
             document.documentElement.setAttribute('data-color', chosenColour);
             document.documentElement.setAttribute('data-mode', modeFor(chosenColour));
         });

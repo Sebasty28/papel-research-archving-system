@@ -14,9 +14,20 @@ if (isset($_SESSION['guest_login']) && isset($_SESSION['guest_expire'])) {
     }
 }
 
+/* The repository listing already only links a paper's title for someone who
+   can view it — everyone else gets a "Login to view details" button instead
+   of an <a href>, per $can_view in archive/index.php. That only ever hid the
+   link on the page a visitor was shown; the id in the URL was never actually
+   checked here, so pasting or typing it read the full record anyway.
+   require_login() is the same gate the rest of the site's protected pages
+   use, and it already treats a valid guest pass as signed in — a guest's
+   session is set by login_user() same as a member's — so this closes the
+   direct-link gap without touching Guest Login itself. */
+require_login();
+
 $can_view = $u || isset($_SESSION['guest_login']);
 
-$id = (int)($_GET['id'] ?? 0); 
+$id = (int)($_GET['id'] ?? 0);
 if($id<=0){ header('Location: index.php'); exit; }
 $_s = $conn->prepare("SELECT * FROM research_papers WHERE paper_id=? AND current_status = 'approved'");
 $_s->bind_param('i', $id); $_s->execute();
@@ -623,12 +634,31 @@ document.addEventListener('DOMContentLoaded', function () {
     var railIcon   = document.getElementById('pdRailToggleIcon');
     var layout     = document.getElementById('pdLayout');
     if (railToggle && layout) {
-        railToggle.addEventListener('click', function () {
-            var collapsed = layout.classList.toggle('is-rail-collapsed');
+        function setRail(collapsed) {
+            layout.classList.toggle('is-rail-collapsed', collapsed);
             railIcon.textContent = collapsed ? 'right_panel_open' : 'right_panel_close';
             railToggle.title = collapsed ? 'Show the contents and citation panel' : 'Hide the contents and citation panel';
             railToggle.setAttribute('aria-label', railToggle.title);
             railToggle.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
+        }
+
+        railToggle.addEventListener('click', function () {
+            setRail(!layout.classList.contains('is-rail-collapsed'));
+        });
+
+        /* The manuscript opens down the right of the window, which is where
+           the rail runs: with both up, the record is squeezed into whatever is
+           left between them. The rail gives way while the manuscript is being
+           read, and comes back as it was when the panel closes — a rail the
+           reader had already hidden stays hidden. */
+        var railWasOpen = false;
+        document.addEventListener('papel:pdf-dock-open', function () {
+            railWasOpen = !layout.classList.contains('is-rail-collapsed');
+            if (railWasOpen) { setRail(true); }
+        });
+        document.addEventListener('papel:pdf-dock-close', function () {
+            if (railWasOpen) { setRail(false); }
+            railWasOpen = false;
         });
     }
 

@@ -279,6 +279,10 @@ if (false):
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sign in · PAPEL - PUP Biñan Digital Research Repository</title>
+<?php /* No site_head.php on this page, so the start-up animation — which the
+         sign-in form below puts up as well — has to be asked for by name.
+         First in the head, so it decides before anything is painted. */ ?>
+<?php require_once ROOT_PATH . '/includes/splash.php'; ?>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1026,7 +1030,9 @@ if (false):
         </div>
       <?php endif; ?>
       
-      <form method="post" id="<?= $step === 'otp' ? 'otpForm' : 'loginForm' ?>">
+      <?php /* data-splash: the full-screen logo animation stands in for the
+               small pill here — see includes/loading_bar.php. */ ?>
+      <form method="post" data-splash id="<?= $step === 'otp' ? 'otpForm' : 'loginForm' ?>">
         <!-- CSRF token placeholder -->
         <?= csrf_field(); ?>
         
@@ -1225,6 +1231,9 @@ if (false):
     });
   }
 </script>
+<?php /* No site_footer.php here, so signing in — one of the workflows the logo
+         pill marks — has to ask for the loader itself. */ ?>
+<?php require_once ROOT_PATH . '/includes/loading_bar.php'; ?>
 <?php include '../../includes/accessibility.php'; ?>
 </body>
 </html>

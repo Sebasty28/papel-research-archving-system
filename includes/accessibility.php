@@ -17,7 +17,10 @@ body {
     top: 50%;
     right: 0;
     transform: translateY(-50%);
-    z-index: 2147483647;
+    /* Above everything the app itself draws, but below the start-up splash
+       (includes/splash.php), which covers the whole window for a moment and
+       had this tab showing through it. */
+    z-index: 2147482000;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     font-size: 14px;
 }
@@ -221,7 +224,7 @@ body {
     width: 100%;
     height: 4px;
     background: rgba(255,200,0,.7);
-    z-index: 2147483646;
+    z-index: 2147481999;    /* with the widget, under the splash */
     pointer-events: none;
     display: none;
     box-shadow: 0 0 0 9999px rgba(0,0,0,.25);

@@ -79,8 +79,9 @@
             mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M1.5 1.5l9 9M10.5 1.5l-9 9' stroke='%23000' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 .search-input::-webkit-search-cancel-button:hover { opacity: 1; }
-/* Light on a dark field, for the same reason it is dark on a light one. */
-html[data-mode="dark"] { --search-clear: #C3CAD4; }
+/* Light on a dark field, for the same reason it is dark on a light one — a
+   warm parchment grey, to match Old Night's surfaces (10.10:1 on #1E1813). */
+html[data-mode="dark"] { --search-clear: #CFC3AE; }
 
 /* ===== Paper list ===== */
 /* Row hover bleeds slightly past the column, so the cream block reads as a
