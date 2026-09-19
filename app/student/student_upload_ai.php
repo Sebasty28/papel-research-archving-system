@@ -2290,6 +2290,32 @@ body.chat-docked-right { padding-right: var(--chat-dock-w, 380px); }
 }
 .message.bot a { color: var(--maroon); }
 
+/* A reply is built into paragraphs and lists (see formatBotReply), so the
+   spacing lives here: one gap between blocks, a smaller one between list
+   items, and nothing above the first block or below the last, which would
+   double the bubble's own padding. */
+.message.bot { line-height: 1.55; }
+.message.bot > * { margin: 0; }
+.message.bot > * + * { margin-top: .6rem; }
+.message.bot ul,
+.message.bot ol { padding-left: 1.2rem; }
+.message.bot li + li { margin-top: .3rem; }
+.message.bot li > ul { margin: .3rem 0 0; padding-left: 1rem; list-style: circle; }
+.message.bot li::marker { color: var(--maroon); }
+.message.bot ol > li::marker { font-weight: 600; }
+.message.bot strong { font-weight: 600; }
+.message.bot .msg-head {
+    font-family: var(--font-head);
+    font-weight: 600;
+    color: var(--maroon);
+}
+.message.bot code {
+    font-size: .8125rem;
+    background: var(--cream);
+    padding: 0 .3rem;
+    border-radius: 4px;
+}
+
 /* Every answer is signed with the dog's face, sat at the foot of the bubble so
    a long reply still reads as coming from one speaker rather than restarting. */
 .msg-row {
@@ -7184,37 +7210,91 @@ function repaintMessageAvatars() {
     });
 }
 
+/* The model answers in Markdown. Rendered as one run of text with <br>s, as it
+   used to be, a bulleted answer was a wall of "•" lines and there was nothing
+   for CSS to space — so it is built into real paragraphs and lists instead.
+   Every line is escaped before any tag is added, and the only tags added are
+   the fixed ones below, so nothing the model writes can become markup. */
+function escapeChatText(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function formatChatInline(s) {
+    return escapeChatText(s)
+        .replace(/\\\*/g, '*')                                  // the model sometimes escapes its own stars
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/__(.+?)__/g, '<strong>$1</strong>')
+        .replace(/(^|[^*])\*(?!\s)([^*]+?)\*(?!\*)/g, '$1<em>$2</em>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>');
+    // Single underscores are left alone: file names like Consent_Form.pdf
+    // would otherwise be italicised mid-word.
+}
+
+function formatBotReply(text) {
+    const out = [];
+    let para = [];
+    let list = null;   // { type: 'ul'|'ol', start, items: [{ html, sub: [] }] }
+
+    function flushPara() {
+        if (para.length) { out.push('<p>' + para.join('<br>') + '</p>'); para = []; }
+    }
+    function flushList() {
+        if (!list) return;
+        const start = list.type === 'ol' && list.start > 1 ? ' start="' + list.start + '"' : '';
+        out.push('<' + list.type + start + '>' + list.items.map(function (it) {
+            const sub = it.sub.length ? '<ul>' + it.sub.map(function (s) { return '<li>' + s + '</li>'; }).join('') + '</ul>' : '';
+            return '<li>' + it.html + sub + '</li>';
+        }).join('') + '</' + list.type + '>');
+        list = null;
+    }
+    function lastItem() { return list && list.items.length ? list.items[list.items.length - 1] : null; }
+
+    text.replace(/\r\n?/g, '\n').split('\n').forEach(function (raw) {
+        const indent = raw.match(/^\s*/)[0].length;
+        const line = raw.trim();
+        let m;
+        /* A blank line ends a paragraph but not a list: the model often puts
+           one between numbered steps, and closing the list there restarted
+           the count at 1 for every step. */
+        if (!line) { flushPara(); return; }
+
+        if ((m = line.match(/^#{1,6}\s+(.*)$/))) {
+            flushPara(); flushList();
+            out.push('<p class="msg-head">' + formatChatInline(m[1]) + '</p>');
+            return;
+        }
+        if ((m = line.match(/^[-*•]\s+(.*)$/))) {
+            flushPara();
+            // Indented under an item: a sub-point of it, not a new list.
+            if (indent > 0 && lastItem()) { lastItem().sub.push(formatChatInline(m[1])); return; }
+            if (!list || list.type !== 'ul') { flushList(); list = { type: 'ul', items: [] }; }
+            list.items.push({ html: formatChatInline(m[1]), sub: [] });
+            return;
+        }
+        if ((m = line.match(/^(\d+)[.)]\s+(.*)$/))) {
+            flushPara();
+            if (!list || list.type !== 'ol') { flushList(); list = { type: 'ol', start: +m[1], items: [] }; }
+            list.items.push({ html: formatChatInline(m[2]), sub: [] });
+            return;
+        }
+        // An indented plain line carries on the item above it.
+        if (indent > 0 && lastItem()) { lastItem().html += '<br>' + formatChatInline(line); return; }
+        flushList();
+        para.push(formatChatInline(line));
+    });
+    flushPara(); flushList();
+    return out.join('');
+}
+
 function addMessage(text, sender, mood) {
     const div = document.createElement('div');
     div.className = `message ${sender}`;
     div.id = 'msg-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
-    
-    // Escape HTML to prevent XSS
-    let safeText = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    
-    // 1. Remove escaped asterisks (sometimes AI outputs \*\*text\*\*)
-    safeText = safeText.replace(/\\\*/g, '*');
-    
-    // 2. Headers (### text)
-    safeText = safeText.replace(/^#{1,3}\s+(.*)$/gm, '<strong>$1</strong>');
-    
-    // 3. Bullet points (lines starting with -, *, or •) - processed BEFORE bolding
-    safeText = safeText.replace(/^[\s]*[-*•][\s]+(.*)$/gm, '&bull; $1');
-    
-    // 4. Bold with double asterisks or underscores (**text** or __text__)
-    safeText = safeText.replace(/\*\*([\s\S]+?)\*\*/g, '<strong>$1</strong>');
-    safeText = safeText.replace(/__([\s\S]+?)__/g, '<strong>$1</strong>');
-    
-    // 5. Emphasis with single asterisk (*text*)
-    safeText = safeText.replace(/\*([^\*\n]+)\*/g, '<strong>$1</strong>');
-    
-    // 6. Numbered lists (e.g., "1. Requirement")
-    safeText = safeText.replace(/^[\s]*(\d+\.)[\s]+(.*)$/gm, '<strong>$1</strong> $2');
-    
-    // 7. Newlines to line breaks
-    safeText = safeText.replace(/\n/g, '<br>');
-    
-    div.innerHTML = safeText;
+
+    // What the student typed is shown as typed; only the dog's answers are Markdown.
+    div.innerHTML = sender === 'bot'
+        ? formatBotReply(text)
+        : escapeChatText(text).replace(/\n/g, '<br>');
     const container = document.getElementById('chat-messages');
     if (sender === 'bot') {
         /* The face is the dog's resting one on a normal answer and the worried
