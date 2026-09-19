@@ -10,8 +10,8 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>About Us · <?= e(APP_NAME) ?></title>
 <?php require_once ROOT_PATH.'/includes/site_head.php'; ?>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.min.css" rel="stylesheet">
 <?php require_once ROOT_PATH.'/includes/page_theme.php'; ?>
+<?php require_once ROOT_PATH.'/includes/page_sections.php'; ?>
 <style nonce="<?= $nonce ?>">
 /* ===== Role table ===== */
 .role-table { width: 100%; border-collapse: collapse; margin-top: 1rem; border-radius: var(--r-control, 4px); overflow: hidden; }
@@ -29,8 +29,13 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
     background: rgba(129,4,3,.08); color: var(--maroon); white-space: nowrap;
 }
 
-/* ===== Info tiles ===== */
-.info-tiles { display: grid; grid-template-columns: repeat(3,1fr); gap: 1rem; margin-top: 1.25rem; }
+/* ===== Info tiles =====
+   Sized by the room they have rather than by the window: they now sit in the
+   column beside the section list, nearly 15rem narrower than the page, so
+   three-across-until-900px squeezed them long before the window did. */
+.info-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 1.25rem; }
+/* The only thing in its card, so the card's own padding is gap enough. */
+.info-tiles:first-child { margin-top: 0; }
 .info-tile {
     background: var(--cream); border: 1px solid var(--border);
     border-radius: var(--r-card, 8px); padding: 1.25rem;
@@ -39,13 +44,6 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
 .info-tile .tile-icon { font-size: 1.5rem; color: var(--maroon); }
 .info-tile .tile-title { font-weight: 400; font-size: .9rem; color: var(--ink); }
 .info-tile .tile-desc { font-size: .875rem; color: var(--ink); line-height: 1.6; }
-
-@media(max-width:900px) {
-    .info-tiles { grid-template-columns: 1fr 1fr; }
-}
-@media(max-width:600px) {
-    .info-tiles { grid-template-columns: 1fr; }
-}
 </style>
 </head>
 <body>
@@ -70,26 +68,52 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
         <p>The PUP Bi&ntilde;an Digital Research Repository, preserving and sharing the intellectual outputs of our academic community.</p>
     </div>
 
-    <div class="page-shell">
+    <div class="page-shell page-sections">
 
+    <?php /* One card at a time, chosen from the list — the same sections
+             Settings has (includes/page_sections.php). Each sets the
+             address's #fragment, so about_us.php#why links straight to it. */ ?>
+    <nav class="page-sections-nav" role="tablist" aria-label="About PAPEL sections" aria-orientation="vertical">
+        <button type="button" class="page-sections-tab" role="tab" id="tab-mission" aria-controls="sec-mission" aria-selected="true" data-section="mission">
+            <span class="material-symbols-outlined">info</span> Our Mission
+        </button>
+        <button type="button" class="page-sections-tab" role="tab" id="tab-purpose" aria-controls="sec-purpose" aria-selected="false" data-section="purpose">
+            <span class="material-symbols-outlined">lightbulb</span> Our Purpose
+        </button>
+        <button type="button" class="page-sections-tab" role="tab" id="tab-why" aria-controls="sec-why" aria-selected="false" data-section="why">
+            <span class="material-symbols-outlined">auto_awesome</span> Why PAPEL
+        </button>
+    </nav>
 
-    <div class="page-card">
+    <div class="page-sections-panels">
+
+    <section class="page-card" id="sec-mission" role="tabpanel" aria-labelledby="tab-mission">
         <div class="page-card-header">
-            <i class="bi bi-info-circle"></i>
+            <span class="material-symbols-outlined">info</span>
             <h2>Our Mission</h2>
         </div>
         <div class="page-card-body">
-        
         <p><strong>PAPEL</strong> (PUP Biñan Digital Research Repository) is the official centralized archiving platform for the <em>Polytechnic University of the Philippines – Biñan Campus</em>. Born out of a need for structured, accessible, and sustainable academic record-keeping, PAPEL serves as the digital home for the diverse research outputs of our student body.</p>
-        <h3>Our Purpose</h3>
+        </div>
+    </section>
+
+    <section class="page-card" id="sec-purpose" role="tabpanel" aria-labelledby="tab-purpose">
+        <div class="page-card-header">
+            <span class="material-symbols-outlined">lightbulb</span>
+            <h2>Our Purpose</h2>
+        </div>
+        <div class="page-card-body">
         <p>In the fast-evolving landscape of higher education, the preservation of knowledge is paramount. <strong>PAPEL</strong> aims to eliminate the barriers of physical storage and fragmented data by providing a seamless interface where students can upload, and the administration can manage, scholarly works. We are dedicated to fostering a culture of research excellence and ensuring that every study contributes to the growing intellectual capital of the Sintang Paaralan.</p>
         </div>
-    </div>
+    </section>
 
     <!-- ===== PAPEL Ecosystem section hidden for now =====
+         Bringing it back means a tab in the list above and an id/role on the
+         card like the others; a card with neither is never hidden, and would
+         sit under whichever section is open.
     <div class="page-card">
         <div class="page-card-header">
-            <i class="bi bi-people"></i>
+            <span class="material-symbols-outlined">groups</span>
             <h2>The PAPEL Ecosystem</h2>
         </div>
         <div class="page-card-body">
@@ -134,7 +158,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
 
     <div class="page-card">
         <div class="page-card-header">
-            <i class="bi bi-diagram-3"></i>
+            <span class="material-symbols-outlined">account_tree</span>
             <h2>How a Paper Gets Published</h2>
         </div>
         <div class="page-card-body">
@@ -174,32 +198,36 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
     </div>
     ===== End hidden PAPEL Ecosystem section ===== -->
 
-    <div class="page-card">
+    <section class="page-card" id="sec-why" role="tabpanel" aria-labelledby="tab-why">
         <div class="page-card-header">
-            <i class="bi bi-stars"></i>
+            <span class="material-symbols-outlined">auto_awesome</span>
             <h2>Why PAPEL</h2>
         </div>
         <div class="page-card-body">
-        
+        <?php /* Material Symbols, like the rest of the site. These were
+                 Bootstrap Icons, and bi-leaf is not in the set, so the
+                 Sustainability tile had a blank where its icon should be. */ ?>
         <div class="info-tiles">
             <div class="info-tile">
-                <div class="tile-icon"><i class="bi bi-globe2"></i></div>
+                <div class="tile-icon"><span class="material-symbols-outlined">public</span></div>
                 <div class="tile-title">Accessibility</div>
                 <div class="tile-desc">A 24/7 digital library for the PUP Biñan community, available anytime from any device.</div>
             </div>
             <div class="info-tile">
-                <div class="tile-icon"><i class="bi bi-shield-check"></i></div>
+                <div class="tile-icon"><span class="material-symbols-outlined">verified_user</span></div>
                 <div class="tile-title">Security</div>
                 <div class="tile-desc">A tiered access system that ensures research data is handled by the right people at the right level.</div>
             </div>
             <div class="info-tile">
-                <div class="tile-icon"><i class="bi bi-leaf"></i></div>
+                <div class="tile-icon"><span class="material-symbols-outlined">eco</span></div>
                 <div class="tile-title">Sustainability</div>
                 <div class="tile-desc">Reducing the environmental footprint of physical archiving while future-proofing our research records.</div>
             </div>
         </div>
         </div>
-    </div>
+    </section>
+
+    </div><!-- /.page-sections-panels -->
     </div><!-- /.page-shell -->
 
 </div>

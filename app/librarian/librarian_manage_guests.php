@@ -300,11 +300,9 @@ function guest_table(array $rows, string $which): void {
     <div class="mgmt-grid">
 
         <!-- ============ Issue a pass ============ -->
-        <section class="mgmt-panel" id="formPanel">
-            <div class="mgmt-panel-head">
-                <span class="material-symbols-outlined">badge</span>
-                <span>New guest pass</span>
-            </div>
+        <?php /* No heading row, as on the other management pages: the page
+                 title already says what this form is for. */ ?>
+        <section class="mgmt-panel" id="formPanel" aria-label="Guest pass form">
             <div class="mgmt-panel-body">
                 <form method="post" id="guestForm">
                     <?= csrf_field(); ?>

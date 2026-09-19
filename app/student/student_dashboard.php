@@ -235,6 +235,14 @@ ob_start();
     <div class="main-col" id="mainCol" data-card-console="1">
         <?php ob_start(); ?>
 
+        <?php /* Deleting, withdrawing and submitting all land back here, and
+                 the ones that can fail set a message to say so. This page never
+                 read them, so a message sat in the session and turned up on
+                 whichever page next did — Settings, Contact Support, a paper —
+                 long after the action it was about. The review desks had the
+                 same fault and the same fix (includes/review_console.php). */ ?>
+        <?php require_once ROOT_PATH.'/includes/flash_banner.php'; flash_banner(); ?>
+
         <div class="dash-shell">
 
             <!-- Search + upload -->

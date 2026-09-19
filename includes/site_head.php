@@ -266,8 +266,13 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
     text-decoration: none;
     transition: background .2s, color .2s;
     position: relative;
+    /* The hover circle is painted 28px across, the avatar's size beside it,
+       while the button keeps its 34px to be clicked: the padding holds the
+       target, and the background stops at the content box inside it. */
+    padding: 3px;
+    background-clip: content-box;
 }
-.nav-icon-btn:hover { background: var(--cream); color: var(--maroon); }
+.nav-icon-btn:hover { background: var(--cream); background-clip: content-box; color: var(--maroon); }
 .notif-badge {
     position: absolute;
     top: 2px; right: 2px;
@@ -294,6 +299,12 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
     font-family: inherit;
 }
 .avatar-group .material-symbols-outlined { font-size: 18px; }
+/* Turned over while the menu is open, as the Resources chevron is. Read off
+   the menu rather than a class on this button: the menu is closed from
+   several places — this button, its own ×, the bell, a click anywhere else —
+   and every one of them already clears .open there. */
+.avatar-group .avatar-caret { transition: transform .2s ease; }
+.avatar-group:has(+ .user-dropdown.open) .avatar-caret { transform: rotate(180deg); }
 .header-inner {
     display: flex;
     align-items: center;
@@ -475,7 +486,11 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
     transform: scaleX(0);
     transition: transform .2s ease, background-color .2s ease;
 }
-.nav-more-btn::after { right: calc(.875rem + 18px + .125rem); }   /* not under the chevron */
+/* Under the chevron as well as the word, as Login's runs under its icon. The
+   chevron's V ends 4.8px inside its 18px box and the R starts 1.3px inside
+   its own, so the bar is pulled in by the difference to overhang both ends
+   alike. The V is symmetrical, so turning it over while open changes nothing. */
+.nav-more-btn::after { right: calc(.875rem + 3.5px); }
 .main-nav > a:hover::after,
 .nav-more-btn:hover::after { transform: scaleX(1); }
 .main-nav > a.active::after,
@@ -548,10 +563,34 @@ html.nav-open .nav-burger .burger-open { display: inline-flex; }
     font-size: .875rem;
     color: var(--ink);
     text-decoration: none;
-    transition: background .15s, color .15s;
+    transition: color .15s;
 }
 .nav-more-dropdown a:hover,
-.nav-more-dropdown a.active { background: var(--cream); color: var(--maroon); }
+.nav-more-dropdown a.active { color: var(--maroon); }
+
+/* The same underline as the bar above, so the menu does not go back to cream
+   tiles one level down. The row stays full-width to keep its hit area, so
+   the bar hangs off the label's span instead — on the row it would run the
+   width of the menu. The drop matches how far the navbar's bar sits below
+   "Resources"; any closer and it touches the descenders in "Support". */
+.nav-more-label { position: relative; }
+.nav-more-label::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -.48em;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--soft-maroon);
+    transform: scaleX(0);
+    transition: transform .2s ease, background-color .2s ease;
+}
+.nav-more-dropdown a:hover .nav-more-label::after { transform: scaleX(1); }
+.nav-more-dropdown a.active .nav-more-label::after { transform: scaleX(1); background: var(--maroon); }
+@media (prefers-reduced-motion: reduce) {
+    .nav-more-label::after { transition: none; }
+}
 
 .header-right {
     display: flex;
@@ -573,10 +612,33 @@ html.nav-open .nav-burger .burger-open { display: inline-flex; }
     cursor: pointer;
     padding: .375rem .75rem;
     border-radius: var(--r-control, 4px);
-    transition: color .2s, background .2s;
+    transition: color .2s;
     text-decoration: none;
+    position: relative;
 }
-.btn-login-nav:hover { color: var(--dark-maroon); background: var(--cream); }
+.btn-login-nav:hover { color: var(--dark-maroon); }
+/* The navbar's underline rather than a cream tile, for the same reason the
+   links lost theirs — see .main-nav > a::after. It runs under the icon as
+   well as the word, the two being one control. The extra 1px at the right:
+   the icon's glyph sits 2.5px inside its box, the L's 1.6px inside its own,
+   so ending at the box left the bar hanging further past one end than the
+   other. */
+.btn-login-nav::after {
+    content: '';
+    position: absolute;
+    left: .75rem;
+    right: calc(.75rem + 1px);
+    bottom: .125rem;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--soft-maroon);
+    transform: scaleX(0);
+    transition: transform .2s ease;
+}
+.btn-login-nav:hover::after { transform: scaleX(1); }
+@media (prefers-reduced-motion: reduce) {
+    .btn-login-nav::after { transition: none; }
+}
 
 .user-avatar-btn {
     width: 28px; height: 28px;
@@ -910,7 +972,7 @@ html.nav-open .nav-burger .burger-open { display: inline-flex; }
 .panel-title {
     font-family: var(--font-head);
     font-size: 1.5rem;
-    font-weight: 500;
+    font-weight: 700;
     color: var(--pup-maroon);
     text-align: center;
     margin-bottom: .375rem;
@@ -1148,7 +1210,8 @@ select.lf-input {
        the item between its side paddings — would run the width of the sheet.
        The word itself is underlined instead, and the Resources links that
        join the list here follow suit rather than keeping their cream rows. */
-    .main-nav > a::after { display: none; }
+    .main-nav > a::after,
+    .nav-more-label::after { display: none; }
     .main-nav > a:hover,
     .nav-more-dropdown a:hover {
         background: none;

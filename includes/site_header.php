@@ -182,7 +182,7 @@ $login_notif_popup_items = $show_login_notif_popup
                     </button>
                     <div class="nav-more-dropdown" id="navMoreDropdown">
                         <?php foreach ($info_links as $il): ?>
-                            <a href="<?= e($il['href']) ?>" class="<?= in_array($current_script, $il['match'], true) ? 'active' : '' ?>"><?= e($il['label']) ?></a>
+                            <a href="<?= e($il['href']) ?>" class="<?= in_array($current_script, $il['match'], true) ? 'active' : '' ?>"><span class="nav-more-label"><?= e($il['label']) ?></span></a>
                         <?php endforeach; ?>
                     </div>
                 </div>
@@ -253,7 +253,7 @@ $login_notif_popup_items = $show_login_notif_popup
                 </div>
                 <button class="avatar-group" id="userAvatarBtn" type="button" title="<?= e($display_name) ?>">
                     <span class="user-avatar-btn"><?= e($initial) ?></span>
-                    <span class="material-symbols-outlined">expand_more</span>
+                    <span class="material-symbols-outlined avatar-caret">expand_more</span>
                 </button>
                 <div class="user-dropdown" id="userDropdown">
                     <div class="dd-head">

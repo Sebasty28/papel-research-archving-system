@@ -1,6 +1,10 @@
 <?php
 require_once __DIR__.'/../config/core.php';
-$u = current_user();
+/* Called before any output for what it does on the way: it starts the session
+   and drops a revoked guest pass while headers can still be sent. The page no
+   longer needs the user itself — that was for the chat box — and the header
+   looks it up on its own. */
+current_user();
 $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
 ?>
 <!doctype html>
@@ -48,57 +52,64 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
    sent to see is obvious among a column of identical rows. It stays marked:
    a highlight that fades while somebody is still reading is worse than none. */
 .faq-item.is-called-out { border-color: var(--maroon); box-shadow: 0 0 0 3px rgba(129,4,3,.08); }
-.quick-link-card.is-called-out {
-    border-color: var(--maroon);
-    background: rgba(129,4,3,.05);
-    box-shadow: 0 0 0 3px rgba(129,4,3,.08);
-}
-.quick-link-card.is-called-out .qlc-title { color: var(--maroon); font-weight: 500; }
 
-/* ===== Quick links grid ===== */
-.quick-links { display: grid; grid-template-columns: repeat(3,1fr); gap: 1rem; margin-top: 0; }
-.quick-link-card {
-    background: var(--cream); border: 1px solid var(--border); border-radius: var(--r-card, 8px);
-    padding: 1.25rem; text-decoration: none; color: var(--ink);
-    display: flex; flex-direction: column; gap: .5rem; transition: all .2s;
+/* ===== Layout: the questions, with the quick links in a column beside them ===== */
+.help-layout {
+    display: grid;
+    grid-template-columns: 14rem minmax(0, 1fr);
+    gap: .75rem;
+    align-items: start;
 }
-.quick-link-card:hover { border-color: var(--maroon); background: rgba(129,4,3,.03); color: var(--maroon); }
-.quick-link-card .qlc-icon { font-size: 1.5rem; color: var(--maroon); }
-.quick-link-card .qlc-title { font-weight: 400; font-size: .9rem; }
-.quick-link-card .qlc-desc { font-size: .8125rem; color: var(--grey); }
+/* Each card is alone in its column, so the gap page_theme puts under a
+   stacked card would only pad out the grid — and, on a phone where the two
+   stack, double the gap between them. */
+.help-layout > .page-card { margin-bottom: 0; }
 
-/* ===== Chatbot ===== */
-#chat-widget { position: fixed; bottom: 1.5rem; left: 1.5rem; z-index: 1000; font-family: 'Inter', sans-serif; }
-#chat-button {
-    width: 56px; height: 56px; border-radius: 50%;
-    background: var(--maroon); color: white; border: none;
-    box-shadow: 0 4px 16px rgba(129,4,3,.35);
-    cursor: pointer; display: flex; align-items: center; justify-content: center;
-    font-size: 1.375rem; transition: transform .2s, box-shadow .2s;
+/* ===== Quick links =====
+   A short list rather than the row of tiles they were: three one-line rows,
+   an icon and a name each. The names say where they go; the descriptions
+   under them repeated it at three times the height. Hover marks a row with
+   the soft bar down its left edge, the way the navbar underlines a link. */
+.help-links { padding: .375rem 0; }
+.help-link {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: .625rem;
+    padding: .625rem 1.25rem;
+    color: var(--ink);
+    font-size: .875rem;
+    text-decoration: none;
+    transition: color .15s, background-color .15s;
 }
-#chat-button:hover { transform: scale(1.07); box-shadow: 0 6px 20px rgba(129,4,3,.4); }
-#chat-window {
-    display: none; position: absolute; bottom: 70px; left: 0;
-    width: 360px; height: 520px; background: white;
-    border-radius: var(--r-card, 8px); box-shadow: var(--shadow-md); border: 1px solid var(--border);
-    flex-direction: column; overflow: hidden;
+.help-link .material-symbols-outlined { font-size: 20px; color: var(--grey); transition: color .15s; }
+.help-link::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: .4rem;
+    bottom: .4rem;
+    width: 3px;
+    border-radius: 0 2px 2px 0;
+    background: var(--soft-maroon);
+    transform: scaleY(0);
+    transition: transform .2s ease, background-color .2s ease;
 }
-#chat-header { background: var(--maroon); color: white; padding: 1rem; font-weight: 400; font-size: .875rem; display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
-#chat-messages { flex: 1; padding: 1rem; overflow-y: auto; background: var(--cream); display: flex; flex-direction: column; gap: .625rem; }
-#chat-input-area { padding: .75rem 1rem; border-top: 1px solid var(--border); display: flex; gap: .5rem; background: white; }
-.chat-msg { padding: .625rem .875rem; border-radius: var(--r-card, 8px); max-width: 82%; font-size: .875rem; line-height: 1.5; }
-.chat-msg.user { background: var(--maroon); color: white; align-self: flex-end; border-bottom-right-radius: 3px; }
-.chat-msg.bot { background: var(--white); color: var(--ink); align-self: flex-start; border: 1px solid var(--border); border-bottom-left-radius: 3px; }
-#chat-close-btn { background: none; border: none; color: rgba(255,255,255,.8); cursor: pointer; font-size: 1.125rem; padding: 0; line-height: 1; }
-#chat-close-btn:hover { color: #fff; }
-#chat-send-btn { flex-shrink: 0; }
-
-@media(max-width:900px) {
-    .quick-links { grid-template-columns: 1fr 1fr; }
+.help-link:hover { color: var(--dark-maroon); }
+.help-link:hover .material-symbols-outlined { color: var(--maroon); }
+.help-link:hover::before { transform: scaleY(1); }
+/* The card clips (overflow:hidden, for its rounded corners), and the site's
+   ring is drawn 2px outside with !important — its sides would be cut off. */
+.help-links .help-link:focus-visible { outline-offset: -2px !important; border-radius: var(--r-control, 4px); }
+/* Arriving from "Forgot password?": this is the reader's likely next step. */
+.help-link.is-called-out { color: var(--maroon); background: color-mix(in srgb, var(--maroon) 6%, transparent); }
+.help-link.is-called-out .material-symbols-outlined { color: var(--maroon); }
+.help-link.is-called-out::before { transform: scaleY(1); background: var(--maroon); }
+@media (prefers-reduced-motion: reduce) {
+    .help-link::before { transition: none; }
 }
-@media(max-width:600px) {
-    .quick-links { grid-template-columns: 1fr; }
-#chat-window { width: calc(100vw - 3rem); }
+@media (max-width: 700px) {
+    .help-layout { grid-template-columns: 1fr; }
 }
 </style>
 </head>
@@ -124,12 +135,34 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
         <p>Guides and answers for using the repository.</p>
     </div>
 
-    <div class="page-shell">
+    <div class="page-shell help-layout">
 
-
-    <div class="page-card">
+    <?php /* The quick links in the left column, where the section list
+             stood — one list of places to go, beside the answers, rather
+             than a second card to switch to. First in the markup as well as
+             on screen, so the keyboard meets them in the order they are seen;
+             on a phone they stack above the questions. */ ?>
+    <nav class="page-card" aria-labelledby="help-links-title">
         <div class="page-card-header">
-            <i class="bi bi-question-circle"></i>
+            <span class="material-symbols-outlined">bolt</span>
+            <h2 id="help-links-title">Quick Links</h2>
+        </div>
+        <div class="help-links">
+            <a href="../archive/index.php?browse=1" class="help-link">
+                <span class="material-symbols-outlined">search</span> Browse Repository
+            </a>
+            <a href="contact_support.php" class="help-link is-support">
+                <span class="material-symbols-outlined">mail</span> Contact Support
+            </a>
+            <a href="about_us.php" class="help-link">
+                <span class="material-symbols-outlined">info</span> About PAPEL
+            </a>
+        </div>
+    </nav>
+
+    <section class="page-card">
+        <div class="page-card-header">
+            <span class="material-symbols-outlined">help</span>
             <h2>Frequently Asked Questions</h2>
         </div>
         <div class="page-card-body">
@@ -191,9 +224,9 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
                 </button>
                 <div class="faq-body" id="q5">
                     <p><strong>If you still know your password</strong> and simply want a new one,
-                    you can change it yourself: sign in, open <a href="settings.php">Settings</a>
-                    and use the Security card. You will be asked for your current password and to
-                    type your full name to confirm.</p>
+                    you can change it yourself: sign in, open <a href="settings.php#password">Settings</a>
+                    and choose Password. You will be asked for your current password, then the
+                    new one twice.</p>
 
                     <p><strong>If you have forgotten it</strong>, it cannot be recovered — passwords
                     are stored scrambled and nobody, including the Research Office, can read yours.
@@ -217,67 +250,11 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
 
         </div>
         </div>
-    </div>
+    </section>
 
-    <div class="page-card">
-        <div class="page-card-header">
-            <i class="bi bi-lightning"></i>
-            <h2>Quick Links</h2>
-        </div>
-        <div class="page-card-body">
-        
-        <div class="quick-links">
-            <a href="../archive/index.php?browse=1" class="quick-link-card">
-                <div class="qlc-icon"><i class="bi bi-search"></i></div>
-                <div class="qlc-title">Browse Repository</div>
-                <div class="qlc-desc">Search and explore all published research papers</div>
-            </a>
-            <a href="contact_support.php" class="quick-link-card is-support">
-                <div class="qlc-icon"><i class="bi bi-envelope"></i></div>
-                <div class="qlc-title">Contact Support</div>
-                <div class="qlc-desc">Reach out to the Research Office directly</div>
-            </a>
-            <a href="about_us.php" class="quick-link-card">
-                <div class="qlc-icon"><i class="bi bi-info-circle"></i></div>
-                <div class="qlc-title">About PAPEL</div>
-                <div class="qlc-desc">Learn more about the platform and our mission</div>
-            </a>
-        </div>
-        </div>
-    </div>
     </div><!-- /.page-shell -->
 
 </div>
-
-<!-- ===== AI Chatbot (logged-in users only) ===== -->
-<?php if ($u): ?>
-<div id="chat-widget">
-    <div id="chat-window">
-        <div id="chat-header">
-            <span class="d-flex align-items-center gap-2">
-                <i class="bi bi-robot" style="font-size:1.125rem;"></i> PUPPY — AI Support
-            </span>
-            <div class="d-flex align-items-center gap-2">
-                <select id="chatModelSelect" style="background:rgba(255,255,255,0.18);color:#fff;border:1px solid rgba(255,255,255,0.25);border-radius:6px;padding:2px 6px;font-size:0.72rem;cursor:pointer;outline:none;">
-                    <option value="1" style="color:#333;">Model 1</option>
-                    <option value="2" style="color:#333;">Model 2</option>
-                </select>
-                <button type="button" id="chat-close-btn"><i class="bi bi-x-lg"></i></button>
-            </div>
-        </div>
-        <div id="chat-messages">
-            <div class="chat-msg bot">Hello <?= e($u['full_name']) ?>! I'm PUPPY, your AI support assistant. How can I help you today?</div>
-        </div>
-        <div id="chat-input-area">
-            <input type="text" id="chat-input" class="form-control form-control-sm" placeholder="Type a message…">
-            <button type="button" id="chat-send-btn" class="btn btn-sm" style="background:var(--maroon);color:#fff;white-space:nowrap;">Send</button>
-        </div>
-    </div>
-    <button type="button" id="chat-button" title="Ask AI Assistant">
-        <i class="bi bi-robot"></i>
-    </button>
-</div>
-<?php endif; ?>
 
 <?php require ROOT_PATH.'/includes/site_footer.php'; ?>
 
@@ -301,11 +278,11 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    /* Arriving from the sign-in panel's "Forgot password?" opens that answer
-       rather than the first one, brings it into view, and marks the Contact
-       Support card, which is where the reader is most likely headed next. A
-       fragment on its own would scroll to a closed accordion and look like
-       nothing had happened. */
+    /* Arriving from the sign-in panel's "Forgot password?" opens that answer,
+       brings it into view, and marks Contact
+       Support in the quick links beside it, which is where the reader is most
+       likely headed next. A fragment on its own would scroll to a closed
+       accordion and look like nothing had happened. */
     function openFromHash() {
         var id = (location.hash || '').replace('#', '');
         if (!id) return false;
@@ -318,62 +295,16 @@ document.addEventListener('DOMContentLoaded', function () {
         item.scrollIntoView({ block: 'center', behavior: 'smooth' });
         item.classList.add('is-called-out');
 
-        var support = document.querySelector('.quick-link-card.is-support');
+        var support = document.querySelector('.help-link.is-support');
         if (support) support.classList.add('is-called-out');
         return true;
     }
 
-    // Open first FAQ by default, unless a link asked for a particular one.
-    if (!openFromHash()) {
-        var firstTrigger = document.querySelector('.faq-trigger');
-        if (firstTrigger) firstTrigger.click();
-    }
+    /* Every question starts closed, so the page opens on the list of them
+       rather than on the first answer; only a link that asked for one
+       (#forgot-password) opens anything. */
+    openFromHash();
     window.addEventListener('hashchange', openFromHash);
-
-    <?php if ($u): ?>
-    // Chatbot
-    var chatWin = document.getElementById('chat-window');
-    var chatInput = document.getElementById('chat-input');
-
-    function toggleChat() {
-        var isOpen = chatWin.style.display === 'flex';
-        chatWin.style.display = isOpen ? 'none' : 'flex';
-        if (!isOpen) chatInput.focus();
-    }
-
-    document.getElementById('chat-button').addEventListener('click', toggleChat);
-    document.getElementById('chat-close-btn').addEventListener('click', toggleChat);
-    document.getElementById('chat-send-btn').addEventListener('click', sendMessage);
-    chatInput.addEventListener('keypress', function (e) { if (e.key === 'Enter') sendMessage(); });
-
-    async function sendMessage() {
-        var msg = chatInput.value.trim();
-        if (!msg) return;
-        addMsg(msg, 'user');
-        chatInput.value = '';
-        try {
-            var modelChoice = document.getElementById('chatModelSelect').value;
-            var res = await fetch('help_chatbot.php', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({message: msg, model_choice: modelChoice})
-            });
-            var data = await res.json();
-            addMsg(data.reply || 'Error processing request', 'bot');
-        } catch (e) {
-            addMsg('Connection error. Please try again.', 'bot');
-        }
-    }
-
-    function addMsg(text, sender) {
-        var div = document.createElement('div');
-        div.className = 'chat-msg ' + sender;
-        div.textContent = text;
-        var msgs = document.getElementById('chat-messages');
-        msgs.appendChild(div);
-        msgs.scrollTop = msgs.scrollHeight;
-    }
-    <?php endif; ?>
 
 });
 </script>

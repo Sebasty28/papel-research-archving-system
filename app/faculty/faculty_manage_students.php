@@ -567,11 +567,11 @@ $password_rows = password_audit_rows(['student'], (int)$u['user_id']);
              One panel does both. Editing fills these same boxes with the chosen
              student and swaps the action underneath, so there is never a second
              form to keep in step with this one. -->
-        <section class="mgmt-panel" id="formPanel">
-            <div class="mgmt-panel-head">
-                <span class="material-symbols-outlined" id="formIcon">person_add</span>
-                <span id="formTitle">New student account</span>
-            </div>
+        <?php /* No heading row. The page title above already says what this is
+                 for, and in edit mode the note at the top of the form names the
+                 student being edited — the heading only repeated one or the
+                 other. */ ?>
+        <section class="mgmt-panel" id="formPanel" aria-label="Student account form">
             <div class="mgmt-panel-body">
                 <form method="post" class="js-manage-form" id="createStudentForm">
                     <?= csrf_field(); ?>
@@ -1020,8 +1020,6 @@ document.addEventListener('DOMContentLoaded', function () {
         panel.classList.remove('is-editing');
         document.getElementById('formAction').value = 'create_user';
         document.getElementById('formUserId').value = '';
-        document.getElementById('formTitle').textContent = 'New student account';
-        document.getElementById('formIcon').textContent = 'person_add';
         document.getElementById('formSubmitIcon').textContent = 'add';
         document.getElementById('formSubmitText').textContent = 'Create student account';
         document.getElementById('passReq').hidden = false;
@@ -1050,8 +1048,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
         document.getElementById('formAction').value = 'update_user';
         document.getElementById('formUserId').value = d.userId;
-        document.getElementById('formTitle').textContent = 'Edit student account';
-        document.getElementById('formIcon').textContent = 'edit';
         document.getElementById('formSubmitIcon').textContent = 'save';
         document.getElementById('formSubmitText').textContent = 'Save changes';
         document.getElementById('editingWho').textContent = d.fullName || 'this student';
@@ -1109,9 +1105,10 @@ document.addEventListener('DOMContentLoaded', function () {
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape' && help.classList.contains('is-open')) { closeHelp(); }
     });
-
-    refreshSections();
-    refreshYears();
+    /* refreshSections() and refreshYears() used to be called here as well.
+       They live inside the filter set-up above, which already calls both, so
+       from out here they were never in scope and every page load ended in a
+       ReferenceError. */
 });
 </script>
 <?php require ROOT_PATH.'/includes/password_generator.php';

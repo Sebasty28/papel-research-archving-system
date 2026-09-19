@@ -102,7 +102,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'chang
             ? 'Your password has been updated. ' . $notify_upline['full_name'] . ' has been notified.'
             : 'Your password has been updated.');
     }
-    header('Location: settings.php');
+    // Back to the Password section, which is where the result is about.
+    header('Location: settings.php#password');
     exit;
 }
 
@@ -135,6 +136,7 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
 <title>Settings · <?= e(APP_NAME) ?></title>
 <?php require_once ROOT_PATH.'/includes/site_head.php'; ?>
 <?php require_once ROOT_PATH.'/includes/page_theme.php'; ?>
+<?php require_once ROOT_PATH.'/includes/page_sections.php'; ?>
 <style nonce="<?= $nonce ?>">
 /* Profile grid */
 .profile-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 1rem 2rem; }
@@ -159,6 +161,8 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
 .option-text { min-width: 0; }
 .option-text strong { display: block; font-size: .875rem; font-weight: 400; color: var(--ink); }
 .option-text span { font-size: .8125rem; color: var(--grey); }
+/* Two buttons on one row, kept together and at their own width. */
+.option-actions { display: flex; gap: .5rem; flex-shrink: 0; }
 
 .segmented { display: inline-flex; border: 1px solid var(--border); border-radius: var(--r-card, 8px); overflow: hidden; flex-shrink: 0; }
 .segmented input { position: absolute; opacity: 0; pointer-events: none; }
@@ -235,6 +239,10 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
 
 .pw-hint { font-size: .75rem; color: var(--grey); margin-top: .3rem; }
 
+/* The closing note under a card's content. These were style="margin-top"
+   attributes, which the CSP drops, so the gap they asked for never showed. */
+.settings-note { margin-top: 1rem; }
+
 @media (max-width: 700px) {
     .profile-grid { grid-template-columns: 1fr; }
     .option-row { flex-direction: column; align-items: flex-start; gap: .625rem; }
@@ -259,7 +267,7 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
 
     <div class="page-intro">
         <h1>Settings</h1>
-        <p>Manage your account details, appearance, and notification preferences.</p>
+        <p>Your personal information, password, appearance and notifications.</p>
     </div>
 
     <?php if ($m = flash('error')): ?>
@@ -269,13 +277,34 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
         <div class="alert success"><?= e($m) ?></div>
     <?php endif; ?>
 
-    <div class="page-shell">
+    <div class="page-shell page-sections">
 
-    <!-- ===== Profile ===== -->
-    <div class="page-card">
+    <?php /* The four sections, one card showing at a time. Buttons rather
+             than links: they switch what is on this page instead of going
+             anywhere, though each also sets the address's #fragment so a
+             section can be linked to and survives a reload. */ ?>
+    <nav class="page-sections-nav" role="tablist" aria-label="Settings sections" aria-orientation="vertical">
+        <button type="button" class="page-sections-tab" role="tab" id="tab-personal" aria-controls="sec-personal" aria-selected="true" data-section="personal">
+            <span class="material-symbols-outlined">badge</span> Personal Information
+        </button>
+        <button type="button" class="page-sections-tab" role="tab" id="tab-password" aria-controls="sec-password" aria-selected="false" data-section="password">
+            <span class="material-symbols-outlined">lock</span> Password
+        </button>
+        <button type="button" class="page-sections-tab" role="tab" id="tab-appearance" aria-controls="sec-appearance" aria-selected="false" data-section="appearance">
+            <span class="material-symbols-outlined">palette</span> Appearance
+        </button>
+        <button type="button" class="page-sections-tab" role="tab" id="tab-notifications" aria-controls="sec-notifications" aria-selected="false" data-section="notifications">
+            <span class="material-symbols-outlined">notifications</span> Notifications
+        </button>
+    </nav>
+
+    <div class="page-sections-panels">
+
+    <!-- ===== Personal information ===== -->
+    <section class="page-card" id="sec-personal" role="tabpanel" aria-labelledby="tab-personal">
         <div class="page-card-header">
-            <span class="material-symbols-outlined">account_circle</span>
-            <h2>Profile</h2>
+            <span class="material-symbols-outlined">badge</span>
+            <h2>Personal Information</h2>
             <span class="hint">Managed by your administrator</span>
         </div>
         <div class="page-card-body">
@@ -336,99 +365,18 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
                 </div>
                 <?php endif; ?>
             </dl>
-            <p class="page-note" style="margin-top:1rem;">
+            <p class="page-note settings-note">
                 Need a correction to your name, program, or email?
                 <a href="<?= e(BASE_URL) ?>/pages/contact_support.php?subject=Profile%20Correction">Contact support</a>.
             </p>
         </div>
-    </div>
+    </section>
 
-    <!-- ===== Appearance ===== -->
-    <div class="page-card">
-        <div class="page-card-header">
-            <span class="material-symbols-outlined">palette</span>
-            <h2>Appearance</h2>
-            <span class="hint">Saved on this device</span>
-        </div>
-        <div class="page-card-body">
-            <div class="option-row">
-                <div class="option-text">
-                    <strong>Result density</strong>
-                    <span>How much spacing to use in research listings.</span>
-                </div>
-                <div class="segmented">
-                    <input type="radio" name="qs_density" id="density_default" value="default"><label for="density_default">Default</label>
-                    <input type="radio" name="qs_density" id="density_comfortable" value="comfortable"><label for="density_comfortable">Comfortable</label>
-                    <input type="radio" name="qs_density" id="density_compact" value="compact"><label for="density_compact">Compact</label>
-                </div>
-            </div>
-            <div class="option-row">
-                <div class="option-text">
-                    <strong>Theme Colour</strong>
-                    <span>The palette the whole site is drawn in. Two of them are dark; choosing one is how the site goes dark.</span>
-                </div>
-                <div class="segmented" id="colourChoices"></div>
-            </div>
-            <div class="option-row">
-                <div class="option-text">
-                    <strong>Accessibility tools</strong>
-                    <span>Text size, contrast, dyslexia-friendly font, and reading guide.</span>
-                </div>
-                <button type="button" class="btn-page" id="openA11yBtn">Open</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- ===== Notifications ===== -->
-    <div class="page-card">
-        <div class="page-card-header">
-            <span class="material-symbols-outlined">notifications</span>
-            <h2>Notifications</h2>
-            <span class="hint">Saved on this device</span>
-        </div>
-        <div class="page-card-body">
-            <div class="option-row">
-                <div class="option-text">
-                    <strong>Submission updates</strong>
-                    <span>Alert me when a paper is approved, returned, or forwarded.</span>
-                </div>
-                <label class="switch">
-                    <input type="checkbox" class="js-pref-toggle" data-pref="notify_submissions" checked>
-                    <span class="slider"></span>
-                </label>
-            </div>
-            <div class="option-row">
-                <div class="option-text">
-                    <strong>Repository announcements</strong>
-                    <span>News about the repository, maintenance, and new features.</span>
-                </div>
-                <label class="switch">
-                    <input type="checkbox" class="js-pref-toggle" data-pref="notify_announcements" checked>
-                    <span class="slider"></span>
-                </label>
-            </div>
-            <div class="option-row">
-                <div class="option-text">
-                    <strong>Show unread badge</strong>
-                    <span>Display the unread counter on the notification bell.</span>
-                </div>
-                <label class="switch">
-                    <input type="checkbox" class="js-pref-toggle" data-pref="notify_badge" checked>
-                    <span class="slider"></span>
-                </label>
-            </div>
-            <p class="page-note" style="margin-top:1rem;">
-                These control in-app alerts only. System emails required for the review
-                workflow are always sent.
-            </p>
-        </div>
-    </div>
-
-    <!-- ===== Security ===== -->
-    <div class="page-card">
+    <!-- ===== Password ===== -->
+    <section class="page-card" id="sec-password" role="tabpanel" aria-labelledby="tab-password">
         <div class="page-card-header">
             <span class="material-symbols-outlined">lock</span>
-            <h2>Security</h2>
+            <h2>Password</h2>
         </div>
         <div class="page-card-body">
             <?php
@@ -490,7 +438,95 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
                         data-confirm-input="Type your full name to confirm">Update password</button>
             </form>
         </div>
-    </div>
+    </section>
+
+    <!-- ===== Appearance ===== -->
+    <section class="page-card" id="sec-appearance" role="tabpanel" aria-labelledby="tab-appearance">
+        <div class="page-card-header">
+            <span class="material-symbols-outlined">palette</span>
+            <h2>Appearance</h2>
+            <span class="hint">Saved on this device</span>
+        </div>
+        <div class="page-card-body">
+            <div class="option-row">
+                <div class="option-text">
+                    <strong>Result density</strong>
+                    <span>How much spacing to use in research listings.</span>
+                </div>
+                <div class="segmented">
+                    <input type="radio" name="qs_density" id="density_default" value="default"><label for="density_default">Default</label>
+                    <input type="radio" name="qs_density" id="density_comfortable" value="comfortable"><label for="density_comfortable">Comfortable</label>
+                    <input type="radio" name="qs_density" id="density_compact" value="compact"><label for="density_compact">Compact</label>
+                </div>
+            </div>
+            <div class="option-row">
+                <div class="option-text">
+                    <strong>Theme Colour</strong>
+                    <span>The palette the whole site is drawn in. Old Night is the dark one; choosing it is how the site goes dark.</span>
+                </div>
+                <div class="segmented" id="colourChoices"></div>
+            </div>
+            <div class="option-row">
+                <div class="option-text">
+                    <strong>Accessibility tools</strong>
+                    <span>Text size, contrast, dyslexia-friendly font, and reading guide. Hide the bar at the side of the screen and they stay here, under Open.</span>
+                </div>
+                <div class="option-actions">
+                    <?php /* Labelled by what it will do; the script sets it to
+                             "Show bar" when the bar is already hidden. */ ?>
+                    <button type="button" class="btn-page-outline" id="a11yTabBtn">Hide bar</button>
+                    <button type="button" class="btn-page" id="openA11yBtn">Open</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== Notifications ===== -->
+    <section class="page-card" id="sec-notifications" role="tabpanel" aria-labelledby="tab-notifications">
+        <div class="page-card-header">
+            <span class="material-symbols-outlined">notifications</span>
+            <h2>Notifications</h2>
+            <span class="hint">Saved on this device</span>
+        </div>
+        <div class="page-card-body">
+            <div class="option-row">
+                <div class="option-text">
+                    <strong>Submission updates</strong>
+                    <span>Alert me when a paper is approved, returned, or forwarded.</span>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" class="js-pref-toggle" data-pref="notify_submissions" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="option-row">
+                <div class="option-text">
+                    <strong>Repository announcements</strong>
+                    <span>News about the repository, maintenance, and new features.</span>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" class="js-pref-toggle" data-pref="notify_announcements" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="option-row">
+                <div class="option-text">
+                    <strong>Show unread badge</strong>
+                    <span>Display the unread counter on the notification bell.</span>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" class="js-pref-toggle" data-pref="notify_badge" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <p class="page-note settings-note">
+                These control in-app alerts only. System emails required for the review
+                workflow are always sent.
+            </p>
+        </div>
+    </section>
+
+    </div><!-- /.page-sections-panels -->
 
     </div><!-- /.page-shell -->
 
@@ -501,6 +537,8 @@ document.addEventListener('DOMContentLoaded', function () {
     function getStored(key, fallback) {
         try { return localStorage.getItem(key) || fallback; } catch (err) { return fallback; }
     }
+
+    // The section list — one card at a time — is includes/page_sections.php.
 
     // Appearance — shares the same storage keys as the browse page's
     // Quick Settings panel, so the two stay in sync.
@@ -601,11 +639,44 @@ document.addEventListener('DOMContentLoaded', function () {
             // opened — which is why the button appeared to do nothing.
             e.stopPropagation();
             if (window.papelAccessibility) {
-                window.papelAccessibility.open();
+                // With the bar hidden, the panel opens against this button.
+                window.papelAccessibility.open(openA11yBtn);
             } else {
                 var toggle = document.getElementById('a11y-toggle');
                 if (toggle) toggle.click();
             }
+        });
+    }
+
+    /* Hide or bring back the Accessibility bar on the edge of every page.
+       The widget owns the switch (includes/accessibility.php) and applies it
+       before the bar is drawn; this button only flips it and says which way
+       the next press goes. */
+    var a11yTabBtn = document.getElementById('a11yTabBtn');
+    function a11yTabHidden() {
+        return document.documentElement.classList.contains('a11y-tab-hidden');
+    }
+    function paintA11yTabBtn() {
+        a11yTabBtn.textContent = a11yTabHidden() ? 'Show bar' : 'Hide bar';
+    }
+    if (a11yTabBtn) {
+        paintA11yTabBtn();
+        a11yTabBtn.addEventListener('click', function () {
+            var hide = !a11yTabHidden();
+            if (window.papelAccessibility && window.papelAccessibility.setTabHidden) {
+                window.papelAccessibility.setTabHidden(hide);
+            } else {
+                document.documentElement.classList.toggle('a11y-tab-hidden', hide);
+                try {
+                    if (hide) localStorage.setItem('papel_a11y_tab_hidden', '1');
+                    else      localStorage.removeItem('papel_a11y_tab_hidden');
+                } catch (err) {}
+            }
+            paintA11yTabBtn();
+        });
+        // Switched in another tab: the widget follows, and so does the label.
+        window.addEventListener('storage', function (e) {
+            if (e.key === 'papel_a11y_tab_hidden') paintA11yTabBtn();
         });
     }
 

@@ -203,6 +203,21 @@ body {
     transition: background .2s;
 }
 .btn-page:hover { background: var(--maroon-surface-hover); }
+/* The quieter partner for a second action beside it. One pixel less padding
+   pays for the border, so the two stand the same height side by side. */
+.btn-page-outline {
+    padding: calc(.625rem - 1px) 1.5rem;
+    background: none;
+    color: var(--maroon);
+    border: 1px solid var(--soft-maroon);
+    border-radius: var(--r-control, 4px);
+    font-family: inherit;
+    font-size: .875rem;
+    font-weight: 400;
+    cursor: pointer;
+    transition: background .2s;
+}
+.btn-page-outline:hover { background: var(--cream); }
 
 /* ===== Alerts ===== */
 .alert {

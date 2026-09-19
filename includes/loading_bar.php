@@ -1,6 +1,7 @@
 <?php
 /**
- * A thin bar across the foot of the window that runs while the site is busy.
+ * A thin bar across the top of the window, over the navbar, that runs while
+ * the site is busy.
  *
  * The point is to answer "did my click do anything?" during the gap where the
  * page still looks finished but the server has not answered yet — leaving a
@@ -50,6 +51,9 @@
  * full-screen animation (includes/splash.php) instead, since that is the site
  * opening rather than a change being saved.
  *
+ * While it is up, the page behind it is dimmed and blurred (.papel-loader-veil,
+ * the sign-in panel's backdrop) and takes no clicks.
+ *
  * Once it appears it stays at least 1.5s, even when the work is already done.
  * A form usually navigates sooner than that, which would take the pill with
  * the page, so the time it owes is left in sessionStorage and the next page
@@ -66,7 +70,12 @@ $loader_badge_gif = (defined('BASE_URL') ? BASE_URL : '/capstone')
     position: fixed;
     left: 0;
     right: 0;
-    bottom: 0;
+    /* Along the top edge of the window, over the navbar, where the eye goes to
+       see whether a page is on its way — it used to run along the foot, where
+       it was easy to miss. Fixed rather than inside the navbar, so it is
+       there the same on every page, and on the two sign-in pages that have no
+       navbar at all. */
+    top: 0;
     height: 3px;
     /* Over everything, the start-up splash included: the first page load is
        exactly when there is something to report, and a bar hidden behind the
@@ -139,6 +148,31 @@ $loader_badge_gif = (defined('BASE_URL') ? BASE_URL : '/capstone')
     transform: translate(-50%, -50%);
 }
 
+/* Behind the pill, the page dims and blurs the way it does behind the sign-in
+   panel (.login-backdrop, same tint and blur), so the pill reads as the one
+   thing happening. It also takes the clicks while it is up: the page is about
+   to be replaced or is saving, and a second press of the same button is the
+   last thing either needs. Nothing else here takes pointer events, so the
+   give-up timer in workLeaving() is what guarantees it never outstays that.
+   Just under the pill; above the navbar, dialogs and panels, below the
+   accessibility tab and the splash. */
+.papel-loader-veil {
+    position: fixed;
+    inset: 0;
+    z-index: 20099;
+    background: rgba(51, 0, 0, .40);
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity .2s ease, visibility .2s;
+}
+.papel-loader-veil.is-working { opacity: 1; visibility: visible; }
+/* A page that moves the pill out of the way of an overlay of its own (the
+   upload page, via --papel-pill-top) already dims and blurs behind that
+   overlay; a second veil over it would blur its progress card as well. */
+html[style*="--papel-pill-top"] .papel-loader-veil { display: none; }
+
 /* Someone who has asked for less movement still needs to know it is working,
    so the bar stays and breathes instead of travelling. A GIF cannot be paused
    from CSS, so the logo is left out altogether, and for the site's own "Stop
@@ -153,14 +187,18 @@ $loader_badge_gif = (defined('BASE_URL') ? BASE_URL : '/capstone')
         50%      { opacity: 1; }
     }
     .papel-loader-badge { display: none; }
+    /* With the pill gone, a veil would be a blurred page with nothing on it. */
+    .papel-loader-veil { display: none; }
 }
-body.a11y-stop-animations .papel-loader-badge { display: none; }
+body.a11y-stop-animations .papel-loader-badge,
+body.a11y-stop-animations .papel-loader-veil { display: none; }
 </style>
 
 <div class="papel-loader" id="papelLoader" role="status" aria-live="polite"
      aria-label="Loading">
     <div class="papel-loader__seg"></div>
 </div>
+<div class="papel-loader-veil" id="papelWorkVeil" aria-hidden="true"></div>
 <div class="papel-loader-badge" id="papelWorkBadge" aria-hidden="true">
     <img src="<?= htmlspecialchars($loader_badge_gif, ENT_QUOTES, 'UTF-8') ?>" alt="" width="300" height="99">
 </div>
@@ -218,26 +256,33 @@ body.a11y-stop-animations .papel-loader-badge { display: none; }
 
     // ---- the logo pill: workflows only (see the note at the top) -----------
     var badge = document.getElementById('papelWorkBadge');
+    var veil  = document.getElementById('papelWorkVeil');
     var WORK_MIN = 1500;                 // ms required on screen once shown
+    var LEAVE_GIVE_UP = 15000;           // ms a "leaving" page may keep it before it is taken down
     var OWED_KEY = 'papel_work_until';   // when a page that navigated away owed it until
     var workJobs = 0;
     var workShownAt = 0;
     var workHideTimer = null;
     var leaving = false;
 
+    // The pill and the veil behind it come and go together.
+    function paintWork(on) {
+        if (badge) { badge.classList.toggle('is-working', on); }
+        if (veil)  { veil.classList.toggle('is-working', on); }
+    }
     function workShow() {
         if (!badge) { return; }
         clearTimeout(workHideTimer);
         workHideTimer = null;
         if (!badge.classList.contains('is-working')) {
             workShownAt = Date.now();
-            badge.classList.add('is-working');
+            paintWork(true);
         }
     }
     function workHideAt(when) {
         clearTimeout(workHideTimer);
         workHideTimer = setTimeout(function () {
-            if (workJobs === 0 && badge) { badge.classList.remove('is-working'); }
+            if (workJobs === 0) { paintWork(false); }
         }, Math.max(0, when - Date.now()));
     }
     function workStart() {
@@ -256,6 +301,18 @@ body.a11y-stop-animations .papel-loader-badge { display: none; }
         leaving = true;
         workStart();
         try { sessionStorage.setItem(OWED_KEY, String(workShownAt + WORK_MIN)); } catch (err) {}
+        /* A real navigation takes this page, and this timer, with it. Still
+           here after fifteen seconds means it is not going anywhere — a form
+           whose answer was a file download, which the browser saves without
+           leaving and without telling this page — and the veil, which takes
+           every click, would otherwise lock the page for good. */
+        setTimeout(function () {
+            workJobs = 0;
+            leaving = false;
+            clearTimeout(workHideTimer);
+            paintWork(false);
+            try { sessionStorage.removeItem(OWED_KEY); } catch (err) {}
+        }, LEAVE_GIVE_UP);
     }
 
     /* leave() is for a workflow sent in the background that then moves to
@@ -357,7 +414,7 @@ body.a11y-stop-animations .papel-loader-badge { display: none; }
         workJobs = 0;
         leaving = false;
         clearTimeout(workHideTimer);
-        if (badge) { badge.classList.remove('is-working'); }
+        paintWork(false);
     });
 
     // ---- report the requests the site already makes -----------------------

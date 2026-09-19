@@ -124,6 +124,17 @@ body {
 #a11y-widget.anchor-top  #a11y-menu  { top: calc(100% + 12px); bottom: auto; }
 /* Open state darkens the same accent rather than switching to another colour. */
 #a11y-toggle.panel-open { background: var(--maroon-surface, #820707); }
+/* Hidden from Settings, for someone who never uses it and would rather not
+   have it on the edge of every page. Only the tab goes: the tools stay, and
+   Settings' "Open" still brings the panel up. */
+html.a11y-tab-hidden #a11y-toggle { display: none; }
+/* With the tab hidden, the panel opens against whatever button asked for it
+   (Settings' "Open") instead of at the edge where the tab would have been —
+   above or below that button, placed by positionAgainst(). Fixed to the
+   window rather than to the widget, whose centring transform would otherwise
+   become its containing block and drag it back to the edge. */
+#a11y-widget.is-anchored { transform: none !important; }
+#a11y-widget.is-anchored #a11y-menu { position: fixed; max-width: calc(100vw - 24px); }
 
 /* ===== Panel ===== */
 #a11y-menu {
@@ -268,6 +279,16 @@ body.a11y-big-cursor,
 body.a11y-big-cursor * { cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='black' stroke='white' stroke-width='2'><path d='M5.5 3.21l10.8 15.66-5.2 1.1-2.8 6.03-3.6-1.6 2.8-6.03-5.5-2.4V3.21z'/></svg>"), auto !important; }
 </style>
 
+<?php /* Read before the tab below is parsed, so a hidden tab is never
+         drawn for a frame first and then pulled away. */ ?>
+<script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
+try {
+    if (localStorage.getItem('papel_a11y_tab_hidden') === '1') {
+        document.documentElement.classList.add('a11y-tab-hidden');
+    }
+} catch (e) {}
+</script>
+
 <div id="a11y-widget">
     <div id="a11y-menu" role="dialog" aria-label="Accessibility options">
         <div class="a11y-header">
@@ -375,6 +396,14 @@ body.a11y-big-cursor * { cursor: url("data:image/svg+xml;utf8,<svg xmlns='http:/
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 (function () {
     var STORAGE_KEY = 'papel_a11y';
+    var TAB_KEY     = 'papel_a11y_tab_hidden';
+
+    // Hidden or shown in another tab: follow it here too.
+    window.addEventListener('storage', function (e) {
+        if (e.key === TAB_KEY) {
+            document.documentElement.classList.toggle('a11y-tab-hidden', e.newValue === '1');
+        }
+    });
 
     /* ---- Move widget + guide to <html> so body { filter:... } never
             breaks position:fixed (CSS spec: a filtered element becomes
@@ -464,7 +493,52 @@ body.a11y-big-cursor * { cursor: url("data:image/svg+xml;utf8,<svg xmlns='http:/
            scrollbar could not help, because the part that was cut off was
            outside the window rather than inside the panel. It now opens into
            whichever side has more room and is never taller than that room. */
+        /* Set while the panel is open against a button rather than the tab. */
+        var anchorEl = null;
+
+        function tabHidden() {
+            return document.documentElement.classList.contains('a11y-tab-hidden');
+        }
+
+        /* Below the button when the whole panel fits there, otherwise on
+           whichever side has more room; right edge in line with the button's,
+           pulled in if that would run off either side of the window. */
+        function positionAgainst(el) {
+            var r = el.getBoundingClientRect();
+            var gap = 8, margin = 12;
+            /* Opening upwards it stops under the site's navbar rather than
+               covering the bell and the avatar menu; the panel scrolls inside
+               itself for the rest. Pages without the navbar (the sign-in
+               pages) just keep the window margin. */
+            var topEdge = margin;
+            var header = document.getElementById('siteHeader');
+            if (header) {
+                var hb = header.getBoundingClientRect().bottom;
+                if (hb > 0) topEdge = Math.max(topEdge, hb + gap);
+            }
+            var below = window.innerHeight - r.bottom - gap - margin;
+            var above = r.top - gap - topEdge;
+            var s = menu.style;
+            s.maxHeight = '';
+            var natural = menu.scrollHeight;
+            var openDown = below >= natural || below >= above;
+
+            var w = menu.offsetWidth;
+            var left = Math.min(Math.max(r.right - w, margin), Math.max(margin, window.innerWidth - w - margin));
+            s.left = left + 'px';
+            s.right = 'auto';
+            if (openDown) {
+                s.top = (r.bottom + gap) + 'px';
+                s.bottom = 'auto';
+            } else {
+                s.top = 'auto';
+                s.bottom = (window.innerHeight - r.top + gap) + 'px';
+            }
+            s.maxHeight = Math.max(140, openDown ? below : above) + 'px';
+        }
+
         function positionPanel() {
+            if (anchorEl) { positionAgainst(anchorEl); return; }
             var r = widget.getBoundingClientRect();
             var gap = 12, margin = 12;
             var above = r.top - gap - margin;
@@ -475,9 +549,16 @@ body.a11y-big-cursor * { cursor: url("data:image/svg+xml;utf8,<svg xmlns='http:/
             menu.style.maxHeight = Math.max(140, openDown ? below : above) + 'px';
         }
 
-        function openPanel() {
-            positionPanel();
+        /* `anchor` is the button that asked, when it was not the tab. It only
+           counts while the tab is hidden: with the tab showing, the panel
+           opens beside it as always, so what is open stays next to the thing
+           that opens and closes it. */
+        function openPanel(anchor) {
+            anchorEl = (anchor && anchor.getBoundingClientRect && tabHidden()) ? anchor : null;
+            widget.classList.toggle('is-anchored', !!anchorEl);
+            // Shown first: the anchored placement measures the panel itself.
             menu.classList.add('visible');
+            positionPanel();
             toggle.setAttribute('aria-expanded', 'true');
             toggle.classList.add('panel-open');
         }
@@ -485,11 +566,20 @@ body.a11y-big-cursor * { cursor: url("data:image/svg+xml;utf8,<svg xmlns='http:/
             menu.classList.remove('visible');
             toggle.setAttribute('aria-expanded', 'false');
             toggle.classList.remove('panel-open');
+            if (anchorEl) {
+                anchorEl = null;
+                widget.classList.remove('is-anchored');
+                menu.style.left = menu.style.right = menu.style.top = menu.style.bottom = '';
+            }
         }
+        // An anchored panel keeps to its button as the page moves under it.
+        window.addEventListener('scroll', function () {
+            if (anchorEl && menu.classList.contains('visible')) positionAgainst(anchorEl);
+        }, { passive: true });
 
         if (toggle) toggle.addEventListener('click', function (e) {
             e.stopPropagation();
-            menu.classList.contains('visible') ? closePanel() : openPanel();
+            menu.classList.contains('visible') ? closePanel() : openPanel(null);
         });
         if (closeBtn) closeBtn.addEventListener('click', closePanel);
 
@@ -502,8 +592,21 @@ body.a11y-big-cursor * { cursor: url("data:image/svg+xml;utf8,<svg xmlns='http:/
         window.papelAccessibility = {
             open:   openPanel,
             close:  closePanel,
-            toggle: function () {
-                menu.classList.contains('visible') ? closePanel() : openPanel();
+            toggle: function (anchor) {
+                menu.classList.contains('visible') ? closePanel() : openPanel(anchor);
+            },
+            /* The tab on the edge of the page, hidden or shown — Settings has
+               the switch. Saved per browser, like everything else here. */
+            tabHidden: tabHidden,
+            setTabHidden: function (hide) {
+                document.documentElement.classList.toggle('a11y-tab-hidden', !!hide);
+                try {
+                    if (hide) localStorage.setItem(TAB_KEY, '1');
+                    else      localStorage.removeItem(TAB_KEY);
+                } catch (e) {}
+                /* Placed while hidden, it was measured at no size at all; now
+                   that it has one again, keep it inside the window. */
+                if (!hide) restorePosition();
             }
         };
 

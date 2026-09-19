@@ -286,11 +286,10 @@ $password_rows = password_audit_rows(['faculty', 'librarian'], (int)$u['user_id'
 
         <!-- ============ Create / edit ============
              One panel does both, exactly as on Manage Students. -->
-        <section class="mgmt-panel" id="formPanel">
-            <div class="mgmt-panel-head">
-                <span class="material-symbols-outlined" id="formIcon">person_add</span>
-                <span id="formTitle">New staff account</span>
-            </div>
+        <?php /* No heading row, as on My Students: the page title says what
+                 this is for, and in edit mode the note at the top of the form
+                 names who is being edited. */ ?>
+        <section class="mgmt-panel" id="formPanel" aria-label="Staff account form">
             <div class="mgmt-panel-body">
                 <form method="post" class="js-manage-form" id="staffForm">
                     <?= csrf_field(); ?>
@@ -462,8 +461,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function toCreateMode() {
         panel.classList.remove('is-editing');
-        document.getElementById('formTitle').textContent = 'New staff account';
-        document.getElementById('formIcon').textContent = 'person_add';
         document.getElementById('formSubmitIcon').textContent = 'add';
         document.getElementById('formSubmitText').textContent = 'Create account';
         document.getElementById('passReq').hidden = false;
@@ -492,8 +489,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
         document.getElementById('formAction').value = 'update_user';
         document.getElementById('formUserId').value = d.userId;
-        document.getElementById('formTitle').textContent = 'Edit staff account';
-        document.getElementById('formIcon').textContent = 'edit';
         document.getElementById('formSubmitIcon').textContent = 'save';
         document.getElementById('formSubmitText').textContent = 'Save changes';
         document.getElementById('editingWho').textContent = d.fullName || 'this account';

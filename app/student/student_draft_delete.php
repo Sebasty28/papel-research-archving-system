@@ -110,6 +110,9 @@ foreach (array_merge([$draft['file_path']], $docPaths) as $stored) {
     if (is_file($candidate)) @unlink($candidate);
 }
 
-flash('success', 'Deleted: ' . $draft['title']);
+/* No "Deleted" message. The dashboard's own dialog has already named the item
+   and asked, and the card is gone when the page comes back — a banner saying
+   so again was one thing too many. Failures above still set one, since
+   nothing else would tell the student it did not work. */
 header('Location: ' . $back);
 exit;
