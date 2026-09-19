@@ -115,13 +115,13 @@ $login_notif_popup_items = $show_login_notif_popup
 <?php /* The campus photo behind the navbar's glass — see .nav-photo in
          site_head.php. The Public Repository sets $hero_under_nav: its own
          banner already runs up behind the navbar, and a second copy of the
-         photo under it would double it. A compressed copy of the banner's
-         picture: behind the blur and the frost a 1.7MB PNG on every page is
-         weight nobody can see, and the dimensions are the same, so the crop
-         is too. */ ?>
+         photo under it would double it. Always the first of the banner's
+         slideshow photos rather than a random one: behind the blur and the
+         frost nobody can tell them apart, and one fixed file stays cached
+         from page to page. */ ?>
 <?php if (empty($hero_under_nav)): ?>
 <div class="nav-photo" aria-hidden="true">
-    <img src="<?= e(BASE_URL) ?>/assests/images/navbar-photo.jpg" alt="" decoding="async">
+    <img src="<?= e(BASE_URL) ?>/assests/images/navbar-photo1.jpg" alt="" decoding="async">
 </div>
 <?php endif; ?>
 <header class="site-header" id="siteHeader">

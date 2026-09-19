@@ -351,6 +351,17 @@ ob_start();
    strip begins, so it reads as the strip's edge rather than the photo's. */
 .hero.collapsed img { clip-path: inset(0 0 calc(100% - var(--hero-nav)) 0); }
 
+/* Slideshow: every photo is stacked in the same place by the rule above, and
+   only the active one is opaque. The transition list is restated in full
+   because it replaces the clip-path one rather than adding to it. A slide
+   with no src yet (still waiting in data-src) stays transparent whatever its
+   class, so a slow network shows the previous photo rather than a gap. */
+.hero img.hero-slide {
+    opacity: 0;
+    transition: clip-path .35s ease, opacity 1.2s ease;
+}
+.hero img.hero-slide.is-active[src] { opacity: 1; }
+
 /* The search field and the sidebar panel both sit on the photo, and a shadow
    cast only downwards left their top edges to fend for themselves against a
    bright wall. --shadow-up lifts them off it. Only while the banner is up:
@@ -726,8 +737,29 @@ body:has(.hero:not(.collapsed)) .crumb-bar {
 </div>
 
 <!-- ===== 4. Hero banner ===== -->
+<?php /* A slideshow of the campus photos, in a fresh random order on every
+         visit — shuffled here rather than in the script so the first photo is
+         already a random one at first paint, not swapped in a moment later.
+         Only that first one carries a src; the rest wait in data-src until the
+         page has loaded (see the slideshow script), so four photos nobody has
+         seen yet do not hold up the first paint. The first is the only one
+         announced: the others are the same subject and would be read out as
+         four more images every five seconds.
+
+         The set is whatever navbar-photo*.jpg is in the images folder, read
+         from disk rather than listed here, so a photo can be added or dropped
+         by adding or deleting the file — a hard-coded list broke the banner
+         the first time one was removed. Made for a 3840×680 canvas. */
+      $hero_photos = array_map('basename', glob(ROOT_PATH . '/assests/images/navbar-photo*.jpg') ?: []);
+      shuffle($hero_photos); ?>
 <section class="hero" id="heroBanner">
-    <img src="../assests/images/loginbackground.png" alt="PUP Biñan Campus">
+    <?php foreach ($hero_photos as $i => $photo): ?>
+        <?php if ($i === 0): ?>
+            <img class="hero-slide is-active" src="../assests/images/<?= e($photo) ?>" alt="PUP Biñan Campus">
+        <?php else: ?>
+            <img class="hero-slide" data-src="../assests/images/<?= e($photo) ?>" alt="" aria-hidden="true" decoding="async">
+        <?php endif; ?>
+    <?php endforeach; ?>
 </section>
 
 <!-- ===== 5. Search band (overlaps the hero) ===== -->
@@ -1052,6 +1084,40 @@ if (bannerToggle && heroBanner) {
         try { localStorage.setItem('papel_banner_hidden', collapsed ? '1' : '0'); } catch (err) {}
     });
 }
+
+// ===== Banner slideshow — the order was shuffled by the server; this walks
+// it, one photo every five seconds. =====
+(function () {
+    var hero   = document.getElementById('heroBanner');
+    var slides = hero ? hero.querySelectorAll('.hero-slide') : [];
+    if (slides.length < 2) return;
+    /* Someone who has asked their system for less motion gets the one random
+       photo and no crossfade every five seconds. */
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    var current = 0;
+    /* After load, not straight away: the first photo and the results come
+       first, and the other four are only needed five seconds from now. */
+    window.addEventListener('load', function () {
+        slides.forEach(function (img) {
+            if (img.dataset.src) { img.src = img.dataset.src; delete img.dataset.src; }
+        });
+    });
+
+    setInterval(function () {
+        /* Nothing to animate with the banner hidden or the tab in the
+           background — and advancing unseen would make the photo someone
+           returns to a jump rather than a fade. */
+        if (document.hidden || hero.classList.contains('collapsed')) return;
+        var next = (current + 1) % slides.length;
+        /* Not loaded yet (a slow connection): hold on the current photo
+           rather than fade to nothing. */
+        if (!slides[next].complete || !slides[next].getAttribute('src')) return;
+        slides[current].classList.remove('is-active');
+        slides[next].classList.add('is-active');
+        current = next;
+    }, 5000);
+})();
 
 // ===== The banner photo's reach — up under the navbar, down to the bottom of
 // the search field. Measured, because neither the header nor the field is a
