@@ -732,6 +732,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
       .login-right {
         padding: 2rem;
+        /* A grid item defaults to min-width:auto, so its content can hold it
+           wider than the single column it now sits in - 4px of sideways
+           scroll on a phone. */
+        min-width: 0;
       }
     }
 
