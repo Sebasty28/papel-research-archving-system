@@ -917,7 +917,11 @@ html.nav-open .nav-burger .burger-open { display: inline-flex; }
     position: fixed;
     top: 0; right: 0;
     height: 100%;
-    width: 480px;
+    /* Narrow enough to read as a panel beside the page rather than half of
+       it. The floor is the role row — three 105px tiles and two 1rem gaps,
+       347px — which is why the body's side padding below comes in to 2rem at
+       the same time. Expanding it (the arrows in its corner) is unaffected. */
+    width: 430px;
     background: var(--white);
     z-index: 1200;
     display: flex;
@@ -962,7 +966,7 @@ html.nav-open .nav-burger .burger-open { display: inline-flex; }
 
 .panel-body {
     flex: 1;
-    padding: .5rem 2.5rem 2rem;
+    padding: .5rem 2rem 2rem;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -1140,7 +1144,9 @@ select.lf-input {
     font-size: .75rem;
     color: var(--ink);
     text-align: center;
-    margin-top: 1.5rem;
+    /* Close under the button: this is the small print belonging to it, not a
+       separate part of the panel. */
+    margin-top: .75rem;
     line-height: 1.6;
 }
 .panel-footer-text a {

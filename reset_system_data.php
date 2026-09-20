@@ -148,8 +148,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_reset']) && $
     </div>
 
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
-    // Disable right-click context menu to prevent inspection
-    document.addEventListener('contextmenu', function(event) {
+    // Right-click is kept off the page but left on links, as everywhere else
+    // (see includes/accessibility.php); this page carries its own copy
+    // because it renders without the site's shared includes.
+    document.addEventListener('contextmenu', function (event) {
+        if (event.target.closest && event.target.closest('a[href]')) { return; }
         event.preventDefault();
     });
 </script>

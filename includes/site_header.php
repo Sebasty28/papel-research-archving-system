@@ -362,7 +362,10 @@ $login_notif_popup_items = $show_login_notif_popup
 <!-- ===== Login Modal ===== -->
 <div class="login-backdrop" id="modalBackdrop"></div>
 
-<div class="login-panel" id="loginPanel">
+<?php /* A dialog, and said to be one: it covers the page, the page behind it
+         is put out of reach while it is open (site_footer.php), and Escape
+         closes it. */ ?>
+<div class="login-panel" id="loginPanel" role="dialog" aria-modal="true" aria-label="Sign in">
     <div class="panel-topbar">
         <?php /* The same mark as the navbar's — theme colour, the name sliding
                  out past its rule on hover, the name in aria-label — all from

@@ -202,8 +202,12 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
 .switch input:checked + .slider { background: var(--maroon); }
 .switch input:checked + .slider::before { transform: translateX(18px); }
 
-/* Password form (fields themselves come from the shared .page-field styles) */
-.pw-form { max-width: 420px; }
+/* Password form (fields themselves come from the shared .page-field styles).
+   The width is held on the boxes rather than on the form: a password box as
+   wide as the card looks like a search bar, but the note underneath is a
+   sentence, and at 420px it broke onto a second line with most of the card
+   still empty beside it. It now runs to the card's padding like any text. */
+.pw-form .page-field { max-width: 420px; }
 /* A password you cannot see is a password you cannot check, and these are
    typed three times over. The eye sits inside the field rather than beside it
    so the row keeps its shape. */

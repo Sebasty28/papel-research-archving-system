@@ -7,8 +7,19 @@
  * key people reach for first, and Tab is not obvious to anyone who has not been
  * told about it.
  *
- * Down and Right go forward, Up and Left go back, in the order the page is
- * written. Enter still activates whatever is focused, as it always did.
+ * The arrows follow the layout rather than the order the page happens to be
+ * written in, because what the reader is steering by is what they can see:
+ *
+ *   - Left and Right move along the row the focus is already on — the navbar,
+ *     a row of buttons, a line of cards — and stop when the row ends. They no
+ *     longer jump to whatever came next in the markup, which is what made them
+ *     feel as though they had lost the thread.
+ *   - Up and Down go to the nearest control above or below, preferring the one
+ *     in line with where the focus is, so a column stays a column and a form
+ *     goes field by field. Only when nothing is directly above or below do
+ *     they fall back to the page's own order, which is what ends a column.
+ *
+ * Enter still activates whatever is focused, as it always did.
  *
  * The whole difficulty here is not moving focus — it is knowing when NOT to.
  * Arrow keys already mean something in half a dozen places, and taking them
@@ -96,9 +107,64 @@
         return visible(el);
     }
 
+    /* With the sign-in panel open, the arrows stay inside it. The page behind
+       is marked inert while it is up (site_footer.php), which reachable()
+       already respects; this is the same rule stated where the keys are
+       handled, so it holds in a browser too old to know what inert means. */
+    function scope() {
+        return document.querySelector('.login-panel.open') || document;
+    }
+
     function stops() {
         return Array.prototype.filter.call(
-            document.querySelectorAll(CANDIDATES), reachable);
+            scope().querySelectorAll(CANDIDATES), reachable);
+    }
+
+    /* Where something sits on screen. Viewport coordinates, so every candidate
+       is measured in the same frame and they compare directly. */
+    function box(el) {
+        var r = el.getBoundingClientRect();
+        return { l: r.left, r: r.right, t: r.top, b: r.bottom,
+                 cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
+    }
+
+    /* The nearest stop in the direction pressed.
+       Two numbers decide it: the gap straight ahead, and how far off to one
+       side the thing sits. Something that lines up with the focus — the next
+       item down a column, the next along a row — is what the eye expects, so
+       being out of line counts against a candidate, and heavily when the two
+       do not overlap at all. Anything level with the focus, or behind it, is
+       not in that direction and does not count. */
+    function nearest(current, key, list) {
+        var a = box(current);
+        var sideways = SIDEWAYS[key] === 1;
+        var forward  = FORWARD[key] === 1;
+        var best = null, bestScore = Infinity;
+
+        for (var i = 0; i < list.length; i++) {
+            var el = list[i];
+            if (el === current) { continue; }
+            var b = box(el), gap, overlap, offset;
+
+            if (sideways) {
+                gap     = forward ? b.l - a.r : a.l - b.r;
+                overlap = Math.min(a.b, b.b) - Math.max(a.t, b.t);
+                offset  = Math.abs(b.cy - a.cy);
+                // Another row is not to the left or right of this one.
+                if (overlap <= 0) { continue; }
+            } else {
+                gap     = forward ? b.t - a.b : a.t - b.b;
+                overlap = Math.min(a.r, b.r) - Math.max(a.l, b.l);
+                offset  = Math.abs(b.cx - a.cx);
+            }
+
+            if (gap < -2) { continue; }          // level with the focus, or behind it
+            if (gap < 0)  { gap = 0; }           // touching counts as no gap at all
+
+            var score = gap + offset * (overlap > 0 ? 0.3 : 1.5);
+            if (score < bestScore) { bestScore = score; best = el; }
+        }
+        return best;
     }
 
     /* Does this element want the key for itself? */
@@ -144,8 +210,14 @@
         var i = list.indexOf(current);
         if (i === -1) { return; }
 
-        var next = list[i + (back ? -1 : 1)];
-        if (!next) { return; }                       // at either end: stay put
+        var next = nearest(current, e.key, list);
+        /* Nothing above or below: the foot of a column, or a control the
+           layout has set out of line with everything else. The page's own
+           order carries on from there. Left and Right get no such fallback —
+           running off the end of a row into another part of the page is the
+           jump they are meant to stop. */
+        if (!next && !SIDEWAYS[e.key]) { next = list[i + (back ? -1 : 1)]; }
+        if (!next) { return; }                       // nowhere to go: stay put
 
         next.focus();
         /* Selecting the text makes the next box ready to type over, which is

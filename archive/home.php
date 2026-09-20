@@ -936,9 +936,8 @@ $types_res = $conn->query("SELECT DISTINCT paper_type FROM research_papers WHERE
 
 <?php include __DIR__.'/../includes/accessibility.php'; ?>
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
-document.addEventListener('contextmenu', function(event) {
-    event.preventDefault();
-});
+/* Right-click is handled once in includes/accessibility.php, included just
+   above, and that copy leaves links alone. A blanket one here overrode it. */
 
 var filterForm = document.getElementById('filterForm');
 if (filterForm) {

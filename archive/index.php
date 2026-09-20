@@ -1235,7 +1235,9 @@ window.addEventListener('popstate', function () {
     loadResults(window.location.href, false);
 });
 
-document.addEventListener('contextmenu', function(e) { e.preventDefault(); });
+/* Right-click is handled once for the whole site in includes/accessibility.php
+   (via site_footer.php), which leaves links alone. A second blanket copy here
+   put the browser's menu back out of reach on this page only. */
 
 }); // end DOMContentLoaded
 </script>

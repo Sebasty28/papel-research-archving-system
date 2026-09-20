@@ -872,8 +872,17 @@ try {
             });
         }
 
-        /* ---- Disable right-click ---- */
-        document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+        /* ---- Right-click ----
+           Kept off the page at large, but never off a link: "Open link in new
+           tab", "Open in new window" and "Copy link address" are how people
+           read a repository — a paper in one tab, the list still in another —
+           and there is nothing to protect on a link that its own href does not
+           already say. The menu on a notification (includes/notif_actions.php)
+           is that page's own and still takes precedence. */
+        document.addEventListener('contextmenu', function (e) {
+            if (e.target.closest && e.target.closest('a[href]')) { return; }
+            e.preventDefault();
+        });
 
         /* ---- Restore saved preferences ---- */
         loadPrefs();

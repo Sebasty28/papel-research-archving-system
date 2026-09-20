@@ -270,11 +270,44 @@ document.addEventListener('DOMContentLoaded', function () {
     var idFieldLabel = document.getElementById('idFieldLabel');
     var birthdateGroup = document.getElementById('birthdateGroup');
 
-    function openLoginModal(role) {
+    /* Everything except the panel is put out of reach while it is open. The
+       backdrop stopped the mouse, but the keyboard walked straight past it:
+       Tab and the arrow keys (includes/key_nav.php) went on into the page
+       behind, where a filter could be opened — and its menu then drew on top
+       of the panel it had been opened from behind. `inert` takes clicks, the
+       focus order and the accessibility tree away from all of it at once. */
+    function setPageInert(on) {
+        Array.prototype.forEach.call(document.body.children, function (el) {
+            if (el === loginPanel || el === modalBackdrop) { return; }
+            if (on) { el.setAttribute('inert', ''); } else { el.removeAttribute('inert'); }
+        });
+    }
+
+    /* A skinned dropdown left open behind the panel would still be painted
+       over it — its menu is fixed, at the top level of the page, and its own
+       outside-click never fired if the panel was opened from the keyboard. */
+    function closeOpenMenus() {
+        document.querySelectorAll('.sel-menu:not([hidden])').forEach(function (menu) {
+            menu.hidden = true;
+            var btn = menu._sel && menu._sel.btn;
+            if (btn) { btn.setAttribute('aria-expanded', 'false'); }
+        });
+    }
+
+    // Where focus came from, so it can be put back when the panel closes.
+    var loginOpener = null;
+
+    function openLoginModal(role, trigger) {
+        loginOpener = trigger || document.activeElement;
+        closeOpenMenus();
         modalBackdrop.classList.add('open');
         loginPanel.classList.add('open');
         document.body.style.overflow = 'hidden';
+        setPageInert(true);
         selectRole(role || 'student');
+        // Into the panel, so the keyboard starts where the eye already is.
+        var first = document.getElementById('modalIdentifier');
+        if (first) { try { first.focus({ preventScroll: true }); } catch (err) { first.focus(); } }
     }
     function closeLoginModal() {
         modalBackdrop.classList.remove('open');
@@ -282,6 +315,12 @@ document.addEventListener('DOMContentLoaded', function () {
         loginPanel.classList.remove('expanded');
         updateExpandIcon();
         document.body.style.overflow = '';
+        // Before the focus goes back: nothing inert can take it.
+        setPageInert(false);
+        if (loginOpener && document.contains(loginOpener)) {
+            try { loginOpener.focus(); } catch (err) {}
+        }
+        loginOpener = null;
     }
     function toggleExpand() {
         loginPanel.classList.toggle('expanded');
@@ -336,11 +375,15 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    document.getElementById('openModalBtn') && document.getElementById('openModalBtn').addEventListener('click', function () { openLoginModal('student'); });
+    document.getElementById('openModalBtn') && document.getElementById('openModalBtn').addEventListener('click', function () { openLoginModal('student', this); });
     // Delegated so buttons that appear later (e.g. AJAX-swapped result lists) still work
     document.addEventListener('click', function (e) {
         var trigger = e.target.closest('.js-open-modal');
-        if (trigger) openLoginModal(trigger.getAttribute('data-role') || 'student');
+        if (trigger) openLoginModal(trigger.getAttribute('data-role') || 'student', trigger);
+    });
+    // Escape closes it, as it closes any other dialog on the site.
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && loginPanel.classList.contains('open')) { closeLoginModal(); }
     });
     document.getElementById('closeModalBtn') && document.getElementById('closeModalBtn').addEventListener('click', closeLoginModal);
     modalBackdrop && modalBackdrop.addEventListener('click', closeLoginModal);
@@ -387,6 +430,8 @@ require_once ROOT_PATH.'/includes/loading_bar.php';
    after them means they get first refusal, and this one stands down when it
    sees the key was already handled. */
 require_once ROOT_PATH.'/includes/key_nav.php';
+/* The close button and the five-second life of every red and green banner. */
+require_once ROOT_PATH.'/includes/flash_dismiss.php';
 /* Right-click actions for the notification lists. Only for someone signed in:
    there is no bell, and no notification centre, for anybody else. */
 if (current_user()) { require_once ROOT_PATH.'/includes/notif_actions.php'; }

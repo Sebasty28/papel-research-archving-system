@@ -1,5 +1,5 @@
 {
- "built": "2026-09-19 20:56",
+ "built": "2026-09-20 22:32",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -41,7 +41,7 @@
    "lines": 99
   },
   "app/auth/login.php": {
-   "lines": 1240
+   "lines": 1243
   },
   "app/auth/logout.php": {
    "lines": 36
@@ -101,7 +101,7 @@
    "lines": 101
   },
   "app/student/student_chatbot.php": {
-   "lines": 151
+   "lines": 158
   },
   "app/student/student_dashboard.php": {
    "lines": 761
@@ -116,7 +116,7 @@
    "lines": 433
   },
   "app/student/student_upload_ai.php": {
-   "lines": 7779
+   "lines": 7859
   },
   "app/support_requests.php": {
    "lines": 289
@@ -128,13 +128,13 @@
    "lines": 38
   },
   "archive/home.php": {
-   "lines": 953
+   "lines": 952
   },
   "archive/index.php": {
-   "lines": 1228
+   "lines": 1296
   },
   "archive/login.php": {
-   "lines": 1074
+   "lines": 1081
   },
   "archive/view_paper.php": {
    "lines": 802
@@ -167,7 +167,7 @@
    "lines": 9
   },
   "includes/accessibility.php": {
-   "lines": 956
+   "lines": 965
   },
   "includes/action_dialogs.php": {
    "lines": 341
@@ -199,11 +199,14 @@
   "includes/flash_banner.php": {
    "lines": 95
   },
+  "includes/flash_dismiss.php": {
+   "lines": 153
+  },
   "includes/focus_ring.php": {
    "lines": 131
   },
   "includes/key_nav.php": {
-   "lines": 160
+   "lines": 232
   },
   "includes/loading_bar.php": {
    "lines": 458
@@ -263,13 +266,13 @@
    "lines": 394
   },
   "includes/site_footer.php": {
-   "lines": 394
+   "lines": 439
   },
   "includes/site_head.php": {
-   "lines": 1298
+   "lines": 1304
   },
   "includes/site_header.php": {
-   "lines": 465
+   "lines": 468
   },
   "includes/splash.php": {
    "lines": 156
@@ -323,13 +326,13 @@
    "lines": 219
   },
   "pages/settings.php": {
-   "lines": 706
+   "lines": 710
   },
   "pages/terms_and_conditions.php": {
    "lines": 172
   },
   "reset_system_data.php": {
-   "lines": 157
+   "lines": 160
   },
   "scripts/build_field_guide.py": {
    "lines": 909

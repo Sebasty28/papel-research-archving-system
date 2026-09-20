@@ -1071,6 +1071,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <?php /* No site_footer.php here, so signing in — one of the workflows the
            logo pill marks — has to ask for the loader itself. */ ?>
   <?php require_once ROOT_PATH . '/includes/loading_bar.php'; ?>
+  <?php /* Same reason: the sign-in messages on this page are banners like any
+           other, and the footer is not here to say so. */ ?>
+  <?php require_once ROOT_PATH . '/includes/flash_dismiss.php'; ?>
   <?php include __DIR__ . '/../includes/accessibility.php'; ?>
 </body>
 
