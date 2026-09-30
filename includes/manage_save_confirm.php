@@ -2,13 +2,13 @@
 /**
  * A word before an edit is committed.
  *
- * Creating an account is obviously a change — you filled in an empty form. An
+ * Creating an account is obviously a change: you filled in an empty form. An
  * edit is not: the boxes were already full, and it is easy to press Save having
  * touched nothing, or having touched more than you meant to. So on the way out
  * this asks, and names what is about to change.
  *
  * If nothing is different it says so and stops, rather than posting a no-op and
- * answering with "details were saved" — which would read as though something
+ * answering with "details were saved", which would read as though something
  * had happened.
  *
  * The page tells this script when a row has been loaded, by calling
@@ -56,7 +56,7 @@
     var snapshot = null;
     var pending  = null;
 
-    /* Only the fields a person actually edits — the hidden ones carrying the
+    /* Only the fields a person actually edits: the hidden ones carrying the
        action and the row id are bookkeeping, not changes. */
     function fields(form) {
         return [].filter.call(form.elements, function (el) {
@@ -106,7 +106,7 @@
     }
 
     function esc(s) {
-        return String(s === null || s === undefined || s === '' ? '—' : s)
+        return String(s === null || s === undefined || s === '' ? '(empty)' : s)
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 

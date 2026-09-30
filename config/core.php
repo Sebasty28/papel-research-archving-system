@@ -11,7 +11,7 @@ function csp_nonce(): string {
     if ($nonce === null) {
         $nonce = base64_encode(random_bytes(16));
         /* reCAPTCHA is fetched from google.com and framed from google.com, so
-           those origins are opened only while the feature actually has keys —
+           those origins are opened only while the feature actually has keys:
            an unused allowance is still an allowance. */
         $rc      = (defined('RECAPTCHA_SITE_KEY') && RECAPTCHA_SITE_KEY !== ''
                  && defined('RECAPTCHA_SECRET_KEY') && RECAPTCHA_SECRET_KEY !== '');
@@ -62,7 +62,7 @@ function db(): mysqli {
       /* A hosted database: a port that is not 3306, and a connection that has
          to be encrypted and verified against the provider's CA. Built the long
          way round because ssl_set() has to be called on an initialised handle
-         before it connects — the one-line constructor connects immediately and
+         before it connects: the one-line constructor connects immediately and
          leaves no room to say any of this. */
       $conn = mysqli_init();
       $conn->ssl_set(null, null, DB_SSL_CA, null, null);
@@ -171,7 +171,7 @@ function csrf_field(): string { return '<input type="hidden" name="_token" value
  * Does this POST carry the session's CSRF token?
  *
  * The same comparison csrf_verify() makes, for the pages that show their own
- * error inline rather than flashing and redirecting — archive/login.php keeps
+ * error inline rather than flashing and redirecting: archive/login.php keeps
  * its message in $error, so a redirect would throw it away.
  */
 function csrf_valid(): bool {
@@ -184,7 +184,7 @@ function csrf_valid(): bool {
  * Rejects a POST whose CSRF token does not match the session's.
  *
  * @param string|null $redirect Where to send the visitor when the check fails.
- *        A mismatch is usually a stale form rather than an attack — signing out
+ *        A mismatch is usually a stale form rather than an attack: signing out
  *        clears the token, so any page left open beforehand now carries an old
  *        one. Given somewhere to go, this says so and lets them try again
  *        instead of dead-ending on a bare error page. Without it (JSON
@@ -220,7 +220,7 @@ function flash(string $key, string $msg = null): ?string {
 /* ---------------------------------------------------------------------------
    Slowing down password guessing.
 
-   Sign-in is ID + password — no username — and the IDs are guessable by
+   Sign-in is ID + password (no username) and the IDs are guessable by
    design: student numbers run in sequence, staff IDs follow FAC-2026-00n. With
    nothing counting failures, a script could work through passwords against a
    known ID as fast as the server answered.
@@ -229,7 +229,7 @@ function flash(string $key, string $msg = null): ?string {
 
      acct:<id>|<ip>  one account from one machine. Keyed on the machine as well
                      as the account so that hammering somebody else's ID cannot
-                     lock them out of their own session — a lockout that anyone
+                     lock them out of their own session: a lockout that anyone
                      can trigger on anyone is its own denial of service.
      ip:<ip>         any account from one machine, which catches the same script
                      walking a list of IDs instead of a list of passwords.
@@ -398,19 +398,19 @@ function current_user(): ?array {
 
   return $_SESSION['user'] ?? null;
 }
-/* Sends a blocked request to the sign-in panel on the public repository —
+/* Sends a blocked request to the sign-in panel on the public repository:
    the role-tab modal (Student / Faculty-Admin / Guest), not the older
    standalone form at archive/login.php. That standalone page was the target
    briefly; it was moved here because the modal is the more complete
-   experience — Forgot password, Terms & Conditions, role-specific ID
-   labels — and duplicating that onto a second page would only drift out of
+   experience (Forgot password, Terms & Conditions, role-specific ID
+   labels) and duplicating that onto a second page would only drift out of
    sync with it over time. The trade caught in making that move: the
    repository sits behind the modal rather than being hidden entirely, so a
    pasted link to a protected page is answered with the archive in view, not
    a blank sign-in screen. See openLoginModal() in site_footer.php if that
-   needs to open already expanded to cover it — it does not today.
+   needs to open already expanded to cover it: it does not today.
 
-   This is the one place this decision is made — require_role() calls this
+   This is the one place this decision is made: require_role() calls this
    before checking a role, so every protected page in the system already
    goes through it without needing its own change. */
 function require_login(): void { if (!current_user()) { header('Location: '.BASE_URL.'/archive/index.php?login_modal=1'); exit; } }
@@ -419,7 +419,7 @@ function role_home(string $role): string {
   if($role === 'super_admin') return BASE_URL.'/app/admin/super_admin_review_dashboard.php';
   if($role === 'admin') {
     /* A level-2 admin is the Head of Academic Programs, and there is one desk
-       for that job — the same one the head_academic role uses. It used to have
+       for that job: the same one the head_academic role uses. It used to have
        a second, near-identical page of its own. */
     $u = current_user();
     if (($u['admin_level'] ?? 1) == 2) {
@@ -481,8 +481,8 @@ function staff_position_map(?string $position): ?array {
 /**
  * What to call an account, worked out from what the database holds.
  *
- * Two kinds of record mean Head of Academic Programs — the head_academic role,
- * and an admin at level 2 — so both answer with the same name.
+ * Two kinds of record mean Head of Academic Programs (the head_academic role,
+ * and an admin at level 2) so both answer with the same name.
  */
 function staff_position_of(array $user): string {
     $role  = $user['user_role'] ?? '';
@@ -508,8 +508,8 @@ function staff_position_of(array $user): string {
  *   Adviser" and a Head of Academic Programs a "Records Officer", neither of
  *   which is what the rest of the system calls them.
  *
- * This one is for any list that can hold anybody — a roll of password changes,
- * a notice about an account — and uses the names the project uses everywhere
+ * This one is for any list that can hold anybody (a roll of password changes,
+ * a notice about an account) and uses the names the project uses everywhere
  * else. Neither of the other two is changed: both are correct where they are.
  */
 function account_position(array $user): string {
@@ -624,6 +624,90 @@ function support_handler_roles_for(string $requesterRole): array {
             $keep = array_keys($all);
     }
     return array_intersect_key($all, array_flip($keep));
+}
+
+/**
+ * The account an ID names, when the ID really is that kind of account.
+ *
+ * Which column is searched follows the rule the rest of the app keeps:
+ * student_id belongs to students, faculty_id to everybody else. Two roles do
+ * the Head of Academic Programs' job, so the claimed role is matched against
+ * what the account actually is rather than compared as a string: a Coordinator
+ * is admin level 1, a HAP is either head_academic or admin level 2.
+ *
+ * One answer for "no such ID" and for "that ID is not that kind of account",
+ * so it cannot be used to ask which of the two it was.
+ *
+ * @return int|null the user_id, or null when nothing matches
+ */
+function support_account_for(string $role, string $ident): ?int {
+    $ident = trim($ident);
+    if ($ident === '' || !array_key_exists($role, support_requester_roles())) return null;
+
+    $col  = $role === 'student' ? 'student_id' : 'faculty_id';
+    $stmt = db()->prepare(
+        "SELECT user_id, user_role, admin_level FROM users WHERE $col = ? LIMIT 1");
+    $stmt->bind_param('s', $ident);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$row) return null;
+
+    $actual = (string)$row['user_role'];
+    $level  = (int)($row['admin_level'] ?? 0);
+    $ok = ($role === 'admin'         && $actual === 'admin' && $level !== 2)
+       || ($role === 'head_academic' && ($actual === 'head_academic'
+                                         || ($actual === 'admin' && $level === 2)))
+       || (!in_array($role, ['admin', 'head_academic'], true) && $actual === $role);
+
+    return $ok ? (int)$row['user_id'] : null;
+}
+
+/**
+ * Do the name and the email given on the support form belong to that account?
+ *
+ * The ID says which account is being asked about; without this, anybody could
+ * file a request in somebody else's name with their own address on it for the
+ * reply. Checked field by field so the form can say which one is wrong.
+ *
+ * Names are compared loosely on purpose. Somebody who cannot sign in is being
+ * asked to reproduce a string they last saw on a class list, so a middle name,
+ * an initial, a comma or double spacing must not be what refuses them: an exact
+ * match after flattening, or else the same first and last name, is enough.
+ *
+ * An account with no email on record has nothing to check against, so anything
+ * passes there rather than nothing.
+ *
+ * @return array{name:bool, email:bool}
+ */
+function support_identity_matches(int $userId, string $name, string $email): array {
+    $stmt = db()->prepare("SELECT full_name, email FROM users WHERE user_id = ? LIMIT 1");
+    $stmt->bind_param('i', $userId);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$row) return ['name' => false, 'email' => false];
+
+    $flatten = static function (string $v): string {
+        $v = mb_strtolower(trim($v));
+        $v = str_replace(['.', ','], ' ', $v);
+        return trim(preg_replace('/\s+/', ' ', $v));
+    };
+
+    $given  = $flatten($name);
+    $onFile = $flatten((string)$row['full_name']);
+    $nameOk = $given !== '' && $given === $onFile;
+    if (!$nameOk && $given !== '' && $onFile !== '') {
+        $a = explode(' ', $given);
+        $b = explode(' ', $onFile);
+        $nameOk = count($a) > 1 && count($b) > 1
+               && $a[0] === $b[0] && end($a) === end($b);
+    }
+
+    $mailOnFile = mb_strtolower(trim((string)($row['email'] ?? '')));
+    $emailOk = $mailOnFile === '' || mb_strtolower(trim($email)) === $mailOnFile;
+
+    return ['name' => $nameOk, 'email' => $emailOk];
 }
 
 /**
@@ -746,11 +830,11 @@ function account_snapshot(int $userId): array {
  * Both ways at once: an email they can keep, and a notification waiting in the
  * app. A student whose password has just been reset cannot sign in to read a
  * notification, and a person whose email address was wrong cannot be reached by
- * email — one of the two will land.
+ * email: one of the two will land.
  *
  * The new password is included when there is one. That is a deliberate choice
  * and not a small one: it puts a working password in a mailbox. It is here
- * because the alternative was worse in practice — the password was read out or
+ * because the alternative was worse in practice: the password was read out or
  * messaged instead, and the person often never learned their account had been
  * touched at all. Anyone reading this later should know the trade was made
  * knowingly.
@@ -820,9 +904,9 @@ function account_change_notice(int $userId, array $before, array $after,
  *
  * Written from two places that look nothing alike: Settings, where somebody
  * changes their own, and the three management consoles, where a desk resets one
- * for somebody who cannot get in. Both belong on the same roll — what the reader
+ * for somebody who cannot get in. Both belong on the same roll (what the reader
  * wants to know is when this account last had a new password, however it came
- * about — so both come through here.
+ * about) so both come through here.
  *
  * @param int|null $byUserId who did it; null means they did it themselves
  */
@@ -859,7 +943,7 @@ function create_notification_raw(int $userId, string $type, string $message): vo
  *
  * A request is a question: "give me a new password", "my surname is wrong". Once
  * the password has been reset or the details saved, the question has been
- * answered and the row is of no further use — leaving it would have every desk
+ * answered and the row is of no further use: leaving it would have every desk
  * working a list that only ever grows, with no way to tell what is still owed.
  *
  * Deleted rather than flagged: the request carries nothing the account and its
@@ -903,7 +987,7 @@ function support_requests_clear(int $userId, string $kind): int {
  * wrong email.
  *
  * The new password is never in here. It is shown once, to the person who issued
- * it, and it is theirs to hand over — putting it in an email would undo that
+ * it, and it is theirs to hand over: putting it in an email would undo that
  * and put it somewhere it can be read later.
  */
 function support_request_settled_email(array $r): bool {
@@ -970,6 +1054,64 @@ function student_manuscript_access(int $studentUserId, int $paperId): bool {
     return $found;
 }
 
+/**
+ * May this person read one of a paper's files in PAPEL's viewer?
+ *
+ * app/paper_file.php hands out the bytes, so it cannot rely on a tile having
+ * been on the page; this repeats, in one place, the answer the three pages
+ * with file tiles already give:
+ *   - archive/view_paper.php: a published or archived paper's manuscript, for
+ *     staff, and for a student holding an open grant from a Librarian;
+ *   - app/review_paper.php: every file, of any paper for the Coordinator and of
+ *     their own students' papers for a Research Adviser;
+ *   - app/student/paper_details.php: every file of the student's own paper.
+ * Supporting documents belong to the submission, not the published paper, so
+ * the public page never offers them and they are not reachable through it.
+ *
+ * $paper needs paper_id, uploaded_by and current_status; '_archived' marks a
+ * row read from papers_archive.
+ */
+function paper_file_viewable(array $u, array $paper, bool $supporting): bool {
+    $uid  = (int)($u['user_id'] ?? 0);
+    $role = (string)($u['user_role'] ?? '');
+    if ($uid <= 0 || $role === 'guest') return false;
+
+    $author = (int)($paper['uploaded_by'] ?? 0);
+    if ($author === $uid) return true;
+    if ($role === 'admin') return true;
+    if ($role === 'faculty' && $author > 0 && (int)creator_of($author) === $uid) return true;
+    if ($supporting) return false;
+
+    $published = !empty($paper['_archived']) || ($paper['current_status'] ?? '') === 'approved';
+    if (!$published) return false;
+    if (in_array($role, ['faculty', 'super_admin', 'head_academic', 'librarian'], true)) return true;
+    return $role === 'student' && student_manuscript_access($uid, (int)$paper['paper_id']);
+}
+
+/**
+ * The URL of one of the site's own static files, stamped with when it last
+ * changed.
+ *
+ * Apache serves assests/ with a Last-Modified date and no Cache-Control, so a
+ * browser keeps its copy for about a tenth of the file's age without asking
+ * again, for a stylesheet untouched for a month, three or four days. An edit
+ * then did not reach anyone holding the old copy: the file viewer's dark
+ * background shipped and one reader went on seeing the light one. The stamp
+ * moves whenever the file does, so the URL is new and the browser fetches it;
+ * an unchanged file keeps its URL and stays cached.
+ */
+function asset_url(string $path): string {
+    $path = ltrim($path, '/');
+    $file = ROOT_PATH . '/' . $path;
+    $stamp = is_file($file) ? (int)filemtime($file) : 0;
+    return rtrim(BASE_URL, '/') . '/' . $path . ($stamp ? '?v=' . $stamp : '');
+}
+
+/** Where PAPEL's viewer asks for a file: 'paper' for the manuscript, 'doc' for a supporting document. */
+function paper_file_src(string $kind, int $id): string {
+    return rtrim(BASE_URL, '/') . '/app/paper_file.php?' . ($kind === 'doc' ? 'doc' : 'paper') . '=' . $id;
+}
+
 /** How many manuscripts a student currently holds open access to, across every paper. */
 function student_manuscript_active_count(int $studentUserId): int {
     $conn = db();
@@ -1004,7 +1146,7 @@ function student_manuscript_request(int $studentUserId, int $paperId): ?array {
  * The full name is what the database stores and what a student sees on their
  * own record; the code is what fits in a table column or a filter chip. This
  * map lived inside the Manage Students page, which meant the analytics tables
- * had to print the whole name — "Bachelor of Science in Information
+ * had to print the whole name: "Bachelor of Science in Information
  * Technology" in a column beside a date.
  */
 function programs_map(): array {
@@ -1037,14 +1179,14 @@ function program_code(?string $program): string {
  * a second year four, and so on down to two for a fourth year. A ladderized
  * intake is two years by its own reckoning.
  *
- * Anything the rule does not recognise returns null — an unfamiliar section is
+ * Anything the rule does not recognise returns null: an unfamiliar section is
  * a reason to leave the account alone, not to guess a date and lock someone out.
  */
 function student_account_years(?string $section): ?int {
     $section = trim((string)$section);
     if ($section === '') return null;
     if (strcasecmp($section, 'ladderized') === 0) return 2;
-    // "4-1", "4 - 1", "4A" — only the year level in front matters.
+    // "4-1", "4 - 1", "4A", only the year level in front matters.
     if (preg_match('/^\s*([1-4])\b/', $section, $m)) {
         return 6 - (int)$m[1];       // 1 -> 5, 2 -> 4, 3 -> 3, 4 -> 2
     }
@@ -1055,7 +1197,7 @@ function student_account_years(?string $section): ?int {
  * The date a student account stops working.
  *
  * Counted in academic years from the one they were enrolled in, because that is
- * what the life is expressed in — a first year starting A.Y. 26-27 is good
+ * what the life is expressed in: a first year starting A.Y. 26-27 is good
  * through A.Y. 30-31, so the account lapses at the end of July 2031. With no
  * academic year on file the account's own creation date stands in for it.
  *
@@ -1103,6 +1245,54 @@ function get_user(int $user_id): ?array {
   $stmt = $conn->prepare("SELECT user_id, username, email, full_name, user_role, created_by, is_active FROM users WHERE user_id=? LIMIT 1");
   $stmt->bind_param('i',$user_id); $stmt->execute(); $res=$stmt->get_result();
   return $res->fetch_assoc() ?: null;
+}
+
+/**
+ * An email address reduced to the inbox it actually reaches.
+ *
+ * Gmail ignores dots in the name and anything after a "+", so
+ * juan.delacruz@gmail.com, juandelacruz@gmail.com and
+ * JuanDelaCruz+papel@gmail.com are one inbox. Compared character for
+ * character, the second and third passed for strangers to the first. Other
+ * providers are compared whole: their rules differ, and guessing wrong would
+ * merge two real people.
+ */
+function email_inbox_key(string $email): string {
+  $email = strtolower(trim($email));
+  $at = strrpos($email, '@');
+  if ($at === false) return $email;
+  $local  = substr($email, 0, $at);
+  $domain = substr($email, $at + 1);
+  if ($domain === 'gmail.com' || $domain === 'googlemail.com') {
+    $local  = str_replace('.', '', explode('+', $local, 2)[0]);
+    $domain = 'gmail.com';
+  }
+  return $local . '@' . $domain;
+}
+
+/**
+ * The account that already uses an email address (the same inbox, read as
+ * email_inbox_key() reads it) or null. Inactive and expired accounts count:
+ * the address still belongs to that person.
+ */
+function email_account_owner(string $email): ?array {
+  $conn = db();
+  /* email_inbox_key(), written in SQL so every account is compared on the
+     same terms as the address being checked. */
+  $stmt = $conn->prepare(
+    "SELECT user_id, full_name, user_role, admin_level FROM users
+      WHERE email IS NOT NULL AND email <> ''
+        AND (CASE WHEN LOWER(SUBSTRING_INDEX(TRIM(email), '@', -1)) IN ('gmail.com', 'googlemail.com')
+                  THEN CONCAT(REPLACE(SUBSTRING_INDEX(LOWER(SUBSTRING_INDEX(TRIM(email), '@', 1)), '+', 1), '.', ''),
+                              '@gmail.com')
+                  ELSE LOWER(TRIM(email)) END) = ?
+      LIMIT 1");
+  $key = email_inbox_key($email);
+  $stmt->bind_param('s', $key);
+  $stmt->execute();
+  $row = $stmt->get_result()->fetch_assoc() ?: null;
+  $stmt->close();
+  return $row;
 }
 
 function creator_of(int $user_id): ?int {
@@ -1297,7 +1487,7 @@ function email_layout(string $bodyHtml, string $heading = ''): string {
  * Send one email. Returns whether it actually went.
  *
  * This used to return void, so every caller announced "credentials sent to
- * email" whether or not anything was sent — and SMTP authentication has been
+ * email" whether or not anything was sent, and SMTP authentication has been
  * failing, so for a long time nothing was. A caller that cannot tell the
  * difference cannot warn anybody, which is the worst of both.
  *
@@ -1400,8 +1590,8 @@ function binary_search_exists(string $needle, array $haystack): bool {
  * editors.
  *
  * The editors post HTML, so this is the boundary where untrusted markup stops.
- * Anything not named below — script, style, iframe, event handlers, javascript:
- * URLs, inline colours and fonts — is dropped, while the tags a student can
+ * Anything not named below (script, style, iframe, event handlers, javascript:
+ * URLs, inline colours and fonts) is dropped, while the tags a student can
  * actually produce with the toolbar are preserved.
  *
  * @param string $html Raw HTML from a contenteditable surface
@@ -1423,11 +1613,11 @@ function rich_text_sanitize(string $html): string {
         // setup. Only ones this site stores are kept, see $safeImageSrc below.
         'img',
     ];
-    // Spans and merges are structural — losing them scrambles the table — so
+    // Spans and merges are structural (losing them scrambles the table) so
     // these two survive the attribute purge on cells, clamped to sane values.
     $cellSpanAttrs = ['colspan', 'rowspan'];
     // Removed outright, contents and all. Every other disallowed tag is merely
-    // unwrapped so its words survive — but the text inside these is code, not
+    // unwrapped so its words survive, but the text inside these is code, not
     // prose, and must not end up rendered as body copy.
     $dropTags = [
         'script', 'style', 'iframe', 'object', 'embed', 'applet', 'noscript',
@@ -1515,7 +1705,7 @@ function rich_text_sanitize(string $html): string {
             if ($child->nodeType === XML_TEXT_NODE) { $child = $next; continue; }
 
             if ($child->nodeType !== XML_ELEMENT_NODE) {
-                // Comments, processing instructions, CDATA — none belong here.
+                // Comments, processing instructions, CDATA: none belong here.
                 $node->removeChild($child);
                 $child = $next;
                 continue;
@@ -1598,7 +1788,7 @@ function rich_text_sanitize(string $html): string {
                 /* Two declarations survive, on the elements that can mean them:
                    how a cell's text is aligned, and how wide a column is, which
                    comes from dragging a table's border. Everything else in a
-                   style attribute is dropped — fonts and colours would carry
+                   style attribute is dropped: fonts and colours would carry
                    Word's shading into the repository, and url() is an attack
                    surface. */
                 if (($isCell || $inCellBlock || $tag === 'table' || $isImage) && $name === 'style') {
@@ -1609,7 +1799,7 @@ function rich_text_sanitize(string $html): string {
                         $prop  = trim(strtolower($prop));
                         $value = trim(strtolower($value));
 
-                        // Alignment is a cell's business only — body text is
+                        // Alignment is a cell's business only: body text is
                         // justified for every paper, by the stylesheet.
                         if (($isCell || $inCellBlock) && $prop === 'text-align'
                             && in_array($value, $allowedAlign, true)) {
@@ -1794,7 +1984,7 @@ function section_images_sweep(bool $dryRun = false, int $graceHours = SECTION_IM
  */
 function rich_text_to_plain(string $html): string {
     if (trim($html) === '') return '';
-    // Cells are separated, not stacked — without this the row "Usability | 4.03"
+    // Cells are separated, not stacked, without this the row "Usability | 4.03"
     // collapses to "Usability4.03" in search text and card previews.
     $text = preg_replace('#</(td|th)\s*>#i', ' ', $html);
     $text = preg_replace('#<(br|/p|/div|/li|/h[1-6]|/blockquote|/tr|/table|/caption)\s*/?>#i', "\n", $text);
@@ -1812,7 +2002,7 @@ function rich_text_to_plain(string $html): string {
  *
  * safe_error_message() deliberately throws away exception text so internals are
  * never leaked to a browser. That is right for unexpected failures, but it also
- * swallowed messages we wrote *for* the student — "the AI service is rate
+ * swallowed messages we wrote *for* the student: "the AI service is rate
  * limited, wait a minute" arrived as "something went wrong". Throwing this type
  * marks a message as intended for display; everything else stays generic.
  */
@@ -1935,12 +2125,12 @@ function paper_section_labels(): array {
  * An APA 7th-edition reference for a paper, built from what was filed.
  *
  * The archive is the paper's only publisher, so this always cites it as an
- * institutional record rather than guessing at a journal entry — even a paper
+ * institutional record rather than guessing at a journal entry, even a paper
  * whose own "Paper Status" field says Published was never issued a DOI or a
  * volume/issue here, so there is nothing to cite it as except the archive.
  *
  * Names are stored "Given Middle. Surname" (Filipino order), one string per
- * author separated by a comma, semicolon or "and"/"&" — the same split
+ * author separated by a comma, semicolon or "and"/"&": the same split
  * archive/index.php already uses for its author-suggestion search. APA wants
  * "Surname, G. M.", so the last space-separated token is taken as the surname
  * and everything before it is reduced to initials.
@@ -2010,13 +2200,13 @@ function paper_apa_citation(array $paper, string $url = ''): string {
  * allowed to open.
  *
  * Falls back to the reader's own dashboard when the notification carries no
- * paper — a reminder, say — so a click is never a dead end.
+ * paper (a reminder, say) so a click is never a dead end.
  */
 /**
  * Split a notification into the line the list shows and the detail behind it.
  *
- * An account notice carries its detail from the second line on — which can hold
- * a freshly issued password — so the list shows the first line only and the
+ * An account notice carries its detail from the second line on (which can hold
+ * a freshly issued password) so the list shows the first line only and the
  * rest opens in a dialog. There is no paper to send the reader to for one of
  * these, which is the other reason it opens where it is.
  *
@@ -2063,7 +2253,7 @@ function notification_link(?int $paperId, string $role, string $type = ''): stri
     }
 
     /* A manuscript request is about a published paper somebody else wrote, not
-       the reader's own submission — the student case below sends to
+       the reader's own submission: the student case below sends to
        paper_details.php, which is for a student's own papers and would be the
        wrong page here, so this has to be checked first. */
     if ($type === 'manuscript') {
@@ -2089,7 +2279,7 @@ function notification_link(?int $paperId, string $role, string $type = ''): stri
 /**
  * What a role's own landing page is called.
  *
- * Used wherever one page links to "your dashboard" — the public repository's
+ * Used wherever one page links to "your dashboard": the public repository's
  * sidebar most of all, where a reviewer following a link labelled "My
  * Dashboard" arrives at something the page itself calls a Review Desk. The
  * name travels with the link instead.
@@ -2112,7 +2302,7 @@ function role_home_label(string $role): string {
  * Which checklist groups apply to a paper, from the format the student chose.
  *
  * A paper written in IMRaD has no numbered chapters, so asking a reviewer to
- * confirm "Chapter 4" is asking about something that does not exist — and the
+ * confirm "Chapter 4" is asking about something that does not exist, and the
  * unticked box then shows on the student's record as though a piece were
  * missing. A full manuscript has both: the chapters, and the IMRaD sections
  * within them.
@@ -2150,8 +2340,8 @@ function paper_file_url(?string $driveId, ?string $path): ?string {
 /**
  * Where a stored paper file actually lives on this machine.
  *
- * Uploads used to be recorded as a fully qualified URL — BASE_URL with the
- * relative path glued on — so a row carried the address of the machine it was
+ * Uploads used to be recorded as a fully qualified URL (BASE_URL with the
+ * relative path glued on) so a row carried the address of the machine it was
  * uploaded from. Two things went wrong with that. Anything that needed the file
  * rather than a link built a nonsense path
  * ("…/archive/../http://localhost/capstone/…") and simply failed: the download
@@ -2161,7 +2351,7 @@ function paper_file_url(?string $driveId, ?string $path): ?string {
  *
  * New rows store the relative path. This accepts either form, because the old
  * rows are still out there, and returns null rather than a path that escapes
- * the upload folder — a stored path is data, and data used to build a
+ * the upload folder: a stored path is data, and data used to build a
  * filesystem path is checked before it is trusted.
  */
 function paper_file_disk_path(?string $stored): ?string {
@@ -2175,7 +2365,7 @@ function paper_file_disk_path(?string $stored): ?string {
     if ($at !== false) {
         $relative = substr($stored, $at + strlen($marker));
     } elseif (preg_match('#^https?://#i', $stored)) {
-        // An absolute URL from somewhere else entirely — not ours to open.
+        // An absolute URL from somewhere else entirely, not ours to open.
         return null;
     } else {
         $relative = $stored;
@@ -2187,7 +2377,7 @@ function paper_file_disk_path(?string $stored): ?string {
     $full = realpath(__DIR__ . '/../app/student/' . $relative);
     if ($base === false || $full === false) return null;
 
-    // Must resolve inside uploads/ — this is what stops "../" walking out.
+    // Must resolve inside uploads/: this is what stops "../" walking out.
     if (strpos($full, $base . DIRECTORY_SEPARATOR) !== 0) return null;
 
     return is_file($full) ? $full : null;
@@ -2199,7 +2389,7 @@ function paper_file_disk_path(?string $stored): ?string {
  * The copyright document is stored with an empty document_type: the column is
  * an enum that has no 'copyright_doc' member, so the value the uploader writes
  * is coerced to ''. Until that column is widened, an empty type means the
- * copyright document — which is how the rest of the site already reads it.
+ * copyright document, which is how the rest of the site already reads it.
  */
 function supporting_doc_label(?string $type): string {
     $labels = [

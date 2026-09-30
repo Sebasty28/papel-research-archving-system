@@ -59,11 +59,12 @@ if (!function_exists('load_env')) {
 load_env(__DIR__ . '/../../.env');
 
 // Groq API Configuration
-// Groq API Configuration — model switching
-$modelChoice = $input['model_choice'] ?? '1';
+// Groq API Configuration
+/* Not asked for any more: the session says which engine is in play, and the
+   other one stands behind it for this call. See ai_engine_current(). */
+$engine = ai_engine_current();
 
-// Pick primary and fallback keys based on model choice
-if ($modelChoice === '2') {
+if ($engine === 2) {
     $apiKey = defined('GROQ_API_KEY_CHATBOT_2') ? GROQ_API_KEY_CHATBOT_2 : ($_ENV['GROQ_API_KEY'] ?? '');
     $fallbackKey = defined('GROQ_API_KEY_CHATBOT') ? GROQ_API_KEY_CHATBOT : '';
 } else {
@@ -117,6 +118,9 @@ $fireRequest = function ($key) use ($apiUrl, $payload) {
 // Auto-fallback: if rate-limited (429) and a different fallback key exists, retry once
 if ($httpCode === 429 && !empty($fallbackKey) && $fallbackKey !== $apiKey) {
     error_log("Student Chatbot: primary key rate-limited (429), retrying with fallback key...");
+    /* The engine asked for has nothing left for the moment, so the session
+       moves to the other one and later messages start there. */
+    ai_engine_switch();
     [$httpCode, $response, $curlError, $curlErrno] = $fireRequest($fallbackKey);
 }
 
@@ -154,4 +158,4 @@ if ($httpCode !== 200) {
 $data = json_decode($response, true);
 $reply = $data['choices'][0]['message']['content'] ?? 'I am not sure how to respond to that.';
 
-echo json_encode(['reply' => $reply]);
+echo json_encode(['reply' => $reply, 'engine' => ai_engine_current()]);

@@ -1,5 +1,5 @@
 --
--- PAPEL — database structure
+-- PAPEL: database structure
 --
 -- Everything the app needs to run, and nothing that belongs to anybody: no
 -- students, no papers, no notifications. Importing this gives you an empty

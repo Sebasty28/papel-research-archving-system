@@ -23,7 +23,7 @@ $isDirector = ($u['user_role'] ?? '') === 'super_admin';
 /* Marking one done. Resetting the password or saving the details clears the
    request on its own, so this is for the ones settled another way: answered in
    person, sent to the wrong desk, or asked twice. There is no "done" state to
-   keep — the row goes. */
+   keep: the row goes. */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
     $id = (int)($_POST['request_id'] ?? 0);

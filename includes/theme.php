@@ -2,7 +2,7 @@
 /**
  * Colour palettes and light/dark, for the whole site.
  *
- * The page has always been drawn from a handful of tokens — --maroon for the
+ * The page has always been drawn from a handful of tokens: --maroon for the
  * accent, --white for surfaces, --cream for the tint behind them, --ink for
  * text. Nothing here changes that. A palette simply re-points those tokens at
  * a different set of colours, and dark mode re-points the surface ones. So
@@ -10,11 +10,11 @@
  * without being touched.
  *
  * There is one choice, not two. A separate light/dark switch sat beside the
- * palette and the two could disagree — "Dark Green" in dark mode was a third
+ * palette and the two could disagree: "Dark Green" in dark mode was a third
  * thing nobody had designed. Now the palette says whether it is light or dark.
  *
  * Two palettes, one of each: Old Classic, and Old Night, which is Old Classic
- * after dark — the same maroon and gold on warm espresso surfaces rather than
+ * after dark: the same maroon and gold on warm espresso surfaces rather than
  * a generic dark theme. Seven used to be offered; the other five were
  * withdrawn, and anyone still holding one is moved across (see the script).
  *
@@ -22,7 +22,7 @@
  *   data-color  classic | old-night
  *   data-mode   light | dark        (derived from the palette, never chosen)
  *
- * classic ("Old Classic") is the default — a first-time reader with nothing
+ * classic ("Old Classic") is the default: a first-time reader with nothing
  * in storage yet lands there.
  *
  * data-mode is kept because every dark rule on the site keys off it. It is now
@@ -51,8 +51,8 @@
 
     var stored = get('papel_color', 'classic');
     var colour = stored;
-    /* Anything no stylesheet answers to any more — Maroon, Light, the four
-       editor palettes, and the older green, blue and white — would strand the
+    /* Anything no stylesheet answers to any more (Maroon, Light, the four
+       editor palettes, and the older green, blue and white) would strand the
        reader on the bare :root defaults, so it is replaced outright. */
     if (!PALETTES[colour]) { colour = WAS_DARK[colour] ? 'old-night' : 'classic'; }
     /* The old light/dark preference predates palettes. Someone who had chosen
@@ -82,7 +82,7 @@
      --accent-tint   the pale wash behind cards and hovers
      --accent-light  the accent lifted for legibility on a dark surface
    --------------------------------------------------------------- */
-/* Old Classic is the default palette — bundled onto the bare :root so a
+/* Old Classic is the default palette: bundled onto the bare :root so a
    reader whose browser never runs the script above (data-color absent
    entirely) still lands here. */
 :root,
@@ -96,7 +96,7 @@ html[data-color="classic"] {
     --border-base:  #E6D9BF;
 }
 
-/* Old Night — Old Classic after dark. The same two colours carry it: the
+/* Old Night: Old Classic after dark. The same two colours carry it: the
    maroon still fills the buttons and the crumb strip, and the gold that was
    Old Classic's muted accent becomes the accent read as text, since maroon
    text on a dark page cannot be read. The surfaces (section 3b) are a warm
@@ -198,7 +198,7 @@ html[data-color="old-night"] {
 
    That lift is right for the accent as *text* and wrong for it as a
    *background*. This block used to claim that text on the accent "stays
-   readable either way" — it did not: white on the lifted accent measured
+   readable either way": it did not: white on the lifted accent measured
    2.57:1 across the navbar, breadcrumb, footer and primary buttons on
    every page, against the 4.5:1 the rest of the site meets. The surface
    tokens below therefore keep the dark values.
@@ -298,7 +298,7 @@ html[data-mode="dark"] img:not([src*=".svg"]) { filter: brightness(.92); }
 /* --maroon, not --accent: under Old Night the raw accent is a dark maroon on a
    dark panel (1.67:1), and --maroon is the form of it that lifts to be seen. */
 .qs-color input[type="radio"]:checked { background: var(--maroon); }
-/* A solid dot of the palette's own accent — an inset ring here would hollow it
+/* A solid dot of the palette's own accent: an inset ring here would hollow it
    out and leave only a rim of the colour it is meant to be showing. */
 .qs-swatch {
     width: .95rem; height: .95rem; flex: 0 0 auto;

@@ -2,8 +2,8 @@
 /**
  * The look of the management consoles.
  *
- * Manage Students was rebuilt on the site's own tokens — panels, chips, tabs,
- * borderless row actions, the two-column shell — and Manage Faculty needs the
+ * Manage Students was rebuilt on the site's own tokens (panels, chips, tabs,
+ * borderless row actions, the two-column shell) and Manage Faculty needs the
  * same. Rather than keep two copies in step by hand, the whole stylesheet lives
  * here and both pages include it.
  *
@@ -15,8 +15,8 @@
  */
 ?>
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
-/* This page used to carry its own design system — Crimson Pro over IBM Plex
-   Sans, slate greys, a gold gradient on every card — which is why it read as a
+/* This page used to carry its own design system (Crimson Pro over IBM Plex
+   Sans, slate greys, a gold gradient on every card) which is why it read as a
    different product from the dashboard beside it. Everything here now comes
    from the site's own tokens, so the page inherits whatever palette and theme
    the reader has chosen. */
@@ -100,10 +100,10 @@
 .mgmt-help:focus-visible { outline: 2px solid var(--maroon); outline-offset: 1px; }
 .mgmt-field input::placeholder { color: var(--grey); }
 .mgmt-hint { display: block; font-size: .6875rem; color: var(--grey); margin-top: .25rem; }
-/* The hint doubles as the Generate button's only way to answer back — there is
-   no alert() on this site — so it needs a state that reads as a correction. */
+/* The hint doubles as the Generate button's only way to answer back (there is
+   no alert() on this site) so it needs a state that reads as a correction. */
 .mgmt-hint.is-warn { color: var(--maroon); font-weight: 500; }
-/* Academic year and section sit together — they are read as one answer. */
+/* Academic year and section sit together: they are read as one answer. */
 .mgmt-pair { display: grid; grid-template-columns: 1fr 1fr; gap: .625rem; }
 .mgmt-with-btn { display: flex; gap: .375rem; }
 .mgmt-with-btn input { flex: 1 1 auto; min-width: 0; }
@@ -214,14 +214,14 @@
 .mgmt-table td a { color: var(--maroon); }
 .mgmt-table td a:hover { color: var(--dark-maroon); text-decoration-thickness: 2px; }
 /* Actions hug the right edge; everything else takes the room it needs.
-   The alignment lives on the header and on the button row, not on the cell —
+   The alignment lives on the header and on the button row, not on the cell:
    the reset dialog is rendered inside that cell, and a cell-wide text-align
    was reaching into it and right-aligning its labels. */
 .mgmt-table th:last-child, .mgmt-table td:last-child { width: 1%; }
 .mgmt-table th:last-child { text-align: right; }
 .mgmt-table tbody tr:last-child td { border-bottom: none; }
 .mgmt-table tbody tr:hover { background: var(--cream); }
-/* The email belongs to the name, not to a column of its own — as its own
+/* The email belongs to the name, not to a column of its own, as its own
    column it was the widest thing in the table and pushed the actions off. */
 .mgmt-name { font-weight: 500; white-space: nowrap; }
 /* A long address would otherwise set the width of the whole column and push
@@ -260,7 +260,7 @@
 .mgmt-act.is-danger { color: var(--dark-maroon); }
 .mgmt-act.is-danger:hover { background: var(--maroon-surface-hover); color: #fff; }
 /* The Generate button beside the password box is not in a table row, so it
-   keeps an edge — there it reads as part of the field. */
+   keeps an edge: there it reads as part of the field. */
 .mgmt-with-btn .mgmt-act { border: 1px solid var(--border); background: var(--white); }
 .mgmt-with-btn .mgmt-act:hover { border-color: var(--soft-maroon); }
 .mgmt-row-off td { color: var(--grey); }
@@ -372,7 +372,7 @@
             });
             if (!hit) return;
 
-            /* The row may be on a tab that is not the one showing — an archived
+            /* The row may be on a tab that is not the one showing: an archived
                student, say. Press that tab rather than revealing the pane here,
                so the console stays the only thing deciding what "selected"
                looks like. Which pane it sits in is read from the tabs, because
@@ -388,8 +388,8 @@
 
             /* Open the account for editing, by pressing the row's own Edit
                rather than filling the panel from here: the console knows what
-               editing means on its own roll — which fields, what the panel
-               title says, that a blank password keeps the old one — and there is
+               editing means on its own roll (which fields, what the panel
+               title says, that a blank password keeps the old one) and there is
                no second copy of that to fall out of step.
                Its own scrolling then stands, which is why the row is only
                scrolled to when there is no Edit to press. */

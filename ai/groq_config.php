@@ -38,7 +38,7 @@ if (!defined('GROQ_API_KEY')) {
     define('GROQ_API_KEY', $_ENV['GROQ_API_KEY'] ?? ''); // Your API key
     define('GROQ_API_URL', 'https://api.groq.com/openai/v1/chat/completions'); // Groq endpoint
     // Kept in step with config/groq_config.php, which is the file every page
-    // actually loads — nothing requires this one. Llama 3.3 70B was
+    // actually loads: nothing requires this one. Llama 3.3 70B was
     // decommissioned on Groq (2026-08-16).
     define('GROQ_MODEL', $_ENV['GROQ_MODEL'] ?? 'openai/gpt-oss-120b'); // AI model to use
 }

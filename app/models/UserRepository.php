@@ -44,8 +44,8 @@ class UserRepository {
      *
      * Every account used to be stored twice: once hashed, and once in clear
      * text so the management consoles could print it in a Password column.
-     * That put every password in the system — including any a person had
-     * reused elsewhere — in reach of anyone at the screen or holding a copy of
+     * That put every password in the system (including any a person had
+     * reused elsewhere) in reach of anyone at the screen or holding a copy of
      * the database. Only the hash is written now. Whoever performs a reset
      * types the new password, so they already know it; nobody else needs to.
      */

@@ -116,7 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         }
 
         // Insert into database
-        /* Relative, not a full URL — see the same change in
+        /* Relative, not a full URL: see the same change in
            student_upload_ai.php. An absolute URL bakes this machine's address
            into the row and cannot be turned back into a file. */
         $relPath = "uploads/research/$programFolder/$paperType/$y/$m/$submissionFolder/" . basename($destPath);
@@ -141,7 +141,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $paper_id = $stmt->insert_id;
 
         /* Drive has the paper and the row recording it exists, so the staging
-           copy goes — same arrangement as student_upload_ai.php. */
+           copy goes: same arrangement as student_upload_ai.php. */
         if (is_file($destPath)) { @unlink($destPath); }
 
         // Save supporting documents

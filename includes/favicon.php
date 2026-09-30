@@ -3,15 +3,15 @@
  * The address-bar icon, in one place.
  *
  * Most pages pick this up through includes/site_head.php, which requires it.
- * The three that deliberately skip site_head.php — archive/login.php (its own
- * split-screen layout), pages/error_page.php (chrome-less by design) — require
+ * The pages that deliberately skip site_head.php, archive/login.php (its own
+ * split-screen layout) and pages/error_page.php (chrome-less by design), require
  * it directly, so a reader never loses the mark just because a page opted out
  * of the shared header.
  *
  * Paths are absolute via BASE_URL: pages sit at several directory depths and a
  * relative href would resolve differently on each.
  *
- * All three are scaled-down copies of the logo on a white card — white to
+ * All three are scaled-down copies of the logo on a white card: white to
  * match body's own background, so the icon reads as part of the site rather
  * than a tile sat on top of it. They come from Logo-Papel-Transparent.svg
  * composited onto white, not from the cream Logo-Papel.png recoloured: the
@@ -29,7 +29,7 @@
  * of showing what is behind it.
  *
  * Logo-Papel.svg and Logo-Papel.png are kept alongside as the full-size
- * originals, but neither is what the address bar loads — the SVG is a 400KB
+ * originals, but neither is what the address bar loads: the SVG is a 400KB
  * raster in an SVG wrapper, which is a lot to send for a 16px icon.
  *
  * Nothing here leans on the bootstrap: error_page.php renders while the very

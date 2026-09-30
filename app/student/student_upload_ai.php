@@ -9,8 +9,8 @@ require_once '../../config/core.php';
    it, so there is nobody above them in the chain to ask.
 
    Drafts remain student-only, and deliberately. Every page that manages a draft
-   is student-only — the Drafts tab on the student dashboard,
-   student_draft_delete.php, student_cancel_submission.php — so a draft saved by
+   is student-only (the Drafts tab on the student dashboard,
+   student_draft_delete.php, student_cancel_submission.php) so a draft saved by
    a member of staff would be invisible the moment they left: no way to resume
    it, no way to delete it, and it would sit in the database counting as
    somebody's unfinished work forever. That is what closed this page to them in
@@ -48,7 +48,7 @@ if ($isStudent) {
     /* Staff do not belong to a programme, they belong to the faculty, so the
        question is not asked: the field states the answer instead of offering a
        list of degrees none of which is theirs. The value is one the rest of the
-       system already knows — get_program_folder() files it under FACULTY, and
+       system already knows: get_program_folder() files it under FACULTY, and
        program_code() prints it as it is. */
     $myProgram = 'Faculty Member';
 }
@@ -75,7 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'extra
     csrf_verify();
     
     // ── Rate Limiting: Max 10 AI extractions per hour per user ──
-    // TEMPORARILY DISABLED for testing — re-enable before production
+    // TEMPORARILY DISABLED for testing: re-enable before production
     // $limiter = new RateLimiter($conn);
     // $rateCheck = $limiter->check((int) $u['user_id'], 'ai_extract', 10, 3600);
     // if (!$rateCheck['allowed']) {
@@ -98,8 +98,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'extra
     if (!$pdfText || strlen($pdfText) < 50) {
       throw new UserFacingException('No readable text could be found in this PDF. It may be a scan of a printed page, password-protected, or empty. Choose "Fill Manually" to enter the details yourself.');
     }
-    $modelChoice = $_POST['model_choice'] ?? '1';
-    $extracted = extract_metadata_with_groq($pdfText, $modelChoice);
+    /* Not the student's pick any anymore: whichever engine the session is on,
+       with the other behind it for this call. If it had to hand over, the
+       session follows, so the next extraction starts on the one with room. */
+    $extracted = extract_metadata_with_groq($pdfText, (string)ai_engine_current());
+    if (function_exists('groq_used_fallback') && groq_used_fallback()) {
+        ai_engine_switch();
+    }
     if (is_array($extracted)) {
         $aiMeta = $extracted;
     } else {
@@ -109,9 +114,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'extra
         $code = (int)($failure['http_code'] ?? 0);
         if ($code === 429) {
             throw new UserFacingException(
-                'Both AI engines have reached their usage limit for the moment. '
+                'The AI has reached its usage limit for the moment. '
                 . 'Wait a minute and press Extract again, or choose "Fill Manually" to type '
-                . 'the details in yourself. Your paper is fine — this is a service limit.'
+                . 'the details in yourself. Your paper is fine; this is a service limit.'
             );
         }
         if ($code >= 500) {
@@ -180,7 +185,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'extra
    only hard requirement is that the row belongs to the signed-in student and
    is still a draft, so this can never overwrite a submitted paper.
 
-   No Google Drive call — that belongs to submission. A draft must save even
+   No Google Drive call, that belongs to submission. A draft must save even
    when Drive is unreachable, which is exactly when a student most needs their
    work kept.
    --------------------------------------------------------------------------- */
@@ -350,7 +355,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
     }
 
     /* Only ever update this student's own unsubmitted draft. A draft that has
-       since been submitted or deleted is no longer somewhere to save into —
+       since been submitted or deleted is no longer somewhere to save into:
        the id is dropped and the work is kept as a new draft instead, because
        refusing the save outright would lose it. */
     $draftRowFile = null;
@@ -371,7 +376,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
         /* A replacement PDF arrived, so the one it replaces is now unreferenced.
            Each save used to leave its predecessor behind: one draft saved four
            times left four PDFs on disk, and only the last was ever read again.
-           Only files under this student's own draft folder are removed — a path
+           Only files under this student's own draft folder are removed: a path
            anywhere else belongs to a submitted paper and is not ours to touch. */
         $mine = 'uploads/drafts/' . (int)$u['user_id'] . '/';
         if (strpos($draftRowFile, $mine) === 0) {
@@ -438,7 +443,7 @@ if (isset($_GET['draft'])) {
 /* Which drafts this student still has.
  *
  * The copy kept on the device is what drives the "Continue your draft?" prompt,
- * and deleting a draft from the dashboard never touched it — so the prompt kept
+ * and deleting a draft from the dashboard never touched it, so the prompt kept
  * coming back for work the student had already thrown away, and answering
  * Continue saved it again as a brand new draft. The page now knows which ids
  * are real, so a local copy pointing at a draft that is gone can be recognised
@@ -516,7 +521,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     
     /* The program decides which folder the paper is filed under and how it is
        counted in every report, so it has to be a real answer. If the form did
-       not carry one, the student's own program stands in — but filing it as
+       not carry one, the student's own program stands in, but filing it as
        "Other" because nobody answered would put the paper somewhere no one
        looks, so that is refused instead. */
     $programCategory = trim($_POST['program_category'] ?? '');
@@ -653,7 +658,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     // Insert paper
     /* Stored relative to app/student/, not as a full URL. The old absolute form
        baked this machine's BASE_URL into the row, so after the project moved to
-       another computer — or was simply served on a different address — the file
+       another computer (or was simply served on a different address) the file
        could not be found again, and nothing that needed the file rather than a
        link could resolve it at all. paper_file_url() still renders a correct
        link from a relative path, and paper_file_disk_path() reads either form. */
@@ -663,7 +668,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     $null = null;
     
     /* A submitted paper goes to the Research Adviser. It used to be filed as
-       'draft' — the same state as work never sent — so pressing Submit put the
+       'draft' (the same state as work never sent) so pressing Submit put the
        paper in the student's Drafts tab and no reviewer ever saw it. Nothing
        later promoted it, which is why every review queue stayed empty. */
     $initialStatus = ($u['user_role'] === 'student') ? 'pending_faculty' : 'approved';
@@ -710,7 +715,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     $paper_id = $stmt->insert_id;
 
     /* Drive is where a submitted paper lives. The local file was only ever the
-       staging copy the Drive upload reads from — keeping it meant every paper
+       staging copy the Drive upload reads from: keeping it meant every paper
        was stored twice, for good. It goes now that Drive has it (the upload
        throws above if it did not) and the row recording it exists.
 
@@ -720,7 +725,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
 
     /* The draft this submission grew out of becomes the submission itself, so
        the new row replaces it: the values are copied across, the draft's own
-       row is removed, and its stale attachment records go with it — the files
+       row is removed, and its stale attachment records go with it: the files
        attached during *this* submit are written again below. */
     if ($submitDraftId > 0 && $paper_id > 0) {
         $mv = $conn->prepare(
@@ -828,7 +833,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
 
     /* Tell the Research Adviser there is something waiting. The adviser is the
        faculty member who created this student's account, which is the same link
-       their review queue is built on — so if there is no creator, nobody would
+       their review queue is built on, so if there is no creator, nobody would
        ever see the paper, and that is worth recording rather than passing over
        in silence. */
     if ($u['user_role'] === 'student') {
@@ -838,7 +843,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
                 $u['full_name'] . ' submitted "' . $title . '" for your review.');
         } else {
             error_log('Paper ' . $paper_id . ' submitted by user ' . $u['user_id']
-                    . ' who has no Research Adviser (users.created_by is empty) — it will not appear in any review queue.');
+                    . ' who has no Research Adviser (users.created_by is empty), so it will not appear in any review queue.');
         }
     }
 
@@ -861,7 +866,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Upload · <?= e(APP_NAME) ?></title>
 <?php require_once ROOT_PATH.'/includes/site_head.php'; ?>
-<link rel="stylesheet" href="<?= BASE_URL ?>/assests/css/papel-pdf-view.css">
+<link rel="stylesheet" href="<?= e(asset_url('assests/css/papel-pdf-view.css')) ?>">
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>"  src="../../assests/js/input-validation.js" defer></script>
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 /* Enhanced Smooth Animations */
@@ -910,7 +915,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     to { transform: rotate(360deg); }
 }
 
-/* ── Papel Upload Overlay — clear blurred backdrop ── */
+/* ── Papel Upload Overlay: clear blurred backdrop ── */
 #uploadOverlay {
     display: none;
     position: fixed;
@@ -1230,7 +1235,7 @@ body {
   text-align: left;
   white-space: normal;
   /* On a short window the card could be taller than the screen, and no amount
-     of placing fixes that — so it scrolls inside itself instead. */
+     of placing fixes that, so it scrolls inside itself instead. */
   max-height: calc(100vh - 1.5rem);
   overflow-y: auto;
 }
@@ -1306,8 +1311,8 @@ body {
 
 /* ===== Expanded section =====
    Fills the page rather than opening one. z-index 800 puts it below every
-   piece of fixed furniture by construction — the site header is 900, the chat
-   1000, the PDF preview 1200 and the accessibility widget higher still — so it
+   piece of fixed furniture by construction (the site header is 900, the chat
+   1000, the PDF preview 1200 and the accessibility widget higher still) so it
    can never cover any of them. The left and right edges follow the same dock
    widths the panels use, so an expanded box stops where a docked panel starts. */
 .doc-editor.is-expanded {
@@ -1334,7 +1339,7 @@ body {
 body.pdf-docked .doc-editor.is-expanded { right: var(--pdf-dock-w, 460px); }
 
 /* While a section is expanded the chat and the accessibility button step out
-   of the way — nothing is closed or reset, they are only hidden, so both come
+   of the way: nothing is closed or reset, they are only hidden, so both come
    back exactly as they were, docked or floating, when the box is collapsed.
    The accessibility widget is moved to <html> by its own script, so the flag is
    set there as well as on <body>. The PDF preview deliberately stays. */
@@ -1351,7 +1356,7 @@ body.doc-expanded.chat-docked-right { padding-right: 0; }
 
 /* Section tabs, along the bottom the way a spreadsheet names its sheets.
    They exist only while a section is expanded, because that is the only time
-   the other four are out of sight — on the form itself they are all just
+   the other four are out of sight, on the form itself they are all just
    there, one under the other. */
 .doc-tabs { display: none; }
 .doc-editor.is-expanded .doc-tabs {
@@ -1393,7 +1398,7 @@ body.doc-expanded.chat-docked-right { padding-right: 0; }
   border-color: var(--maroon);
   box-shadow: 0 -2px 0 var(--maroon) inset;
 }
-/* A section still to be written carries a dot — the form needs all five, and
+/* A section still to be written carries a dot: the form needs all five, and
    this is the only view where the empty ones are otherwise invisible. */
 .doc-tab-dot {
   width: 6px; height: 6px; border-radius: 50%;
@@ -1410,8 +1415,8 @@ body.doc-expanded.chat-docked-right { padding-right: 0; }
    separate lines cost a whole band of empty space above the tools. The label
    and the count both grow, so the toolbar settles in the middle of the row. */
 /* One row, always. Rather than wrapping onto extra lines when the column is
-   narrow, the tools that no longer fit move into a ⋮ menu — see reflowToolbar()
-   — so the header stays a single tidy strip at any width. */
+   narrow, the tools that no longer fit move into a ⋮ menu (see reflowToolbar())
+   so the header stays a single tidy strip at any width. */
 .doc-editor-head {
   display: flex;
   align-items: center;
@@ -1503,7 +1508,7 @@ body.doc-expanded.chat-docked-right { padding-right: 0; }
 }
 /* Line height and body alignment are fixed for every paper so submissions read
    alike, and both are !important so pasted markup cannot bring its own. Table
-   cells are deliberately left out of the alignment rule — a column of figures
+   cells are deliberately left out of the alignment rule: a column of figures
    needs centring, and that is the one place the toolbar may set it. */
 .doc-surface,
 .doc-surface p,
@@ -1529,7 +1534,7 @@ body.doc-expanded.chat-docked-right { padding-right: 0; }
   pointer-events: none;
 }
 /* One gap between paragraphs, from one place. `div` is included because some
-   browsers produce a <div> rather than a <p> when Enter is pressed — without
+   browsers produce a <div> rather than a <p> when Enter is pressed, without
    this a typed paragraph would sit flush against the next while a pasted one
    had a gap. The trailing gap after the last paragraph is suppressed. */
 .doc-surface p,
@@ -1761,14 +1766,16 @@ body.doc-expanded.chat-docked-right { padding-right: 0; }
 .doc-surface::-webkit-scrollbar { width: 10px; }
 .doc-surface::-webkit-scrollbar-track { background: var(--cream); }
 .doc-surface::-webkit-scrollbar-thumb {
-  background: var(--soft-maroon);
+  /* The site's scrollbar colours (includes/focus_ring.php), so the editor's
+     own bar matches every other one on the page. */
+  background: var(--scroll-thumb, var(--maroon-surface));
   border-radius: var(--r-control, 4px);
   border: 2px solid var(--cream);
 }
-.doc-surface::-webkit-scrollbar-thumb:hover { background: var(--maroon); }
+.doc-surface::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-strong, var(--maroon-surface-hover)); }
 
 @media (max-width: 700px) {
-  /* The header stays one row here too — the ⋮ menu absorbs whatever will not
+  /* The header stays one row here too: the ⋮ menu absorbs whatever will not
      fit, so there is nothing to stack. */
   .doc-surface { min-height: 160px; }
 }
@@ -2026,7 +2033,8 @@ hr {
 }
 #chat-messages::-webkit-scrollbar { width: 8px; }
 #chat-messages::-webkit-scrollbar-track { background: var(--cream); }
-#chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: var(--r-card, 8px); }
+#chat-messages::-webkit-scrollbar-thumb { background: var(--scroll-thumb, var(--maroon-surface)); border-radius: var(--r-card, 8px); }
+#chat-messages::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-strong, var(--maroon-surface-hover)); }
 #chat-input-area {
     padding: .75rem 1rem;
     border-top: 1px solid var(--border);
@@ -2151,37 +2159,6 @@ hr {
     white-space: normal;
 }
 
-#chatModelSelect {
-    appearance: none;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    max-width: 122px;
-    flex-shrink: 0;
-    font-family: var(--font-body);
-    font-size: .75rem;
-    line-height: 1.2;
-    color: #fff;
-    background-color: rgba(255,255,255,.14);
-    border: 1px solid rgba(255,255,255,.28);
-    border-radius: var(--r-control, 4px);
-    padding: .25rem 1.5rem .25rem .55rem;
-    cursor: pointer;
-    outline: none;
-    /* white chevron, matching the custom arrows used on the site's selects */
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23ffffff' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right .5rem center;
-    transition: background-color .2s, border-color .2s;
-}
-#chatModelSelect:hover {
-    background-color: rgba(255,255,255,.22);
-    border-color: rgba(255,255,255,.5);
-}
-#chatModelSelect:focus-visible {
-    border-color: #fff;
-    box-shadow: 0 0 0 2px rgba(255,255,255,.3);
-}
-#chatModelSelect option { color: var(--ink); background: var(--white); }
 #chatCloseBtn {
     background: none;
     border: none;
@@ -2226,7 +2203,7 @@ hr {
 /* ===== Docked side panel =====
    The panel takes a column at the edge of the viewport and the page is
    padded by the same amount, so content slides over to make room rather
-   than being covered — the navbar stays fully visible beside it. */
+   than being covered: the navbar stays fully visible beside it. */
 #chat-widget.is-docked {
     position: fixed;
     top: 0;
@@ -2259,14 +2236,14 @@ body { transition: padding-left .25s ease, padding-right .25s ease; }
 body.chat-docked-left  { padding-left:  var(--chat-dock-w, 380px); }
 body.chat-docked-right { padding-right: var(--chat-dock-w, 380px); }
 
-/* Too narrow to share the screen — overlay instead of squeezing the form. */
+/* Too narrow to share the screen: overlay instead of squeezing the form. */
 @media (max-width: 900px) {
     #chat-widget.is-docked { width: 100vw; }
     body.chat-docked-left,
     body.chat-docked-right { padding-left: 0; padding-right: 0; }
 }
 
-/* Chat bubbles — same treatment as the Help Center's .chat-msg */
+/* Chat bubbles: same treatment as the Help Center's .chat-msg */
 .message {
     padding: .625rem .875rem;
     border-radius: var(--r-card, 8px);
@@ -2345,7 +2322,7 @@ body.chat-docked-right { padding-right: var(--chat-dock-w, 380px); }
     50% { transform: translateY(-5px); }
 }
 
-/* Breadcrumb strip — same maroon bar used site-wide */
+/* Breadcrumb strip: same maroon bar used site-wide */
 .crumb-bar { background: var(--dark-maroon); }
 .crumb-inner {
     display: flex; align-items: center; gap: .25rem;
@@ -2487,39 +2464,9 @@ body.chat-docked-right { padding-right: var(--chat-dock-w, 380px); }
     top: -2px;
 }
 
-/* The engine picker used to be a bare dropdown showing nothing but a code name.
-   It now carries a label and an explanation of what choosing one actually does. */
-.model-picker { max-width: 34rem; margin: 0 auto; text-align: center; }
-.model-picker .form-label {
-    display: block;
-    margin-bottom: .375rem;
-    font-size: .8125rem;
-    color: var(--ink);
-}
-.model-picker .form-select {
-    width: auto;
-    min-width: 11rem;
-    margin: 0 auto;
-    font-size: .85rem;
-    border-radius: var(--r-control, 4px);
-    border: 2px solid var(--border);
-    /* text-align centres the closed value, text-align-last is what Firefox
-       honours. Matching the left padding to the space Bootstrap reserves for
-       the chevron keeps the name optically centred rather than pushed left. */
-    text-align: center;
-    text-align-last: center;
-    padding-left: 2.25rem;
-    padding-right: 2.25rem;
-}
-.model-picker-note {
-    display: block;
-    margin-top: .5rem;
-    font-size: .75rem;
-    line-height: 1.55;
-    color: var(--grey);
-}
 
-/* ===== Step 3 — supporting documents =====
+
+/* ===== Step 3: supporting documents =====
    Same type and palette as the section editors in Step 2: Plus Jakarta Sans for
    headings, Inter for everything else, nothing bolded, maroon on cream. */
 .docs-card {
@@ -2567,7 +2514,7 @@ body.chat-docked-right { padding-right: var(--chat-dock-w, 380px); }
     font-weight: 400;
     color: var(--ink);
 }
-/* Filled in by syncSupportingDocs() — the marker depends on the paper type. */
+/* Filled in by syncSupportingDocs(): the marker depends on the paper type. */
 .doc-req-mark { font-size: .75rem; }
 
 /* Date Completed owns the full row so its helper line can run the whole width
@@ -2580,7 +2527,7 @@ body.chat-docked-right { padding-right: var(--chat-dock-w, 380px); }
     max-width: none;
 }
 
-/* Checkboxes / radios — flat maroon fills, matching the sidebar filters
+/* Checkboxes / radios: flat maroon fills, matching the sidebar filters
    and Quick Settings controls used elsewhere on the site. */
 .form-check-input {
     appearance: none;
@@ -2811,7 +2758,7 @@ body.chat-docked-right { padding-right: var(--chat-dock-w, 380px); }
 /* ===== Responsive to the content column, not the window =====
    Docking the chat and the PDF preview pads the body from both sides, so the
    form can be squeezed to a few hundred pixels while the viewport is still
-   1900px wide — width media queries never fire in that situation. Declaring the
+   1900px wide: width media queries never fire in that situation. Declaring the
    column a container lets these rules key off the space the form actually has. */
 .upload-shell {
     container-type: inline-size;
@@ -2827,14 +2774,14 @@ body.chat-docked-right { padding-right: var(--chat-dock-w, 380px); }
     .supporting-docs-grid { grid-template-columns: 1fr; }
     /* Paired fields stack rather than squeezing into unusable columns. */
     .row > [class*="col-md-"] { flex: 0 0 100%; max-width: 100%; }
-    .date-field .form-control, .model-picker { max-width: 100%; }
+    .date-field .form-control { max-width: 100%; }
 }
 
 @container uploadcol (max-width: 540px) {
     /* The labels no longer fit side by side; the row scrolls rather than
        wrapping into a broken second line. `safe center` keeps it centred while
        it still fits and only falls back to starting at the left edge once it
-       genuinely overflows — plain `center` would push the first step out of
+       genuinely overflows: plain `center` would push the first step out of
        reach past the start of the scroll area. */
     .upload-steps {
         flex-wrap: nowrap;
@@ -3049,7 +2996,7 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
 }
 
 
-/* Restore tab — pinned to the right edge once the preview is put away. */
+/* Restore tab: pinned to the right edge once the preview is put away. */
 #pdf-restore {
     position: fixed;
     top: 50%;
@@ -3215,8 +3162,14 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
                   </h3>
                 </div>
 
+                <?php /* Two to a row rather than one under the other: four full-width
+                         groups put the Next button below the fold on a laptop, and
+                         none of these four is wide enough to need the whole card.
+                         The second row divides the same way as the first, so Paper
+                         Status starts on the same edge as Paper / Research Type
+                         above it. */ ?>
                 <div class="row g-4">
-                  <div class="col-md-12">
+                  <div class="col-md-6">
                     <label class="form-label">Academic Program <span class="text-danger">*</span></label>
                     <?php if (!$isStudent): ?>
                       <?php /* Not a question for staff: they belong to the faculty rather
@@ -3231,7 +3184,7 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
                     <select class="form-select" name="program_category" id="programSelect" required>
                       <option value="">Select Program...</option>
                       <?php /* Read from programs_map() and written the way the
-                               Manage Students console writes it — "BSIT: Bachelor
+                               Manage Students console writes it: "BSIT: Bachelor
                                of Science in Information Technology". The ten
                                programmes were spelled out here in a shorthand of
                                their own, so a student saw their degree named one
@@ -3247,7 +3200,7 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
                     <?php endif; ?>
                   </div>
 
-                  <div class="col-12">
+                  <div class="col-md-6">
                     <label class="form-label">Paper / Research Type <span class="text-danger">*</span></label>
                     <select class="form-select" name="paper_type" required>
                       <option value="">Select paper type...</option>
@@ -3257,7 +3210,7 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
                     </select>
                   </div>
 
-                  <div class="col-12">
+                  <div class="col-md-6">
                     <?php /* Two boxes rather than a list, because a paper can be
                              handed in as both. Ticking both asks for both files
                              in step 2. */ ?>
@@ -3293,9 +3246,9 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
                     </div>
                   </div>
 
-                  <div class="col-12">
+                  <div class="col-md-6">
                       <div class="label-row">
-                        <label class="form-label mb-0">Paper Status</label>
+                        <label class="form-label mb-0">Paper Status <span class="text-danger">*</span></label>
                         <span class="field-help-wrap">
                           <button type="button" class="field-help js-help" aria-expanded="false"
                                   aria-label="What is paper status?">
@@ -3365,18 +3318,11 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
                   <div class="ai-extract-button-container mt-4 text-center">
                     <p class="fw-semibold mb-3" style="color:var(--maroon);">How would you like to enter your paper details?</p>
                   
-                    <div class="mb-3 model-picker">
-                      <label class="form-label" for="extractModelSelect">AI extraction engine</label>
-                      <select id="extractModelSelect" class="form-select form-select-sm">
-                        <option value="1">Aincrad</option>
-                        <option value="2">Alfheim</option>
-                      </select>
-                      <small class="model-picker-note">
-                        Aincrad and Alfheim are the two engines that read your PDF and pull out the
-                        title, authors, year, keywords and abstract. They do the same job, so either
-                        is fine. If one is busy and extraction fails, pick the other and try again.
-                      </small>
-                    </div>
+                    <?php /* No engine picker: the two are the same model on two keys,
+                             and which one is in play is decided by whichever still
+                             has room (see ai_engine_current()). Asking the student
+                             to choose put a service detail in front of somebody
+                             trying to hand in a paper. */ ?>
 
                     <div class="d-flex justify-content-center gap-3 flex-wrap">
                       <button type="button" class="btn btn-ai btn-lg" id="btnExtract" style="position:relative;">
@@ -3437,7 +3383,7 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
                       <?php
                       /* One editor per section. The set of sections and their
                          labels come from paper_section_labels(), which the submit
-                         handler and the draft both validate against — so a section
+                         handler and the draft both validate against, so a section
                          cannot exist on the form without being saved, or be
                          demanded on submit without being shown here. Only the
                          wording of the placeholder lives on this page. */
@@ -3713,10 +3659,6 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
                 </div>
             </div>
             <div class="d-flex align-items-center gap-2">
-                <select id="chatModelSelect">
-                    <option value="1">Aincrad</option>
-                    <option value="2">Alfheim</option>
-                </select>
                 <button type="button" id="chatCloseBtn"><span class="material-symbols-outlined mi-20">close</span></button>
             </div>
         </div>
@@ -3742,16 +3684,16 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
 
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 // Paths the PDF preview needs. Declared here, ahead of the code that reads
-// them, rather than beside the markup further down — both are same-origin, so
+// them, rather than beside the markup further down: both are same-origin, so
 // script-src 'self' already covers the library and its worker and the CSP needs
 // no widening.
-const PAPEL_PDF_WORKER     = <?= json_encode(BASE_URL . '/assests/js/pdfjs/pdf.worker.min.js', JSON_UNESCAPED_SLASHES) ?>;
+const PAPEL_PDF_WORKER     = <?= json_encode(asset_url('assests/js/pdfjs/pdf.worker.min.js'), JSON_UNESCAPED_SLASHES) ?>;
 const PAPEL_PDF_VIEWER_URL = <?= json_encode(BASE_URL . '/app/student/pdf_viewer.php', JSON_UNESCAPED_SLASHES) ?>;
 
 /* ----- Supporting documents, by paper type -----
    Ethics clearance, consent and a data-collection tool are only demanded of the
    types that involve human participants and original data gathering. The list
-   mirrors paper_type_needs_documents() in config/core.php — the server decides,
+   mirrors paper_type_needs_documents() in config/core.php: the server decides,
    this only keeps the form honest about what it is going to ask for. */
 const DOCS_REQUIRED_FOR = <?= json_encode(array_values(array_filter(
     array_keys(paper_types() + paper_types_retired()),
@@ -3789,7 +3731,7 @@ function syncSupportingDocs() {
         if (!input) return;
         input.required = required;
 
-        /* The input's own label, found by its `for` — not "the first label in
+        /* The input's own label, found by its `for`, not "the first label in
            some ancestor". Copyright/IP sits outside the grid the other three
            are in, so climbing to a `col-` ancestor walked all the way up past
            Step 3 and marked the first label it met on the page: Academic
@@ -3838,8 +3780,8 @@ let currentStep = 1;
     }
 
     /* Put the card under its icon, then pull it back inside the window: it is
-       fixed, so nothing else will do that for it. If there is no room below —
-       which is the usual case for the lower of the two — it opens upward. */
+       fixed, so nothing else will do that for it. If there is no room below
+       (the usual case for the lower of the two) it opens upward. */
     function place(btn, card) {
         var GAP = 8, EDGE = 8;
         var b = btn.getBoundingClientRect();
@@ -3879,7 +3821,7 @@ let currentStep = 1;
             place(btn, card);
             /* Again once the browser has laid it out. The first call can run
                before the card has a height, and a height of zero always looks
-               like it fits below — which is how it ended up hanging off the
+               like it fits below, which is how it ended up hanging off the
                bottom of a short window. */
             requestAnimationFrame(function () { place(btn, card); });
         }
@@ -3940,7 +3882,7 @@ const papelDoc = (function () {
                         'insertUnorderedList', 'insertOrderedList'];
 
     // Mirrors rich_text_sanitize() in config/core.php. The server is still the
-    // authority — this only keeps the live document clean, since pasted markup
+    // authority: this only keeps the live document clean, since pasted markup
     // is inserted into a contenteditable long before it is ever submitted.
     const ALLOWED = ['p','br','div','span','b','strong','i','em','u','strike','s','del','sub','sup',
                      'ul','ol','li','blockquote','a','img',
@@ -3950,13 +3892,13 @@ const papelDoc = (function () {
                      'form','input','button','select','textarea','option'];
     // No inline styling survives a paste at all. Line height and alignment are
     // fixed for every paper, and colours would carry Word's shading into the
-    // repository — so a pasted passage arrives looking like everything the
+    // repository, so a pasted passage arrives looking like everything the
     // student typed themselves.
 
     /* Rebuilds pasted content into flowing paragraphs.
 
        Copying from a PDF gives one hard line break per *visual* line, because
-       that is how the page was laid out — PDF.js emits a <br> per line in its
+       that is how the page was laid out: PDF.js emits a <br> per line in its
        text layer. CSS never justifies a line that ends in a forced break, so
        pasted text stayed ragged no matter what text-align said, and it also
        kept the PDF's column width instead of reflowing to the editor's.
@@ -4811,7 +4753,7 @@ const papelDoc = (function () {
         ed.overflow = { head: head, toolbar: toolbar, wrap: wrap, menu: menu };
         reflowToolbar(ed);
 
-        // Re-measure whenever the header's width changes for any reason —
+        // Re-measure whenever the header's width changes for any reason:
         // a panel docking, the window resizing, the box being expanded.
         if (typeof ResizeObserver !== 'undefined') {
             new ResizeObserver(function () { reflowToolbar(ed); }).observe(head);
@@ -4941,7 +4883,7 @@ const papelDoc = (function () {
         // The accessibility widget lives on <html>, outside <body>.
         document.documentElement.classList.add('doc-expanded');
         buildTabs(ed);       // the way across to the other four sections
-        reflowToolbar(ed);   // far more room now — bring the tools back out
+        reflowToolbar(ed);   // far more room now: bring the tools back out
 
         const btn = ed.root.querySelector('.doc-tool[data-role="expand"]');
         if (btn) {
@@ -5084,7 +5026,7 @@ const papelDoc = (function () {
     /* ----- First-line indent -----
        Tab used to run execCommand('indent'), which wraps the block in a
        <blockquote>. That shifted the whole paragraph, added the blockquote's
-       vertical margins, and picked up its colour — three surprises for what
+       vertical margins, and picked up its colour: three surprises for what
        should just be a tab. Two em spaces give a real first-line indent
        instead: ordinary characters that survive the sanitiser untouched and
        leave the rest of the paragraph where it is. */
@@ -5166,7 +5108,7 @@ const papelDoc = (function () {
         const cell = cellAtCaret(ed.surface);
         if (cell) { moveToCell(ed, cell, back ? -1 : 1); return; }
 
-        // Inside a list, indenting means nesting the item — that is what
+        // Inside a list, indenting means nesting the item, that is what
         // execCommand does well, and no blockquote is involved.
         if (listItemAtCaret(ed.surface)) {
             try { document.execCommand(back ? 'outdent' : 'indent', false, null); } catch (err) {}
@@ -5268,7 +5210,7 @@ const papelDoc = (function () {
         });
         menu.appendChild(list);
 
-        // Alignment applies to the cell under the caret, and nowhere else —
+        // Alignment applies to the cell under the caret, and nowhere else:
         // body text is justified for every paper and is not adjustable.
         const alignHead = document.createElement('div');
         alignHead.className = 'doc-pop-label';
@@ -5595,7 +5537,7 @@ const papelDoc = (function () {
         };
         editors[ed.key] = ed;
 
-        // Produce tags (<b>, <i>) rather than inline styles, and <p> on Enter —
+        // Produce tags (<b>, <i>) rather than inline styles, and <p> on Enter:
         // both keep the stored markup simple enough to sanitise server-side.
         try { document.execCommand('styleWithCSS', false, false); } catch (err) {}
         try { document.execCommand('defaultParagraphSeparator', false, 'p'); } catch (err) {}
@@ -5715,7 +5657,7 @@ const papelDoc = (function () {
 
                A paper's paragraphs are separated by a visible gap, so every
                Enter starting a fresh paragraph would space out lines that were
-               only ever meant to wrap — an address block, a list of authors, a
+               only ever meant to wrap: an address block, a list of authors, a
                table caption. A single Enter therefore inserts a line break, and
                the second one promotes it to a real paragraph. */
             if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
@@ -5826,7 +5768,7 @@ const papelDoc = (function () {
             showContextMenu(ed, e.clientX, e.clientY, { cell: inCell, image: inImage });
         });
 
-        // Paste keeps structure — pictures and tables above all — but not
+        // Paste keeps structure (pictures and tables above all) but not
         // presentation. The clipboard HTML is run through the allowlist first,
         // so rows, columns and lists survive while Word's fonts, colours and
         // widths do not.
@@ -5995,7 +5937,7 @@ const papelDoc = (function () {
             const table = cell.closest('table');
             if (!table) return;
 
-            e.preventDefault();      // not a text selection — a resize
+            e.preventDefault();      // not a text selection: a resize
             const index = Array.prototype.indexOf.call(cell.parentNode.children, cell);
             drag = {
                 table: table,
@@ -6059,7 +6001,7 @@ const papelDoc = (function () {
         text:  function (key) { const ed = editors[key]; return ed ? plainText(ed) : ''; },
         html:  function (key) { const ed = editors[key]; return ed ? ed.input.value : ''; },
         // Restores formatted content, unlike setText which builds plain
-        // paragraphs — used when a saved draft is put back.
+        // paragraphs: used when a saved draft is put back.
         setHtml: function (key, html) {
             const ed = editors[key]; if (!ed) return;
             ed.surface.innerHTML = html || '';
@@ -6090,7 +6032,7 @@ const papelDoc = (function () {
 /* =========================================================================
    PDF preview
    The chosen file is read straight out of the browser's memory through an
-   object URL. Nothing is uploaded to open this — the file only reaches the
+   object URL. Nothing is uploaded to open this: the file only reaches the
    server, and Google Drive, when the form is finally submitted.
    ========================================================================= */
 const papelPdfPreview = (function () {
@@ -6132,8 +6074,8 @@ const papelPdfPreview = (function () {
         btn.classList.toggle('active', panning);
         btn.setAttribute('aria-pressed', panning ? 'true' : 'false');
         btn.title = panning
-            ? 'Drag mode — press T or Esc, or click, to select text instead'
-            : 'Select mode — press H, or click, to drag the page instead';
+            ? 'Drag mode: press T or Esc, or click, to select text instead'
+            : 'Select mode: press H, or click, to drag the page instead';
         btn.querySelector('.material-symbols-outlined').textContent = panning ? 'pan_tool' : 'text_select_start';
     }
 
@@ -6227,7 +6169,7 @@ const papelPdfPreview = (function () {
         reset: function () {
             this.close();
             release();
-            // Picking a PDF shows it straight away — the student can check they
+            // Picking a PDF shows it straight away: the student can check they
             // grabbed the right file before spending time on the rest of the form.
             if (currentFile()) this.open();
         }
@@ -6242,7 +6184,7 @@ const papelPdfPreview = (function () {
    worst thing this page could do. Everything typed is therefore kept on this
    device as it is entered, and offered back on return.
 
-   One honest limit: a chosen file cannot be stored by a web page — the browser
+   One honest limit: a chosen file cannot be stored by a web page: the browser
    gives a page a handle to a file, not the file itself, and that handle dies
    with the tab. Every word is restored; the PDF and any supporting documents
    have to be picked again. The restore prompt says so plainly rather than
@@ -6253,7 +6195,7 @@ const papelDraft = (function () {
     /* Set when the dashboard sent us here with ?draft=<id>.
 
        JSON_HEX_TAG matters here: a title is free text, and without it a title
-       containing a closing script tag ended this block early — the rest of the
+       containing a closing script tag ended this block early: the rest of the
        draft became markup and papelDraft was never defined, which quietly broke
        the whole wizard. */
     const SERVER_DRAFT = <?= $draftPayload ? json_encode($draftPayload, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) : 'null' ?>;
@@ -6266,7 +6208,7 @@ const papelDraft = (function () {
     let submitting = false;
     /* What the form looked like the last time it was saved. dirty() used to ask
        only "is there anything typed?", which is true from the first keystroke
-       and stays true after a save — so every link on the page kept asking to
+       and stays true after a save, so every link on the page kept asking to
        save a draft that was already saved, on page after page. Comparing
        against this makes "unsaved" mean what it says. */
     let savedSignature = null;
@@ -6311,7 +6253,7 @@ const papelDraft = (function () {
         };
     }
 
-    /* Only the typed values matter for "has this changed" — the file list is
+    /* Only the typed values matter for "has this changed": the file list is
        rebuilt from scratch on every visit and would otherwise report a change
        that the student never made. */
     function signature(data) {
@@ -6393,7 +6335,7 @@ const papelDraft = (function () {
         if (typeof syncSupportingDocs === 'function') syncSupportingDocs();
         if (typeof updateReview === 'function') updateReview();
 
-        // Step 2 onwards needs a PDF, which cannot be restored — so the student
+        // Step 2 onwards needs a PDF, which cannot be restored, so the student
         // lands back on Step 1 to re-attach it, with everything else in place.
         if (typeof goToStep === 'function') goToStep(1);
     }
@@ -6466,13 +6408,13 @@ const papelDraft = (function () {
 
         // Offered once, on arrival.
         offerRestore: async function () {
-            /* The baseline for "unsaved". Some boxes arrive already filled — the
-               year, the student's own name — so without this the page counts as
+            /* The baseline for "unsaved". Some boxes arrive already filled (the
+               year, the student's own name) so without this the page counts as
                having unsaved work before the student has touched anything, and
                the leave prompt fires on the very first link they click. */
             savedSignature = signature(collect());
 
-            // A draft opened from the dashboard is applied without asking —
+            // A draft opened from the dashboard is applied without asking:
             // clicking it *is* the request to continue.
             if (SERVER_DRAFT) {
                 apply({ fields: SERVER_DRAFT.fields, files: {}, step: 1 });
@@ -6505,7 +6447,7 @@ const papelDraft = (function () {
             const when = new Date(data.savedAt || Date.now());
             const files = Object.keys(data.files || {});
             const note = files.length
-                ? ' You will need to attach ' + files.join(', ') + ' again — a browser cannot keep a file between visits.'
+                ? ' You will need to attach ' + files.join(', ') + ' again. A browser cannot keep a file between visits.'
                 : '';
 
             const restore = await window.papelConfirm(
@@ -6571,7 +6513,7 @@ function goToStep(step) {
             /* By name, not by tag. A student picks a programme from a select;
                staff belong to the faculty rather than to a degree, so for them
                the field is a read-only box with a hidden input behind it. This
-               looked only for a select, found nothing, and threw on .value —
+               looked only for a select, found nothing, and threw on .value,
                which killed the click handler, so the button appeared dead
                rather than complaining about anything. */
             const programEl = document.querySelector('[name="program_category"]');
@@ -6584,6 +6526,12 @@ function goToStep(step) {
                group, so the "at least one" rule is made here. */
             if (!document.querySelectorAll('.js-manuscript:checked').length) {
                 papelAlert('Please choose at least one manuscript type');
+                return;
+            }
+            /* Marked required on the form, so it is asked for here too. One is
+               ticked to begin with, but all three can be cleared. */
+            if (!document.querySelectorAll('input[name="paper_status[]"]:checked').length) {
+                papelAlert('Please choose at least one paper status');
                 return;
             }
         }
@@ -6690,7 +6638,7 @@ const SECTIONS_NOTE =
   + ' PDF is not what they read, and it is not what the search looks through.</p>'
   + '<p>That is why all six are required:</p>'
   + '<ul>'
-  + '<li><strong>Abstract</strong> — taken from your PDF word for word, so check it.</li>'
+  + '<li><strong>Abstract</strong>: taken from your PDF word for word, so check it.</li>'
   + '<li><strong>Introduction</strong></li>'
   + '<li><strong>Methodology</strong></li>'
   + '<li><strong>Results and Discussion</strong></li>'
@@ -6741,7 +6689,7 @@ function updateReview() {
     
     /* The wording follows whether this paper type needs the documents at
        all. "Missing" reads as a fault, and for a Journal Article or a
-       Project there is no fault to report — nothing was ever required. */
+       Project there is no fault to report: nothing was ever required. */
     const docsNeeded = supportingDocsRequired();
 
     document.getElementById('reviewDocs').textContent =
@@ -6819,14 +6767,13 @@ document.getElementById('btnExtract').addEventListener('click', function(){
   let fd = new FormData();
   fd.append('action', 'extract_ai');
   fd.append('research_pdf', pdfFile);
-  fd.append('model_choice', document.getElementById('extractModelSelect').value);
 
   // Find CSRF token
   const tokenInput = document.querySelector('input[name="csrf_token"]') || document.querySelector('input[name="_token"]');
   if(tokenInput) fd.append(tokenInput.name, tokenInput.value);
 
   // Extraction is a background request, so the form-submit hook in
-  // loading_bar.php never sees it — the logo pill has to be asked for.
+  // loading_bar.php never sees it: the logo pill has to be asked for.
   if (window.papelLoading) window.papelLoading.work.start();
   fetch('student_upload_ai.php', {method:'POST', body:fd})
   .then(r => r.json())
@@ -6854,7 +6801,7 @@ document.getElementById('btnExtract').addEventListener('click', function(){
       document.getElementById('btnNextToSupporting').style.display = 'block';
       
       // Extraction notice. It stays until the student dismisses it or runs
-      // another extraction — it tells them what they still have to write, so
+      // another extraction: it tells them what they still have to write, so
       // timing it out means the instruction vanishes before it has been read.
       const previousMsg = document.getElementById('extractMsg');
       if (previousMsg) previousMsg.remove();
@@ -6865,7 +6812,7 @@ document.getElementById('btnExtract').addEventListener('click', function(){
       successMsg.innerHTML = (papelDoc.text('abstract')
         ? '<strong>Extraction complete.</strong> Review the Abstract and edit if needed, '
           + 'then write your Introduction, Methodology, and Results and Discussion.'
-        : '<strong>Extraction complete.</strong> No abstract could be found in your PDF — '
+        : '<strong>Extraction complete.</strong> No abstract could be found in your PDF, so '
           + 'please write all four sections yourself.')
         + '<button type="button" class="alert-close" aria-label="Dismiss">'
         + '<span class="material-symbols-outlined mi-18">close</span></button>';
@@ -6925,7 +6872,7 @@ document.getElementById('uploadForm').addEventListener('submit', function(e){
         'Uploading to secure storage',
         'Saving paper metadata',
         'Running document checks',
-        'Almost there — finalizing'
+        'Almost there, finalizing'
     ];
     let msgIdx = 0;
     const msgTimer = setInterval(function() {
@@ -6938,8 +6885,8 @@ document.getElementById('uploadForm').addEventListener('submit', function(e){
     }, 3500);
 
     const fd  = new FormData(this);
-    /* If this paper was being written as a draft — or was sent back for
-       revision and reopened — the server replaces that row instead of filing a
+    /* If this paper was being written as a draft (or was sent back for
+       revision and reopened) the server replaces that row instead of filing a
        second copy of the same paper. */
     const openDraft = (typeof papelDraft !== 'undefined') ? papelDraft.draftId() : 0;
     if (openDraft) fd.set('draft_id', String(openDraft));
@@ -7060,7 +7007,7 @@ function applyChatDock(docked, side) {
     document.body.classList.toggle('chat-docked-left',  docked && side === 'left');
     document.body.classList.toggle('chat-docked-right', docked && side === 'right');
 
-    // Docking implies the panel is open — otherwise the floating button is
+    // Docking implies the panel is open: otherwise the floating button is
     // hidden while the window is still closed and nothing is visible at all.
     if (docked) {
         const win = document.getElementById('chat-window');
@@ -7112,11 +7059,13 @@ document.getElementById('chat-input').addEventListener('keypress', function(e) {
 });
 
 /* ----- PUPPY's moods -----
-   Two models, four moods. The model select picks the colour (1 Aincrad is the
+   Two engines, four moods. The engine in use picks the colour (1 Aincrad is the
    maroon dog, 2 Alfheim the yellow) and the conversation picks the mood, so the
-   face is rebuilt whenever either changes. All eight are preloaded: swapping
-   src on a cold cache leaves a blank frame mid-conversation, which reads as the
-   widget breaking rather than as the dog thinking. */
+   face is rebuilt whenever either changes. Which engine that is comes back with
+   each reply rather than from a dropdown: nobody chooses it now, and the colour
+   is the only place it shows. All eight are preloaded: swapping src on a cold
+   cache leaves a blank frame mid-conversation, which reads as the widget
+   breaking rather than as the dog thinking. */
 const PUPPY_BASE    = <?= json_encode(BASE_URL . '/assests/images/', JSON_UNESCAPED_SLASHES) ?>;
 const PUPPY_COLOURS = { '1': 'red', '2': 'yellow' };
 const PUPPY_STATES  = ['welcome', 'processing', 'successful', 'alert'];
@@ -7129,9 +7078,10 @@ Object.keys(PUPPY_COLOURS).forEach(function (k) {
 
 let puppyRevertTimer = null;
 
+let puppyEngine = '1';                       // told by the server with each reply
+
 function puppyColour() {
-    const sel = document.getElementById('chatModelSelect');
-    return PUPPY_COLOURS[sel ? sel.value : '1'] || 'red';
+    return PUPPY_COLOURS[puppyEngine] || 'red';
 }
 
 function setPuppyState(state) {
@@ -7177,14 +7127,19 @@ async function sendMessage() {
     setPuppyState('processing');             // overwrite the face mid-request
     const thinkingSince = Date.now();
     try {
-        const modelChoice = document.getElementById('chatModelSelect').value;
         const res = await fetch('student_chatbot.php', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({message: msg, model_choice: modelChoice})
+            body: JSON.stringify({message: msg})
         });
         const data = await res.json();
         await puppyFinishThinking(thinkingSince);
+        /* The engine can change under us, when the one that was answering runs
+           out and the other takes over. The dog changes colour with it. */
+        if (data && data.engine && String(data.engine) !== puppyEngine) {
+            puppyEngine = String(data.engine);
+            repaintMessageAvatars();
+        }
         // A 200 carrying no reply is still a failure to the student, so the dog
         // reacts to what actually came back rather than to the status code.
         if (data && data.reply) {
@@ -7212,7 +7167,7 @@ function repaintMessageAvatars() {
 
 /* The model answers in Markdown. Rendered as one run of text with <br>s, as it
    used to be, a bulleted answer was a wall of "•" lines and there was nothing
-   for CSS to space — so it is built into real paragraphs and lists instead.
+   for CSS to space, so it is built into real paragraphs and lists instead.
    Every line is escaped before any tag is added, and the only tags added are
    the fixed ones below, so nothing the model writes can become markup. */
 function escapeChatText(s) {
@@ -7387,7 +7342,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    /* Closing or reloading the tab. The save happens either way — the prompt
+    /* Closing or reloading the tab. The save happens either way: the prompt
        is the browser's own and only asks whether to stay; it cannot be relied
        on to run anything afterwards, so the write comes first. */
     window.addEventListener('beforeunload', function (e) {
@@ -7466,7 +7421,7 @@ document.addEventListener('DOMContentLoaded', function() {
        leaving silently. Pressing Back again from the answer is what really
        leaves.
 
-       (Closing or reloading the tab is a different matter — browsers show
+       (Closing or reloading the tab is a different matter: browsers show
        their own fixed wording there and ignore any text a page supplies, so
        that one cannot be replaced, only triggered.) */
     let backGuardArmed = false;
@@ -7583,14 +7538,14 @@ document.addEventListener('DOMContentLoaded', function() {
         // The PDF preview is the most recently opened surface, so Escape
         // belongs to it first. It steps back rather than closing outright:
         // drag mode returns to selecting text, and only then does a second
-        // Escape close the panel — so the key never strands the reader in a
+        // Escape close the panel, so the key never strands the reader in a
         // mode they cannot get out of without reaching for the toolbar.
         const pdfPanel = document.getElementById('pdf-preview');
         if (pdfPanel && !pdfPanel.hidden) {
             e.preventDefault();
             if (papelPdfPreview.getMode() === 'pan') {
                 papelPdfPreview.setMode('select');
-                papelPdfPreview.hint('Select mode — drag across the text to copy it');
+                papelPdfPreview.hint('Select mode: drag across the text to copy it');
             } else {
                 papelPdfPreview.close();
             }
@@ -7603,13 +7558,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     document.getElementById('chat-button').addEventListener('click', toggleChat);
-
-    // Colour follows the model, so the pick is visible on the dog itself.
-    const puppyModelSel = document.getElementById('chatModelSelect');
-    if (puppyModelSel) puppyModelSel.addEventListener('change', function () {
-        setPuppyState('welcome');
-        repaintMessageAvatars();
-    });
 
     // Chat form submit
     document.getElementById('chatForm').addEventListener('submit', function(e) {
@@ -7671,14 +7619,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
 <!-- Brings the preview back after it has been minimised or closed. Pinned to
      the right edge on every step, so the paper is never more than one click
-     away — including from Steps 3 and 4, long after the file was chosen. -->
+     away, including from Steps 3 and 4, long after the file was chosen. -->
 <button type="button" id="pdf-restore" hidden title="Show the PDF preview" aria-label="Show the PDF preview">
   <span class="material-symbols-outlined mi-20">picture_as_pdf</span>
   <span class="pdf-restore-label">PDF</span>
 </button>
 
-<script src="<?= BASE_URL ?>/assests/js/pdfjs/pdf.min.js"></script>
-<script src="<?= BASE_URL ?>/assests/js/papel-pdf-view.js"></script>
+<script src="<?= e(asset_url('assests/js/pdfjs/pdf.min.js')) ?>"></script>
+<script src="<?= e(asset_url('assests/js/papel-pdf-view.js')) ?>"></script>
 
 <!-- Site dialog, used in place of the browser's alert box -->
 <div class="papel-dialog-backdrop" id="papelDialog" role="dialog" aria-modal="true" aria-labelledby="papelDialogTitle">
@@ -7781,7 +7729,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     /* Same dialog, asking for a value instead of just announcing one. Resolves
-       with the typed string, or null when cancelled — so callers can tell
+       with the typed string, or null when cancelled, so callers can tell
        "cleared the field" apart from "changed their mind". */
     window.papelPrompt = function (message, opts) {
         opts = opts || {};

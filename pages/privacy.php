@@ -79,7 +79,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
     <div class="page-card">
         <div class="page-card-body">
         <p class="updated-note">Last updated: <?= date('F d, Y') ?></p>
-        <p class="lead-text">At <strong><?= e(APP_NAME) ?></strong>, the official digital research repository of the <em>Polytechnic University of the Philippines – Biñan Campus</em>, we respect your privacy and handle your information responsibly. This Privacy Policy explains what data the system collects, why we collect it, who it is shared with, and the choices available to you.</p>
+        <p class="lead-text">At <strong><?= e(APP_NAME) ?></strong>, a digital research repository built for the <em>Polytechnic University of the Philippines – Biñan Campus</em>, we respect your privacy and handle your information responsibly. This Privacy Policy explains what data the system collects, why we collect it, who it is shared with, and the choices available to you.</p>
         </div>
     </div>
 
@@ -125,7 +125,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
                     </tr>
                 </tbody>
             </table>
-            <p>We do not collect more than this — the system does not run third-party advertising trackers or build marketing profiles.</p>
+            <p>We do not collect more than this. The system does not run third-party advertising trackers or build marketing profiles.</p>
         </div>
 
         <div class="terms-section">
@@ -166,7 +166,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
             <ul>
                 <li>Account information is retained while your account remains active within the institution.</li>
                 <li>Approved papers are preserved as part of the university's research archive and may be archived rather than deleted.</li>
-                <li>When a submission is declined, its uploaded files may be permanently removed from cloud storage to conserve space — so you should always keep your own copy of any work you submit.</li>
+                <li>When a submission is declined, its uploaded files may be permanently removed from cloud storage to conserve space, so you should always keep your own copy of any work you submit.</li>
                 <li>Guest credentials expire automatically and expired guest sessions may be cleared by an administrator.</li>
             </ul>
         </div>
@@ -175,7 +175,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
             <h2><span class="num">6.</span> How We Protect Your Data</h2>
             <p>The system applies reasonable technical and organizational safeguards, including:</p>
             <ul>
-                <li>Passwords stored only as secure one-way hashes — never in plain readable form for standard accounts.</li>
+                <li>Passwords stored only as secure one-way hashes, never in plain readable form for standard accounts.</li>
                 <li>Role-based access control, so each user only reaches the dashboards and data appropriate to their role.</li>
                 <li>Protection against cross-site request forgery (CSRF) and a Content Security Policy to reduce common web attacks.</li>
                 <li>Server-side session management for authenticated access.</li>

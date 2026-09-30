@@ -8,7 +8,7 @@ class PaperService {
            analytics.time_to_approval and the tile that reads it have both
            existed all along, but nothing ever wrote the column, so the figure
            always showed "not recorded yet". Measured from upload to this
-           moment, in days, and only on the final approval — an adviser signing
+           moment, in days, and only on the final approval: an adviser signing
            off is a step along the way, not the end of it. */
         if ($targetStatus === 'approved') {
             $this->recordTimeToApproval((int)$paperId);
@@ -38,7 +38,7 @@ class PaperService {
 
             $days = round((float)$row['days'], 2);
             /* The analytics row is created on first view, so it may not exist
-               yet — this has to be able to make one. */
+               yet: this has to be able to make one. */
             $up = $conn->prepare(
                 "INSERT INTO analytics (paper_id, time_to_approval) VALUES (?, ?)
                  ON DUPLICATE KEY UPDATE time_to_approval = VALUES(time_to_approval)");
@@ -52,7 +52,7 @@ class PaperService {
     public function declinePaper($paperId, $reviewerId, $reviewLevel, $feedback, $message) {
         add_workflow($paperId, $reviewerId, $reviewLevel, 'declined', $feedback);
         set_status($paperId, 'draft');
-        // Free Drive storage — a declined paper cannot be resubmitted, so its files are no longer needed.
+        // Free Drive storage: a declined paper cannot be resubmitted, so its files are no longer needed.
         if (!function_exists('purge_paper_drive_files')) {
             require_once __DIR__ . '/../../config/gdrive_config.php';
         }

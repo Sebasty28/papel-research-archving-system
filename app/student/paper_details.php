@@ -4,7 +4,7 @@
  *
  * The repository page (archive/view_paper.php) is written for a reader looking
  * something up. This is the other thing entirely: it is the author's copy of
- * what they filed — everything from Step 1 to Step 3 of the upload, the five
+ * what they filed: everything from Step 1 to Step 3 of the upload, the five
  * written sections, the files that went with it, and the checklist the Research
  * Adviser ticked when they approved it. That last part is the point: the
  * checklist is the only place a student can see what their adviser actually
@@ -22,7 +22,7 @@ $u    = current_user();
 
 $paper_id = (int)($_GET['id'] ?? 0);
 
-/* Ownership is the whole access rule — the paper must be this student's.
+/* Ownership is the whole access rule: the paper must be this student's.
    A returned paper carries the status 'draft', which is also what an
    untouched draft has, so the two are told apart by whether a reviewer has
    ever sent it back: a returned paper has a decline on record and everything
@@ -73,7 +73,7 @@ if (!$sections && trim((string)$paper['abstract']) !== '') {
 /* ---- Files -------------------------------------------------------------- */
 /* Every document this paper should have, whether or not it arrived. Showing
    only what was attached hides the thing a student most needs to see when a
-   paper comes back — which file is missing. Ethics, consent and the data tool
+   paper comes back, which file is missing. Ethics, consent and the data tool
    are demanded only of the paper types that gather original data; for anything
    else they are welcome but not owed, and are marked as such rather than as a
    fault. */
@@ -86,11 +86,13 @@ $expected = [
     'copyright_doc'    => ['label' => 'Copyright / IP Document', 'required' => $docsRequired],
 ];
 
+/* Each file that exists is opened through app/paper_file.php, in PAPEL's own
+   viewer; paper_file_url() is asked only whether there is a file at all. */
 $found = [];
-if ($link = paper_file_url($paper['gdrive_file_id'] ?? null, $paper['file_path'] ?? null)) {
-    $found['manuscript'] = $link;
+if (paper_file_url($paper['gdrive_file_id'] ?? null, $paper['file_path'] ?? null)) {
+    $found['manuscript'] = paper_file_src('paper', $paper_id);
 }
-$ds = $conn->prepare("SELECT document_type, file_path, gdrive_file_id FROM supporting_documents WHERE paper_id = ? ORDER BY doc_id ASC");
+$ds = $conn->prepare("SELECT doc_id, document_type, file_path, gdrive_file_id FROM supporting_documents WHERE paper_id = ? ORDER BY doc_id ASC");
 $ds->bind_param('i', $paper_id);
 $ds->execute();
 foreach ($ds->get_result()->fetch_all(MYSQLI_ASSOC) as $d) {
@@ -100,8 +102,8 @@ foreach ($ds->get_result()->fetch_all(MYSQLI_ASSOC) as $d) {
     $label = supporting_doc_label($d['document_type'] ?? '');
     $key   = array_search($label, array_column($expected, 'label'), true);
     $key   = $key === false ? $label : array_keys($expected)[$key];
-    if ($link = paper_file_url($d['gdrive_file_id'] ?? null, $d['file_path'] ?? null)) {
-        $found[$key] = $link;   // later rows overwrite earlier ones
+    if (paper_file_url($d['gdrive_file_id'] ?? null, $d['file_path'] ?? null)) {
+        $found[$key] = paper_file_src('doc', (int)$d['doc_id']);   // later rows overwrite earlier ones
     }
 }
 $ds->close();
@@ -248,7 +250,7 @@ $fill  = count($steps) > 1 ? max(0, min(100, ($done - 1) / (count($steps) - 1) *
                     <h2>Sent back for revision</h2>
                     <p>
                         Fix what is described below, then submit the paper again. Everything you
-                        wrote is still here — editing reopens it exactly as you left it.
+                        wrote is still here: editing reopens it exactly as you left it.
                     </p>
                     <?php if (!empty($returned['feedback'])): ?>
                         <p class="pd-said"><?= e($returned['feedback']) ?></p>
@@ -362,13 +364,13 @@ $fill  = count($steps) > 1 ? max(0, min(100, ($done - 1) / (count($steps) - 1) *
             <div class="pd-files">
                 <?php foreach ($files as $f): ?>
                     <?php if ($f['href']): ?>
-                        <a class="pd-file" href="<?= e($f['href']) ?>" target="_blank" rel="noopener"
-                           title="Show <?= e($f['label']) ?> beside the record">
+                        <a class="pd-file" href="#pd-sec-files" data-pdf-src="<?= e($f['href']) ?>"
+                           title="Open <?= e($f['label']) ?> here">
                             <span class="pd-file-name"><?= e($f['label']) ?></span>
                             <span class="pd-file-ico"><span class="material-symbols-outlined">picture_as_pdf</span></span>
                         </a>
                     <?php else: ?>
-                        <?php /* Not a link — there is nothing to open. It stays on the page so the
+                        <?php /* Not a link: there is nothing to open. It stays on the page so the
                                  gap is visible, worded as required or simply not needed. */ ?>
                         <div class="pd-file is-missing <?= $f['required'] ? '' : 'is-optional' ?>">
                             <span class="pd-file-name"><?= e($f['label']) ?></span>
@@ -423,7 +425,7 @@ $fill  = count($steps) > 1 ? max(0, min(100, ($done - 1) / (count($steps) - 1) *
                     </div>
                 <?php endif; ?>
 
-                <?php /* Files are not read from the checklist table — this column reports
+                <?php /* Files are not read from the checklist table: this column reports
                          what is actually attached to the paper, so it cannot disagree with
                          the Uploaded Files card above it. */ ?>
                 <div>
@@ -508,7 +510,7 @@ $fill  = count($steps) > 1 ? max(0, min(100, ($done - 1) / (count($steps) - 1) *
         <aside class="pd-side">
             <?php
             /* One entry per card actually on the page, plus one per written
-               section inside "Written Sections" — mirrors the public paper
+               section inside "Written Sections": mirrors the public paper
                view's table of contents (archive/view_paper.php), minus the
                "Cite This Paper" card, which has no place on a student's own
                working copy of an unpublished submission. Order matches the
@@ -562,6 +564,10 @@ $fill  = count($steps) > 1 ? max(0, min(100, ($done - 1) / (count($steps) - 1) *
 </main>
 
 <?php
+/* A file opens inside Uploaded Files, beside the tile that opened it, and can
+   be docked to either side of the window: the same as on the review desk. */
+$PDF_DOCK_HOME      = '#pd-sec-files';
+$PDF_DOCK_HOME_NAME = 'Uploaded Files';
 require ROOT_PATH.'/includes/pdf_dock.php';
 require ROOT_PATH.'/includes/scroll_jump.php';
 $CARD_COLLAPSE_SELECTOR = '.pd-card';
@@ -577,12 +583,30 @@ document.addEventListener('DOMContentLoaded', function () {
     var railIcon   = document.getElementById('pdRailToggleIcon');
     var layout     = document.getElementById('pdLayout');
     if (railToggle && layout) {
-        railToggle.addEventListener('click', function () {
-            var collapsed = layout.classList.toggle('is-rail-collapsed');
+        function setRail(collapsed) {
+            layout.classList.toggle('is-rail-collapsed', collapsed);
             railIcon.textContent = collapsed ? 'right_panel_open' : 'right_panel_close';
             railToggle.title = collapsed ? 'Show the contents panel' : 'Hide the contents panel';
             railToggle.setAttribute('aria-label', railToggle.title);
             railToggle.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
+        }
+
+        railToggle.addEventListener('click', function () {
+            setRail(!layout.classList.contains('is-rail-collapsed'));
+        });
+
+        /* A file docked to either side of the window leaves the record
+           squeezed between it and the rail, so the rail gives way while it is
+           docked and comes back as it was: one the reader had hidden stays
+           hidden. The same arrangement as the public paper view. */
+        var railWasOpen = false;
+        document.addEventListener('papel:pdf-dock-open', function () {
+            railWasOpen = !layout.classList.contains('is-rail-collapsed');
+            if (railWasOpen) { setRail(true); }
+        });
+        document.addEventListener('papel:pdf-dock-close', function () {
+            if (railWasOpen) { setRail(false); }
+            railWasOpen = false;
         });
     }
 
@@ -638,7 +662,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    /* Scroll-spy only tracks the finest-grained heading on the page — a
+    /* Scroll-spy only tracks the finest-grained heading on the page: a
        parent entry that has its own sub-list would otherwise stay "active"
        for as long as any of its children are, since it spans all of them. */
     var spyLinks = tocLinks.filter(function (link) {

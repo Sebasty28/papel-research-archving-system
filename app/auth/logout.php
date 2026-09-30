@@ -12,7 +12,7 @@ $from_archive = $from_archive || (strpos($referrer, '/archive/') !== false);
 
 /* Destroy the session, and the cookie that points at it.
    Without clearing the cookie the browser keeps presenting the same id, so the
-   next page reuses an emptied session — one with no CSRF token in it. Any login
+   next page reuses an emptied session: one with no CSRF token in it. Any login
    page left open from before then fails to submit, which reads as "Invalid CSRF
    token" rather than "you signed out". Dropping the cookie means the next
    request starts a clean session and is issued a fresh token. */

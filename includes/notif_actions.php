@@ -2,8 +2,8 @@
 /**
  * Right-click a notification: mark it read or unread, or delete it.
  *
- * One menu serves both lists — the bell's dropdown (.notif-item) and the
- * notification centre (.nc-item) — because both already tag each row with
+ * One menu serves both lists, the bell's dropdown (.notif-item) and the
+ * notification centre (.nc-item), because both already tag each row with
  * data-notif-id. Included from site_footer.php, which every page carries.
  *
  * Read/unread is a toggle rather than two entries: the menu offers whichever
@@ -95,7 +95,7 @@
 
     /* Every count on the page, from the figures the server just returned.
        There are four of them and they are easy to miss: the bell's badge, the
-       dropdown's Unread tab, and — on the full-screen list — the "N in total,
+       dropdown's Unread tab, and (on the full-screen list) the "N in total,
        M unread" line and its own Unread tab. Deleting moves the total as well
        as the unread tally, which is why both are read back rather than the
        caller subtracting one and hoping. */
@@ -142,6 +142,11 @@
         }
     }
 
+    /* The bell's panel paints the same counts after its own "Mark all"
+       (site_footer.php), so it borrows this rather than keeping a second copy
+       of where all four of them are. */
+    window.papelNotifCounts = paintCounts;
+
     function send(action, row) {
         var id = row.getAttribute('data-notif-id');
         if (!id) { return; }
@@ -171,6 +176,10 @@
                   setUnread(row, action === 'mark_unread');
               }
               paintCounts(data.unread, data.total);
+              /* Said out loud: the bell's panel offers whichever move is
+                 left (site_footer.php), and a row read or put back here can
+                 be the one that changes which that is. */
+              document.dispatchEvent(new CustomEvent('papel:notif-changed'));
           })
           .catch(function () {
               if (window.papelNote) {

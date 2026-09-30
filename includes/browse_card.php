@@ -14,7 +14,7 @@
  * one of the old cards or from the navbar.
  *
  * Upload Paper and View Drafts used to live here too, but Browse is about
- * *going somewhere else* — the repository, a desk. Those two are actions on
+ * *going somewhere else*: the repository, a desk. Those two are actions on
  * the student's own work, not destinations, so they moved into their own
  * "What you can do" card below, the same one the review desks already use for
  * exactly this distinction.
@@ -24,7 +24,7 @@
  * Where this person can go, in the order the card lists them.
  *
  * Each entry carries the scripts it should light up on. `tab` narrows that
- * further where one script serves two views — the student dashboard is both
+ * further where one script serves two views: the student dashboard is both
  * "My Dashboard" and "View Drafts" depending on the query.
  */
 function browse_card_links(?array $u): array
@@ -56,7 +56,7 @@ function browse_card_links(?array $u): array
 }
 
 /**
- * Quick actions for the role — everything that acts on the reader's own
+ * Quick actions for the role: everything that acts on the reader's own
  * work or desk rather than taking them somewhere else. Empty for a role with
  * nothing of the sort (a guest, the Director, the Head of Academic
  * Programs): nobody there uploads a paper, has drafts to check on, or runs
@@ -65,7 +65,7 @@ function browse_card_links(?array $u): array
  * A Research Adviser and a Research Coordinator get the same quick actions
  * here as their own review desk's "What you can do" card offers (minus the
  * link back to the repository itself, redundant on the page that already
- * is one) — reading a paper on the public repository shouldn't mean losing
+ * is one): reading a paper on the public repository shouldn't mean losing
  * the one-click reach to Upload Paper, Analytics or Notifications that desk
  * gives them.
  */
@@ -162,7 +162,7 @@ function browse_card_html(?array $u, string $cardId = 'browseCard'): string
 }
 
 /**
- * "What you can do" — the same title and placement the review desks already
+ * "What you can do": the same title and placement the review desks already
  * use for a reviewer's own quick actions, offered here to students, Research
  * Advisers and Research Coordinators alike. Empty string for any other
  * role, so a page can call this unconditionally without checking who is

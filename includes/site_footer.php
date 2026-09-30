@@ -60,12 +60,12 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         var handlerUrl = <?= json_encode(BASE_URL.'/notifications/notifications_handler.php') ?>;
-        /* The handler refuses a post it cannot trace to this application — it
+        /* The handler refuses a post it cannot trace to this application: it
            can delete now, so an untraceable one must not be enough. */
         var notifToken = <?= json_encode(csrf_token()) ?>;
 
         /* A notification is about a paper, so clicking one goes there. Marking
-           it read is sent first and the browser follows the link either way —
+           it read is sent first and the browser follows the link either way:
            a failed bookkeeping call should not strand someone on the page they
            just tried to leave. Shared between the corner dropdown and the
            centred "what's new" popup below, since both list the same rows in
@@ -151,28 +151,74 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         }
 
+        /* Mark all as read, or back again once everything has been read: the
+           button offers whichever move is left, so the panel is never showing
+           an action that would do nothing. Kept in step with the list itself,
+           since a row read on its own (or put back through its right-click
+           menu, includes/notif_actions.php) can be the one that empties it. */
         var markAllBtn = document.getElementById('notifMarkAllBtn');
+        function paintMarkAll() {
+            if (!markAllBtn) { return; }
+            var items  = notifDropdown.querySelectorAll('.notif-item');
+            var unread = notifDropdown.querySelectorAll('.notif-item.unread').length;
+            markAllBtn.hidden = items.length === 0;
+            var toRead = unread > 0;
+            markAllBtn.dataset.act = toRead ? 'mark_all_read' : 'mark_all_unread';
+            var icon = markAllBtn.querySelector('.material-symbols-outlined');
+            if (icon) { icon.textContent = toRead ? 'done_all' : 'mark_email_unread'; }
+            var label = markAllBtn.querySelector('.notif-mark-all-label');
+            if (label) { label.textContent = 'Mark all as ' + (toRead ? 'read' : 'unread'); }
+        }
         if (markAllBtn) {
             markAllBtn.addEventListener('click', function (e) {
                 e.stopPropagation();
+                var act = markAllBtn.dataset.act === 'mark_all_unread' ? 'mark_all_unread' : 'mark_all_read';
                 fetch(handlerUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: 'action=mark_all_read&_token=' + encodeURIComponent(notifToken)
-                }).then(function () {
-                    notifDropdown.querySelectorAll('.notif-item.unread').forEach(function (i) { i.classList.remove('unread'); });
-                    var badge = notifToggle.querySelector('.notif-badge');
-                    if (badge) badge.remove();
-                    var unreadTab = notifDropdown.querySelector('.notif-tab[data-filter="unread"]');
-                    if (unreadTab) unreadTab.textContent = 'Unread';
+                    body: 'action=' + act + '&_token=' + encodeURIComponent(notifToken)
+                }).then(function (res) {
+                    return res.json().catch(function () { return null; });
+                }).then(function (data) {
+                    var nowUnread = act === 'mark_all_unread';
+                    notifDropdown.querySelectorAll('.notif-item').forEach(function (i) {
+                        i.classList.toggle('unread', nowUnread);
+                    });
+                    /* The counts the server just returned, painted everywhere
+                       they appear (includes/notif_actions.php owns that), with
+                       the bell's badge and the Unread tab as the fallback for
+                       a page without it. */
+                    if (window.papelNotifCounts && data) {
+                        window.papelNotifCounts(data.unread, data.total);
+                    } else {
+                        var left  = data ? data.unread : (nowUnread ? notifDropdown.querySelectorAll('.notif-item').length : 0);
+                        var badge = notifToggle.querySelector('.notif-badge');
+                        if (!left) {
+                            if (badge) { badge.remove(); }
+                        } else {
+                            if (!badge) {
+                                badge = document.createElement('span');
+                                badge.className = 'notif-badge';
+                                notifToggle.appendChild(badge);
+                            }
+                            badge.textContent = left > 9 ? '9+' : String(left);
+                        }
+                        var unreadTab = notifDropdown.querySelector('.notif-tab[data-filter="unread"]');
+                        if (unreadTab) { unreadTab.textContent = left ? 'Unread (' + left + ')' : 'Unread'; }
+                    }
+                    paintMarkAll();
                 });
             });
+            /* A row read or put back on its own changes which move is left. */
+            notifDropdown.addEventListener('click', function () { setTimeout(paintMarkAll, 0); });
+            document.addEventListener('papel:notif-changed', paintMarkAll);
+            paintMarkAll();
         }
 
         /* The one-shot "what's new" card site_header.php pops in the centre
            of the page right after signing in, when something is unread. Its
            rows are wired the same way the dropdown's are; only closing it is
-           new — a click on the dimmed backdrop, the X, or Escape all just
+           new: a click on the dimmed backdrop, the X, or Escape all just
            remove it, without marking anything read that was not clicked. */
         var notifPopup = document.getElementById('notifPopupBackdrop');
         if (notifPopup) {
@@ -191,7 +237,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     /* The phone menu. The sheet it opens is the same <nav> the wide layout
        shows in the bar, so there is one set of links and one set of active
-       states — only the painting changes with the width. */
+       states, only the painting changes with the width. */
     var navToggle = document.getElementById('navToggle');
     if (navToggle) {
         var root = document.documentElement;
@@ -222,7 +268,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (e.key === 'Escape') setNav(false);
         });
         /* Turned to landscape or opened on a tablet, the links are back in the
-           bar and the sheet is meaningless — but the open class would still be
+           bar and the sheet is meaningless, but the open class would still be
            swapping the button's glyph to a close icon. */
         window.addEventListener('resize', function () {
             if (window.innerWidth > 900) setNav(false);
@@ -273,7 +319,7 @@ document.addEventListener('DOMContentLoaded', function () {
     /* Everything except the panel is put out of reach while it is open. The
        backdrop stopped the mouse, but the keyboard walked straight past it:
        Tab and the arrow keys (includes/key_nav.php) went on into the page
-       behind, where a filter could be opened — and its menu then drew on top
+       behind, where a filter could be opened, and its menu then drew on top
        of the panel it had been opened from behind. `inert` takes clicks, the
        focus order and the accessibility tree away from all of it at once. */
     function setPageInert(on) {
@@ -284,7 +330,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     /* A skinned dropdown left open behind the panel would still be painted
-       over it — its menu is fixed, at the top level of the page, and its own
+       over it: its menu is fixed, at the top level of the page, and its own
        outside-click never fired if the panel was opened from the keyboard. */
     function closeOpenMenus() {
         document.querySelectorAll('.sel-menu:not([hidden])').forEach(function (menu) {
@@ -430,7 +476,10 @@ require_once ROOT_PATH.'/includes/loading_bar.php';
    after them means they get first refusal, and this one stands down when it
    sees the key was already handled. */
 require_once ROOT_PATH.'/includes/key_nav.php';
-/* The close button and the five-second life of every red and green banner. */
+/* The close button and the five-second life of every red and green banner.
+   site_head.php has it already on any page with the shared head, where it
+   must be to hold a banner back before it is drawn; this is for a page that
+   carries the footer without it. */
 require_once ROOT_PATH.'/includes/flash_dismiss.php';
 /* Right-click actions for the notification lists. Only for someone signed in:
    there is no bell, and no notification centre, for anybody else. */

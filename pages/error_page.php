@@ -35,7 +35,7 @@ $description = $descriptions[$error_http_code] ?? 'An unexpected error occurred.
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?= htmlspecialchars($title) ?> · <?= htmlspecialchars($app_name) ?></title>
-<?php /* Deliberately chrome-less, so no site_head.php to carry the icon in —
+<?php /* Deliberately chrome-less, so no site_head.php to carry the icon in,
          and reached via __DIR__ rather than ROOT_PATH, which is one of the
          things that may not be defined by the time this page is needed. */ ?>
 <?php require_once __DIR__ . '/../includes/favicon.php'; ?>

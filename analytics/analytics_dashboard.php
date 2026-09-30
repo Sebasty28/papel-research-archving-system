@@ -2,7 +2,7 @@
 require_once __DIR__.'/../config/core.php';
 require_once __DIR__.'/../config/groq_config.php';
 /* The Head of Academic Programs used to read these same figures inline on their
-   own dashboard. That dashboard is now a list, so the numbers live here — the
+   own dashboard. That dashboard is now a list, so the numbers live here: the
    page is unscoped, which is the whole-institution view that role oversees. */
 require_role(['admin','super_admin','faculty','head_academic']);
 $conn = db();
@@ -10,13 +10,13 @@ $u = current_user();
 
 /* What counts as a submission.
  *
- * A draft is a student's private workspace — it can sit half-written for weeks
+ * A draft is a student's private workspace: it can sit half-written for weeks
  * and nobody has been asked to look at it. Counting those alongside real
  * submissions made three papers out of one, so analytics only counts work that
  * has actually been handed in.
  *
  * "Handed in" means it is past draft state, or it has at least one review step
- * behind it — the second half matters because a paper returned for revision
+ * behind it: the second half matters because a paper returned for revision
  * goes back to draft, and it was still submitted.
  */
 const SUBMITTED = "(%1\$s.current_status <> 'draft'
@@ -106,7 +106,7 @@ $avgDays   = $conn->query("SELECT ROUND(AVG(time_to_approval),1) v FROM analytic
 $avgDays   = $avgDays ? ($avgDays->fetch_assoc()['v'] ?? null) : null;
 $approvalPct = $totalSubs > 0 ? round(($approved / $totalSubs) * 100) : 0;
 
-// Drafts nobody has been asked to look at yet — counted apart, never inside.
+// Drafts nobody has been asked to look at yet: counted apart, never inside.
 $openDrafts = (int)$one($conn->query(
     "SELECT COUNT(*) v FROM research_papers rp WHERE NOT " . $submitted('rp')));
 
@@ -218,14 +218,14 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     header('Content-Disposition: attachment; filename="papel_analytics_' . date('Y-m-d') . '.csv"');
     $out = fopen('php://output', 'w');
     fputs($out, "\xEF\xBB\xBF");
-    fputcsv($out, ['PAPEL Analytics — ' . date('Y-m-d H:i')]);
+    fputcsv($out, ['PAPEL Analytics, ' . date('Y-m-d H:i')]);
     if ($filtered) {
         fputcsv($out, ['Filtered by',
             'Year: '    . ($fYear    ?: 'all'),
             'Program: ' . ($fProgram ?: 'all'),
             'Type: '    . ($fType    ?: 'all'),
             'Status: '  . ($fStatus  ?: 'all'),
-            'Search: '  . ($fQuery   ?: '—')]);
+            'Search: '  . ($fQuery   ?: 'none')]);
     }
     fputcsv($out, []);
     fputcsv($out, ['SUMMARY']);
@@ -876,7 +876,7 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
         </div>
         <div class="an-tile">
             <span class="an-tile-label">Average time to approval</span>
-            <span class="an-tile-value"><?= $avgDays !== null ? e($avgDays) : '—' ?></span>
+            <span class="an-tile-value"><?= $avgDays !== null ? e($avgDays) : 'N/A' ?></span>
             <span class="an-tile-note"><?= $avgDays !== null ? 'days' : 'not recorded yet' ?></span>
         </div>
     </div>
@@ -1068,11 +1068,11 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
                                 <span class="an-sub"><?= e($p['author_names']) ?></span>
                             <?php endif; ?>
                         </td>
-                        <td><?= e($p['student'] ?: '—') ?></td>
+                        <td><?= e($p['student'] ?: 'N/A') ?></td>
                         <td title="<?= e($p['program'] ?? '') ?>">
-                            <?= e($p['program'] ? (function_exists('program_code') ? program_code($p['program']) : $p['program']) : '—') ?>
+                            <?= e($p['program'] ? (function_exists('program_code') ? program_code($p['program']) : $p['program']) : 'N/A') ?>
                         </td>
-                        <td><?= e($p['paper_type'] ?: '—') ?></td>
+                        <td><?= e($p['paper_type'] ?: 'N/A') ?></td>
                         <td><span class="an-status <?= e($cls) ?>"><?= e($label) ?></span></td>
                         <td class="an-when"><?= e(date('M j, Y', strtotime($p['upload_date']))) ?></td>
                     </tr>

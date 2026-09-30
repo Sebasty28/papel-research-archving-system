@@ -7,14 +7,14 @@
  * easier to move around when the parts you are not reading can be shut.
  *
  * The wrapping is done here rather than in each page's markup, so a card only
- * has to be a card — it needs no extra div and no extra class.
+ * has to be a card: it needs no extra div and no extra class.
  *
  * Usage, before the include:
  *   $CARD_COLLAPSE_SELECTOR = '.pd-card, .set-card';
  *   require ROOT_PATH.'/includes/card_collapse.php';
  *
- * A card marked data-collapse-default="closed" starts folded instead of open
- * — for a card whose content is useful but not what the page is chiefly for.
+ * A card marked data-collapse-default="closed" starts folded instead of open,
+ * for a card whose content is useful but not what the page is chiefly for.
  */
 $CARD_COLLAPSE_SELECTOR = $CARD_COLLAPSE_SELECTOR ?? '.pd-card';
 ?>

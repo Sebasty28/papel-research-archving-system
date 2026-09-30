@@ -768,13 +768,15 @@ $types_res = $conn->query("SELECT DISTINCT paper_type FROM research_papers WHERE
         background: var(--accent-cream);
     }
     
+    /* The maroon the rest of the site's scrollbars use, rather than the old
+       gradient that faded into gold halfway down. */
     ::-webkit-scrollbar-thumb {
-        background: linear-gradient(180deg, var(--accent-blue), var(--accent-yellow));
+        background: var(--accent-blue);
         border-radius: var(--r-control, 4px);
     }
-    
+
     ::-webkit-scrollbar-thumb:hover {
-        background: var(--accent-blue);
+        background: var(--accent-blue-light);
     }
 </style>
 </head>

@@ -72,7 +72,7 @@ class AdminManagementService {
             ], ['ID', 'Password']);
             $emailBody .= email_action('Sign in at', BASE_URL . '/archive/index.php');
             $emailBody .= email_para('Please change your password after signing in for the first time.');
-            // Reported honestly — see the note in FacultyManagementService.
+            // Reported honestly: see the note in FacultyManagementService.
             $sent = function_exists('send_email')
                  && send_email($data['email'], "Your Admin Account Credentials", $emailBody);
             return $title_val . ($sent
@@ -88,8 +88,8 @@ class AdminManagementService {
      *
      * Mirrors updateFaculty on the adviser side: the panel that creates one also
      * edits it, the uniqueness checks skip the row being edited, and a blank
-     * password leaves theirs alone. The admin level can move — a coordinator
-     * promoted to Head of Academic Programs is the same person, not a new one —
+     * password leaves theirs alone. The admin level can move (a coordinator
+     * promoted to Head of Academic Programs is the same person, not a new one)
      * so it is editable here where the create form also asks for it.
      */
     public function updateAdmin($data, $userId) {
@@ -161,8 +161,8 @@ class AdminManagementService {
      * The Director's roll, grouped by the position each account holds.
      *
      * Positions are what the page talks in; roles and levels are what the
-     * database holds. Head of Academic Programs collects both kinds of record —
-     * the head_academic role and an admin at level 2 — because they are the same
+     * database holds. Head of Academic Programs collects both kinds of record
+     * (the head_academic role and an admin at level 2) because they are the same
      * job, and listing only one of them hid half the people doing it.
      *
      * @return array position => rows

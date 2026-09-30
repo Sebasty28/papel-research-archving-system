@@ -143,7 +143,7 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
 .profile-field { display: flex; flex-direction: column; gap: .2rem; min-width: 0; }
 .profile-field dt { font-size: .6875rem; font-weight: 400; text-transform: uppercase; letter-spacing: .5px; color: var(--grey); }
 .profile-field dd { font-size: .875rem; color: var(--ink); word-break: break-word; }
-/* A date on its own invites "why then?" — the reason sits under it. */
+/* A date on its own invites "why then?": the reason sits under it. */
 .profile-hint { display: block; font-size: .6875rem; color: var(--grey); margin-top: .15rem; line-height: 1.5; }
 .profile-field dd.profile-warn { color: var(--dark-maroon); font-weight: 500; }
 
@@ -337,7 +337,7 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
                 <?php endif; ?>
                 <div class="profile-field">
                     <dt>Member since</dt>
-                    <dd><?= !empty($profile['created_at']) ? e(date('F j, Y', strtotime($profile['created_at']))) : '—' ?></dd>
+                    <dd><?= !empty($profile['created_at']) ? e(date('F j, Y', strtotime($profile['created_at']))) : 'Unknown' ?></dd>
                 </div>
                 <div class="profile-field">
                     <dt>Last sign-in</dt>
@@ -542,9 +542,9 @@ document.addEventListener('DOMContentLoaded', function () {
         try { return localStorage.getItem(key) || fallback; } catch (err) { return fallback; }
     }
 
-    // The section list — one card at a time — is includes/page_sections.php.
+    // The section list (one card at a time) is includes/page_sections.php.
 
-    // Appearance — shares the same storage keys as the browse page's
+    // Appearance: shares the same storage keys as the browse page's
     // Quick Settings panel, so the two stay in sync.
     /* Show or hide one password field. Each eye names its own field, so the
        three on this form never get in each other's way, and the state is
@@ -583,7 +583,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var WAS_DARK = { 'modern-dark': 1, 'quiet-dark': 1 };
     function modeFor(c) { return DARK_COLOURS[c] ? 'dark' : 'light'; }
 
-    // Old Classic is the default — a first-time reader with nothing stored
+    // Old Classic is the default: a first-time reader with nothing stored
     // yet lands there.
     var colour = getStored('papel_color', 'classic');
     // A withdrawn palette, or an old dark preference, lands somewhere sensible:
@@ -640,7 +640,7 @@ document.addEventListener('DOMContentLoaded', function () {
         openA11yBtn.addEventListener('click', function (e) {
             // Stop here: left to bubble, this same click reaches <html> and the
             // widget reads it as a click outside itself, closing what it just
-            // opened — which is why the button appeared to do nothing.
+            // opened, which is why the button appeared to do nothing.
             e.stopPropagation();
             if (window.papelAccessibility) {
                 // With the bar hidden, the panel opens against this button.

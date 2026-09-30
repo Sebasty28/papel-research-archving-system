@@ -49,11 +49,23 @@
        --border sits at 1.43:1, which is right for a divider between two rows
        and not enough for the outline of a control. Dividers keep it. */
     --border-control: #A88A8A;
+    /* The scrollbar's thumb: the maroon the buttons and the crumb bar are
+       drawn in, rather than the soft accent it used to be, which reads as
+       gold on the cream track. */
+    --scroll-thumb:        var(--maroon-surface, #820707);
+    --scroll-thumb-strong: var(--maroon-surface-hover, #630000);
 }
 html[data-color="classic"]   { --border-control: #A4906A; }
 /* Old Night's surface is a warm espresso, so the outline is a muted gold
    rather than the grey-blue the old blue-black dark used. */
 html[data-mode="dark"]       { --border-control: #8C7A5C; }   /* 4.23:1 on #1E1813 */
+/* A dark maroon thumb on Old Night's near-black page would be barely there,
+   so the dark palette keeps its own accent: muted gold, brightening as the
+   thumb is pointed at or dragged. */
+html[data-mode="dark"] {
+    --scroll-thumb:        var(--accent-soft, #8A7348);
+    --scroll-thumb-strong: var(--accent-light, #D8B472);
+}
 
 /* Applied narrowly: the things you type into or choose from. */
 input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
@@ -107,7 +119,7 @@ summary:focus-visible,
    the middle of the accent. */
 * {
     scrollbar-width: thin;
-    scrollbar-color: var(--soft-maroon, #B17D7D) var(--cream, #FFF5F5);
+    scrollbar-color: var(--scroll-thumb) var(--cream, #FFF5F5);
 }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -116,15 +128,15 @@ summary:focus-visible,
     border-left: 1px solid var(--border, #E6D4D4);
 }
 ::-webkit-scrollbar-thumb {
-    background: var(--soft-maroon, #B17D7D);
+    background: var(--scroll-thumb);
     border-radius: var(--r-control, 4px);
     /* A little of the track shows through around the thumb, so it reads as
        sitting in the groove rather than filling it. */
     border: 2px solid var(--cream, #FFF5F5);
     background-clip: padding-box;
 }
-::-webkit-scrollbar-thumb:hover  { background: var(--maroon, #820707); }
-::-webkit-scrollbar-thumb:active { background: var(--dark-maroon, #630000); }
+::-webkit-scrollbar-thumb:hover,
+::-webkit-scrollbar-thumb:active { background: var(--scroll-thumb-strong); }
 ::-webkit-scrollbar-button { display: none; height: 0; width: 0; }
 ::-webkit-scrollbar-corner { background: var(--cream, #FFF5F5); }
 </style>

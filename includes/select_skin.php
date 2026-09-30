@@ -7,7 +7,7 @@
  * its own highlight colour. On a page built out of maroon and cream that is the
  * one control that always looks borrowed.
  *
- * There is no CSS for the open list — no browser allows it — so the list has to
+ * There is no CSS for the open list (no browser allows it) so the list has to
  * be drawn. The rule followed here is that the real control stays:
  *
  *   - The `<select>` remains in the DOM and keeps its name and value, so forms

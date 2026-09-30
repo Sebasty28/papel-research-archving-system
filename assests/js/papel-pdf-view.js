@@ -5,7 +5,7 @@
  * built-in viewer. That viewer lays out once against whatever size its frame
  * happens to have and never re-measures, which left it painting into a strip of
  * the preview panel no matter how the frame was sized. Drawing the pages here
- * keeps the geometry — and therefore zoom, panning and text selection — under
+ * keeps the geometry (and therefore zoom, panning and text selection) under
  * our control.
  *
  * Each page gets a canvas for the picture and, on top of it, a transparent text
@@ -19,7 +19,11 @@
  *   const view = papelPdfView.create({
  *       scroller: <element the pages go in>,
  *       status:   <element for messages>,
- *       workerSrc: '/path/to/pdf.worker.min.js'
+ *       workerSrc: '/path/to/pdf.worker.min.js',
+ *       failMessage: 'said when a PDF cannot be drawn'    (optional)
+ *       intro:       'hint shown after the first document' (optional; '' for none)
+ *       loadingText: 'said while loading'                 (optional; '' for none)
+ *       onBusy:      function (loading) {…}               (optional; for a spinner)
  *   });
  *   view.load(fileOrArrayBuffer);
  */
@@ -39,6 +43,7 @@
         var pdfDoc = null;
         var zoom = 1;              // 1 = fit the scroller's width
         var renderToken = 0;       // bumped to abandon a superseded render
+        var lastWidth = 0;         // the width the pages were last drawn at
         var workerReady = false;
         var resizeTimer = null;
         var panMode = false;
@@ -46,6 +51,15 @@
 
         function say(msg) {
             if (statusEl) statusEl.textContent = msg || '';
+        }
+
+        /* Loading, told to the page rather than written: onBusy(true) when a
+           document starts to load, onBusy(false) once its first page is up or
+           it has failed. A page that shows a spinner for this passes
+           loadingText: '' so the words do not appear under it as well. */
+        var loadingText = options.loadingText !== undefined ? options.loadingText : 'Loading preview...';
+        function busy(on) {
+            if (typeof options.onBusy === 'function') options.onBusy(!!on);
         }
 
         function ready() {
@@ -99,86 +113,143 @@
             }
         }
 
-        function render() {
+        /* Where the reader is: the page across the middle of the view, and how
+           far down it. Kept as a page and a fraction rather than a pixel
+           offset, because a redraw at another width or zoom changes every
+           pixel measurement but not which line is being read. */
+        function readingPlace() {
+            var pages = scroller.querySelectorAll('.papel-pdf-page');
+            if (!pages.length) return null;
+            var mid = scroller.getBoundingClientRect().top + scroller.clientHeight / 2;
+            for (var i = 0; i < pages.length; i++) {
+                var r = pages[i].getBoundingClientRect();
+                if (r.bottom >= mid) {
+                    return { page: i + 1, ratio: r.height ? Math.min(1, Math.max(0, (mid - r.top) / r.height)) : 0 };
+                }
+            }
+            return { page: pages.length, ratio: 1 };
+        }
+
+        function putBack(place, wraps) {
+            var wrap = wraps[Math.min(place.page, wraps.length) - 1];
+            if (!wrap) return;
+            var top = wrap.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+            scroller.scrollTop = Math.max(0, top + place.ratio * wrap.offsetHeight - scroller.clientHeight / 2);
+        }
+
+        /* Draws the document at the current width and zoom. Given a reading
+           place, it opens there rather than at the top. */
+        function render(keep) {
             var token = ++renderToken;
             if (!pdfDoc) return Promise.resolve();
 
             var base = availableWidth();
             if (base <= 0) return Promise.resolve();
+            lastWidth = base;
 
             var ratio = global.devicePixelRatio || 1;
-            scroller.textContent = '';
+            var total = pdfDoc.numPages;
 
-            var page = 1;
+            return pdfDoc.getPage(1).then(function (first) {
+                if (token !== renderToken) return;
 
-            function next() {
-                if (token !== renderToken || page > pdfDoc.numPages) return Promise.resolve();
+                /* Every page is laid out before any is drawn, at the first
+                   page's size, so the document has its whole height at once
+                   and the reading place can be put back immediately, rather
+                   than starting again at page 1 and jumping once every page
+                   above had been drawn. A page of another size is corrected
+                   when its turn comes. */
+                var firstView = first.getViewport({ scale: (base / first.getViewport({ scale: 1 }).width) * zoom });
+                scroller.textContent = '';
+                var wraps = [];
+                for (var i = 0; i < total; i++) {
+                    var w = document.createElement('div');
+                    w.className = 'papel-pdf-page';
+                    w.style.width = Math.floor(firstView.width) + 'px';
+                    w.style.height = Math.floor(firstView.height) + 'px';
+                    scroller.appendChild(w);
+                    wraps.push(w);
+                }
+                if (keep) putBack(keep, wraps);
 
-                return pdfDoc.getPage(page).then(function (p) {
-                    if (token !== renderToken) return;
+                // The page being read is drawn first, then on to the end, then
+                // the pages above it.
+                var start = keep ? Math.min(Math.max(keep.page, 1), total) : 1;
+                var order = [];
+                for (var a = start; a <= total; a++) order.push(a);
+                for (var b = 1; b < start; b++) order.push(b);
+                var done = 0;
 
-                    var natural = p.getViewport({ scale: 1 });
-                    // Fit the width first, then apply the zoom multiplier on
-                    // top, so 100% always means "as wide as the panel".
-                    var scale = (base / natural.width) * zoom;
-                    var viewport = p.getViewport({ scale: scale });
+                function next() {
+                    if (token !== renderToken || done >= order.length) return Promise.resolve();
+                    var page = order[done++];
 
-                    // Wrapper so the text layer can sit exactly over the canvas.
-                    var wrap = document.createElement('div');
-                    wrap.className = 'papel-pdf-page';
-                    wrap.style.width = Math.floor(viewport.width) + 'px';
-                    wrap.style.height = Math.floor(viewport.height) + 'px';
-
-                    var canvas = document.createElement('canvas');
-                    canvas.className = 'papel-pdf-canvas';
-                    canvas.setAttribute('role', 'img');
-                    canvas.setAttribute('aria-label', 'Page ' + page + ' of ' + pdfDoc.numPages);
-                    // Backing store in device pixels keeps text crisp; the CSS
-                    // size stays in layout pixels.
-                    canvas.width = Math.floor(viewport.width * ratio);
-                    canvas.height = Math.floor(viewport.height * ratio);
-
-                    var layer = document.createElement('div');
-                    layer.className = 'papel-pdf-textlayer';
-                    // PDF.js 3.x sizes the text spans from this custom property.
-                    layer.style.setProperty('--scale-factor', scale);
-
-                    wrap.appendChild(canvas);
-                    wrap.appendChild(layer);
-                    scroller.appendChild(wrap);
-
-                    var pageNo = page;
-                    return p.render({
-                        canvasContext: canvas.getContext('2d'),
-                        viewport: viewport,
-                        transform: ratio !== 1 ? [ratio, 0, 0, ratio, 0, 0] : null
-                    }).promise.then(function () {
+                    return pdfDoc.getPage(page).then(function (p) {
                         if (token !== renderToken) return;
-                        return p.getTextContent();
-                    }).then(function (textContent) {
-                        if (token !== renderToken || !textContent) return;
-                        // Selectable, copyable text sitting invisibly on top of
-                        // the rendered picture.
-                        const divs = [];
-                        return pdfjsLib.renderTextLayer({
-                            textContentSource: textContent,
-                            container: layer,
+
+                        var natural = p.getViewport({ scale: 1 });
+                        // Fit the width first, then apply the zoom multiplier on
+                        // top, so 100% always means "as wide as the panel".
+                        var scale = (base / natural.width) * zoom;
+                        var viewport = p.getViewport({ scale: scale });
+
+                        // Wrapper so the text layer can sit exactly over the canvas.
+                        var wrap = wraps[page - 1];
+                        var before = wrap.offsetHeight;
+                        wrap.style.width = Math.floor(viewport.width) + 'px';
+                        wrap.style.height = Math.floor(viewport.height) + 'px';
+                        // A page above the one being read that turned out another
+                        // height would slide the text out from under the reader.
+                        if (page < start) scroller.scrollTop += wrap.offsetHeight - before;
+
+                        var canvas = document.createElement('canvas');
+                        canvas.className = 'papel-pdf-canvas';
+                        canvas.setAttribute('role', 'img');
+                        canvas.setAttribute('aria-label', 'Page ' + page + ' of ' + total);
+                        // Backing store in device pixels keeps text crisp; the CSS
+                        // size stays in layout pixels.
+                        canvas.width = Math.floor(viewport.width * ratio);
+                        canvas.height = Math.floor(viewport.height * ratio);
+
+                        var layer = document.createElement('div');
+                        layer.className = 'papel-pdf-textlayer';
+                        // PDF.js 3.x sizes the text spans from this custom property.
+                        layer.style.setProperty('--scale-factor', scale);
+
+                        wrap.appendChild(canvas);
+                        wrap.appendChild(layer);
+
+                        return p.render({
+                            canvasContext: canvas.getContext('2d'),
                             viewport: viewport,
-                            textDivs: divs
+                            transform: ratio !== 1 ? [ratio, 0, 0, ratio, 0, 0] : null
                         }).promise.then(function () {
-                            markBold(p, textContent, divs);
+                            if (token !== renderToken) return;
+                            return p.getTextContent();
+                        }).then(function (textContent) {
+                            if (token !== renderToken || !textContent) return;
+                            // Selectable, copyable text sitting invisibly on top of
+                            // the rendered picture.
+                            const divs = [];
+                            return pdfjsLib.renderTextLayer({
+                                textContentSource: textContent,
+                                container: layer,
+                                viewport: viewport,
+                                textDivs: divs
+                            }).promise.then(function () {
+                                markBold(p, textContent, divs);
+                            });
+                        }).then(function () {
+                            if (token !== renderToken) return;
+                            if (done === 1) { say(''); busy(false); }   // the first page is up
+                            return next();
                         });
-                    }).then(function () {
-                        if (token !== renderToken) return;
-                        if (pageNo === 1) say('');
-                        page++;
-                        return next();
                     });
-                });
-            }
+                }
 
-            return next().catch(function () {
-                if (token === renderToken) say('This PDF could not be displayed.');
+                return next();
+            }).catch(function () {
+                if (token === renderToken) { busy(false); say('This PDF could not be displayed.'); }
             });
         }
 
@@ -186,19 +257,12 @@
             var clamped = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
             if (Math.abs(clamped - zoom) < 0.001) return;
 
-            // Keep whatever is in the middle of the view roughly in place, so
-            // zooming does not throw the reader back to the top of the document.
-            var anchor = scroller.scrollHeight > 0
-                ? (scroller.scrollTop + scroller.clientHeight / 2) / scroller.scrollHeight
-                : 0;
-
+            // Keep whatever is in the middle of the view in place, so zooming
+            // does not throw the reader back to the top of the document.
+            var place = readingPlace();
             zoom = clamped;
             onZoom(zoom);
-            render().then(function () {
-                scroller.scrollTop = Math.max(
-                    0, anchor * scroller.scrollHeight - scroller.clientHeight / 2
-                );
-            });
+            render(place);
         }
 
         function step(direction) {
@@ -219,7 +283,7 @@
         /* =====================================================================
            Copying out of the preview
 
-           A PDF carries no paragraphs, no bold tags and no tables — only glyphs
+           A PDF carries no paragraphs, no bold tags and no tables, only glyphs
            at coordinates. Left to itself the browser copies the text layer as
            one span per visual line, which is why a paste used to arrive as a
            single undifferentiated block.
@@ -276,7 +340,7 @@
             for (var i = 0; i < spans.length; i++) {
                 var span = spans[i];
                 // Spans are direct children of the text layer, which is a direct
-                // child of the page — no closest() walk needed per span.
+                // child of the page: no closest() walk needed per span.
                 var layer = span.parentNode;
                 var page = layer && layer.parentNode;
                 if (!pageOrder.has(page)) {
@@ -301,7 +365,7 @@
                 row.spans.push(span);
             }
 
-            // Numeric compare — no DOM work inside the comparator.
+            // Numeric compare: no DOM work inside the comparator.
             rows.sort(function (a, b) {
                 return (a.index - b.index) || (a.top - b.top);
             });
@@ -332,7 +396,7 @@
            Two earlier attempts failed on real documents. Splitting each row on
            a fixed pixel gap meant nothing at a different zoom level. Clustering
            the left edges of the runs worked only while the columns were
-           left-aligned — centred cells, which is how most academic tables set
+           left-aligned: centred cells, which is how most academic tables set
            their text, start at a different x on every row and never clustered
            at all.
 
@@ -383,8 +447,8 @@
                 for (var i = 0; i < count; i++) if (covered[i]) hits[i]++;
             });
 
-            // A lane may be written into by a few rows — a merged heading, a
-            // footnote marker — and still be a column boundary.
+            // A lane may be written into by a few rows: a merged heading, a
+            // footnote marker, and still be a column boundary.
             var tolerated = Math.floor(rows.length * 0.15);
             var bands = [], open = null;
             for (var i = 0; i < count; i++) {
@@ -466,8 +530,8 @@
 
         /* Prose: rejoin the wrapped lines and start a new paragraph where the
            page shows one. A PDF marks a paragraph with a first-line indent or
-           by ending the previous line short of the margin — never with a blank
-           line — which is why joining on line breaks alone produced one block. */
+           by ending the previous line short of the margin (never with a blank
+           line) which is why joining on line breaks alone produced one block. */
         function paragraphsToHtml(rows) {
             var lefts = rows.map(function (r) { return r.left; });
             var rights = rows.map(function (r) { return r.right; });
@@ -507,7 +571,7 @@
 
             // Every early return below leaves the event alone, so the browser
             // performs its own copy. Reconstruction is an improvement on that,
-            // never a prerequisite — if anything here is unhappy, the copy must
+            // never a prerequisite, if anything here is unhappy, the copy must
             // still work.
             try {
                 var spans = selectedSpans(sel.getRangeAt(0));
@@ -534,7 +598,9 @@
         /* ----- Transient hint ----- */
         var toast = null, toastTimer = null;
 
-        function hint(message) {
+        /* Shown for `ms`, or 2.6 seconds: long enough to read a mode change,
+           which is all most hints are. */
+        function hint(message, ms) {
             if (!message) return;
             if (!toast) {
                 toast = document.createElement('div');
@@ -550,7 +616,7 @@
             clearTimeout(toastTimer);
             toastTimer = setTimeout(function () {
                 if (toast) toast.classList.remove('is-visible');
-            }, 2600);
+            }, ms || 2600);
         }
 
         function setMode(mode, announce) {
@@ -561,8 +627,8 @@
             onMode(panMode ? 'pan' : 'select');
             if (announce && changed) {
                 hint(panMode
-                    ? 'Drag mode — click and drag to move the page'
-                    : 'Select mode — drag across the text to copy it');
+                    ? 'Drag mode: click and drag to move the page'
+                    : 'Select mode: drag across the text to copy it');
             }
         }
 
@@ -647,18 +713,29 @@
             step(e.deltaY < 0 ? 1 : -1);
         }, { passive: false });
 
-        global.addEventListener('resize', function () {
+        /* Re-rasterise when the pages' own width changes: these are our
+           canvases, so this is a genuine re-layout rather than a stretched
+           stale image. Watched on the scroller itself, not the window: a panel
+           docked, put back or dragged wider changes it while the window stands
+           still. The reading place goes with it. */
+        function relayout() {
             if (!pdfDoc) return;
+            var w = availableWidth();
+            if (w <= 0 || Math.abs(w - lastWidth) < 2) return;   // hidden, or not really moved
+            render(readingPlace());
+        }
+        function scheduleRelayout() {
             clearTimeout(resizeTimer);
-            // Re-rasterise at the new width — these are our canvases, so this is
-            // a genuine re-layout rather than a stretched stale image.
-            resizeTimer = setTimeout(render, 200);
-        });
+            resizeTimer = setTimeout(relayout, 180);
+        }
+        if (global.ResizeObserver) { new ResizeObserver(scheduleRelayout).observe(scroller); }
+        else { global.addEventListener('resize', scheduleRelayout); }
 
         return {
             load: function (source) {
                 if (!ready()) { say('The preview component could not be loaded.'); return Promise.resolve(); }
-                say('Loading preview...');
+                say(loadingText);
+                busy(true);
 
                 var asBuffer = (source instanceof ArrayBuffer)
                     ? Promise.resolve(source)
@@ -666,7 +743,12 @@
 
                 return asBuffer.then(function (data) {
                     if (pdfDoc) { try { pdfDoc.destroy(); } catch (err) {} pdfDoc = null; }
-                    return pdfjsLib.getDocument({ data: data }).promise;
+                    /* isEvalSupported off: this PDF.js (3.11) can be made to run
+                       a script hidden in a crafted font when it compiles glyphs
+                       with eval (CVE-2024-4367). The CSP already forbids eval;
+                       this stops it being attempted. The papers are uploaded by
+                       students, so the files are not ours to trust. */
+                    return pdfjsLib.getDocument({ data: data, isEvalSupported: false }).promise;
                 }).then(function (doc) {
                     pdfDoc = doc;
                     zoom = 1;
@@ -675,14 +757,23 @@
                 }).then(function () {
                     // Announced once per page load, not on every document, so it
                     // informs the first time and never nags afterwards.
-                    if (!introShown) {
+                    var intro = options.intro !== undefined ? options.intro
+                        : 'Press H to drag the page, T or Esc to select and copy text';
+                    if (!introShown && intro) {
                         introShown = true;
-                        hint('Press H to drag the page, T or Esc to select and copy text');
+                        // Ten seconds: it is the one hint that teaches the keys,
+                        // and it arrives while the reader is still taking in
+                        // the page, not looking for instructions.
+                        hint(intro, options.introMs || 10000);
                     }
                 }).catch(function () {
-                    say('This PDF could not be previewed. You can still upload it.');
+                    busy(false);
+                    say(options.failMessage || 'This PDF could not be previewed. You can still upload it.');
                 });
             },
+            pageCount: function () { return pdfDoc ? pdfDoc.numPages : 0; },
+            // The page across the middle of the view, for a "page 3 of 12" label.
+            currentPage: function () { var p = readingPlace(); return p ? p.page : 0; },
             zoomIn:    function () { step(1); },
             zoomOut:   function () { step(-1); },
             resetZoom: function () { setZoom(1); },
@@ -696,12 +787,14 @@
                 renderToken++;
                 scroller.textContent = '';
                 say('');
+                busy(false);
             },
             destroy: function () {
                 renderToken++;
                 if (pdfDoc) { try { pdfDoc.destroy(); } catch (err) {} pdfDoc = null; }
                 scroller.textContent = '';
                 say('');
+                busy(false);
             }
         };
     }

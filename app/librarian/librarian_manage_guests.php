@@ -38,6 +38,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
 
+        /* A pass is for someone with no way in. A student or staff member who
+           was sent one would be reading as an anonymous guest instead of as
+           themselves, with none of what their own account gives them, and a
+           student would be handed a way round an expired account. */
+        if ($owner = email_account_owner($email)) {
+            flash('error', 'That email already belongs to a PAPEL account: ' . $owner['full_name']
+                . ' (' . role_label($owner) . '). They should sign in with that account. '
+                . 'Guest passes are for visitors who do not have one.');
+            header('Location: librarian_manage_guests.php');
+            exit;
+        }
+
         $duration = (int)($_POST['duration'] ?? 2);
         $duration = max(GUEST_MIN_HOURS, min(GUEST_MAX_HOURS, $duration));
 
@@ -241,7 +253,7 @@ function guest_table(array $rows, string $which): void {
     gap: .375rem;
     flex: 0 0 auto;
     text-decoration: none;
-    /* .btn-sm-outline's border reads as a second frame here — this sits
+    /* .btn-sm-outline's border reads as a second frame here: this sits
        beside the plain page title rather than in a row of other buttons it
        needs to be told apart from. */
     border: none;
@@ -312,7 +324,8 @@ function guest_table(array $rows, string $which): void {
                         <label for="email">Email <span class="req">*</span></label>
                         <input type="email" name="email" id="email"
                                placeholder="visitor@example.com" required>
-                        <small class="mgmt-hint">The pass is sent here. It is not stored on the account.</small>
+                        <small class="mgmt-hint">The pass is sent here and not stored. An email that already
+                            has a PAPEL account is refused: its owner signs in with that account.</small>
                     </div>
 
                     <div class="mgmt-field">

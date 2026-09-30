@@ -4,12 +4,12 @@
  *
  * The public repository shows a paper's record to everyone but its actual PDF
  * to staff only (see archive/view_paper.php's $can_view_file). A student who
- * wants the file itself asks here instead of it simply being open to all —
+ * wants the file itself asks here instead of it simply being open to all:
  * the Librarian grants a time-limited look at one paper, or turns it down.
  *
  * Built on the same shell as app/support_requests.php (not console_shell.php
  * / review_console.php, which are for the paper-card dashboards and don't
- * fit a plain management list) — .mgmt-wrap, .mgmt-tabs, .mgmt-table, the
+ * fit a plain management list): .mgmt-wrap, .mgmt-tabs, .mgmt-table, the
  * same data-confirm dialog every other console uses.
  */
 require_once '../../config/core.php';
@@ -44,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $expires = date('Y-m-d H:i:s', strtotime("+$duration hours"));
             /* The WHERE repeats status='pending' so two librarians racing to
-               act on the same row can't both succeed — whichever UPDATE lands
+               act on the same row can't both succeed: whichever UPDATE lands
                second affects nothing. */
             $upd = $conn->prepare(
                 "UPDATE manuscript_requests
@@ -84,12 +84,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $upd->close();
     } elseif ($action === 'delete') {
-        /* One row or many — a single-row delete button posts the same array
+        /* One row or many: a single-row delete button posts the same array
            with one value in it, so there is only ever one code path to keep
            correct. No status restriction: a librarian clearing a pending or
            granted row out from under a student is exactly what "delete" means
            here, not just tidying up settled history. Deleting a still-open
-           grant also revokes it immediately — student_manuscript_access()
+           grant also revokes it immediately: student_manuscript_access()
            has nothing left to find once the row is gone. */
         $ids = array_values(array_unique(array_filter(array_map('intval', $_POST['request_ids'] ?? []))));
         if ($ids) {
@@ -102,7 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $del->close();
             flash($n ? 'success' : 'error',
                   $n ? $n . ' request' . ($n === 1 ? '' : 's') . ' deleted.'
-                     : 'Nothing was deleted — it may already be gone.');
+                     : 'Nothing was deleted. It may already be gone.');
         } else {
             flash('error', 'Nothing was selected to delete.');
         }
@@ -112,7 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
-/** How much of a grant is left, in words — same shape as guest_time_left() in librarian_manage_guests.php. */
+/** How much of a grant is left, in words: same shape as guest_time_left() in librarian_manage_guests.php. */
 function manuscript_time_left(string $expiresAt): string {
     $left = strtotime($expiresAt) - time();
     if ($left <= 0) return 'Expired';
@@ -124,7 +124,7 @@ function manuscript_time_left(string $expiresAt): string {
 
 /**
  * One tab's sort chips (oldest/newest, by whichever date that table shows)
- * and its bulk-delete bar, identical in every pane bar what they act on —
+ * and its bulk-delete bar, identical in every pane bar what they act on:
  * pulled out once rather than written three times over.
  */
 function manuscript_toolbar(): void {
@@ -157,8 +157,8 @@ $select    = "r.*, s.full_name AS student_name, s.student_id AS student_no,
               COALESCE(p.title, pa.title) AS paper_title";
 
 /* Each tab's own sort chips (below) re-order client-side by the same field
-   this default ORDER BY uses — the date that tab's own table already shows
-   (Requested / Granted / decided) — so the "Oldest first" chip that starts
+   this default ORDER BY uses: the date that tab's own table already shows
+   (Requested / Granted / decided). So the "Oldest first" chip that starts
    ticked always matches what the server actually sent, oldest first. */
 $pending = $conn->query("SELECT $select FROM manuscript_requests r $paperJoin
                           WHERE r.status = 'pending' ORDER BY r.created_at ASC")
@@ -195,23 +195,23 @@ $history = $conn->query("SELECT $select FROM manuscript_requests r $paperJoin
 .mgmt-bulk-bar .js-sel-count { font-size: .75rem; color: var(--grey); }
 .mgmt-bulk-bar form { display: contents; }
 /* .mgmt-sort's own margin-left:auto (manage_page.php) is built for riding at
-   the end of the tab row, which is not this context — left undone, it pushes
+   the end of the tab row, which is not this context: left undone, it pushes
    Sort to the far right here regardless of justify-content above. */
 .mgmt-toolbar .mgmt-sort { margin-left: 0; }
 /* The border read as a stray box around plain text; the cream fill, the
-   maroon text and the bold weight already say which one is on — the same
+   maroon text and the bold weight already say which one is on: the same
    reasoning .notif-tab (site_head.php) drops its own border for. */
 .mgmt-toolbar .mgmt-chip,
 .mgmt-toolbar .mgmt-chip:hover,
 .mgmt-toolbar .mgmt-chip.is-on { border-color: transparent; }
 /* The duration select sits beside three borderless buttons (Grant, Deny,
    Delete); its box was the only outlined thing in that row. Scoped to just
-   this one select — .sel-btn is shared by every dropdown on the site. */
+   this one select: .sel-btn is shared by every dropdown on the site. */
 .mr-duration-select + .sel-btn,
 .mr-duration-select + .sel-btn:hover,
 .mr-duration-select + .sel-btn[aria-expanded="true"] { border-color: transparent; }
 /* Left at their native appearance, the select-all and per-row checkboxes
-   render in the browser's own default blue rather than the theme — the same
+   render in the browser's own default blue rather than the theme: the same
    fix .rc-check input (review_console.php) already applies elsewhere. */
 .js-select-all, .js-row-check { accent-color: var(--maroon); }
 </style>
@@ -448,7 +448,7 @@ $history = $conn->query("SELECT $select FROM manuscript_requests r $paperJoin
                                     </a>
                                 </td>
                                 <td>
-                                    <?= $isDenied ? 'Denied' : 'Granted, ' . (int)$r['duration_hours'] . 'h — expired' ?>
+                                    <?= $isDenied ? 'Denied' : 'Granted, ' . (int)$r['duration_hours'] . 'h, expired' ?>
                                 </td>
                                 <td class="mgmt-date">
                                     <?= e(date('M j, Y g:i A', strtotime($whenAt))) ?>
@@ -489,7 +489,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    /* Each pane sorts and selects on its own — "oldest" means something
+    /* Each pane sorts and selects on its own: "oldest" means something
        different to a queue of open requests than it does to a pile of past
        decisions, and a tick in Pending has nothing to do with Granted. */
     document.querySelectorAll('.js-pane').forEach(function (pane) {
@@ -510,8 +510,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
         /* The hidden request_ids[] fields are rebuilt on every checkbox
            change rather than gathered at submit time: a confirmed dialog in
-           action_dialogs.php submits the form with form.submit(), which —
-           unlike an actual click — never fires a submit event, so there is
+           action_dialogs.php submits the form with form.submit(), which,
+           unlike an actual click, never fires a submit event, so there is
            nothing left to catch that late. */
         var selectAll  = pane.querySelector('.js-select-all');
         var bar        = pane.querySelector('.mgmt-bulk-bar');

@@ -13,6 +13,51 @@ const SUPPORT_REQUEST_KINDS = [
 
 $handlers = support_handlers();
 
+/* Who issued the account an ID names, asked while the form is being filled in.
+   The name box used to offer every adviser on the roll and only find out on
+   submit whether the one picked was the right one; now the ID is put to the
+   database first and the only name offered is the one that account is actually
+   on. Nothing is returned for a desk the form would not have offered anyway,
+   so this says no more than the page already prints. */
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['lookup_handler'])) {
+    header('Content-Type: application/json');
+    if (!csrf_valid()) { echo json_encode(['ok' => false, 'reason' => 'expired']); exit; }
+
+    $role  = trim($_POST['requester_role'] ?? '');
+    $ident = trim($_POST['requester_ident'] ?? '');
+    $uid   = support_account_for($role, $ident);
+    if (!$uid) { echo json_encode(['ok' => false, 'reason' => 'no_account']); exit; }
+
+    /* Whether what is at the top of the form belongs to the same account. Only
+       which field disagrees is said, never what is on record: the answer to
+       "is this the name" must not become a way of asking "what is the name". */
+    $who = support_identity_matches($uid, trim($_POST['name'] ?? ''), trim($_POST['email'] ?? ''));
+
+    $creator = support_creator_of($uid);
+    if (!$creator) {
+        echo json_encode(['ok' => false, 'reason' => 'no_desk',
+                          'name_ok' => $who['name'], 'email_ok' => $who['email']]);
+        exit;
+    }
+
+    /* A student the Coordinator enrolled is one the form only offers advisers
+       for. There is nothing to verify against in that case, so the name is
+       withheld and the box falls back to the roll: whatever is chosen is
+       overridden by the record on submit. */
+    if (!array_key_exists($creator['role'], support_handler_roles_for($role))) {
+        echo json_encode(['ok' => true, 'offerable' => false,
+                          'name_ok' => $who['name'], 'email_ok' => $who['email']]);
+        exit;
+    }
+
+    echo json_encode(['ok' => true, 'offerable' => true,
+        'name_ok' => $who['name'], 'email_ok' => $who['email'],
+        'handler' => [
+            'id' => $creator['id'], 'name' => $creator['name'], 'role' => $creator['role'],
+        ]]);
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
     $name    = trim($_POST['name']    ?? '');
@@ -31,11 +76,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     /* Every topic the form offers is now a request about an account, so there is
        no longer a general branch that posts prose to a mailbox. A submission
        with no topic, or one invented by hand, is refused: it has none of the
-       facts a desk would need, and the office address is on this same page for
-       anything the form does not cover. */
+       facts a desk would need. */
     if ($kind === null) {
-        flash('error', 'Please choose what your request is about. For anything else, '
-            . 'use the office details beside this form.');
+        flash('error', 'Please choose what your request is about.');
         header('Location: contact_support.php');
         exit;
     }
@@ -68,37 +111,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     /* The account the request is about has to exist, and has to be the kind of
        account they say it is. A request naming no real account is one nobody can
        act on: the desk it reaches has a name, a number that matches nothing, and
-       no roll to open. It is refused here rather than passed on.
-       Which column is searched follows the rule the rest of the app keeps:
-       student_id belongs to students, faculty_id to everybody else. */
-    $col  = $rRole === 'student' ? 'student_id' : 'faculty_id';
-    $look = $conn->prepare(
-        "SELECT user_id, user_role, admin_level, is_active FROM users WHERE $col = ? LIMIT 1");
-    $look->bind_param('s', $rIdent);
-    $look->execute();
-    $found = $look->get_result()->fetch_assoc();
-    $look->close();
+       no roll to open. It is refused here rather than passed on. The same lookup
+       answers the name box while the form is being filled in. */
+    $rUserId = support_account_for($rRole, $rIdent);
 
-    /* Two roles do the Head of Academic Programs' job, so the claimed role is
-       matched against what the account actually is rather than compared as a
-       string. A Coordinator is admin level 1; a HAP is either head_academic or
-       admin level 2. */
-    $actual = $found['user_role'] ?? '';
-    $level  = (int)($found['admin_level'] ?? 0);
-    $claimOk = $found && (
-        ($rRole === 'admin'         && $actual === 'admin' && $level !== 2) ||
-        ($rRole === 'head_academic' && ($actual === 'head_academic'
-                                        || ($actual === 'admin' && $level === 2))) ||
-        (!in_array($rRole, ['admin', 'head_academic'], true) && $actual === $rRole)
-    );
-
-    /* One message for "no such ID" and for "that ID is not that kind of
-       account", so an anonymous form cannot be used to ask which of the two it
-       was. */
-    if (!$claimOk) {
-        /* Not escaped here: the flash is escaped where it is printed. The office
-           address is in the panel beside this form, so it is not repeated in the
-           message. */
+    if (!$rUserId) {
+        /* Not escaped here: the flash is escaped where it is printed. */
         flash('error', 'We could not find a ' . support_requester_roles()[$rRole]
             . ' account with the ID ' . $rIdent . '. Check the ID on your account and the role '
             . 'you chose, then try again.');
@@ -106,11 +124,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
-    /* A deactivated or expired account is still an account, and being unable to
-       sign in is exactly when somebody writes in. It goes through. */
-    $rUserId = (int)$found['user_id'];
+    /* The ID names the account; the name and the address at the top of the form
+       have to be that same account's. Which one is wrong is said, because the
+       fix differs, but never what is on record. */
+    $who = support_identity_matches($rUserId, $name, $email);
+    if (!$who['name'] || !$who['email']) {
+        $wrong = !$who['name'] && !$who['email']
+            ? 'The name and email address you gave are not the ones'
+            : (!$who['name'] ? 'The name you gave is not the one'
+                             : 'The email address you gave is not the one');
+        flash('error', $wrong . ' on the account for that ID. '
+            . 'Use the details the account was set up with.');
+        header('Location: contact_support.php?subject=' . rawurlencode($subject));
+        exit;
+    }
 
-    /* Who it actually goes to. The account itself records who issued it, and
+    /* A deactivated or expired account is still an account, and being unable to
+       sign in is exactly when somebody writes in. It goes through.
+
+       Who it actually goes to. The account itself records who issued it, and
        that is the only desk that can reissue it, so the record decides. */
     $creator = support_creator_of($rUserId);
     if ($creator) {
@@ -241,27 +273,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 .request-block .mb-form:last-child { margin-bottom: 0; }
 .form-hint { display: block; margin-top: .25rem; font-size: .75rem; color: var(--grey); }
-/* What the chosen topic means, said before the fields rather than after. */
-.subject-note {
-    margin: .5rem 0 0;
-    font-size: .75rem; color: var(--grey); line-height: 1.6;
-}
+/* Said under the field it is about, in the colour the rest of the site uses for
+   something that has to be put right before it will go. */
+.form-hint.is-bad { color: var(--bad-text); }
 </style>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.min.css" rel="stylesheet">
 <?php require_once ROOT_PATH.'/includes/page_theme.php'; ?>
 <style nonce="<?= $nonce ?>">
 /* ===== Hero ===== */
 /* ===== Layout ===== */
-.contact-layout { display: grid; grid-template-columns: 1fr 1.75fr; gap: 1.5rem; align-items: start; }
+.contact-flat { background: none; padding: 0; }
+/* Trimmed where it costs nothing to read, so the page still clears the fold on
+   a shorter laptop screen than this one. */
+.page-intro { margin-bottom: .625rem; }
+.contact-layout .page-card-body { padding: 1rem 1.25rem; }
+/* Against the left of the shell rather than centred in it, and only as wide
+   as it needs to be: the card grows sideways when a topic is chosen. */
+.contact-layout { width: fit-content; max-width: 100%; margin: 0; }
 
-/* ===== Office info ===== */
-.info-group { display: flex; flex-direction: column; gap: 1.25rem; }
-.info-item { display: flex; gap: 1rem; align-items: flex-start; }
-.info-item-icon { width: 36px; height: 36px; border-radius: var(--r-card, 8px); background: rgba(129,4,3,.08); color: var(--maroon); display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0; margin-top: .125rem; }
-.info-item-label { font-size: .75rem; font-weight: 400; text-transform: uppercase; letter-spacing: .5px; color: var(--grey); margin-bottom: .25rem; }
-.info-item-value { font-size: .9375rem; color: var(--ink); line-height: 1.5; }
-.info-item-value a { color: var(--maroon); text-decoration: none; font-weight: 500; }
-.info-item-value a:hover { text-decoration: underline; }
+/* The form proper, and beside it the column the extra questions open in. The
+   form column keeps its width either way, so nothing already on screen moves
+   when the questions appear. */
+.contact-form { display: flex; align-items: flex-start; gap: 1.5rem; }
+/* Sized so the two columns and the gap between them come to exactly the width
+   of the shell once the card's own padding is taken off: open, the card fills
+   the page rather than stopping short of it. */
+.form-main { width: 656px; max-width: 100%; }
+.form-side { width: 400px; }
+.form-side .request-block:last-child { margin-bottom: 0; }
+
+/* Wide enough for the two blocks of questions to stand beside each other as
+   well as beside the form. Stacked they are the tallest thing on the page and
+   the foot of the card falls below the fold; side by side the whole page is
+   one screenful. */
+@media(min-width:1024px) {
+    /* Shares of what there is rather than fixed widths, so the three columns
+       hold from a small laptop up to a wide desktop. */
+    .form-main { width: auto; flex: 1 1 440px; min-width: 0; }
+    .form-side {
+        width: auto;
+        flex: 1 1 560px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.5rem;
+    }
+    .form-side .request-block { margin-bottom: 0; }
+}
+
 
 /* ===== Form ===== */
 .form-label { font-size: .8125rem; font-weight: 400; color: var(--ink); margin-bottom: .375rem; display: block; }
@@ -272,7 +330,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     transition: border-color .2s, box-shadow .2s; width: 100%;
 }
 .form-control:focus, .form-select:focus { outline: none; border-color: var(--maroon); box-shadow: 0 0 0 3px rgba(129,4,3,.1); }
-textarea.form-control { resize: vertical; min-height: 130px; }
+textarea.form-control { resize: vertical; min-height: 104px; }
 .btn-submit {
     width: 100%; padding: .75rem 1rem;
     background: var(--maroon); color: #fff;
@@ -282,7 +340,13 @@ textarea.form-control { resize: vertical; min-height: 130px; }
     display: flex; align-items: center; justify-content: center; gap: .5rem;
 }
 .btn-submit:hover { background: var(--dark-maroon); }
-.mb-form { margin-bottom: 1rem; }
+/* The same button, sized for the header strip rather than the width of a column. */
+.btn-submit-head { width: auto; margin-left: auto; padding: .5rem 1rem; font-size: .875rem; }
+/* The header strip paints every icon in it maroon, for the ones that sit beside
+   a heading on white. On the button that is maroon on maroon, so the paper
+   plane disappeared: in here the icon takes the button's own colour. */
+.page-card-header .btn-submit i[class*="bi-"] { color: inherit; }
+.mb-form { margin-bottom: .75rem; }
 
 /* ===== Alert ===== */
 .alert-box { padding: .875rem 1rem; border-radius: var(--r-card, 8px); font-size: .875rem; margin-bottom: 1.25rem; }
@@ -290,7 +354,10 @@ textarea.form-control { resize: vertical; min-height: 130px; }
 .alert-box.error   { background: #fee2e2; color: #991b1b; }
 
 @media(max-width:900px) {
-    .contact-layout { grid-template-columns: 1fr; }
+    /* No room for a second column: the questions go back under the form. */
+    .contact-layout { width: auto; }
+    .contact-form { flex-direction: column; }
+    .form-main, .form-side { width: 100%; }
 }
 @media(max-width:600px) {
 }
@@ -317,11 +384,12 @@ textarea.form-control { resize: vertical; min-height: 130px; }
         <h1>Contact Support</h1>
         <?php /* Says what the form can now do, since both topics it offers go to a
                  named person rather than to a shared mailbox. */ ?>
-        <p>Ask for a new password, or for a correction to your account. Anything else
-           reaches us at the address beside this form.</p>
+        <p>Ask for a new password, or for a correction to your account.</p>
     </div>
 
-    <div class="page-shell">
+    <?php /* No tinted panel behind the card: it has edges of its own, as on
+             the Help Center. */ ?>
+    <div class="page-shell contact-flat">
 
     <?php if ($m = flash('success')): ?>
         <div class="alert-box success"><i class="bi bi-check-circle me-2"></i><?= e($m) ?></div>
@@ -332,88 +400,63 @@ textarea.form-control { resize: vertical; min-height: 130px; }
 
     <div class="contact-layout">
 
-        <!-- Office info -->
-        <div class="page-card">
-        <div class="page-card-header">
-            <i class="bi bi-building"></i>
-            <h2>Office Information</h2>
-        </div>
-        <div class="page-card-body">
-            
-            <div class="info-group">
-                <div class="info-item">
-                    <div class="info-item-icon"><i class="bi bi-geo-alt"></i></div>
-                    <div>
-                        <div class="info-item-label">Address</div>
-                        <div class="info-item-value">Polytechnic University of the Philippines<br>Biñan Campus, Laguna</div>
-                    </div>
-                </div>
-                <div class="info-item">
-                    <div class="info-item-icon"><i class="bi bi-envelope"></i></div>
-                    <div>
-                        <div class="info-item-label">Email</div>
-                        <div class="info-item-value"><a href="mailto:<?= e(SUPPORT_EMAIL) ?>"><?= e(SUPPORT_EMAIL) ?></a></div>
-                    </div>
-                </div>
-                <div class="info-item">
-                    <div class="info-item-icon"><i class="bi bi-telephone"></i></div>
-                    <div>
-                        <div class="info-item-label">Phone</div>
-                        <div class="info-item-value">09773407439</div>
-                    </div>
-                </div>
-                <div class="info-item">
-                    <div class="info-item-icon"><i class="bi bi-clock"></i></div>
-                    <div>
-                        <div class="info-item-label">Office Hours</div>
-                        <div class="info-item-value">Monday – Friday<br>8:00 AM – 5:00 PM</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
         <!-- Contact form -->
         <div class="page-card">
         <div class="page-card-header">
-            <i class="bi bi-send"></i>
             <h2>Send a Message</h2>
+            <?php /* At the top of the card rather than the foot of the form. It is
+                     outside the <form>, so it names the form it posts instead of
+                     being inside it. */ ?>
+            <button type="submit" form="supportForm" class="btn-submit btn-submit-head">
+                <i class="bi bi-send"></i> Send Concern
+            </button>
         </div>
         <div class="page-card-body">
             
-            <form method="post">
-                <?= csrf_field() ?>
-                <div class="mb-form">
-                    <label class="form-label">Full Name <span style="color:var(--maroon)">*</span></label>
-                    <input type="text" name="name" class="form-control" placeholder="Enter your full name" required
-                           value="<?= $u ? e($u['full_name']) : '' ?>">
-                </div>
-                <div class="mb-form">
-                    <label class="form-label">Email Address <span style="color:var(--maroon)">*</span></label>
-                    <input type="email" name="email" class="form-control" placeholder="Enter your email address" required
-                           value="<?= $u ? e($u['email'] ?? '') : '' ?>">
-                </div>
-                <div class="mb-form">
-                    <label class="form-label">Subject <span style="color:var(--maroon)">*</span></label>
-                    <?php $presetSubject = trim($_GET['subject'] ?? ''); ?>
-                    <?php /* Upload Problem, Approval Inquiry and Other are gone: all
-                             three were general prose to a mailbox. A paper already has
-                             a review desk and a place to say what is wrong with it,
-                             and anything this form does not cover has the office
-                             address and telephone number beside it. */ ?>
-                    <select name="subject" id="subjectSelect" class="form-select" required>
-                        <option value="">Select a topic…</option>
-                        <option value="Forgotten Password" <?= $presetSubject === 'Forgotten Password' ? 'selected' : '' ?>>Forgotten Password</option>
-                        <option value="Account Issue" <?= $presetSubject === 'Account Issue' ? 'selected' : '' ?>>Account Issue</option>
-                    </select>
-                    <p class="subject-note" id="subjectNote" hidden></p>
+            <form method="post" class="contact-form" id="supportForm">
+                <?php /* The questions a topic asks open in a column of their own
+                         beside the form, rather than in the middle of it: put back
+                         in line they pushed the message box and the button down the
+                         page, so choosing a topic read as the form having moved. */ ?>
+                <div class="form-main">
+                    <?= csrf_field() ?>
+                    <div class="mb-form">
+                        <label class="form-label">Full Name <span style="color:var(--maroon)">*</span></label>
+                        <input type="text" name="name" id="fullNameBox" class="form-control" placeholder="Enter your full name" required
+                               value="<?= $u ? e($u['full_name']) : '' ?>">
+                        <small class="form-hint is-bad" id="nameNote" hidden></small>
+                    </div>
+                    <div class="mb-form">
+                        <label class="form-label">Email Address <span style="color:var(--maroon)">*</span></label>
+                        <input type="email" name="email" id="emailBox" class="form-control" placeholder="Enter your email address" required
+                               value="<?= $u ? e($u['email'] ?? '') : '' ?>">
+                        <small class="form-hint is-bad" id="emailNote" hidden></small>
+                    </div>
+                    <div class="mb-form">
+                        <label class="form-label">Subject <span style="color:var(--maroon)">*</span></label>
+                        <?php $presetSubject = trim($_GET['subject'] ?? ''); ?>
+                        <?php /* Upload Problem, Approval Inquiry and Other are gone: all
+                                 three were general prose to a mailbox. A paper already has
+                                 a review desk and a place to say what is wrong with it. */ ?>
+                        <select name="subject" id="subjectSelect" class="form-select" required>
+                            <option value="">Select a topic…</option>
+                            <option value="Forgotten Password" <?= $presetSubject === 'Forgotten Password' ? 'selected' : '' ?>>Forgotten Password</option>
+                            <option value="Account Issue" <?= $presetSubject === 'Account Issue' ? 'selected' : '' ?>>Account Issue</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-form">
+                        <label class="form-label">Message <span style="color:var(--maroon)">*</span></label>
+                        <textarea name="message" id="messageBox" class="form-control"
+                                  placeholder="How can we help you?" required></textarea>
+                    </div>
                 </div>
 
-                <?php /* Shown only for the two topics that are requests about an
-                         account. A request without these is a paragraph nobody can
-                         act on, so they are required when they are visible and
-                         ignored entirely when they are not. */ ?>
-                <div id="requestFields" hidden>
+                <?php /* Always on show, so the form does not rearrange itself as a
+                         topic is chosen. Both topics ask them, and a request without
+                         them is a paragraph nobody can act on; only whether they are
+                         required follows the topic. */ ?>
+                <div id="requestFields" class="form-side">
                     <div class="request-block">
                         <p class="request-block-head">About your account</p>
 
@@ -466,14 +509,6 @@ textarea.form-control { resize: vertical; min-height: 130px; }
                         </div>
                     </div>
                 </div>
-                <div class="mb-form">
-                    <label class="form-label">Message <span style="color:var(--maroon)">*</span></label>
-                    <textarea name="message" id="messageBox" class="form-control"
-                              placeholder="How can we help you?" required></textarea>
-                </div>
-                <button type="submit" class="btn-submit">
-                    <i class="bi bi-send"></i> Send Message
-                </button>
             </form>
         </div>
     </div>
@@ -485,7 +520,7 @@ textarea.form-control { resize: vertical; min-height: 130px; }
 
 <script nonce="<?= $nonce ?>">
 /* The people who can be asked, grouped by desk. Names only, and only of active
-   accounts — see support_handlers() for why that is safe to put on a public
+   accounts: see support_handlers() for why that is safe to put on a public
    page. */
 const SUPPORT_HANDLERS = <?= json_encode($handlers, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?>;
 
@@ -497,15 +532,6 @@ const HANDLER_ROLES_FOR = <?= json_encode(
         array_keys(support_requester_roles()), array_keys(support_requester_roles()))),
     JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?>;
 
-const SUBJECT_HELP = {
-    'Forgotten Password':
-        'You will be asked who set up your account, because only they can issue a new password. '
-      + 'Nobody can read your old one back to you.',
-    'Account Issue':
-        'For corrections to your name, programme, section or other details on your account. '
-      + 'Say what is wrong and what it should be.'
-};
-
 const MESSAGE_PLACEHOLDER = {
     'Forgotten Password': 'Anything that helps them find you, and when you last signed in.',
     'Account Issue': 'What is wrong on your account, and what it should say instead.',
@@ -513,9 +539,13 @@ const MESSAGE_PLACEHOLDER = {
 };
 
 (function () {
+    const TOKEN     = (document.querySelector('input[name="_token"]') || {}).value || '';
     const subject   = document.getElementById('subjectSelect');
     const block     = document.getElementById('requestFields');
-    const note      = document.getElementById('subjectNote');
+    const fullName  = document.getElementById('fullNameBox');
+    const emailBox  = document.getElementById('emailBox');
+    const nameNote  = document.getElementById('nameNote');
+    const emailNote = document.getElementById('emailNote');
     const rRole     = document.getElementById('requesterRole');
     const rIdent    = document.getElementById('requesterIdent');
     const identHint = document.getElementById('identHint');
@@ -539,30 +569,38 @@ const MESSAGE_PLACEHOLDER = {
 
     function onSubject() {
         const wanted = NEEDS_DETAIL.indexOf(subject.value) !== -1;
-        block.hidden = !wanted;
         setRequired(wanted);
-
-        note.hidden = !SUBJECT_HELP[subject.value];
-        note.textContent = SUBJECT_HELP[subject.value] || '';
         message.placeholder = MESSAGE_PLACEHOLDER[subject.value] || MESSAGE_PLACEHOLDER[''];
     }
 
     /* The ID box names whichever kind of account was chosen. Before a role is
        chosen it must stay neutral: an example of one kind reads as an
        instruction to give that kind. */
+    function identHintText() {
+        if (!rRole.value) return 'The number on your account.';
+        return rRole.value === 'student'
+            ? 'The Student ID on your account.'
+            : 'The Faculty ID on your account.';
+    }
+
+    /* The hint under the ID says what to put there, or what is wrong with what
+       is there. Marked on the box as well: the name dropdown goes empty and
+       disabled when no account is found, and a disabled field is one the
+       browser skips, so without this the form would let a request with no desk
+       on it be sent and answered with a flash. */
+    function sayIdent(bad, text) {
+        if (!rIdent || !identHint) return;
+        identHint.textContent = bad ? text : identHintText();
+        identHint.classList.toggle('is-bad', !!bad);
+        rIdent.setCustomValidity(bad ? text : '');
+    }
+
     function onRequesterRole() {
         offerHandlerRoles();
         if (!rIdent) return;
-        if (!rRole.value) {
-            rIdent.placeholder = 'Your Student ID or Faculty ID';
-            identHint.textContent = 'The number on your account.';
-            return;
-        }
-        const student = rRole.value === 'student';
-        rIdent.placeholder = student ? 'e.g. 2023-00056-BN-0' : 'e.g. FC-00122';
-        identHint.textContent = student
-            ? 'The Student ID on your account.'
-            : 'The Faculty ID on your account.';
+        rIdent.placeholder = !rRole.value ? 'Your Student ID or Faculty ID'
+                           : (rRole.value === 'student' ? 'e.g. 2023-00056-BN-0' : 'e.g. FC-00122');
+        sayIdent(false, '');
     }
 
     /* Only the desks that could have set up this kind of account. Where that
@@ -588,16 +626,39 @@ const MESSAGE_PLACEHOLDER = {
         onHandlerRole();
     }
 
+    /* What the ID given above turned out to be. Until it has been put to the
+       database there is nothing to offer: the whole point of asking is that only
+       the desk this account is actually on can reissue it. */
+    let state = { kind: 'need_id' };   // need_id | checking | none | matched | roll
+    let match = null;                  // {id, name, role} once one is found
+    let seq   = 0;                     // only the newest answer is allowed to paint
+
+    function only(text) {
+        hName.innerHTML = '';
+        hName.disabled = true;
+        hName.appendChild(new Option(text, ''));
+    }
+
     /* The names for the chosen desk. Rebuilt rather than filtered so a name from
        a previously chosen role cannot be left selected. */
-    function onHandlerRole() {
-        const people = SUPPORT_HANDLERS[hRole.value] || [];
-        hName.innerHTML = '';
-        if (!hRole.value) {
-            hName.disabled = true;
-            hName.appendChild(new Option('Choose a role first…', ''));
+    function paintNames() {
+        if (!hRole.value)              return only('Choose a role first…');
+        if (state.kind === 'need_id')  return only('Enter your ID above first…');
+        if (state.kind === 'checking') return only('Checking that ID…');
+        if (state.kind === 'none')     return only('No account with that ID');
+
+        if (state.kind === 'matched') {
+            if (match.role !== hRole.value) return only('Not the desk that issued this ID');
+            hName.innerHTML = '';
+            hName.disabled = false;
+            hName.appendChild(new Option(match.name, match.id, true, true));
             return;
         }
+
+        /* The account was found but its desk is not one this form offers, so
+           there is nothing to check a name against: the roll it is. */
+        const people = SUPPORT_HANDLERS[hRole.value] || [];
+        hName.innerHTML = '';
         hName.disabled = people.length === 0;
         // One person holding the desk is not a choice either.
         if (people.length === 1) {
@@ -609,13 +670,118 @@ const MESSAGE_PLACEHOLDER = {
         people.forEach(function (p) { hName.appendChild(new Option(p.name, p.id)); });
     }
 
+    function onHandlerRole() { paintNames(); }
+
+    /* Asks the page itself who issued the account. A failed request leaves the
+       roll on offer rather than an empty box: the submitted choice is checked
+       against the record either way, so a dropped connection must not be the
+       thing that stops somebody asking for help. */
+    /* The name and the address are the account's too, or the request is somebody
+       writing in about a roll they are not on. Marked against the field itself,
+       so the browser will not send it until it is put right. */
+    function sayField(input, note, bad, text) {
+        if (!input || !note) return;
+        note.hidden = !bad;
+        note.textContent = bad ? text : '';
+        input.setCustomValidity(bad ? text : '');
+    }
+
+    function clearIdentityMarks() {
+        sayField(fullName, nameNote, false, '');
+        sayField(emailBox, emailNote, false, '');
+    }
+
+    function markIdentity(d) {
+        sayField(fullName, nameNote, d.name_ok === false,
+                 'This is not the name on the account for that ID.');
+        sayField(emailBox, emailNote, d.email_ok === false,
+                 'This is not the email address on the account for that ID.');
+    }
+
+    function checkIdent() {
+        const role  = rRole  ? rRole.value : '';
+        const ident = rIdent ? rIdent.value.trim() : '';
+        const mine  = ++seq;
+
+        if (!role || !ident) {
+            match = null; state = { kind: 'need_id' };
+            clearIdentityMarks(); sayIdent(false, ''); paintNames(); return;
+        }
+
+        state = { kind: 'checking' };
+        paintNames();
+
+        fetch(location.pathname, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                _token: TOKEN, lookup_handler: '1',
+                requester_role: role, requester_ident: ident,
+                name: fullName ? fullName.value : '',
+                email: emailBox ? emailBox.value : ''
+            })
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+            if (mine !== seq) return;                   // a newer ID is being checked
+            /* Nothing was found, so there is nothing for the name to disagree
+               with: one complaint about the ID beats three about everything. */
+            if (d.reason === 'no_account' || d.name_ok === undefined) clearIdentityMarks();
+            else markIdentity(d);
+
+            sayIdent(d.reason === 'no_account', 'No account has that ID. Check the ID and the role above.');
+
+            if (!d.ok)             { match = null; state = { kind: 'none' }; }
+            else if (!d.offerable) { match = null; state = { kind: 'roll' }; }
+            else {
+                match = d.handler;
+                state = { kind: 'matched' };
+                // The desk is known, so there is nothing left to choose there.
+                if (hRole.value !== match.role
+                    && hRole.querySelector('option[value="' + match.role + '"]')) {
+                    hRole.value = match.role;
+                }
+            }
+            paintNames();
+        })
+        .catch(function () {
+            if (mine !== seq) return;
+            match = null; state = { kind: 'roll' };
+            clearIdentityMarks();          // the submit checks all three anyway
+            sayIdent(false, '');
+            paintNames();
+        });
+    }
+
+    let typing = null;
+    function onIdentTyped() {
+        clearTimeout(typing);
+        typing = setTimeout(checkIdent, 450);
+    }
+
     subject.addEventListener('change', onSubject);
-    if (rRole) rRole.addEventListener('change', onRequesterRole);
-    if (hRole) hRole.addEventListener('change', onHandlerRole);
+    if (rRole)  rRole.addEventListener('change', function () { onRequesterRole(); checkIdent(); });
+    if (hRole)  hRole.addEventListener('change', onHandlerRole);
+    if (rIdent) {
+        rIdent.addEventListener('input', function () { sayIdent(false, ''); onIdentTyped(); });
+        rIdent.addEventListener('change', checkIdent);
+        rIdent.addEventListener('blur', checkIdent);
+    }
+    /* Typing clears the mark at once: a field the browser is refusing to send,
+       still complaining about what it said a moment ago, reads as stuck. */
+    [[fullName, nameNote], [emailBox, emailNote]].forEach(function (pair) {
+        if (!pair[0]) return;
+        pair[0].addEventListener('input', function () {
+            sayField(pair[0], pair[1], false, '');
+            onIdentTyped();
+        });
+        pair[0].addEventListener('change', checkIdent);
+        pair[0].addEventListener('blur', checkIdent);
+    });
 
     onSubject();
     onRequesterRole();
-    onHandlerRole();
+    checkIdent();
 })();
 </script>
 

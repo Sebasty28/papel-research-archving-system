@@ -59,7 +59,7 @@ if (!$u) {
             break;
         case 'librarian':
             /* Support Requests used to sit here too, but support_handler_roles()
-               only ever offers faculty/admin/super_admin as a handler — a
+               only ever offers faculty/admin/super_admin as a handler: a
                librarian could never actually be routed one, so that page was
                permanently empty for this role. Manuscript Requests is the
                librarian's real inbox. */
@@ -99,7 +99,7 @@ if ($u) {
 }
 
 /* Shown once, on whichever page this session lands on right after signing
-   in — unset immediately so a later page in the same session never shows it
+   in: unset immediately so a later page in the same session never shows it
    again, the same one-shot pattern flash() uses for a message set by one
    page and read by the next. Nothing to show if nothing is unread: a login
    with a clean slate should not still greet the reader with an empty card. */
@@ -112,21 +112,32 @@ $login_notif_popup_items = $show_login_notif_popup
     ? array_slice(array_values(array_filter($recent_notifs, function ($n) { return !$n['is_read']; })), 0, 5)
     : [];
 ?>
-<?php /* The campus photo behind the navbar's glass — see .nav-photo in
-         site_head.php. The Public Repository sets $hero_under_nav: its own
-         banner already runs up behind the navbar, and a second copy of the
-         photo under it would double it. Always the first of the banner's
-         slideshow photos rather than a random one: behind the blur and the
-         frost nobody can tell them apart, and one fixed file stays cached
-         from page to page. */ ?>
+<?php /* The campus photo behind the navbar's glass and the maroon strip under
+         it: see .nav-photo in site_head.php. The Public Repository sets
+         $hero_under_nav: its own banner already runs up behind both, and a
+         second copy of the photo under it would double it.
+
+         The banner's slideshow, carried onto every other page: the same set,
+         shuffled per visit the same way, so the strip is a different photo
+         each time rather than one fixed file. Only the first carries a src;
+         the rest wait in data-src until the page has loaded, so photos nobody
+         has seen yet do not hold up the first paint. */ ?>
 <?php if (empty($hero_under_nav)): ?>
-<div class="nav-photo" aria-hidden="true">
-    <img src="<?= e(BASE_URL) ?>/assests/images/navbar-photo1.jpg" alt="" decoding="async">
+<?php $nav_photos = array_map('basename', glob(ROOT_PATH . '/assests/images/navbar-photo*.jpg') ?: []);
+      shuffle($nav_photos); ?>
+<div class="nav-photo" id="navPhoto" aria-hidden="true">
+    <?php foreach ($nav_photos as $i => $photo): ?>
+        <?php if ($i === 0): ?>
+            <img class="nav-slide is-active" src="<?= e(BASE_URL) ?>/assests/images/<?= e($photo) ?>" alt="" decoding="async">
+        <?php else: ?>
+            <img class="nav-slide" data-src="<?= e(BASE_URL) ?>/assests/images/<?= e($photo) ?>" alt="" decoding="async">
+        <?php endif; ?>
+    <?php endforeach; ?>
 </div>
 <?php endif; ?>
 <header class="site-header" id="siteHeader">
     <div class="wrap-wide header-inner">
-        <?php /* The mark always goes to the public repository, for every role —
+        <?php /* The mark always goes to the public repository, for every role:
                  the role dashboard is reached via the nav links and the avatar
                  menu instead.
 
@@ -201,8 +212,17 @@ $login_notif_popup_items = $show_login_notif_popup
                     <div class="notif-dropdown-header">
                         <span>Notifications</span>
                         <span class="notif-header-tools">
-                            <button class="notif-mark-all" id="notifMarkAllBtn" type="button">
-                                <span class="material-symbols-outlined mi-18">done_all</span> Mark all as read
+                            <?php /* Offers whichever move is left: with something
+                                     unread it reads them, with nothing unread it
+                                     puts them all back. The script keeps it in step
+                                     as rows are read one by one; this is only where
+                                     it starts. Nothing at all to mark, no button. */ ?>
+                            <?php $mark_all_read = $unread_count > 0; ?>
+                            <button class="notif-mark-all" id="notifMarkAllBtn" type="button"
+                                    data-act="<?= $mark_all_read ? 'mark_all_read' : 'mark_all_unread' ?>"
+                                    <?= $recent_notifs ? '' : 'hidden' ?>>
+                                <span class="material-symbols-outlined mi-18"><?= $mark_all_read ? 'done_all' : 'mark_email_unread' ?></span>
+                                <span class="notif-mark-all-label">Mark all as <?= $mark_all_read ? 'read' : 'unread' ?></span>
                             </button>
                             <button class="notif-close" id="notifCloseBtn" type="button" aria-label="Close">
                                 <span class="material-symbols-outlined mi-18">close</span>
@@ -281,7 +301,7 @@ $login_notif_popup_items = $show_login_notif_popup
             <?php endif; ?>
         </div>
         <?php /* On a phone the bar has no room for the links, and until now
-                 they were simply hidden — which left no route at all to About,
+                 they were simply hidden, which left no route at all to About,
                  Help Center, Contact Support or any role page. They fold into
                  this instead. Last in the row so the wordmark keeps the left
                  edge, and it is the only control here that changes what it
@@ -295,30 +315,78 @@ $login_notif_popup_items = $show_login_notif_popup
     </div>
 </header>
 <script nonce="<?= csp_nonce() ?>">
-/* The navbar's height, for the photo strip behind it (.nav-photo). Read from
-   the bar rather than assumed: it wraps taller on a phone, and grows a little
-   when the web fonts arrive after this runs. */
+/* The navbar's height and the maroon strip's, for the photo behind the two of
+   them (.nav-photo). Read from them rather than assumed: the bar wraps taller
+   on a phone, and both grow a little when the web fonts arrive after this
+   runs. */
 (function () {
     var bar = document.getElementById('siteHeader');
     if (!bar) { return; }
+    var watch = window.ResizeObserver ? new ResizeObserver(measure) : null;
+    var seen  = null;
+
     function measure() {
-        document.documentElement.style.setProperty('--nav-h', bar.offsetHeight + 'px');
+        var root = document.documentElement.style;
+        root.setProperty('--nav-h', bar.offsetHeight + 'px');
+        /* Looked up each time, not once: this script runs where it stands, and
+           the strip is further down the page than the header it belongs to, so
+           on the first pass there is nothing there yet. */
+        var crumb = document.querySelector('.crumb-bar');
+        if (!crumb) { return; }
+        root.setProperty('--crumb-h', crumb.offsetHeight + 'px');
+        if (watch && crumb !== seen) { watch.observe(crumb); seen = crumb; }
     }
+
     measure();
-    if (window.ResizeObserver) { new ResizeObserver(measure).observe(bar); }
+    document.addEventListener('DOMContentLoaded', measure);
+    if (watch) { watch.observe(bar); }
     else { window.addEventListener('resize', measure); }
+})();
+
+/* The strip's slideshow, walked one photo every five seconds. The same timing
+   and the same rules as the repository's banner, which is the same picture in
+   the same place on that one page. */
+(function () {
+    var strip  = document.getElementById('navPhoto');
+    var slides = strip ? strip.querySelectorAll('.nav-slide') : [];
+    if (slides.length < 2) { return; }
+    /* Someone who has asked their system for less motion keeps the one random
+       photo the server dealt, and no crossfade every five seconds. */
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) { return; }
+
+    var current = 0;
+    /* After load, not straight away: the page comes first, and the others are
+       not needed until five seconds from now. */
+    window.addEventListener('load', function () {
+        slides.forEach(function (img) {
+            if (img.dataset.src) { img.src = img.dataset.src; delete img.dataset.src; }
+        });
+    });
+
+    setInterval(function () {
+        /* Nothing to animate in a background tab, and advancing unseen would
+           make the photo someone returns to a jump rather than a fade. */
+        if (document.hidden) { return; }
+        var next = (current + 1) % slides.length;
+        /* Not loaded yet on a slow connection: hold rather than fade to
+           nothing. */
+        if (!slides[next].complete || !slides[next].getAttribute('src')) { return; }
+        slides[current].classList.remove('is-active');
+        slides[next].classList.add('is-active');
+        current = next;
+    }, 5000);
 })();
 </script>
 
 <?php if ($u && $show_login_notif_popup): ?>
     <?php /* Same vocabulary the corner dropdown uses (.notif-item, .notif-dot,
-             .notif-view-all) — this only adds the overlay that centres it
+             .notif-view-all): this only adds the overlay that centres it
              instead, so it reads as the same feature shown two ways rather
              than a second one.
 
              Outside <header> on purpose. Once the page scrolls, the header
              gets a backdrop-filter, and that makes it the containing block for
-             every position:fixed element inside it — the overlay stopped being
+             every position:fixed element inside it: the overlay stopped being
              pinned to the window and was squeezed into the header's strip,
              riding up the page with it. */ ?>
     <div class="notif-popup-backdrop" id="notifPopupBackdrop">
@@ -367,8 +435,8 @@ $login_notif_popup_items = $show_login_notif_popup
          closes it. */ ?>
 <div class="login-panel" id="loginPanel" role="dialog" aria-modal="true" aria-label="Sign in">
     <div class="panel-topbar">
-        <?php /* The same mark as the navbar's — theme colour, the name sliding
-                 out past its rule on hover, the name in aria-label — all from
+        <?php /* The same mark as the navbar's (theme colour, the name sliding
+                 out past its rule on hover, the name in aria-label) all from
                  the shared .brand rules. */ ?>
         <div class="panel-topbar-brand">
             <a href="<?= e(BASE_URL.'/archive/index.php') ?>" class="brand" aria-label="<?= e(APP_NAME) ?>">
@@ -378,7 +446,7 @@ $login_notif_popup_items = $show_login_notif_popup
         </div>
         <?php /* open_in_full / close_fullscreen, the pair the upload wizard's
                  expand button already uses. The screen-corners icon reads as
-                 "make the browser full screen", which is not what this does —
+                 "make the browser full screen", which is not what this does:
                  it widens the panel and leaves the page where it is. The label
                  changes with the state, so a screen reader hears which way the
                  button will go rather than what it is called. */ ?>
@@ -425,7 +493,7 @@ $login_notif_popup_items = $show_login_notif_popup
         <?php endif; ?>
 
         <?php /* data-splash: signing in shows the full-screen logo animation
-                 rather than the small pill the other workflows use — see
+                 rather than the small pill the other workflows use: see
                  includes/loading_bar.php. */ ?>
         <form class="login-form" id="loginModalForm" method="post" data-splash action="<?= e(BASE_URL) ?>/app/auth/login.php">
             <?= csrf_field() ?>

@@ -33,7 +33,7 @@
 /* Magnifier picks up maroon whenever the field is engaged */
 .search-form:hover .btn-search-icon,
 .search-form:focus-within .btn-search-icon { color: var(--maroon); }
-/* The magnifier is the submit control — Figma has no separate button */
+/* The magnifier is the submit control: Figma has no separate button */
 .btn-search-icon {
     display: flex;
     align-items: center;
@@ -79,7 +79,7 @@
             mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M1.5 1.5l9 9M10.5 1.5l-9 9' stroke='%23000' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 .search-input::-webkit-search-cancel-button:hover { opacity: 1; }
-/* Light on a dark field, for the same reason it is dark on a light one — a
+/* Light on a dark field, for the same reason it is dark on a light one: a
    warm parchment grey, to match Old Night's surfaces (10.10:1 on #1E1813). */
 html[data-mode="dark"] { --search-clear: #CFC3AE; }
 
@@ -283,7 +283,7 @@ html[data-mode="dark"] { --search-clear: #CFC3AE; }
 }
 .qs-radio input[type="radio"]:checked { background: var(--pup-maroon); }
 
-/* Density — applied to a stable ancestor so it survives AJAX result swaps */
+/* Density: applied to a stable ancestor so it survives AJAX result swaps */
 /* Applies to both result shapes: .paper-item (public repository rows) and
    .paper-card (dashboard cards). Default deliberately sets explicit values
    too, so switching back from another density actually restores it. */
@@ -309,7 +309,7 @@ html[data-mode="dark"] { --search-clear: #CFC3AE; }
 [data-density="comfortable"] .paper-meta { font-size: .75rem; }
 [data-density="comfortable"] .card-track { margin-top: 1.5rem; }
 
-/* Result well — fixed height with its own scrollbar in both directions */
+/* Result well: fixed height with its own scrollbar in both directions */
 .paper-list.is-scrollable {
     height: 620px;
     overflow-y: auto;
@@ -424,7 +424,7 @@ html[data-mode="dark"] { --search-clear: #CFC3AE; }
    Left is a mirror of right rather than a move: the two grid tracks trade
    places and the columns trade order.
 
-   Every console that has this sidebar gets it — the public repository, the
+   Every console that has this sidebar gets it: the public repository, the
    student dashboard, and the four review desks that share review_console.php.
    The order properties do the work rather than anything moving in the DOM,
    because applying a filter replaces the inside of both columns from script
@@ -471,7 +471,7 @@ html.sidebar-left .js-side-swap .side-icon-right { display: inline-flex; }
 .sidebar-link:hover { background: var(--cream); color: var(--maroon); }
 .sidebar-link.active { color: var(--maroon); font-weight: 700; }
 
-/* Filter groups flow continuously — no rules between them */
+/* Filter groups flow continuously: no rules between them */
 .filter-section { padding: .5rem .625rem .125rem; }
 .filter-section:last-child { padding-bottom: .625rem; }
 .filter-section-label {
@@ -598,8 +598,8 @@ html.sidebar-left .js-side-swap .side-icon-right { display: inline-flex; }
    page built for the device. Nothing here applies above 900px, so the wide
    layout is exactly as it was.
 
-   The density rules further up carry an attribute selector, so these repeat it
-   — otherwise they lose the cascade and silently do nothing. */
+   The density rules further up carry an attribute selector, so these repeat it:
+   otherwise they lose the cascade and silently do nothing. */
 @media (max-width: 900px) {
     /* A result becomes a card you can hit with a thumb, rather than a row
        separated from the next one by a hairline. */
@@ -636,7 +636,7 @@ html.sidebar-left .js-side-swap .side-icon-right { display: inline-flex; }
     .paper-authors { margin-bottom: .25rem; }
     .paper-meta { gap: .3rem .5rem; }
 
-    /* The action was an 11px link in a line of other text — a target a finger
+    /* The action was an 11px link in a line of other text: a target a finger
        cannot reliably find. It becomes the card's own button. */
     .paper-side {
         display: flex;

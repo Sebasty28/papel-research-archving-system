@@ -71,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   
   /* Edit an existing student.
      The same panel on the left does both jobs, so this shares the create form's
-     fields — with two differences: the uniqueness checks have to ignore the row
+     fields, with two differences: the uniqueness checks have to ignore the row
      being edited, and a blank password means "leave it alone" rather than
      "reject this". */
   if (($_POST['action'] ?? '') === 'update_user') {
@@ -106,7 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     /* Moving someone up a year shortens what is left of their account, and
-       moving their academic year shifts it — so the expiry is recomputed from
+       moving their academic year shifts it, so the expiry is recomputed from
        whatever was just entered rather than left at whatever it was. */
     $expires = student_expiry_date($sect, $ay);
 
@@ -133,7 +133,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                       $edit_id, $u['user_id']);
     }
 
-    /* affected_rows is 0 when nothing actually changed, which is not a failure —
+    /* affected_rows is 0 when nothing actually changed, which is not a failure,
        only a statement that did not run is. */
     // The template escapes the flash on the way out, so it is stored as plain text.
     $before = account_snapshot($edit_id);
@@ -155,7 +155,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   $full=normalize_person_name($_POST['full_name']??''); $email=trim($_POST['email']??''); $usern='';   /* derived from the Student ID below - no longer asked for */ $pass=$_POST['password']??''; $program=trim($_POST['program']??''); $student_id=trim($_POST['student_id']??'');
 
   /* Year-and-section and the academic year it belongs to. The form suggests the
-     usual values but does not limit them — a programme with its own naming (a
+     usual values but does not limit them: a programme with its own naming (a
      ladderized intake, a lettered section) has to be able to say so. Only the
      length is enforced, so a stray paste cannot overflow the column. */
   $academic_year = substr(trim($_POST['academic_year'] ?? ''), 0, 20);
@@ -260,7 +260,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 try {
   /* Read into arrays rather than holding the result open: the roll is walked
-     more than once — the section filter needs to know which sections actually
+     more than once: the section filter needs to know which sections actually
      appear before the table itself is drawn. */
   $cols = "user_id,full_name,email,username,student_id,program,academic_year,section,expires_on,created_at,is_active";
   /* The adviser's own students, not every student in the school. The page says
@@ -279,7 +279,7 @@ try {
 
   /* An account past its date cannot be signed into, so listing it as active
      says something untrue. Expired and archived accounts sit together in the
-     second tab — both are "not in use", and both are brought back from there:
+     second tab: both are "not in use", and both are brought back from there:
      an archived one by restoring it, an expired one by editing it on to the
      year it is really in. Each row remembers which of the two it is. */
   $active = $archived = [];
@@ -314,7 +314,7 @@ try {
 $PROGRAMS = programs_map();
 
 /* Suggestions, not rules. The academic year list begins at the intake now
-   running and looks forward — accounts are being made for students starting
+   running and looks forward: accounts are being made for students starting
    now or soon, not for years already gone. The sections cover the four year
    levels plus the ladderized intake. Both fields stay open, so an adviser can
    still type a past year or a section this list has never heard of. */
@@ -332,7 +332,7 @@ $SECTIONS[] = 'Ladderized';
 /* What the section filter offers: the suggestions, plus anything an adviser
    has actually typed that is not among them, so a hand-entered section can
    still be filtered on. Ordered as the suggestions are, oddities last.
-   Built from the whole roll, since both tabs carry the same filter bar — the
+   Built from the whole roll, since both tabs carry the same filter bar: the
    chips with nobody behind them are hidden per tab by the page's own script. */
 $used = [];
 foreach ($roll as $r) {
@@ -346,7 +346,7 @@ foreach (array_keys($used) as $s) {
     if (!in_array($s, $SECTIONS, true)) { $SECTION_FILTERS[] = $s; }
 }
 
-/* And the academic years on the roll, for the third step of the filter — one
+/* And the academic years on the roll, for the third step of the filter: one
    section can hold students from more than one intake. Newest first, since a
    current class is looked for more often than an old one. */
 $YEAR_FILTERS = [];
@@ -425,7 +425,7 @@ function mgmt_student_row(array $r, array $programs): void {
             <span class="mgmt-sub" title="<?= e($r['email']) ?>"><?= e($r['email']) ?></span>
         </td>
         <td class="mgmt-id">
-            <?= e($r['student_id'] ?: '—') ?>
+            <?= e($r['student_id'] ?: 'N/A') ?>
             <?php if ($expTs): ?>
                 <span class="mgmt-sub <?= $lapsed ? 'is-lapsed' : ($closing ? 'is-closing' : '') ?>"
                       title="<?= e(student_account_years($r['section'])) ?>-year account for section <?= e($r['section']) ?>">
@@ -436,10 +436,10 @@ function mgmt_student_row(array $r, array $programs): void {
             <?php endif; ?>
         </td>
         <td class="mgmt-prog" title="<?= e($r['program'] ?? '') ?>">
-            <?= e($programs[$r['program'] ?? ''] ?? ($r['program'] ?: '—')) ?>
+            <?= e($programs[$r['program'] ?? ''] ?? ($r['program'] ?: 'N/A')) ?>
         </td>
         <td class="mgmt-cohort">
-            <?= e($r['section'] ?: '—') ?>
+            <?= e($r['section'] ?: 'N/A') ?>
             <?php if (!empty($r['academic_year'])): ?>
                 <span class="mgmt-sub">A.Y. <?= e($r['academic_year']) ?></span>
             <?php endif; ?>
@@ -569,7 +569,7 @@ $password_rows = password_audit_rows(['student'], (int)$u['user_id']);
              form to keep in step with this one. -->
         <?php /* No heading row. The page title above already says what this is
                  for, and in edit mode the note at the top of the form names the
-                 student being edited — the heading only repeated one or the
+                 student being edited: the heading only repeated one or the
                  other. */ ?>
         <section class="mgmt-panel" id="formPanel" aria-label="Student account form">
             <div class="mgmt-panel-body">
@@ -671,7 +671,7 @@ $password_rows = password_audit_rows(['student'], (int)$u['user_id']);
 
         <!-- ============ Roll ============
      Two tabs over the same kind of rows, so both get the same filter bar and
-     the same row renderer. The second holds accounts not in use — archived by
+     the same row renderer. The second holds accounts not in use: archived by
      hand, or lapsed because their date has passed. -->
         <section>
             <div class="mgmt-tabs" role="tablist">
@@ -839,7 +839,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    /* The Generate button lives in includes/password_generator.php — it needs
+    /* The Generate button lives in includes/password_generator.php: it needs
        the name and ID fields, which are shared by all three create forms. */
 
     // Tabs
@@ -856,7 +856,7 @@ document.addEventListener('DOMContentLoaded', function () {
     /* ---- Filtering and sorting, per tab ----
        Programme, then section, then intake. Each row appears only once the step
        above it has been narrowed, and each offers only values some student in
-       *this* tab actually has — offering 3-2 when nobody is in it just leads to
+       *this* tab actually has: offering 3-2 when nobody is in it just leads to
        an empty table, and the two tabs hold different people.
 
        Both tabs are wired by the same function, so they cannot drift apart. The
@@ -1029,7 +1029,7 @@ document.addEventListener('DOMContentLoaded', function () {
         pwField.placeholder = 'Min 6 chars, 1 uppercase, 1 number';
         cancel.hidden = true;
         form.reset();
-        // form.reset() restores the markup's values, not these — set them after.
+        // form.reset() restores the markup's values, not these: set them after.
         document.getElementById('formAction').value = 'create_user';
         document.getElementById('formUserId').value = '';
         document.querySelectorAll('#activeStudentsTable tbody tr.is-editing')
@@ -1086,7 +1086,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function openHelp(from) {
         helpOpener = from;
         help.classList.add('is-open');
-        /* Focus the panel, not a button inside it — a focused Close reads as
+        /* Focus the panel, not a button inside it: a focused Close reads as
            already pressed. Tab still walks into the dialog from here. */
         document.getElementById('helpPanel').focus();
     }

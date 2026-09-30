@@ -3,7 +3,7 @@
  * Everything PAPEL has told this person, in one place.
  *
  * The bell's dropdown shows the last eight; this is the whole record, with the
- * same two views (all, unread) and the same behaviour — a notification is about
+ * same two views (all, unread) and the same behaviour: a notification is about
  * a paper, so clicking one opens that paper in whichever page this reader is
  * allowed to see it on.
  *
@@ -16,14 +16,14 @@ require_login();
 $conn = db();
 $u    = current_user();
 
-/* Marking everything read — or back to unread — is a change, so it is a POST
+/* Marking everything read (or back to unread) is a change, so it is a POST
    and it is checked. */
 $bulk = $_POST['action'] ?? '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $bulk === 'delete_selected') {
     csrf_verify();
     /* AND user_id = ? even though every id already came from this reader's
-       own list — the same defence-in-depth notifications_handler.php's own
+       own list: the same defence-in-depth notifications_handler.php's own
        delete uses, so a crafted id from elsewhere still does nothing. */
     $ids = array_values(array_unique(array_filter(array_map('intval', $_POST['notification_ids'] ?? []))));
     if ($ids) {
@@ -38,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $bulk === 'delete_selected') {
         $del->close();
         flash($n ? 'success' : 'error',
               $n ? $n . ' notification' . ($n === 1 ? '' : 's') . ' deleted.'
-                 : 'Nothing was deleted — it may already be gone.');
+                 : 'Nothing was deleted. It may already be gone.');
     } else {
         flash('error', 'Nothing was selected to delete.');
     }
@@ -129,7 +129,7 @@ $kinds = [
     background: var(--white); border: 1px solid var(--border);
     border-radius: var(--r-card, 8px); overflow: hidden;
 }
-/* Select-all and the bulk-delete bar, above the rows themselves — same shape
+/* Select-all and the bulk-delete bar, above the rows themselves: same shape
    as .mgmt-toolbar (app/librarian/manuscript_requests.php), just local to
    this page since nothing else here uses .mgmt-*. */
 .nc-list-toolbar {
@@ -138,20 +138,29 @@ $kinds = [
     padding: .625rem 1.125rem;
     border-bottom: 1px solid var(--border);
 }
+/* Select all goes at the right end of the bar, above the column the rows'
+   own boxes are now in, with its box last so the two line up. The bulk
+   actions take the left, where there is room for them to grow. */
 .nc-select-all-label {
     display: inline-flex; align-items: center; gap: .5rem;
+    flex-direction: row-reverse;
+    order: 2;
+    margin-left: auto;
     font-size: .75rem; color: var(--grey); cursor: pointer;
 }
+.nc-bulk-bar { order: 1; }
 .nc-bulk-bar { display: flex; align-items: center; gap: .75rem; }
 .nc-bulk-bar .js-sel-count { font-size: .75rem; color: var(--grey); }
 .nc-bulk-bar form { display: contents; }
 
-/* A checkbox beside the link rather than inside it — <a> cannot properly
+/* A checkbox beside the link rather than inside it: <a> cannot properly
    nest an <input>, and keeping them siblings means selecting a row never has
    to fight the row's own click-to-open behaviour. */
 .nc-row {
     display: flex; align-items: center; gap: .625rem;
-    padding-left: 1.125rem;
+    /* The box is at the right end of the row, so the row's own margin is on
+       that side and the notification starts at the left edge. */
+    padding-right: 1.125rem;
     border-bottom: 1px solid var(--border);
     background: var(--white);
     transition: background .15s;
@@ -161,10 +170,26 @@ $kinds = [
 .nc-row.is-unread { background: var(--cream); }
 .nc-row .js-row-check,
 .nc-select-all-label input { accent-color: var(--maroon); flex: 0 0 auto; }
+/* The box sits on the same line as the unread dot beside it, rather than in
+   the middle of the row: on a notification that runs to two lines the two
+   were eighteen pixels apart. Its size is stated so the offset can be worked
+   out from it, rather than depending on how big a browser draws a checkbox. */
+.nc-row .js-row-check {
+    /* After the notification, whatever order the markup is in: the box has to
+       stay next to the link for the reasons above, and this is only where it
+       is drawn. */
+    order: 2;
+    align-self: flex-start;
+    width: 13px;
+    height: 13px;
+    /* The link's top padding, the dot's own offset and half the dot, less
+       half of this box: the two centres then land on the same line. */
+    margin-top: calc(.875rem + .55rem + .225rem - 6.5px);
+}
 .nc-item {
     display: flex; align-items: flex-start; gap: .75rem;
     flex: 1 1 auto; min-width: 0;
-    padding: .875rem 1.125rem .875rem 0;
+    padding: .875rem 0 .875rem 1.125rem;
     text-decoration: none;
 }
 .nc-body { flex: 1 1 auto; min-width: 0; }
@@ -187,7 +212,7 @@ $kinds = [
 
 /* No outline on this one. .btn-sm-outline is shared with two dozen buttons
    across the site, so the border is dropped here rather than from the class
-   itself — transparent, not none, so the button keeps its size. */
+   itself: transparent, not none, so the button keeps its size. */
 .nc-markall { border-color: transparent; }
 .nc-markall:hover { background: var(--cream); }
 </style>
@@ -315,7 +340,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var handler = <?= json_encode(BASE_URL.'/notifications/notifications_handler.php') ?>;
     // The handler can delete now, so it refuses a post it cannot place.
     var ncToken = <?= json_encode(csrf_token()) ?>;
-    /* Mark it read on the way out. The link is followed either way — losing
+    /* Mark it read on the way out. The link is followed either way: losing
        the bookkeeping is a smaller problem than blocking the click. */
     /* Filtering, without leaving the page. */
     var list = document.getElementById('ncList');
@@ -346,8 +371,8 @@ document.addEventListener('DOMContentLoaded', function () {
     if (startTab) startTab.click();
     <?php endif; ?>
 
-    /* An account notice has nowhere to go — what it is about is the message
-       itself — so it opens where it is, exactly as it does in the bell's list.
+    /* An account notice has nowhere to go (what it is about is the message
+       itself) so it opens where it is, exactly as it does in the bell's list.
        Bound to every row, not only the unread ones, because reading it a second
        time should still show the detail. */
     document.querySelectorAll('.nc-item[data-notif-popup]').forEach(function (item) {
@@ -391,7 +416,7 @@ document.addEventListener('DOMContentLoaded', function () {
        bulk-delete bar. The hidden notification_ids[] fields are rebuilt on
        every checkbox change rather than gathered at submit time: a confirmed
        dialog in action_dialogs.php submits the form with form.submit(),
-       which — unlike an actual click — never fires a submit event, so there
+       which (unlike an actual click) never fires a submit event, so there
        is nothing left to catch that late. */
     if (list) {
         var selectAll  = list.querySelector('.js-select-all');

@@ -80,7 +80,7 @@ $filter_day   = (int)($_GET['day'] ?? 0);
 // Whitelisted so it can be interpolated into ORDER BY safely
 $sort_dir     = (($_GET['sort'] ?? '') === 'asc') ? 'ASC' : 'DESC';
 $sort_param   = $sort_dir === 'ASC' ? 'asc' : 'desc';
-// Home layout disabled — browse view is the permanent landing page
+// Home layout disabled: browse view is the permanent landing page
 $is_searching = true;
 
 // Papers are only openable by signed-in users (or an active guest session)
@@ -88,7 +88,7 @@ $can_view = $u || isset($_SESSION['guest_login']);
 // Signed-in members get the full browse console (toolbar + extended filters)
 $is_member = (bool)$u;
 
-// Pagination — 10 results per page for everyone
+// Pagination: 10 results per page for everyone
 $per_page = 10;
 $page     = max(1, (int)($_GET['page'] ?? 1));
 $offset   = ($page - 1) * $per_page;
@@ -208,7 +208,7 @@ $qs = http_build_query(array_filter([
     'day' => $filter_day ?: null, 'sort' => $sort_param, 'browse' => '1'
 ]));
 
-// AJAX result refresh — search/filter/pagination fetch just the results
+// AJAX result refresh: search/filter/pagination fetch just the results
 // fragment instead of reloading the whole page. Nothing has been sent to
 // the browser yet (buffered below), so header() below is still safe even
 // though this flag is only acted on much further down the file.
@@ -226,7 +226,7 @@ ob_start();
 <?php require_once ROOT_PATH.'/includes/browse_card.php'; ?>
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 /* =========================================================
-   PAPEL — Public Repository landing page
+   PAPEL: Public Repository landing page
    Design tokens + header/footer/modal CSS now live in
    includes/site_head.php. This block is page-specific only.
    ========================================================= */
@@ -235,23 +235,20 @@ ob_start();
     --col-gap:      36px;
     /* The rendered height of the search field: .75rem of padding above and
        below its content. Named rather than left implicit because the sidebar
-       is aligned against it — see .sidebar-right. Change the field's padding
+       is aligned against it: see .sidebar-right. Change the field's padding
        and this has to follow, or the two tops drift apart again. */
     --search-h:     50px;
     /* The banner's own height, and how far the search field is pulled up into
        it. Named because the photo's size is worked out from them in both
-       banner states — see .hero img. Both change at the breakpoints below. */
+       banner states: see .hero img. Both change at the breakpoints below. */
     --hero-h:       240px;
     --hero-overlap: 24px;
 }
 
 /* ===== 3. Breadcrumb strip =====
-   --maroon-surface-hover, not --dark-maroon. The two are the same colour on a
-   light palette, which is why this went unnoticed; on a dark one --dark-maroon
-   lifts so it can be read as text, and the strip came out as a bright band of
-   the accent instead of a dark one. The surface tokens are the ones that do
-   not lift. */
-.crumb-bar { background: var(--maroon-surface-hover); }
+   The strip's own background lives in site_head.php, which makes it tinted
+   glass over the photo behind it. A copy of the solid colour here painted over
+   that glass, on the one page whose photo most needed to show through. */
 .crumb-inner {
     display: flex;
     align-items: center;
@@ -263,7 +260,7 @@ ob_start();
 }
 .crumb-inner a { color: #fff; text-decoration: none; font-weight: 500; }
 .crumb-inner a:hover { text-decoration: underline; }
-/* Current-location indicator — solid white arrow */
+/* Current-location indicator: solid white arrow */
 .crumb-arrow {
     color: #fff;
     font-size: 20px;
@@ -287,15 +284,15 @@ ob_start();
    values here are only what shows before it runs.
 
    Hiding the banner does not take the photo away altogether. The strip of it
-   behind the navbar stays, so the navbar's glass still has something to show;
-   it stops at the top of the crumb strip, which goes back to solid maroon, and
-   everything below goes. The photo is not resized for that — it is clipped.
+   behind the navbar and the maroon strip under it stays, so the glass of both
+   still has something to show; it stops at the bottom of the maroon strip, and
+   everything below goes. The photo is not resized for that: it is clipped.
    Its size is the same in both states, so the part behind the navbar is
    exactly the part that was there before, and nothing slides or rescales as
    it closes. */
 .hero {
     --hero-lift: 0px;                             /* page top → top of this box */
-    --hero-nav: 0px;                              /* page top → top of the crumb strip */
+    --hero-nav: 0px;                              /* page top → bottom of the crumb strip */
     --hero-fade: var(--search-h);                 /* the field's height */
     /* Bottom of this box → bottom of the field, with the banner open. Worked
        out rather than measured, because measured with the banner hidden it
@@ -303,7 +300,7 @@ ob_start();
     --hero-tail: calc(var(--hero-fade) - var(--hero-overlap));
     /* How far the fade runs: twice the field's height, so it starts one field
        above it. Over the field's height alone, as it first was, it read as a
-       hard band — too short a run to fade a photo that bright. */
+       hard band: too short a run to fade a photo that bright. */
     --hero-fade-run: calc(var(--hero-fade) * 2);
     position: relative;
     height: var(--hero-h);
@@ -345,10 +342,10 @@ ob_start();
         rgba(0, 0, 0, .024)    calc(100% - var(--hero-fade-run) * .1),
         transparent            100%);
 }
-/* Hidden: everything from the top of the crumb strip down is clipped away,
-   leaving the top --hero-nav of the photo — the part behind the navbar alone.
-   The edge it leaves is hard, but it falls exactly where the solid maroon
-   strip begins, so it reads as the strip's edge rather than the photo's. */
+/* Hidden: everything below the maroon strip is clipped away, leaving the top
+   --hero-nav of the photo: the part behind the navbar and the strip. The edge
+   it leaves is hard, but it falls exactly at the strip's bottom edge, so it
+   reads as that edge rather than the photo's. */
 .hero.collapsed img { clip-path: inset(0 0 calc(100% - var(--hero-nav)) 0); }
 
 /* Slideshow: every photo is stacked in the same place by the rule above, and
@@ -382,7 +379,7 @@ ob_start();
    was a grey glow the full length of the column. So ::before, a strip across
    the top 3rem, casts it instead; its sides are only that tall, and the blur
    fades them out below. The part of its shadow that falls inside the panel
-   is covered by ::after, which carries the panel's cream — moved off the
+   is covered by ::after, which carries the panel's cream: moved off the
    panel because both pseudo-elements paint above the panel's own background,
    and the strip's shadow would otherwise have smudged it. */
 @media (min-width: 901px) {
@@ -409,32 +406,14 @@ ob_start();
     }
 }
 
-/* The photo now runs under the crumb strip. The strip comes before the banner
-   in the page and is not positioned, so without this the photo paints over
-   it. */
-.crumb-bar {
-    position: relative;
-    z-index: 1;
-    /* Eases between glass and solid alongside the banner closing, rather than
-       switching the instant the button is pressed. */
-    transition: background-color .35s ease;
-}
+/* The photo runs under the crumb strip; site_head.php positions the strip so
+   it paints over the photo rather than under it. */
 
-/* The navbar is glass on every page (site_head.php). The crumb strip joins it
-   as tinted glass while the banner is up — solid, it cut the photo into two
-   with a maroon band. With the banner hidden the photo stops at the strip's
-   top edge, which is also how every other page looks, there is nothing behind
-   the strip to see, and it goes back to solid maroon. */
-body:has(.hero:not(.collapsed)) .crumb-bar {
-    background: color-mix(in srgb, var(--maroon-surface-hover) 82%, transparent);
-    -webkit-backdrop-filter: blur(10px) saturate(160%);
-    backdrop-filter: blur(10px) saturate(160%);
-}
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-    body:has(.hero:not(.collapsed)) .crumb-bar { background: var(--maroon-surface-hover); }
-}
+/* The strip itself is tinted glass on every page now (site_head.php), banner
+   up or hidden alike: the photo runs behind it in both states, and solid
+   maroon would cut it in two with a band. */
 
-/* ===== 5. Search band — sits over the lower edge of the hero,
+/* ===== 5. Search band: sits over the lower edge of the hero,
    left-aligned to the main content column (matches Figma) ===== */
 .search-band {
     position: relative;
@@ -442,13 +421,13 @@ body:has(.hero:not(.collapsed)) .crumb-bar {
     margin-top: calc(-1 * var(--hero-overlap));
     transition: margin-top .35s ease;
 }
-/* With the banner hidden there is no hero to overlap — drop the pull-up
+/* With the banner hidden there is no hero to overlap: drop the pull-up
    so the search bar can't ride over the breadcrumb strip. */
 .hero.collapsed + .search-band { margin-top: 1.25rem; }
-/* Same reasoning for the layout below it — no photo to tuck under, so
+/* Same reasoning for the layout below it: no photo to tuck under, so
    drop its pull-up too or it rides over the search bar/sidebar. */
 .hero.collapsed ~ .layout { margin-top: 1rem; }
-/* Search field and banner toggle share one row — hiding the banner must not
+/* Search field and banner toggle share one row: hiding the banner must not
    leave an empty full-width band between the search bar and the results. */
 .search-row {
     display: grid;
@@ -464,12 +443,12 @@ body:has(.hero:not(.collapsed)) .crumb-bar {
 }
 /* The row under the search field. It held the banner eye as well once; the eye
    lives in the crumb strip now, so all that is left here is the phone's
-   "Browse & Filters" button, and above 900px — where that button is hidden —
+   "Browse & Filters" button, and above 900px (where that button is hidden)
    the row would be empty. It is taken out rather than left as a blank band,
    and .layout's margin below is what makes up the difference. */
 .banner-toggle-col { display: none; }
 
-/* Banner visibility toggle — in the crumb strip, at the far right, on the
+/* Banner visibility toggle, in the crumb strip, at the far right, on the
    maroon. It sat in the search row until the banner started running up under
    the navbar; there it was a grey glyph floating on the photo's fade, and it
    moved to a different row whenever the banner was hidden. Here it has the
@@ -492,7 +471,7 @@ body:has(.hero:not(.collapsed)) .crumb-bar {
    the navbar's own controls directly above it: the navbar runs full width and
    holds them 1.5rem off the right edge at every width, while the crumbs sit
    in the narrower centred .wrap. (.crumb-bar is already positioned, for the
-   banner — see the rule after .hero.) Anchored by its right edge, so the
+   banner: see the rule after .hero.) Anchored by its right edge, so the
    words slide open leftwards, into the empty middle of the strip.
 
    Lined up by what can be seen, not by the boxes. Every icon glyph carries
@@ -508,7 +487,7 @@ body:has(.hero:not(.collapsed)) .crumb-bar {
     transform: translateY(-50%);
     padding: 0;
     color: #fff;
-    /* Quiet at rest — it is a setting, not something to act on every visit —
+    /* Quiet at rest (it is a setting, not something to act on every visit)
        and full strength the moment it is pointed at, pressed or reached from
        the keyboard. */
     opacity: .4;
@@ -520,7 +499,7 @@ body:has(.hero:not(.collapsed)) .crumb-bar {
 .crumb-inner .btn-banner-toggle:hover,
 .crumb-inner .btn-banner-toggle:active,
 .crumb-inner .btn-banner-toggle:focus-visible { color: #fff; opacity: 1; }
-/* At rest the control is one glyph. The words are still there — collapsed to
+/* At rest the control is one glyph. The words are still there: collapsed to
    no width rather than removed, so they are read out to anyone using a screen
    reader and slide open the moment the button is pointed at or tabbed to.
    A tooltip would do neither. */
@@ -553,8 +532,8 @@ body:has(.hero:not(.collapsed)) .crumb-bar {
     margin-top: 1rem;
     padding-bottom: 3rem;
 }
-/* The search field and the sidebar are in two different grids — the field in
-   .search-row, the sidebar in .layout — so nothing tied their tops together
+/* The search field and the sidebar are in two different grids (the field in
+   .search-row, the sidebar in .layout) so nothing tied their tops together
    and the sidebar sat 66px lower in both banner states.
 
    66px is not arbitrary: the sidebar column starts where .search-band ends,
@@ -562,12 +541,12 @@ body:has(.hero:not(.collapsed)) .crumb-bar {
 
    Only the sidebar rises; the results column keeps its place. Below 900px the
    layout is a single column and the sidebar follows the content, so the pull
-   would drag it over the results — hence the media query. */
+   would drag it over the results: hence the media query. */
 @media (min-width: 901px) {
     .sidebar-right {
         margin-top: calc(-1 * (var(--search-h, 50px) + 1rem));
         /* Raised to the search field's line, it now reaches 24px into the hero
-           photo — the same overlap the search card has. That card floats over
+           photo: the same overlap the search card has. That card floats over
            the photo on z-index 5; without the same treatment the sidebar is
            static, so the hero paints across its top edge and clips the Browse
            header. */
@@ -576,7 +555,7 @@ body:has(.hero:not(.collapsed)) .crumb-bar {
     }
 }
 
-/* ===== The sidebar on either side — this page's share of it =====
+/* ===== The sidebar on either side: this page's share of it =====
    The column swap itself lives in includes/browse_console.php, with the rest
    of the sidebar. What stays here is the search row, which only this page has:
    the field has to cross to the other column too, or it sits over the sidebar
@@ -603,7 +582,7 @@ body:has(.hero:not(.collapsed)) .crumb-bar {
 
 /* ===== 10. Responsive (page-specific layout only) ===== */
 /* ===== The sidebar as a drawer, on a phone =====
-   In one column the Browse and Filter cards land underneath every result —
+   In one column the Browse and Filter cards land underneath every result:
    a long scroll from the search box they belong to, which is where the eye
    is. On a narrow screen they become a drawer instead, opened by a button
    beside the search field.
@@ -738,7 +717,7 @@ body:has(.hero:not(.collapsed)) .crumb-bar {
 
 <!-- ===== 4. Hero banner ===== -->
 <?php /* A slideshow of the campus photos, in a fresh random order on every
-         visit — shuffled here rather than in the script so the first photo is
+         visit: shuffled here rather than in the script so the first photo is
          already a random one at first paint, not swapped in a moment later.
          Only that first one carries a src; the rest wait in data-src until the
          page has loaded (see the slideshow script), so four photos nobody has
@@ -748,7 +727,7 @@ body:has(.hero:not(.collapsed)) .crumb-bar {
 
          The set is whatever navbar-photo*.jpg is in the images folder, read
          from disk rather than listed here, so a photo can be added or dropped
-         by adding or deleting the file — a hard-coded list broke the banner
+         by adding or deleting the file: a hard-coded list broke the banner
          the first time one was removed. Made for a 3840×680 canvas. */
       $hero_photos = array_map('basename', glob(ROOT_PATH . '/assests/images/navbar-photo*.jpg') ?: []);
       shuffle($hero_photos); ?>
@@ -788,7 +767,7 @@ body:has(.hero:not(.collapsed)) .crumb-bar {
         <div class="banner-toggle-col">
             <?php /* Only ever seen on a narrow screen; the stylesheet hides
                      this row the moment the sidebar is a column again. Worded
-                     for what it opens rather than drawn as a hamburger — a
+                     for what it opens rather than drawn as a hamburger: a
                      hamburger reads as "the site's menu", and this is the
                      filters for the list underneath. */ ?>
             <button type="button" class="btn-tools-toggle" id="toolsToggle"
@@ -806,7 +785,7 @@ body:has(.hero:not(.collapsed)) .crumb-bar {
         <?php ob_start(); ?>
         <h1 class="section-heading"><?= $has_filters ? 'Search Results' : 'Recent Researches' ?></h1>
 
-        <!-- Browse toolbar — same for guests and members -->
+        <!-- Browse toolbar: same for guests and members -->
         <div class="browse-toolbar">
             <div class="toolbar-left">
                 <span>Showing items <?= $total_papers > 0 ? $start_item : 0 ?>-<?= $end_item ?> of <?= number_format($total_papers) ?></span>
@@ -822,7 +801,7 @@ body:has(.hero:not(.collapsed)) .crumb-bar {
                 <?php endif; ?>
             </div>
             <div class="toolbar-right">
-                <a class="toolbar-btn" href="index.php?browse=1" title="Refresh — clears search and filters"><span class="material-symbols-outlined">refresh</span></a>
+                <a class="toolbar-btn" href="index.php?browse=1" title="Refresh (clears search and filters)"><span class="material-symbols-outlined">refresh</span></a>
                 <a class="toolbar-btn" href="../pages/help_center.php" title="Help"><span class="material-symbols-outlined">help</span></a>
                 <div class="quick-settings">
                     <button class="toolbar-btn" type="button" id="quickSettingsBtn" title="Quick Settings" aria-haspopup="true" aria-expanded="false"><span class="material-symbols-outlined">settings</span></button>
@@ -917,7 +896,7 @@ body:has(.hero:not(.collapsed)) .crumb-bar {
             <div class="sidebar-card-header is-toggle">
                 <button class="card-title-btn js-card-toggle" type="button" data-card="filterCard">Filter</button>
                 <span class="card-header-tools">
-                    <?php /* A crossed-out funnel, not a plain X — the X sits next to a
+                    <?php /* A crossed-out funnel, not a plain X: the X sits next to a
                              collapse chevron and reads as "close the card". */ ?>
                     <a class="card-tool" href="index.php?browse=1" title="Clear all filters" aria-label="Clear all filters"><span class="material-symbols-outlined">filter_alt_off</span></a>
                     <button class="card-tool card-chevron js-card-toggle" type="button" data-card="filterCard" aria-label="Collapse Filter"><span class="material-symbols-outlined">expand_more</span></button>
@@ -1085,7 +1064,7 @@ if (bannerToggle && heroBanner) {
     });
 }
 
-// ===== Banner slideshow — the order was shuffled by the server; this walks
+// ===== Banner slideshow: the order was shuffled by the server; this walks
 // it, one photo every five seconds. =====
 (function () {
     var hero   = document.getElementById('heroBanner');
@@ -1106,7 +1085,7 @@ if (bannerToggle && heroBanner) {
 
     setInterval(function () {
         /* Nothing to animate with the banner hidden or the tab in the
-           background — and advancing unseen would make the photo someone
+           background, and advancing unseen would make the photo someone
            returns to a jump rather than a fade. */
         if (document.hidden || hero.classList.contains('collapsed')) return;
         var next = (current + 1) % slides.length;
@@ -1119,10 +1098,10 @@ if (bannerToggle && heroBanner) {
     }, 5000);
 })();
 
-// ===== The banner photo's reach — up under the navbar, down to the bottom of
+// ===== The banner photo's reach: up under the navbar, down to the bottom of
 // the search field. Measured, because neither the header nor the field is a
 // fixed size (see .hero). Both readings are the same with the banner open or
-// hidden — the top of the box never moves, only its height — so the photo
+// hidden (the top of the box never moves, only its height) so the photo
 // keeps one size in both states. =====
 (function () {
     var hero  = document.getElementById('heroBanner');
@@ -1133,18 +1112,19 @@ if (bannerToggle && heroBanner) {
         var h = hero.getBoundingClientRect();
         hero.style.setProperty('--hero-lift', Math.max(0, Math.round(h.top + window.scrollY)) + 'px');
         hero.style.setProperty('--hero-fade', Math.round(field.getBoundingClientRect().height) + 'px');
-        // Where the hidden banner is cut: the top of the crumb strip, which
-        // is the bottom of the navbar. Read off the strip because the navbar
-        // is sticky and its own position depends on the scroll.
+        // Where the hidden banner is cut: the bottom of the maroon strip, so
+        // the glass of the navbar and of the strip both keep something behind
+        // them. Read off the strip because the navbar is sticky and its own
+        // position depends on the scroll.
         if (crumb) {
             hero.style.setProperty('--hero-nav',
-                Math.max(0, Math.round(crumb.getBoundingClientRect().top + window.scrollY)) + 'px');
+                Math.max(0, Math.round(crumb.getBoundingClientRect().bottom + window.scrollY)) + 'px');
         }
     }
     fit();
     window.addEventListener('resize', fit);
     /* The header grows when the web fonts land and when the nav wraps, and the
-       field changes height at the narrow breakpoints — none of which is a
+       field changes height at the narrow breakpoints: none of which is a
        window resize on its own. */
     if (window.ResizeObserver) {
         var watch = new ResizeObserver(fit);
@@ -1153,14 +1133,14 @@ if (bannerToggle && heroBanner) {
     }
 })();
 
-// ===== AJAX result loading — search, filters, and pagination update just
+// ===== AJAX result loading: search, filters, and pagination update just
 // the results list instead of reloading the whole page. =====
 var mainCol = document.getElementById('mainCol');
 var searchForm = document.getElementById('searchForm');
 // filterForm is resolved per-event via delegation (the sidebar is swapped too)
 
 // Only reveal the loading state if the fetch is still pending after a
-// short delay — keeps fast responses from flashing the overlay on/off.
+// short delay: keeps fast responses from flashing the overlay on/off.
 var resultsLoadingTimer = null;
 function setResultsLoading(isLoading) {
     if (!mainCol) return;
@@ -1187,7 +1167,7 @@ function loadResults(url, pushState) {
                 if (side) side.innerHTML = data.sidebar;
             }
             setResultsLoading(false);
-            // The swap replaced the Quick Settings controls — re-tick them.
+            // The swap replaced the Quick Settings controls: re-tick them.
             if (window.papelSyncQuickSettings) window.papelSyncQuickSettings();
             if (pushState !== false) history.pushState({ papelAjax: true }, '', url);
         })
@@ -1216,7 +1196,7 @@ if (searchForm) {
 }
 
 // The sidebar is re-rendered on every swap, so the filter form is bound by
-// delegation — a direct handler would be orphaned on a detached node.
+// delegation: a direct handler would be orphaned on a detached node.
 document.addEventListener('submit', function (e) {
     var form = e.target.closest('#filterForm');
     if (!form) return;
@@ -1277,7 +1257,7 @@ window.addEventListener('popstate', function () {
     });
 
     /* Back on a wide screen the sidebar is a column again and the drawer means
-       nothing — but the open class would still be holding the page's scroll. */
+       nothing, but the open class would still be holding the page's scroll. */
     window.addEventListener('resize', function () {
         if (window.innerWidth > 900 && isOpen()) { setOpen(false); }
     });

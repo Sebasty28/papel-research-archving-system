@@ -20,7 +20,7 @@
 .pd-wrap.has-rail { max-width: 78rem; }
 
 /* Table of contents + citation, run down the right of the record. Only the
-   public paper view builds this markup — everything else keeps the plain
+   public paper view builds this markup: everything else keeps the plain
    single column above. */
 .pd-layout { display: grid; grid-template-columns: minmax(0, 1fr) 16rem; gap: 1.75rem; align-items: start; }
 .pd-main { min-width: 0; }
@@ -28,15 +28,15 @@
     position: sticky; top: 76px; display: flex; flex-direction: column; gap: 1.125rem;
     max-height: calc(100vh - 96px); overflow-y: auto; overflow-x: hidden;
 }
-/* Collapsed by the toggle beneath the status badge in .pd-top — the rail
+/* Collapsed by the toggle beneath the status badge in .pd-top: the rail
    leaves the grid entirely rather than shrinking to nothing, so .pd-main
    retakes the width instead of leaving an empty column behind. */
 .pd-layout.is-rail-collapsed { grid-template-columns: 1fr; }
 .pd-layout.is-rail-collapsed .pd-side { display: none; }
 
 /* Under "Status", right-aligned like the badge above it. Icon-only, the same
-   chrome-free treatment as the card-collapse chevron it sits beside in spirit
-   — a border here just duplicated the badge's own box outline above it. */
+   chrome-free treatment as the card-collapse chevron it sits beside in spirit:
+   a border here just duplicated the badge's own box outline above it. */
 .pd-rail-toggle {
     display: inline-flex; align-items: center; justify-content: center;
     margin-top: .5rem; width: 1.875rem; height: 1.875rem;
@@ -55,7 +55,7 @@
    claiming its own share of an auto margin and drifting apart. */
 .pd-card-title { flex: 1 1 auto; min-width: 0; }
 
-/* Sends the whole rail to the other side of the record — the same control,
+/* Sends the whole rail to the other side of the record: the same control,
    the same icon pair and the same stored preference (papel_sidebar_side) as
    the Public Repository's own panel-side tool, so the choice made there
    carries over here. */
@@ -70,7 +70,7 @@
 html.sidebar-left .pd-side-swap .side-icon-left { display: none; }
 html.sidebar-left .pd-side-swap .side-icon-right { display: inline-flex; }
 
-/* Only above the breakpoint where the rail sits beside the record at all —
+/* Only above the breakpoint where the rail sits beside the record at all:
    stacked on a narrow screen, there is no "side" left to choose between. */
 @media (min-width: 1051px) {
     html.sidebar-left .pd-layout { grid-template-columns: 16rem minmax(0, 1fr); }
@@ -100,7 +100,7 @@ html.sidebar-left .pd-side-swap .side-icon-right { display: inline-flex; }
     margin: 0 0 .875rem; padding: .75rem .875rem; border-left: 2px solid var(--soft-maroon);
     background: var(--cream); font-size: .75rem; line-height: 1.65; color: var(--ink);
     font-style: normal;
-    /* The retrieval URL is one unbroken token — without this it overflows the
+    /* The retrieval URL is one unbroken token, without this it overflows the
        card instead of wrapping, and .pd-side's own overflow-y:auto then picks
        up an implicit overflow-x:auto (per spec, when one axis is scrollable
        and the other is "visible", the visible one becomes "auto" too), which
@@ -128,7 +128,7 @@ html.sidebar-left .pd-side-swap .side-icon-right { display: inline-flex; }
 /* A direct link (or a browser back/forward jump) lands on the fragment
    without running the table of contents' own script, so this keeps the
    target clear of the fixed header even then. Matched by id prefix rather
-   than by these two classes alone — a table of contents can also point at a
+   than by these two classes alone: a table of contents can also point at a
    plain row that is neither, such as the reviewer names under "Where It
    Stands". */
 .pd-card[id], .pd-section[id], [id^="pd-sec-"], [id^="pd-sub-"] { scroll-margin-top: 76px; }
@@ -136,7 +136,7 @@ html.sidebar-left .pd-side-swap .side-icon-right { display: inline-flex; }
 /* Header: back out the way you came in, title, status.
 
    The title starts on the same line as the cards below it. The way back is
-   taken out of the row to allow that — in the row, even pulled part-way into
+   taken out of the row to allow that, in the row, even pulled part-way into
    the margin, it pushed the title about 20px in from the cards' edge. Where
    there is margin enough it sits out there, level with the title's first
    line; where there is not, it takes a line of its own above the title, and
@@ -146,7 +146,7 @@ html.sidebar-left .pd-side-swap .side-icon-right { display: inline-flex; }
     display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 1.25rem;
     padding-top: 2.25rem;           /* the line the way back sits on */
 }
-/* A way back, not one of the page's own controls — so it sits outside the
+/* A way back, not one of the page's own controls, so it sits outside the
    record rather than boxed in beside the title. */
 .pd-back {
     position: absolute;
@@ -231,13 +231,13 @@ html.sidebar-left .pd-side-swap .side-icon-right { display: inline-flex; }
     font-size: .75rem; color: var(--ink); background: var(--white);
 }
 
-/* Step 2 — the written sections, shown as written */
+/* Step 2: the written sections, shown as written */
 .pd-section + .pd-section { margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px solid var(--border); }
 .pd-section h3 {
     font-family: var(--font-head); font-size: .875rem; font-weight: 600;
     color: var(--maroon); margin: 0 0 .5rem;
 }
-/* Justified, exactly as the section boxes set it while it was being written —
+/* Justified, exactly as the section boxes set it while it was being written:
    the record should read the way the author saw it. */
 .pd-prose { font-size: .8125rem; color: var(--ink); line-height: 1.8; text-align: justify; }
 .pd-prose td, .pd-prose th { text-align: left; }   /* cells keep their own alignment */
@@ -260,7 +260,7 @@ html.sidebar-left .pd-side-swap .side-icon-right { display: inline-flex; }
 }
 .pd-prose-scroll { overflow-x: auto; }
 
-/* Step 3 — the files that went with it */
+/* Step 3: the files that went with it */
 .pd-files { display: grid; grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr)); gap: .75rem; }
 .pd-file {
     display: flex; flex-direction: column; gap: .5rem; min-height: 7rem;
@@ -286,7 +286,7 @@ html.sidebar-left .pd-side-swap .side-icon-right { display: inline-flex; }
 .pd-file.is-optional .pd-file-state { color: var(--grey); font-weight: 400; }
 .pd-file-state .material-symbols-outlined { font-size: 14px; }
 
-/* The checklist — the reason this page exists */
+/* The checklist: the reason this page exists */
 .pd-check-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1.25rem 2rem; }
 .pd-check-head {
     font-size: .75rem; font-weight: 600; color: var(--maroon);
@@ -309,7 +309,7 @@ html.sidebar-left .pd-side-swap .side-icon-right { display: inline-flex; }
 .pd-check-row.is-gap .pd-check-state { color: var(--maroon); font-weight: 500; }
 
 /* A banner introduces what follows, so it always carries the gap below it
-   itself — the inline margins dotted through the markup were what let it sit
+   itself: the inline margins dotted through the markup were what let it sit
    flush against the file cards and the checklist. */
 .pd-note {
     display: flex; gap: .5rem; padding: .75rem .875rem; border-radius: var(--r-card, 8px);

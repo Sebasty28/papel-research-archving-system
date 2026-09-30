@@ -2,8 +2,8 @@
 /**
  * The "I'm not a robot" check on the two sign-in surfaces.
  *
- * Sign-in is ID + password and the IDs are guessable by design — student
- * numbers run in sequence, staff IDs follow FAC-2026-00n — so the only thing
+ * Sign-in is ID + password and the IDs are guessable by design (student
+ * numbers run in sequence, staff IDs follow FAC-2026-00n) so the only thing
  * between a script and an account is a password rule that admits six
  * characters. login_attempts already slows a run down after the fact; this
  * stops most of them being made at all.
@@ -20,7 +20,7 @@
  *     RECAPTCHA_SECRET_KEY=6Lc...
  *
  * The site key is public and appears in the markup. The secret key never
- * leaves the server, and .env is gitignored — keep it that way.
+ * leaves the server, and .env is gitignored: keep it that way.
  */
 
 function recaptcha_enabled(): bool
@@ -48,7 +48,7 @@ function recaptcha_field(): string
  *
  * The button is disabled from JavaScript rather than in the markup on purpose.
  * If this script never runs the button stays clickable and the server does the
- * refusing with a message that explains itself — the alternative is a form
+ * refusing with a message that explains itself: the alternative is a form
  * nobody can submit and no way to find out why.
  */
 function recaptcha_scripts(): string
@@ -125,9 +125,9 @@ function recaptcha_scripts(): string
         document.querySelectorAll('.papel-recaptcha').forEach(function (box) {
             var form = box.closest('form');
             if (!form) { return; }
-            /* The two surfaces disagree on what the first field is called —
-               the slide-in posts "identifier", the standalone page posts
-               "username" — so both are accepted rather than the widget
+            /* The two surfaces disagree on what the first field is called
+               (the slide-in posts "identifier", the standalone page posts
+               "username") so both are accepted rather than the widget
                silently staying put on whichever one was not named here. */
             var id = form.querySelector(
                 'input[name="identifier"], input[name="username"]');

@@ -3,7 +3,7 @@
  * The "Password changes" tab shared by the three management consoles.
  *
  * A notice saying somebody changed their password is read once and gone. The
- * question it leaves behind — who else, when, and how often — needs a list, and
+ * question it leaves behind (who else, when, and how often) needs a list, and
  * each console already has the roll it applies to:
  *
  *     Research Adviser    students

@@ -2,7 +2,7 @@
 /**
  * Arrow keys move between links, buttons and boxes, anywhere on the site.
  *
- * Tab already does this — it is the browser's own way through a page and it
+ * Tab already does this: it is the browser's own way through a page and it
  * works everywhere. This adds the arrow keys alongside it, because that is the
  * key people reach for first, and Tab is not obvious to anyone who has not been
  * told about it.
@@ -10,8 +10,8 @@
  * The arrows follow the layout rather than the order the page happens to be
  * written in, because what the reader is steering by is what they can see:
  *
- *   - Left and Right move along the row the focus is already on — the navbar,
- *     a row of buttons, a line of cards — and stop when the row ends. They no
+ *   - Left and Right move along the row the focus is already on (the navbar,
+ *     a row of buttons, a line of cards) and stop when the row ends. They no
  *     longer jump to whatever came next in the markup, which is what made them
  *     feel as though they had lost the thread.
  *   - Up and Down go to the nearest control above or below, preferring the one
@@ -21,7 +21,7 @@
  *
  * Enter still activates whatever is focused, as it always did.
  *
- * The whole difficulty here is not moving focus — it is knowing when NOT to.
+ * The whole difficulty here is not moving focus: it is knowing when NOT to.
  * Arrow keys already mean something in half a dozen places, and taking them
  * over blindly would break typing, dropdowns and radio buttons all at once. So
  * this stands aside whenever:
@@ -30,7 +30,7 @@
  *   - the focus is in a textarea, or moving the caret sideways in a text box;
  *   - the focus is on a select, a radio, a slider or editable content, where
  *     the arrows change the value;
- *   - a component has already handled the key — the custom dropdown, the
+ *   - a component has already handled the key: the custom dropdown, the
  *     search suggestions and the PDF panel's resize grip all do;
  *   - any modifier is held, so browser and screen-reader shortcuts still work.
  *
@@ -49,7 +49,7 @@
     var SIDEWAYS = { ArrowLeft: 1, ArrowRight: 1 };
 
     /* Text fields whose caret moves left and right. Everything else that is an
-       <input> — a checkbox, a button, a file picker — has no caret, so the
+       <input> (a checkbox, a button, a file picker) has no caret, so the
        arrows are free. */
     var CARET = {
         text: 1, search: 1, email: 1, password: 1, tel: 1, url: 1,
@@ -83,7 +83,7 @@
         var w = window.innerWidth || document.documentElement.clientWidth;
         if (r.right <= 0 || r.left >= w) { return false; }
 
-        /* Chrome's own answer where it exists — it accounts for display,
+        /* Chrome's own answer where it exists: it accounts for display,
            visibility and opacity on every ancestor, which the offsetParent
            test below only half does. */
         if (el.checkVisibility) {
@@ -130,8 +130,8 @@
 
     /* The nearest stop in the direction pressed.
        Two numbers decide it: the gap straight ahead, and how far off to one
-       side the thing sits. Something that lines up with the focus — the next
-       item down a column, the next along a row — is what the eye expects, so
+       side the thing sits. Something that lines up with the focus (the next
+       item down a column, the next along a row) is what the eye expects, so
        being out of line counts against a candidate, and heavily when the two
        do not overlap at all. Anything level with the focus, or behind it, is
        not in that direction and does not count. */
@@ -184,7 +184,7 @@
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') {
             /* Let go, so the arrows scroll the page again. Only when focus is
-               on something of ours — a dialog's own Escape must still close it. */
+               on something of ours: a dialog's own Escape must still close it. */
             var on = document.activeElement;
             if (on && on !== document.body && !on.closest('[role="dialog"], .modal, .quick-settings-dropdown')) {
                 on.blur();
@@ -213,7 +213,7 @@
         var next = nearest(current, e.key, list);
         /* Nothing above or below: the foot of a column, or a control the
            layout has set out of line with everything else. The page's own
-           order carries on from there. Left and Right get no such fallback —
+           order carries on from there. Left and Right get no such fallback:
            running off the end of a row into another part of the page is the
            jump they are meant to stop. */
         if (!next && !SIDEWAYS[e.key]) { next = list[i + (back ? -1 : 1)]; }

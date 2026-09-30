@@ -4,7 +4,7 @@
  *
  * First stop in the workflow: the adviser reads what their own students submit
  * and either forwards it to the Research Coordinator or sends it back with
- * feedback. The page itself is the shared review console — only the scope, the
+ * feedback. The page itself is the shared review console, only the scope, the
  * tabs and this role's own tools are described here.
  */
 require_once '../../config/core.php';
@@ -17,7 +17,7 @@ $u    = current_user();
 $SELF = 'faculty_review_dashboard.php';
 
 /* ---- Decisions --------------------------------------------------------- */
-// A POST carrying 'export' is a document download, not a paper decision —
+// A POST carrying 'export' is a document download, not a paper decision:
 // let it fall through untouched to review_console.php's own export handling.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['export'])) {
     csrf_verify();
@@ -85,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['export'])) {
     } elseif ($action === 'decline') {
         add_workflow($paper_id, $u['user_id'], 'faculty', 'declined', $feedback);
         set_status($paper_id, 'draft');
-        // Free the storage — a returned paper is re-uploaded, not reused.
+        // Free the storage: a returned paper is re-uploaded, not reused.
         purge_paper_drive_files($paper_id);
         if ($student_id = paper_owner($paper_id)) {
             create_notification($student_id, $paper_id, 'decline',
@@ -138,7 +138,7 @@ $RC = [
         ['href' => BASE_URL.'/app/student/student_upload_ai.php', 'icon' => 'upload_file', 'label' => 'Upload Paper',
          'desc' => 'Add a paper of your own. It is published straight away, with no review'],
         ['href' => 'faculty_manage_students.php', 'icon' => 'group', 'label' => 'My Students',
-         'desc' => $student_count . ' student ' . ($student_count === 1 ? 'account' : 'accounts') . ' — add, edit or reset one'],
+         'desc' => $student_count . ' student ' . ($student_count === 1 ? 'account' : 'accounts') . '. Add, edit or reset one.'],
         ['href' => BASE_URL.'/analytics/analytics_dashboard.php', 'icon' => 'insights', 'label' => 'Analytics',
          'desc' => 'Submissions by program, paper type and month'],
         ['href' => BASE_URL.'/archive/index.php?browse=1', 'icon' => 'menu_book', 'label' => 'Public Repository',

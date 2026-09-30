@@ -28,7 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               else flash('error', 'User not found.');
           }
       } elseif ($action === 'update_user') {
-          /* Same panel, same fields — only the action underneath it changed.
+          /* Same panel, same fields, only the action underneath it changed.
              A blank password means "leave theirs alone". */
           $before = account_snapshot((int)($_POST['user_id'] ?? 0));
           $message = $facultyService->updateFaculty([
@@ -85,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       }
   } catch (InvalidArgumentException $e) {
       /* Something about what was typed. These messages are written for the
-         person filling the form in, so they are shown as they are — a duplicate
+         person filling the form in, so they are shown as they are: a duplicate
          email saying "an unexpected error occurred" gives them nothing to act
          on. Anything else is still swallowed and logged. */
       flash('error', $e->getMessage());
@@ -107,7 +107,7 @@ try {
   $archived = $facultyService->getInactiveFaculty()->fetch_all(MYSQLI_ASSOC);
 } catch (mysqli_sql_exception $e) {
   /* This used to special-case a missing plain_password column. The column is
-     gone on purpose — see UserRepository::updatePassword — so a query failing
+     gone on purpose (see UserRepository::updatePassword) so a query failing
      here now means something genuinely unexpected. */
   throw $e;
 }
@@ -157,7 +157,7 @@ function staff_table(array $rows, string $which): void {
                             <span class="mgmt-sub" title="<?= e($r['email']) ?>"><?= e($r['email']) ?></span>
                         </td>
                         <td class="mgmt-id">
-                            <?= e($r['faculty_id'] ?: '—') ?>
+                            <?= e($r['faculty_id'] ?: 'N/A') ?>
                             <span class="mgmt-sub">Added <?= e(date('M j, Y', strtotime($r['created_at']))) ?></span>
                         </td>
                         <td class="mgmt-prog"><?= e($r['title'] ?: staff_position_of($r)) ?></td>
@@ -398,10 +398,10 @@ $password_rows = password_audit_rows(['faculty', 'librarian'], (int)$u['user_id'
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 document.addEventListener('DOMContentLoaded', function () {
 
-    /* The Generate button lives in includes/password_generator.php — it needs
+    /* The Generate button lives in includes/password_generator.php: it needs
        the name and ID fields, which are shared by all three create forms. */
 
-    /* The ID box is named for whichever position is selected — a librarian
+    /* The ID box is named for whichever position is selected: a librarian
        does not have a "Faculty ID". */
     var positionSelect = document.getElementById('title');
     var idLabel = document.getElementById('idLabel');
@@ -471,7 +471,7 @@ document.addEventListener('DOMContentLoaded', function () {
         cancel.hidden = true;
         form.reset();
         relabelId();
-        // form.reset() restores the markup's values, not these — set them after.
+        // form.reset() restores the markup's values, not these: set them after.
         document.getElementById('formAction').value = 'create_user';
         document.getElementById('formUserId').value = '';
         document.querySelectorAll('tr.is-editing')

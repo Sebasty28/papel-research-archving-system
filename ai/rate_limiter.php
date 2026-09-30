@@ -3,7 +3,7 @@
  * RateLimiter - Database-backed per-user rate limiting for AI endpoints.
  *
  * Uses MySQL to track request counts per user per action within a sliding time window.
- * The table is auto-created on first use — no manual migration needed.
+ * The table is auto-created on first use: no manual migration needed.
  *
  * Usage:
  *   require_once __DIR__ . '/rate_limiter.php';

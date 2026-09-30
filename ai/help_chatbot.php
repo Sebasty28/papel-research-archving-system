@@ -36,7 +36,7 @@ if (empty($message)) {
 // ── Prompt Injection Protection: Sanitize user input ──
 $check = PromptGuard::sanitizeInput($message);
 if (!$check['safe']) {
-    // Block the request entirely — do NOT send to AI
+    // Block the request entirely: do NOT send to AI
     echo json_encode(['reply' => $check['message']]);
     exit;
 }
@@ -61,11 +61,12 @@ Guidelines for helping:
 
 This is the Help Center. You are NOT the research writing assistant. You are the technical support guide." . PromptGuard::getSecurityRules();
 
-// Groq API Configuration — model switching (inspired by client_hs)
-$modelChoice = $input['model_choice'] ?? '1';
+// Groq API Configuration
+/* Not asked for any more: the session says which engine is in play, and the
+   other one stands behind it for this call. See ai_engine_current(). */
+$engine = ai_engine_current();
 
-// Pick primary and fallback keys based on model choice
-if ($modelChoice === '2') {
+if ($engine === 2) {
     $apiKey = defined('GROQ_API_KEY_CHATBOT_2') ? GROQ_API_KEY_CHATBOT_2 : ($_ENV['GROQ_API_KEY'] ?? '');
     $fallbackKey = defined('GROQ_API_KEY_CHATBOT') ? GROQ_API_KEY_CHATBOT : '';
 } else {
@@ -80,7 +81,7 @@ if (empty($apiKey)) {
 }
 $apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
 
-// ✅ User content is isolated in its own role — never interpolated into system prompt
+// ✅ User content is isolated in its own role: never interpolated into system prompt
 $payload = [
     'model' => GROQ_MODEL,
     'messages' => [
@@ -123,6 +124,9 @@ $fireRequest = function ($key) use ($apiUrl, $payload) {
 // Auto-fallback: if rate-limited (429) and a different fallback key exists, retry once
 if ($httpCode === 429 && !empty($fallbackKey) && $fallbackKey !== $apiKey) {
     error_log("Chatbot: primary key rate-limited (429), retrying with fallback key...");
+    /* The engine asked for has nothing left for the moment, so the session
+       moves to the other one and later messages start there. */
+    ai_engine_switch();
     [$httpCode, $response, $curlError] = $fireRequest($fallbackKey);
 }
 
@@ -138,4 +142,4 @@ $reply = $data['choices'][0]['message']['content'] ?? 'I am not sure how to resp
 // ── Prompt Injection Protection: Validate output before returning ──
 $reply = PromptGuard::validateOutput($reply);
 
-echo json_encode(['reply' => $reply]);
+echo json_encode(['reply' => $reply, 'engine' => ai_engine_current()]);

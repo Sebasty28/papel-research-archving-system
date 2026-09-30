@@ -15,13 +15,13 @@ if (isset($_SESSION['guest_login']) && isset($_SESSION['guest_expire'])) {
 }
 
 /* The repository listing already only links a paper's title for someone who
-   can view it — everyone else gets a "Login to view details" button instead
+   can view it: everyone else gets a "Login to view details" button instead
    of an <a href>, per $can_view in archive/index.php. That only ever hid the
    link on the page a visitor was shown; the id in the URL was never actually
    checked here, so pasting or typing it read the full record anyway.
    require_login() is the same gate the rest of the site's protected pages
-   use, and it already treats a valid guest pass as signed in — a guest's
-   session is set by login_user() same as a member's — so this closes the
+   use, and it already treats a valid guest pass as signed in (a guest's
+   session is set by login_user() same as a member's) so this closes the
    direct-link gap without touching Guest Login itself. */
 require_login();
 
@@ -39,7 +39,7 @@ if(!$paper) {
 }
 if(!$paper){ http_response_code(404); echo '<div style="padding:2rem;text-align:center;font-family:sans-serif;"><h2>Paper Not Found</h2><p>The requested paper could not be found.</p><a href="index.php">Back to Archive</a></div>'; exit; }
 
-// Resolve role-specific Groq key — must be defined before the AI extraction block below
+// Resolve role-specific Groq key: must be defined before the AI extraction block below
 $_roleKeyMap = [
     'super_admin' => 'GROQ_API_KEY_SUPERADMIN',
     'admin'       => 'GROQ_API_KEY_ADMIN',
@@ -93,7 +93,7 @@ if (empty($paper['ai_summary'])) {
 // Permission check for full access
 $can_full_access = $u && in_array($u['user_role'], ['admin', 'super_admin']);
 
-/* Who may open the manuscript itself. Staff roles only — the record is public,
+/* Who may open the manuscript itself. Staff roles only: the record is public,
    the file is not. The Head of Academic Programs oversees the output of every
    program, so reading a published paper is squarely part of that; their desk
    deliberately has no approve control, and this does not give them one. The
@@ -102,7 +102,7 @@ $can_full_access = $u && in_array($u['user_role'], ['admin', 'super_admin']);
 $can_view_file = $u && in_array($u['user_role'], ['admin', 'faculty', 'super_admin', 'head_academic', 'librarian'], true);
 
 /* A student who has been granted temporary access to this specific manuscript
-   sees it too, for as long as the grant lasts — checked here, at read time,
+   sees it too, for as long as the grant lasts: checked here, at read time,
    the same lazy-expiry style the guest-session timer above and
    student_expiry_date() both use. */
 if (!$can_view_file && $u && $u['user_role'] === 'student') {
@@ -111,7 +111,7 @@ if (!$can_view_file && $u && $u['user_role'] === 'student') {
 
 /* Handle Manual AI Regeneration.
 
-   Nothing in the codebase posts regenerate_ai any more — the button that drove
+   Nothing in the codebase posts regenerate_ai any more: the button that drove
    it is gone, so the only way in is a hand-written request. That is precisely
    why the token check matters: without it any page could make a signed-in
    adviser or coordinator spend Groq quota and overwrite the stored AI summary,
@@ -185,7 +185,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['regenerate_ai']) && (
 
 /* A student asking a Librarian for temporary access to this paper's actual
    PDF. Anyone can post the form since this is a public page, but only a
-   signed-in student can turn it into a request — everyone else is silently
+   signed-in student can turn it into a request: everyone else is silently
    ignored rather than shown an error, since there is no way for them to have
    seen the button that posts it. */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_manuscript'])) {
@@ -251,6 +251,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_manuscript'])
     padding: .4rem .75rem; border-radius: var(--r-badge, 2px);
     background: var(--maroon); color: #fff; font-size: .75rem;
     box-shadow: 0 4px 14px rgba(51,0,0,.2);
+}
+
+/* ----- The Manuscript card opens the paper itself -----
+   Expanding the card is what shows the manuscript; there is no separate tile
+   to press. While it is folded, a thought bubble, as in a comic, sits by its
+   chevron to say what unfolding it does, its two trailing puffs leading to the
+   chevron it is thinking about. Put in by the script below, beside the
+   chevron, once card_collapse.php has added that. */
+.pd-think {
+    position: relative;
+    margin-left: auto;
+    padding: .35rem .85rem;
+    border: 1.5px solid var(--soft-maroon);
+    border-radius: 1.1rem;
+    background: var(--white);
+    color: var(--maroon);
+    font-family: var(--font-body);
+    font-size: .75rem;
+    font-weight: 400;
+    line-height: 1.4;
+    white-space: nowrap;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(51, 0, 0, .08);
+    transition: background-color .15s;
+}
+.pd-think:hover { background: var(--cream); }
+.pd-think::before,
+.pd-think::after {
+    content: '';
+    position: absolute;
+    border: 1.5px solid var(--soft-maroon);
+    border-radius: 50%;
+    background: var(--white);
+}
+.pd-think::before { width: 9px; height: 9px; right: -12px; bottom: -4px; }
+.pd-think::after  { width: 5px; height: 5px; right: -19px; bottom: -9px; }
+/* Only while folded. The chevron then sits a little clear of the puffs rather
+   than pushed to the far edge; open, the bubble is gone and it goes back. */
+#pd-sec-manuscript:not([data-collapsed="1"]) .pd-think { display: none; }
+#pd-sec-manuscript[data-collapsed="1"] .pd-think + .card-collapse-btn { margin-left: 1.5rem; }
+@media (max-width: 480px) {
+    .pd-think { white-space: normal; max-width: 11rem; text-align: center; font-size: .6875rem; }
 }
 </style>
 </head>
@@ -334,7 +376,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_manuscript'])
             </div>
         </div>
 
-        <div class="pd-card" id="pd-sec-manuscript">
+        <?php
+        /* The file this reader may open here, if there is one. When there is,
+           the card itself is how it is opened: it starts folded, and unfolding
+           it shows the manuscript (the script at the foot of the page). */
+        $ms_src = ($can_view && $can_view_file
+                   && paper_file_url($paper['gdrive_file_id'] ?? null, $paper['file_path'] ?? null))
+                ? paper_file_src('paper', $id) : null;
+        ?>
+        <div class="pd-card" id="pd-sec-manuscript"<?= $ms_src ? ' data-collapse-default="closed" data-viewer="1"' : '' ?>>
             <h2><span class="material-symbols-outlined">folder_open</span> Manuscript</h2>
             <?php flash_banner(); ?>
             <?php if (!$can_view): ?>
@@ -347,9 +397,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_manuscript'])
                 /* A student gets a way to ask a librarian for the actual file,
                    rather than only ever reading the staff-only note the elseif
                    below shows everyone else. Reaching this branch at all means
-                   there is no currently-active grant — one would have already
+                   there is no currently-active grant (one would have already
                    made $can_view_file true above, landing in the final else
-                   instead — so this only ever has pending / denied / lapsed /
+                   instead) so this only ever has pending / denied / lapsed /
                    never-asked to show, each with its own line, followed by the
                    "ask" button (skipped only while a request is already
                    pending). */
@@ -397,7 +447,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_manuscript'])
                 <?php endif; ?>
             <?php elseif (!$can_view_file): ?>
                 <?php /* The record is public; the file itself is not. Supporting
-                         documents and the review checklist are never shown here —
+                         documents and the review checklist are never shown here:
                          they belong to the submission, not to the published paper. */ ?>
                 <div class="pd-note">
                     <span class="material-symbols-outlined">info</span>
@@ -405,20 +455,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_manuscript'])
                           wrote is on this page.</span>
                 </div>
             <?php else: ?>
-                <div class="pd-files">
-                    <?php $fileHref = paper_file_url($paper['gdrive_file_id'] ?? null, $paper['file_path'] ?? null); ?>
-                    <?php if ($fileHref): ?>
-                        <a class="pd-file" href="<?= e($fileHref) ?>" target="_blank" rel="noopener"
-                           title="Show the manuscript beside the record">
-                            <span class="pd-file-name">Manuscript</span>
-                            <span class="pd-file-ico"><span class="material-symbols-outlined">picture_as_pdf</span></span>
-                        </a>
-                    <?php endif; ?>
-                </div>
+                <?php if ($ms_src): ?>
+                    <?php /* No tile to press: unfolding the card opens the manuscript.
+                             This hidden link is only what tells the viewer
+                             (includes/pdf_dock.php) which file to load and what to
+                             call it. Opened through app/paper_file.php; the Drive
+                             link itself is deliberately not on the page. */ ?>
+                    <a class="pd-file" href="#pd-sec-manuscript" data-pdf-src="<?= e($ms_src) ?>" hidden>
+                        <span class="pd-file-name">Manuscript</span>
+                    </a>
+                <?php else: ?>
+                    <div class="pd-note">
+                        <span class="material-symbols-outlined">info</span>
+                        <span>No manuscript file is on record for this paper.</span>
+                    </div>
+                <?php endif; ?>
                 <?php
                 /* can_view_file is true here either because this reader is
                    staff, or because a student's grant on this specific paper
-                   is still open — the latter is worth a reminder of when it
+                   is still open: the latter is worth a reminder of when it
                    runs out, since it is the one case where the file link
                    above can silently stop working again on its own. */
                 if ($u && $u['user_role'] === 'student'):
@@ -486,7 +541,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_manuscript'])
             <?php /* Two of these fields are a couple of words and three run to
                      a thousand characters. Putting them all in the same narrow
                      grid squeezed paragraphs into columns barely wider than the
-                     label — so the short ones stay as chips and the long ones
+                     label, so the short ones stay as chips and the long ones
                      are given the full width to read in. */ ?>
             <?php
             $aiChips = array_filter([
@@ -538,7 +593,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_manuscript'])
 
             <?php
             /* One entry per card actually on the page, plus one per written
-               section inside "The Paper" — a paper filed before every section
+               section inside "The Paper": a paper filed before every section
                had an editor might only have an abstract, so this walks the
                same $sections the card itself rendered rather than assuming
                all six exist. */
@@ -600,6 +655,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_manuscript'])
 </main>
 
 <?php
+/* The manuscript opens inside its own card, where the reader asked for it,
+   rather than over the right of the window; from there it can be docked to
+   either side. The review desk and the student's own paper page do the same
+   with their Uploaded Files. */
+$PDF_DOCK_HOME      = '#pd-sec-manuscript';
+$PDF_DOCK_HOME_NAME = 'the Manuscript section';
 require ROOT_PATH.'/includes/pdf_dock.php';
 require ROOT_PATH.'/includes/scroll_jump.php';
 $CARD_COLLAPSE_SELECTOR = '.pd-card';
@@ -646,11 +707,12 @@ document.addEventListener('DOMContentLoaded', function () {
             setRail(!layout.classList.contains('is-rail-collapsed'));
         });
 
-        /* The manuscript opens down the right of the window, which is where
-           the rail runs: with both up, the record is squeezed into whatever is
-           left between them. The rail gives way while the manuscript is being
-           read, and comes back as it was when the panel closes — a rail the
-           reader had already hidden stays hidden. */
+        /* A manuscript docked to either side of the window leaves the record
+           squeezed between it and the rail. The rail gives way while it is
+           docked, and comes back as it was when the panel is closed or put back
+           in its section: a rail the reader had already hidden stays hidden.
+           pdf_dock.php sends these only for docking; open in its section, the
+           manuscript is in nobody's way. */
         var railWasOpen = false;
         document.addEventListener('papel:pdf-dock-open', function () {
             railWasOpen = !layout.classList.contains('is-rail-collapsed');
@@ -663,14 +725,14 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     /* ----- Move the rail to the other side, like the Public Repository's own
-       panel-side tool — same icon pair, same stored preference, so a choice
+       panel-side tool: same icon pair, same stored preference, so a choice
        made on either page carries over to this one. Built after
        card_collapse.php's own script has already run, so its chevron is
        already in each heading and the swap icon can be slotted in beside it
        without corrupting the "Hide/Show <title>" label that script reads off
        the heading's text before it adds anything of its own.
 
-       One icon for the whole rail is enough — it lives on the Table of
+       One icon for the whole rail is enough: it lives on the Table of
        Contents heading only, not repeated on Cite This Paper below it. */
     var SIDE_KEY = 'papel_sidebar_side';
     var htmlEl = document.documentElement;
@@ -707,6 +769,40 @@ document.addEventListener('DOMContentLoaded', function () {
         try { localStorage.setItem(SIDE_KEY, left ? 'left' : 'right'); } catch (err) {}
     });
 
+    /* ----- The Manuscript card opens the paper itself -----
+       Unfolding the card is how the manuscript is opened: its chevron (or the
+       thought bubble beside it) shows the viewer, folding it hides it, and
+       closing the viewer with its own X folds the card back, so the bubble is
+       there again to open it next time. Added after card_collapse.php's script
+       for the same reason as the swap icon above: its chevron has to exist,
+       and it has already read the heading for its "Show Manuscript" label. */
+    var ms = document.getElementById('pd-sec-manuscript');
+    var msBtn = ms && ms.hasAttribute('data-viewer') ? ms.querySelector(':scope > h2 .card-collapse-btn') : null;
+    if (msBtn) {
+        var msSrc  = ms.querySelector('a.pd-file[data-pdf-src]');
+        var msDock = document.getElementById('pdfDock');
+
+        var think = document.createElement('span');
+        think.className = 'pd-think';
+        // The chevron says the same to a screen reader; this is for the eye.
+        think.setAttribute('aria-hidden', 'true');
+        think.textContent = 'Click to see the Original Paper';
+        think.addEventListener('click', function () { msBtn.click(); });
+        msBtn.parentNode.insertBefore(think, msBtn);
+
+        function msOpen() { return !!msDock && msDock.classList.contains('is-open'); }
+
+        /* card_collapse.php's own listener runs first, so data-collapsed
+           already says where the card has just been left. Only opened if it
+           is not already: pressing the source link again would close it. */
+        msBtn.addEventListener('click', function () {
+            if (ms.getAttribute('data-collapsed') === '0' && !msOpen() && msSrc) { msSrc.click(); }
+        });
+        document.addEventListener('papel:pdf-dock-shut', function () {
+            if (ms.getAttribute('data-collapsed') === '0') { msBtn.click(); }
+        });
+    }
+
     var tocLinks = Array.prototype.slice.call(document.querySelectorAll('.pd-toc-link'));
 
     tocLinks.forEach(function (link) {
@@ -720,7 +816,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    /* Scroll-spy only tracks the finest-grained heading on the page — a
+    /* Scroll-spy only tracks the finest-grained heading on the page: a
        parent entry that has its own sub-list would otherwise stay "active"
        for as long as any of its children are, since it spans all of them. */
     var spyLinks = tocLinks.filter(function (link) {

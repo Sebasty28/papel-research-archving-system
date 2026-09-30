@@ -7,7 +7,7 @@ class ArchiveRepository {
      *
      * Archiving deletes the row from research_papers, so a column missing from
      * this list is a column the paper loses for good. One list drives both
-     * directions, which is what keeps them from drifting apart — they had,
+     * directions, which is what keeps them from drifting apart: they had,
      * and papers came back missing their text and their file link.
      */
     private const ARCHIVED_COLUMNS = [
@@ -64,12 +64,12 @@ class ArchiveRepository {
      *
      * Archiving deletes the row from research_papers, so whatever is not
      * copied here is gone for good. Ten columns that papers_archive already
-     * has were missing from this statement — including imrad_content, which
+     * has were missing from this statement, including imrad_content, which
      * holds the paper's written sections, and the whole Step 1 record
      * (research/manuscript type, publication status, program). Archiving one
      * paper therefore emptied it out, and restoring it brought back a shell.
      * Every column of the paper is now written, including research_date and the
-     * status it held when it was archived — papers_archive gained columns for
+     * status it held when it was archived: papers_archive gained columns for
      * those so that archiving preserves the whole record rather than a summary
      * of it.
      */
@@ -97,7 +97,7 @@ class ArchiveRepository {
      * The type string here used to be 'issississsisssssss', which does not line
      * up with the columns: file_path was bound as an integer and came back as
      * "0", gdrive_file_id as "1". A restored paper therefore lost the link to
-     * its own file — silently, because the insert still succeeded. Building
+     * its own file: silently, because the insert still succeeded. Building
      * the statement from one column list makes that class of mistake
      * impossible, and the columns match insertToArchive() so nothing is
      * dropped on the way back either.
@@ -108,7 +108,7 @@ class ArchiveRepository {
 
         /* A paper goes back to the status it held when it was archived. Rows
            archived before that status was recorded have nothing to go back to,
-           so they return as approved — which is what they were, since approved
+           so they return as approved, which is what they were, since approved
            is the only thing the Director can archive. */
         if (empty($paper['current_status'])) $paper['current_status'] = 'approved';
 

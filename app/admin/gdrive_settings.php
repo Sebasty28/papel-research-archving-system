@@ -1,6 +1,6 @@
 <?php
 /**
- * Storage folder — where every uploaded paper is kept.
+ * Storage folder, where every uploaded paper is kept.
  *
  * This was a field tucked into a sidebar card on the Director's dashboard,
  * which gave no room to say what the setting actually does. It is one of the
@@ -35,7 +35,7 @@ $current   = get_gdrive_parent_folder_id();
 $connected = is_gdrive_connected();
 $authUrl   = get_gdrive_auth_url();
 
-// Who set it, and when — a setting this consequential should say who touched it.
+// Who set it, and when: a setting this consequential should say who touched it.
 $meta = null;
 $ms = $conn->prepare(
     "SELECT s.updated_at, us.full_name
@@ -151,7 +151,7 @@ if ($sc) $stored = (int)($sc->fetch_assoc()['n'] ?? 0);
             <p>
                 Every paper a student submits is uploaded to one folder in the university's
                 Google Drive. This page says which folder that is. Reviewers open papers from
-                there, and the public repository links to it — so the setting decides where the
+                there, and the public repository links to it, so the setting decides where the
                 files live, not what anyone can see.
             </p>
         </div>
@@ -173,7 +173,7 @@ if ($sc) $stored = (int)($sc->fetch_assoc()['n'] ?? 0);
                         <strong>Google Drive is not connected.</strong>
                         <p class="set-status-note">
                             Google is refusing the saved authorisation, so <strong>no paper can be submitted
-                            right now</strong> — uploads fail at the last step. Reconnecting fixes it; nothing
+                            right now</strong>: uploads fail at the last step. Reconnecting fixes it; nothing
                             already in Drive is affected.
                         </p>
                     <?php endif; ?>
@@ -231,7 +231,7 @@ if ($sc) $stored = (int)($sc->fetch_assoc()['n'] ?? 0);
                 </label>
                 <div class="set-actions">
                     <button type="submit" class="btn-sm-maroon">Save folder</button>
-                    <span class="set-hint">Paste the whole sharing URL if you like — the ID is read out of it.</span>
+                    <span class="set-hint">Paste the whole sharing URL if you like. The ID is read out of it.</span>
                 </div>
             </form>
         </div>
@@ -241,7 +241,7 @@ if ($sc) $stored = (int)($sc->fetch_assoc()['n'] ?? 0);
             <ol>
                 <li>Open <a href="https://drive.google.com" target="_blank" rel="noopener">Google Drive</a> and go to the folder you want to use.</li>
                 <li>Look at the address bar. It ends with <code>/folders/<strong>THE_ID</strong></code>.</li>
-                <li>Copy that last part — or the whole address — and paste it above.</li>
+                <li>Copy that last part (or the whole address) and paste it above.</li>
             </ol>
         </div>
 
@@ -250,7 +250,7 @@ if ($sc) $stored = (int)($sc->fetch_assoc()['n'] ?? 0);
             <ul>
                 <li><strong>Papers already uploaded stay where they are.</strong> This only redirects
                     what is uploaded from now on; nothing is moved, and no link breaks.</li>
-                <li><strong>The connected Google account must be able to write to the folder</strong> —
+                <li><strong>The connected Google account must be able to write to the folder</strong>:
                     it should own the folder, or have been given edit access to it.</li>
                 <li><strong>Keep the folder private.</strong> Papers sit there before they are approved,
                     and a folder shared with "anyone with the link" would put unpublished work in reach.</li>
@@ -316,7 +316,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 <?php
-// Same cards, same behaviour — the Director's settings page folds away too.
+// Same cards, same behaviour: the Director's settings page folds away too.
 $CARD_COLLAPSE_SELECTOR = '.set-card';
 require ROOT_PATH.'/includes/card_collapse.php';
 require ROOT_PATH.'/includes/site_footer.php';

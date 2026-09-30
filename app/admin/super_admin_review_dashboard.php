@@ -1,6 +1,6 @@
 <?php
 /**
- * Director — oversight and records desk.
+ * Director: oversight and records desk.
  *
  * The Director takes no part in approving. The chain ends at the Research
  * Coordinator (Research Adviser -> Research Coordinator -> Approved), so this
@@ -18,7 +18,7 @@ $conn = db();
 $u    = current_user();
 $SELF = 'super_admin_review_dashboard.php';
 
-// A POST carrying 'export' is a document download, not a paper decision —
+// A POST carrying 'export' is a document download, not a paper decision:
 // let it fall through untouched to review_console.php's own export handling.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['export'])) {
     csrf_verify();
@@ -27,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['export'])) {
 
     if ($action === 'archive' && $paper_id > 0) {
         /* Archiving is a records decision about what stays publicly visible,
-           not a step in the review — which is why it is the one paper action
+           not a step in the review, which is why it is the one paper action
            left on this desk. */
         if (archive_paper($paper_id, $u['user_id'])) {
             flash('success', 'Paper archived. It is no longer in the public repository.');
@@ -51,7 +51,7 @@ $RC = [
     'title' => 'My Dashboard',
     'role'  => 'Director',
     'blurb' => 'Every paper in the public repository. Approving belongs to the Research Coordinator; '
-             . 'what is yours is the record — archiving a paper, the storage folder and the administrator accounts.',
+             . 'what is yours is the record: archiving a paper, the storage folder and the administrator accounts.',
     'scope' => ['sql' => '1', 'params' => [], 'types' => ''],
     'tabs'  => [
         'published' => ['label' => 'Published', 'icon' => 'verified',
@@ -63,7 +63,7 @@ $RC = [
         ['href' => BASE_URL.'/app/student/student_upload_ai.php', 'icon' => 'upload_file', 'label' => 'Upload Paper',
          'desc' => 'Add a paper of your own. It is published straight away, with no review'],
         ['href' => 'super_admin_manage_admins.php', 'icon' => 'admin_panel_settings', 'label' => 'Manage Admins',
-         'desc' => $admin_count . ' staff ' . ($admin_count === 1 ? 'account' : 'accounts') . ' — add, edit or reset one'],
+         'desc' => $admin_count . ' staff ' . ($admin_count === 1 ? 'account' : 'accounts') . '. Add, edit or reset one.'],
         ['href' => BASE_URL.'/analytics/analytics_dashboard.php', 'icon' => 'insights', 'label' => 'Analytics',
          'desc' => 'Submissions, approval rates and trends'],
         ['href' => BASE_URL.'/archive/index.php?browse=1', 'icon' => 'menu_book', 'label' => 'Public Repository',

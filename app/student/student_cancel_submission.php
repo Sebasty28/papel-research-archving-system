@@ -7,8 +7,8 @@
  * hours of it reaching them. The window is re-checked here rather than trusted
  * from the page, because the button may have been rendered hours ago.
  *
- * Approvals already given are left in place. Only the pending row — the one
- * that says "someone is waiting to look at this" — is removed, since after a
+ * Approvals already given are left in place. Only the pending row (the one
+ * that says "someone is waiting to look at this") is removed, since after a
  * withdrawal nobody is.
  */
 require_once '../../config/core.php';
@@ -79,7 +79,7 @@ try {
     $conn->commit();
 } catch (Exception $e) {
     $conn->rollback();
-    flash('error', 'This submission could not be withdrawn — a reviewer may have just acted on it.');
+    flash('error', 'This submission could not be withdrawn. A reviewer may have just acted on it.');
     header('Location: ' . $back);
     exit;
 }

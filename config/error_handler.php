@@ -127,7 +127,7 @@ function custom_exception_handler(\Throwable $exception): void {
 }
 
 /**
- * Shutdown handler — catches fatal errors that bypass set_error_handler
+ * Shutdown handler: catches fatal errors that bypass set_error_handler
  */
 function custom_shutdown_handler(): void {
     $error = error_get_last();

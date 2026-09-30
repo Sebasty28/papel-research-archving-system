@@ -3,7 +3,7 @@
  * The banner that says what just happened, in one place.
  *
  * Five pages had hand-rolled their own pair of these and the review desks had
- * none at all — which is how "Paper forwarded to the Research Coordinator" ended
+ * none at all, which is how "Paper forwarded to the Research Coordinator" ended
  * up on Manage Students. flash() consumes what it reads, so a message set by one
  * page and never read by the page it redirects to survives in the session and
  * appears on whichever page next asks for one.

@@ -28,8 +28,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
   $locked = ($username !== '') ? login_throttle_locked_for($username) : null;
 
-  /* This is the second sign-in surface — guest invitation emails link straight
-     here — and it was the only one not checking the token. Without it a third
+  /* This is the second sign-in surface (guest invitation emails link straight
+     here) and it was the only one not checking the token. Without it a third
      party could post a sign-in on a visitor's behalf and settle them into an
      account of the attacker's choosing. Checked inline rather than through
      csrf_verify() so the message lands in $error with the others. */
@@ -68,7 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
       /* Not a guest pass, so try it as a staff or student sign-in.
          This used to demand a birthdate as well, and the variable holding it
-         went away when the birthdate was dropped from sign-in — leaving a test
+         went away when the birthdate was dropped from sign-in, leaving a test
          that nothing could pass, so nobody but a guest could get in here.
          An ID and a password now, the same as the main login. */
       $stmt = $conn->prepare(
@@ -922,7 +922,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           <?php endif; ?>
 
           <?php /* data-splash: the full-screen logo animation stands in for the
-                   small pill here — see includes/loading_bar.php. */ ?>
+                   small pill here: see includes/loading_bar.php. */ ?>
           <form method="post" id="loginForm" data-splash>
             <?= csrf_field() ?>
             <div class="form-group">
@@ -1068,8 +1068,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       usernameInput.focus();
     });
   </script>
-  <?php /* No site_footer.php here, so signing in — one of the workflows the
-           logo pill marks — has to ask for the loader itself. */ ?>
+  <?php /* No site_footer.php here, so signing in (one of the workflows the
+           logo pill marks) has to ask for the loader itself. */ ?>
   <?php require_once ROOT_PATH . '/includes/loading_bar.php'; ?>
   <?php /* Same reason: the sign-in messages on this page are banners like any
            other, and the footer is not here to say so. */ ?>

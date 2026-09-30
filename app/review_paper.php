@@ -4,7 +4,7 @@
  *
  * The same record the author sees, plus the two things only a reviewer needs:
  * a checklist they fill in as they read, and the decision at the foot of it.
- * Opening the paper itself is a link to the file in Drive — the reviewer reads
+ * Opening the paper itself is a link to the file in Drive: the reviewer reads
  * the PDF there and records what they found here.
  *
  * The decision is not carried out on this page. Both buttons post to the
@@ -50,7 +50,7 @@ if (!$paper) {
 $status = (string)$paper['current_status'];
 
 /* Whether this paper is actually waiting on *this* reviewer. Anything else is
-   read-only here — the decision belongs to whoever holds it now. */
+   read-only here: the decision belongs to whoever holds it now. */
 $myQueue = $isAdviser
     ? ($status === 'pending_faculty')
     : in_array($status, ['pending_admin', 'pending_admin_l1'], true);
@@ -83,19 +83,21 @@ $expected = [
     'data_collection'  => ['label' => 'Data Collection Tool',    'required' => $docsRequired],
     'copyright_doc'    => ['label' => 'Copyright / IP Document', 'required' => $docsRequired],
 ];
+/* Each file that exists is opened through app/paper_file.php, in PAPEL's own
+   viewer; paper_file_url() is asked only whether there is a file at all. */
 $found = [];
-if ($link = paper_file_url($paper['gdrive_file_id'] ?? null, $paper['file_path'] ?? null)) {
-    $found['manuscript'] = $link;
+if (paper_file_url($paper['gdrive_file_id'] ?? null, $paper['file_path'] ?? null)) {
+    $found['manuscript'] = paper_file_src('paper', $paper_id);
 }
-$ds = $conn->prepare("SELECT document_type, file_path, gdrive_file_id FROM supporting_documents WHERE paper_id = ? ORDER BY doc_id ASC");
+$ds = $conn->prepare("SELECT doc_id, document_type, file_path, gdrive_file_id FROM supporting_documents WHERE paper_id = ? ORDER BY doc_id ASC");
 $ds->bind_param('i', $paper_id);
 $ds->execute();
 foreach ($ds->get_result()->fetch_all(MYSQLI_ASSOC) as $d) {
     $label = supporting_doc_label($d['document_type'] ?? '');
     $key   = array_search($label, array_column($expected, 'label'), true);
     $key   = $key === false ? $label : array_keys($expected)[$key];
-    if ($link = paper_file_url($d['gdrive_file_id'] ?? null, $d['file_path'] ?? null)) {
-        $found[$key] = $link;
+    if (paper_file_url($d['gdrive_file_id'] ?? null, $d['file_path'] ?? null)) {
+        $found[$key] = paper_file_src('doc', (int)$d['doc_id']);
     }
 }
 $ds->close();
@@ -169,7 +171,7 @@ $approveLead  = $isAdviser
 <?php require_once ROOT_PATH.'/includes/console_shell.php'; ?>
 <?php require_once ROOT_PATH.'/includes/paper_record_css.php'; ?>
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
-/* The site's own link colour — the browser's default blue belongs to nothing
+/* The site's own link colour: the browser's default blue belongs to nothing
    else on the page. */
 .pd-repo-link {
     display: inline-flex; align-items: center; gap: .25rem;
@@ -185,7 +187,7 @@ $approveLead  = $isAdviser
 }
 .rv-check-row input { accent-color: var(--maroon); flex: 0 0 auto; }
 .rv-check-row span { flex: 1 1 auto; }
-/* #confirmDone used to set this via a style="" attribute — dropped silently
+/* #confirmDone used to set this via a style="" attribute: dropped silently
    by the CSP (style-src carries no 'unsafe-inline'), which is why it still
    rendered as the browser's default blue. */
 #confirmDone { accent-color: var(--maroon); margin-top: .2rem; }
@@ -260,7 +262,7 @@ $approveLead  = $isAdviser
                     <span class="sep">•</span><span><?= e(paper_type_label($paper['paper_type'])) ?></span>
                     <span class="sep">•</span><span>Submitted by <?= e($submittedBy) ?></span>
                 </div>
-                <?php /* Only once published — before that there is no repository
+                <?php /* Only once published, before that there is no repository
                          page to open. */ ?>
                 <?php if ($status === 'approved'): ?>
                     <a class="pd-repo-link" href="<?= e(BASE_URL) ?>/archive/view_paper.php?id=<?= (int)$paper_id ?>">
@@ -375,8 +377,8 @@ $approveLead  = $isAdviser
             <div class="pd-files">
                 <?php foreach ($files as $f): ?>
                     <?php if ($f['href']): ?>
-                        <a class="pd-file" href="<?= e($f['href']) ?>" target="_blank" rel="noopener"
-                           title="Show <?= e($f['label']) ?> beside the record">
+                        <a class="pd-file" href="#pd-sec-files" data-pdf-src="<?= e($f['href']) ?>"
+                           title="Open <?= e($f['label']) ?> here">
                             <span class="pd-file-name"><?= e($f['label']) ?></span>
                             <span class="pd-file-ico"><span class="material-symbols-outlined">picture_as_pdf</span></span>
                         </a>
@@ -515,7 +517,7 @@ $approveLead  = $isAdviser
         <aside class="pd-side">
             <?php
             /* One entry per card actually on the page, plus one per written
-               section inside "Written Sections" — the same table of contents
+               section inside "Written Sections": the same table of contents
                the author sees on their own copy of the record
                (app/student/paper_details.php), so both sides of a review read
                a long submission the same way. No "Cite This Paper" card here
@@ -568,7 +570,7 @@ $approveLead  = $isAdviser
 
 <?php if ($myQueue): ?>
 <!-- Confirming the decision. Approving moves the paper on and returning it
-     sends it back, so both are asked about — and the question names what has
+     sends it back, so both are asked about, and the question names what has
      not been ticked, because that is exactly what a reviewer in a hurry misses. -->
 <div class="papel-dialog-backdrop" id="confirmDialog" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
   <div class="papel-dialog">
@@ -690,6 +692,10 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 <?php
+/* A file opens inside Uploaded Files, beside the tile that opened it, and can
+   be docked to either side of the window to read against the checklist. */
+$PDF_DOCK_HOME      = '#pd-sec-files';
+$PDF_DOCK_HOME_NAME = 'Uploaded Files';
 require ROOT_PATH.'/includes/pdf_dock.php';
 require ROOT_PATH.'/includes/scroll_jump.php';
 $CARD_COLLAPSE_SELECTOR = '.pd-card';
@@ -697,7 +703,7 @@ require ROOT_PATH.'/includes/card_collapse.php';
 require ROOT_PATH.'/includes/site_footer.php';
 ?>
 <?php /* Its own listener, separate from the review form's script above, which
-         returns early on a read-only paper that has no form — the contents
+         returns early on a read-only paper that has no form: the contents
          panel still has to work there. */ ?>
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 document.addEventListener('DOMContentLoaded', function () {
@@ -708,12 +714,30 @@ document.addEventListener('DOMContentLoaded', function () {
     var railIcon   = document.getElementById('pdRailToggleIcon');
     var layout     = document.getElementById('pdLayout');
     if (railToggle && layout) {
-        railToggle.addEventListener('click', function () {
-            var collapsed = layout.classList.toggle('is-rail-collapsed');
+        function setRail(collapsed) {
+            layout.classList.toggle('is-rail-collapsed', collapsed);
             railIcon.textContent = collapsed ? 'right_panel_open' : 'right_panel_close';
             railToggle.title = collapsed ? 'Show the contents panel' : 'Hide the contents panel';
             railToggle.setAttribute('aria-label', railToggle.title);
             railToggle.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
+        }
+
+        railToggle.addEventListener('click', function () {
+            setRail(!layout.classList.contains('is-rail-collapsed'));
+        });
+
+        /* A file docked to either side of the window leaves the record
+           squeezed between it and the rail, so the rail gives way while it is
+           docked and comes back as it was: one the reader had hidden stays
+           hidden. The same arrangement as the public paper view. */
+        var railWasOpen = false;
+        document.addEventListener('papel:pdf-dock-open', function () {
+            railWasOpen = !layout.classList.contains('is-rail-collapsed');
+            if (railWasOpen) { setRail(true); }
+        });
+        document.addEventListener('papel:pdf-dock-close', function () {
+            if (railWasOpen) { setRail(false); }
+            railWasOpen = false;
         });
     }
 
@@ -769,7 +793,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
-    /* Scroll-spy only tracks the finest-grained heading on the page — a
+    /* Scroll-spy only tracks the finest-grained heading on the page: a
        parent entry that has its own sub-list would otherwise stay "active"
        for as long as any of its children are, since it spans all of them. */
     var spyLinks = tocLinks.filter(function (link) {

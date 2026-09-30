@@ -3,7 +3,7 @@
  * Site-styled confirmations for the management pages.
  *
  * Archiving, deleting and resetting an account were all confirmed by the
- * browser's own dialog — a grey box with the site's name at the top, no way to
+ * browser's own dialog: a grey box with the site's name at the top, no way to
  * word the consequence properly, and nothing to do with PAPEL to look at. This
  * replaces them with the same dialog the rest of the site uses.
  *
@@ -11,7 +11,7 @@
  * `.btn-confirm[data-confirm]` and `.form-confirm[data-confirm]`, so nothing
  * there needs changing. This listens in the capture phase, which runs before
  * the page's own handler, and stops that handler from ever reaching its
- * confirm(). When the reader agrees, the form is submitted directly — going
+ * confirm(). When the reader agrees, the form is submitted directly: going
  * back through the click would only summon the old dialog again.
  *
  * Include once before the footer.
@@ -44,7 +44,7 @@
 }
 /* papelShow(): a line of prose, and label/value pairs for the things that were
    changed. The value takes the monospaced face for the same reason the emails
-   do — a password has to be read one character at a time. */
+   do: a password has to be read one character at a time. */
 .ad-line { margin: 0 0 .75rem; }
 .ad-line:last-child { margin-bottom: 0; }
 .ad-kv {

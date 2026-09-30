@@ -19,7 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_reset']) && $
     $conn->query("SET FOREIGN_KEY_CHECKS = 0");
 
     /* Everything a paper leaves behind, in the order it was accumulated.
-       The previous list had drifted a long way from the schema — five of its
+       The previous list had drifted a long way from the schema: five of its
        seven names did not exist, and the tables that actually hold a paper's
        trail were all missing, so a reset deleted the papers and left
        approval_workflow, the checklists and the supporting documents pointing

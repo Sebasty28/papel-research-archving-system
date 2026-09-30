@@ -2,7 +2,7 @@
 require_once __DIR__.'/../config/core.php';
 /* Called before any output for what it does on the way: it starts the session
    and drops a revoked guest pass while headers can still be sent. The page no
-   longer needs the user itself — that was for the chat box — and the header
+   longer needs the user itself (that was for the chat box) and the header
    looks it up on its own. */
 current_user();
 $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
@@ -59,9 +59,13 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
     grid-template-columns: 14rem minmax(0, 1fr);
     gap: .75rem;
     align-items: start;
+    /* No tinted panel behind the two cards: they have edges of their own, and
+       the cream slab only drew a second one around them. */
+    background: none;
+    padding: 0;
 }
 /* Each card is alone in its column, so the gap page_theme puts under a
-   stacked card would only pad out the grid — and, on a phone where the two
+   stacked card would only pad out the grid, and, on a phone where the two
    stack, double the gap between them. */
 .help-layout > .page-card { margin-bottom: 0; }
 
@@ -99,7 +103,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
 .help-link:hover .material-symbols-outlined { color: var(--maroon); }
 .help-link:hover::before { transform: scaleY(1); }
 /* The card clips (overflow:hidden, for its rounded corners), and the site's
-   ring is drawn 2px outside with !important — its sides would be cut off. */
+   ring is drawn 2px outside with !important: its sides would be cut off. */
 .help-links .help-link:focus-visible { outline-offset: -2px !important; border-radius: var(--r-control, 4px); }
 /* Arriving from "Forgot password?": this is the reader's likely next step. */
 .help-link.is-called-out { color: var(--maroon); background: color-mix(in srgb, var(--maroon) 6%, transparent); }
@@ -138,13 +142,12 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
     <div class="page-shell help-layout">
 
     <?php /* The quick links in the left column, where the section list
-             stood — one list of places to go, beside the answers, rather
+             stood: one list of places to go, beside the answers, rather
              than a second card to switch to. First in the markup as well as
              on screen, so the keyboard meets them in the order they are seen;
              on a phone they stack above the questions. */ ?>
     <nav class="page-card" aria-labelledby="help-links-title">
         <div class="page-card-header">
-            <span class="material-symbols-outlined">bolt</span>
             <h2 id="help-links-title">Quick Links</h2>
         </div>
         <div class="help-links">
@@ -162,7 +165,6 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
 
     <section class="page-card">
         <div class="page-card-header">
-            <span class="material-symbols-outlined">help</span>
             <h2>Frequently Asked Questions</h2>
         </div>
         <div class="page-card-body">
@@ -184,14 +186,18 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
                     What is the approval process?
                     <i class="bi bi-plus faq-icon"></i>
                 </button>
+                <?php /* The chain the system actually runs: adviser, then
+                         Coordinator, who is the last word. See
+                         config/workflow.php, which says the same. */ ?>
                 <div class="faq-body" id="q2">
-                    Once uploaded, your paper goes through a 3-step review process:
+                    <p>Once you submit it, your paper is read by two people:</p>
                     <ol>
-                        <li><strong>Faculty Review:</strong> Your professor checks the content and format.</li>
-                        <li><strong>Admin Review:</strong> The Research Office verifies compliance.</li>
-                        <li><strong>Super Admin:</strong> Final approval for archiving.</li>
+                        <li><strong>Your Research Adviser</strong> reads it first and either sends it on or returns it to you with feedback.</li>
+                        <li><strong>The Research Coordinator</strong> reads it next. Their approval is the last step: the paper is published to the public repository there and then.</li>
                     </ol>
-                    You can track the status at any time in "My Library" on your dashboard.
+                    <p>Either reviewer can send it back instead. It returns to your drafts with their
+                    feedback attached, so you can correct it and submit it again. You can see where
+                    it has reached at any time on your dashboard, which shows the same two steps.</p>
                 </div>
             </div>
 
@@ -211,7 +217,16 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
                     <i class="bi bi-plus faq-icon"></i>
                 </button>
                 <div class="faq-body" id="q4">
-                    Yes. The public archive allows browsing and searching research papers without an account. However, to view full paper details and read the manuscript itself, you must log in using a Guest, Student, or Faculty account.
+                    <p>In part. Anyone can browse and search the published papers without an
+                    account, and see each paper's title, authors, programme and year.</p>
+
+                    <p>Opening a paper needs an account. Signed in, whether as a student, as staff
+                    or with a guest pass from the Librarian, you can read the whole record: the
+                    abstract, the keywords and every section the authors wrote.</p>
+
+                    <p class="faq-note">The manuscript file itself is another matter. Staff can open
+                    it; a student can ask a librarian to unlock it for a while, on the paper's own
+                    page. A guest pass does not open it.</p>
                 </div>
             </div>
 
@@ -228,14 +243,14 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
                     and choose Password. You will be asked for your current password, then the
                     new one twice.</p>
 
-                    <p><strong>If you have forgotten it</strong>, it cannot be recovered — passwords
+                    <p><strong>If you have forgotten it</strong>, it cannot be recovered. Passwords
                     are stored scrambled and nobody, including the Research Office, can read yours.
                     A new one has to be issued by whoever set up your account:</p>
 
                     <ul>
-                        <li><strong>Students</strong> — your Research Adviser.</li>
-                        <li><strong>Research Advisers and the Librarian</strong> — the Research Coordinator.</li>
-                        <li><strong>Research Coordinator and the Head of Academic Programs</strong> — the Director.</li>
+                        <li><strong>Students</strong>: your Research Adviser.</li>
+                        <li><strong>Research Advisers and the Librarian</strong>: the Research Coordinator.</li>
+                        <li><strong>Research Coordinator and the Head of Academic Programs</strong>: the Director.</li>
                     </ul>
 
                     <p>They will give you a new password to sign in with, which you should change to

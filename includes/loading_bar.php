@@ -4,7 +4,7 @@
  * the site is busy.
  *
  * The point is to answer "did my click do anything?" during the gap where the
- * page still looks finished but the server has not answered yet — leaving a
+ * page still looks finished but the server has not answered yet: leaving a
  * page, submitting a form, waiting on an extraction. It is indeterminate on
  * purpose: nothing here can honestly say how far along a request is, so the
  * segment simply travels rather than pretending to measure.
@@ -20,30 +20,30 @@
  *     after that moment does not blink.
  *
  * fetch and XMLHttpRequest are wrapped here rather than at each call site, so
- * every existing AJAX request on the site — the archive search, the notification
- * bell, drafts, the AI extraction — reports without being edited.
+ * every existing AJAX request on the site (the archive search, the notification
+ * bell, drafts, the AI extraction) reports without being edited.
  *
  * Page code can also drive it directly for work that is neither:
  *     window.papelLoading.start();  ...  window.papelLoading.done();
  *
  * ---- The logo pill ----------------------------------------------------------
- * A small pill playing the PAPEL logo animation — a cropped, 300px copy of the
+ * A small pill playing the PAPEL logo animation: a cropped, 300px copy of the
  * full-screen splash's GIF (includes/splash.php), which is a 1920x1080 canvas
  * with the logo in a third of it. It is not tied to the bar. It marks the
- * site's workflows — signing in, uploading or submitting a paper, requesting a
+ * site's workflows (signing in, uploading or submitting a paper, requesting a
  * manuscript or support, creating, editing, enabling, resetting or deleting an
  * account or record, approving or returning a paper, granting or denying a
- * request, archiving — and nothing else: not moving between pages, not the
+ * request, archiving) and nothing else: not moving between pages, not the
  * background requests the bar also reports.
  *
  * Every one of those workflows is a POST form, and nothing else on the site
  * is, bar three that are marked data-no-pill: the two exports, which are
  * downloads, and Mark all as read. So a POST form going out starts the pill,
- * however it is sent — the submit event for an ordinary button, and a wrapped
+ * however it is sent: the submit event for an ordinary button, and a wrapped
  * HTMLFormElement.prototype.submit for the forms action_dialogs.php sends
  * after its confirmation, which never fire that event. Workflows that run
- * as background requests instead — the paper upload, the AI extraction,
- * saving a draft, deleting a notification — drive it by hand:
+ * as background requests instead (the paper upload, the AI extraction,
+ * saving a draft, deleting a notification) drive it by hand:
  *     window.papelLoading.work.start();  ...  window.papelLoading.work.done();
  * with work.leave() in place of done() when the page moves on afterwards.
  *
@@ -71,7 +71,7 @@ $loader_badge_gif = (defined('BASE_URL') ? BASE_URL : '/capstone')
     left: 0;
     right: 0;
     /* Along the top edge of the window, over the navbar, where the eye goes to
-       see whether a page is on its way — it used to run along the foot, where
+       see whether a page is on its way: it used to run along the foot, where
        it was easy to miss. Fixed rather than inside the navbar, so it is
        there the same on every page, and on the two sign-in pages that have no
        navbar at all. */
@@ -119,15 +119,15 @@ $loader_badge_gif = (defined('BASE_URL') ? BASE_URL : '/capstone')
 }
 
 /* The logo animation, in the middle of the window, where the eye already is
-   after pressing a button — down by the bar it was easy to miss. Its
+   after pressing a button: down by the bar it was easy to miss. Its
    background is the GIF's own off-white, so the frame has no visible edge
    inside the pill. It never takes pointer events, so sitting over the page
    cannot block a click. */
 .papel-loader-badge {
     position: fixed;
     left: 50%;
-    /* A page that puts a loader of its own in the middle of the window — the
-       upload overlay is the one that does — moves the pill out of its way by
+    /* A page that puts a loader of its own in the middle of the window (the
+       upload overlay is the one that does) moves the pill out of its way by
        setting --papel-pill-top to where the pill's centre should sit. */
     top: var(--papel-pill-top, 50%);
     z-index: 20100;
@@ -176,7 +176,7 @@ html[style*="--papel-pill-top"] .papel-loader-veil { display: none; }
 /* Someone who has asked for less movement still needs to know it is working,
    so the bar stays and breathes instead of travelling. A GIF cannot be paused
    from CSS, so the logo is left out altogether, and for the site's own "Stop
-   animations" setting too — its animation:none does not reach an image. */
+   animations" setting too: its animation:none does not reach an image. */
 @media (prefers-reduced-motion: reduce) {
     .papel-loader.is-busy .papel-loader__seg {
         animation: papel-loader-breathe 1.6s ease-in-out infinite;
@@ -293,8 +293,8 @@ body.a11y-stop-animations .papel-loader-veil { display: none; }
         workJobs = workJobs > 0 ? workJobs - 1 : 0;
         if (workJobs === 0) { workHideAt(workShownAt + WORK_MIN); }
     }
-    /* A workflow form sent: shown now, and — since the page it belongs to is
-       about to go — never finished here. What is left of its minimum goes to
+    /* A workflow form sent: shown now, and (since the page it belongs to is
+       about to go) never finished here. What is left of its minimum goes to
        the next page instead. */
     function workLeaving() {
         if (leaving) { return; }
@@ -302,9 +302,9 @@ body.a11y-stop-animations .papel-loader-veil { display: none; }
         workStart();
         try { sessionStorage.setItem(OWED_KEY, String(workShownAt + WORK_MIN)); } catch (err) {}
         /* A real navigation takes this page, and this timer, with it. Still
-           here after fifteen seconds means it is not going anywhere — a form
+           here after fifteen seconds means it is not going anywhere (a form
            whose answer was a file download, which the browser saves without
-           leaving and without telling this page — and the veil, which takes
+           leaving and without telling this page) and the veil, which takes
            every click, would otherwise lock the page for good. */
         setTimeout(function () {
             workJobs = 0;
@@ -333,7 +333,7 @@ body.a11y-stop-animations .papel-loader-veil { display: none; }
     } catch (err) {}
 
     /* Signing in is the one workflow that gets the full-screen animation
-       (includes/splash.php) rather than the pill — it is the site opening, not
+       (includes/splash.php) rather than the pill: it is the site opening, not
        a change being saved. The splash declines when a reduced-motion setting
        is on, and the pill stands in. */
     function leavingFor(form) {
@@ -366,7 +366,7 @@ body.a11y-stop-animations .papel-loader-veil { display: none; }
     });
 
     /* form.submit() fires no submit event, and it is how action_dialogs.php
-       sends a form once its confirmation is answered — every delete, archive
+       sends a form once its confirmation is answered: every delete, archive
        and account change on the site goes that way. */
     var nativeSubmit = HTMLFormElement.prototype.submit;
     HTMLFormElement.prototype.submit = function () {
@@ -382,22 +382,22 @@ body.a11y-stop-animations .papel-loader-veil { display: none; }
         window.addEventListener('load', done, { once: true });
     }
 
-    /* Leaving the page. This covers every kind of navigation — a link, a form
-       post, the Back button, a typed address — so no click handler has to be
+    /* Leaving the page. This covers every kind of navigation (a link, a form
+       post, the Back button, a typed address) so no click handler has to be
        attached to anything. The bar then runs on the old page for as long as
        the next one takes to answer, which is exactly the wait being reported.
 
        A form whose response turns out to be a file download (Export CSV, on
-       the review desks) fires this exactly the same as a real navigation —
-       the browser commits to leaving before it has seen the response's
-       Content-Disposition header — and then cancels the navigation once it
+       the review desks) fires this exactly the same as a real navigation
+       (the browser commits to leaving before it has seen the response's
+       Content-Disposition header) and then cancels the navigation once it
        finds out, downloading the file and leaving this same page, and this
        same script, running. Nothing tells this page that happened, so the
        start() this fired never gets the done() it is owed and the bar runs
-       forever — which is the bug this was reported as. The timeout below is
+       forever, which is the bug this was reported as. The timeout below is
        the fallback for exactly that case: a real navigation destroys this
        whole page, and the timer with it, well before six seconds are up, so
-       it never fires there — only a cancelled one runs long enough to reach
+       it never fires there, only a cancelled one runs long enough to reach
        it, and the bar was never entitled to keep running past that point
        anyway. */
     window.addEventListener('beforeunload', function () {

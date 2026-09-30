@@ -15,7 +15,7 @@
 ?>
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 body { background: var(--white); display: flex; flex-direction: column; min-height: 100vh; }
-/* The breadcrumb strip lives in site_head.php now — every page needs it, not
+/* The breadcrumb strip lives in site_head.php now: every page needs it, not
    just the ones with a console layout. */
 /* ===== Two-column layout, mirroring the public repository ===== */
 .layout {
@@ -58,7 +58,7 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
     transition: background .2s, color .2s;
 }
 /* The console sits on a cream panel, so the shared cream hover would be
-   invisible here — hover to white instead for contrast. */
+   invisible here: hover to white instead for contrast. */
 .dash-tab:hover { background: var(--white); color: var(--maroon); }
 .dash-tab.active { background: var(--white); color: var(--maroon); }
 .dash-shell .toolbar-btn:hover { background: var(--white); color: var(--maroon); }
@@ -83,7 +83,7 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
 .paper-card .paper-title a:hover { color: var(--maroon); text-decoration: underline; }
 .card-head { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 1rem; align-items: start; }
 /* The toggle lives in the padding-right gutter reserved here, positioned on
-   its own rather than sitting inline after the status text — so its width
+   its own rather than sitting inline after the status text, so its width
    never enters into how far right "Status: ..." or "View Details" sit, and
    .card-people below (same gutter, no toggle of its own) lines up with them
    both at the same edge instead of the toggle shifting only the first line. */
@@ -94,8 +94,8 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
 .card-status .status-value { color: var(--maroon); }
 .card-status .paper-action { display: block; }
 
-/* Folds everything under .card-head away — the tracker, who is on it, any
-   files and the approve/return buttons — leaving the plain title/authors/
+/* Folds everything under .card-head away (the tracker, who is on it, any
+   files and the approve/return buttons) leaving the plain title/authors/
    status row the public repository's own list shows. Built by
    browse_console_js.php, which wraps that "everything else" into
    .paper-card-body the same way includes/card_collapse.php does. */
@@ -127,7 +127,7 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
 .track-step.current .track-dot { border-color: var(--maroon); color: var(--maroon); }
 .track-label { font-size: .625rem; color: var(--grey); text-align: center; line-height: 1.25; }
 .track-step.done .track-label, .track-step.current .track-label { color: var(--maroon); }
-/* Connector runs edge-to-edge between the first and last dots — never past
+/* Connector runs edge-to-edge between the first and last dots: never past
    them. Each step is flex:1, so the outer dot centres sit at 50%/steps; add
    the dot's radius to land exactly on their inner edges. */
 .track-line {
@@ -144,7 +144,7 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
    Shared vocabulary: every console uses the same two button sizes and the
    same dialog, so a destructive action looks the same wherever it is. */
 /* Same reserved gutter width as .card-status, even though there's no toggle
-   here to put in it — it's what keeps this text's right edge lined up with
+   here to put in it: it's what keeps this text's right edge lined up with
    "Status: ..." above instead of running past it into the toggle's own
    column. */
 .card-people { font-size: .6875rem; color: var(--ink); line-height: 1.8; text-align: right; white-space: nowrap; padding-right: 1.625rem; }

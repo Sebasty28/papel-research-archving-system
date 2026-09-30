@@ -32,7 +32,7 @@ class FacultyManagementService {
      * Correct an existing adviser's details.
      *
      * The same panel that creates one also edits it, so this takes the same
-     * fields — with two differences: the uniqueness checks have to ignore the
+     * fields, with two differences: the uniqueness checks have to ignore the
      * row being edited, and a blank password means "leave it alone" rather than
      * "reject this", since an adviser's password is not something you should
      * have to retype in order to fix a spelling of their name.
@@ -97,7 +97,7 @@ class FacultyManagementService {
         }
 
         /* The position chosen on the form decides the role stored. Only the two
-           this console offers are accepted — a hand-edited form cannot mint an
+           this console offers are accepted: a hand-edited form cannot mint an
            admin from here. */
         $map = staff_position_map($data['title']);
         if (!$map || !in_array($map['role'], self::MANAGES, true)) {

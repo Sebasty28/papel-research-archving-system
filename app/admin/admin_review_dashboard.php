@@ -4,7 +4,7 @@
  *
  * The final gate. A paper the Research Adviser has forwarded is published to
  * the public repository here, or returned to the student. Nobody approves after
- * this — the Head of Academic Programs and the Director read what comes out of
+ * this: the Head of Academic Programs and the Director read what comes out of
  * it. The page is the shared review console; this file describes the desk.
  */
 require_once '../../config/core.php';
@@ -27,7 +27,7 @@ if (($u['admin_level'] ?? 1) == 2) { header('Location: '.BASE_URL.'/app/faculty/
 $SELF = 'admin_review_dashboard.php';
 
 /* ---- Decisions --------------------------------------------------------- */
-// A POST carrying 'export' is a document download, not a paper decision —
+// A POST carrying 'export' is a document download, not a paper decision:
 // let it fall through untouched to review_console.php's own export handling.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['export'])) {
     csrf_verify();
@@ -112,7 +112,7 @@ $RC = [
         ['href' => BASE_URL.'/app/student/student_upload_ai.php', 'icon' => 'upload_file', 'label' => 'Upload Paper',
          'desc' => 'Add a paper of your own. It is published straight away, with no review'],
         ['href' => 'admin_manage_faculty.php', 'icon' => 'diversity_3', 'label' => 'Manage Faculty',
-         'desc' => $faculty_count . ' adviser ' . ($faculty_count === 1 ? 'account' : 'accounts') . ' — add, edit or reset one'],
+         'desc' => $faculty_count . ' adviser ' . ($faculty_count === 1 ? 'account' : 'accounts') . '. Add, edit or reset one.'],
         ['href' => BASE_URL.'/analytics/analytics_dashboard.php', 'icon' => 'insights', 'label' => 'Analytics',
          'desc' => 'Submissions, approval rates and trends'],
         ['href' => BASE_URL.'/archive/index.php?browse=1', 'icon' => 'menu_book', 'label' => 'Public Repository',

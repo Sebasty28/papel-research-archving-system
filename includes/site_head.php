@@ -14,7 +14,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 /* =========================================================
-   PAPEL — universal design tokens + site header/footer/modal
+   PAPEL: universal design tokens + site header/footer/modal
    ========================================================= */
 :root {
     --ink:          #330000;
@@ -41,7 +41,7 @@
     /* The same idea, reaching round the top corners and a little way down
        the sides as well. A plain box-shadow cannot stop partway down a side,
        so this one is cast by a short strip across the top of the element
-       rather than by the element — see .sidebar-right on the repository. */
+       rather than by the element: see .sidebar-right on the repository. */
     --shadow-up-rim: 0 -3px 10px rgba(51,0,0,.12);
 
     --font-head:    'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -90,9 +90,24 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
 
 /* ===== Breadcrumb strip =====
    Used on almost every signed-in page. It lived in console_shell.php and again
-   in manage_console.php, so a page that included neither — analytics, say —
+   in manage_console.php, so a page that included neither (analytics, say)
    rendered its crumbs as bare blue links. It belongs here with .wrap. */
-.crumb-bar { background: var(--maroon-surface-hover); }
+/* The photo strip behind the navbar runs on down behind this one, so the strip
+   is tinted glass rather than solid maroon: the same thing the repository did
+   while its banner was up, now on every page and in both of its states. It has
+   to be positioned to get it: the photo is absolutely positioned, and would
+   paint over an unpositioned strip. */
+.crumb-bar {
+    position: relative;
+    z-index: 1;
+    background: color-mix(in srgb, var(--maroon-surface-hover) 82%, transparent);
+    -webkit-backdrop-filter: blur(10px) saturate(160%);
+    backdrop-filter: blur(10px) saturate(160%);
+}
+/* No blur to hide behind, so the strip keeps its own colour. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .crumb-bar { background: var(--maroon-surface-hover); }
+}
 .crumb-inner {
     display: flex; align-items: center; gap: .25rem;
     padding-top: .5rem; padding-bottom: .5rem;
@@ -160,7 +175,7 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
    background above. */
 .btn { appearance: none; -webkit-appearance: none; }
 
-/* Google Material Icons — inline sizing */
+/* Google Material Icons: inline sizing */
 .material-symbols-outlined {
     font-family: 'Material Symbols Outlined';
     font-weight: normal;
@@ -188,8 +203,8 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
 
 /* ===== Site header =====
    Glass from the start, on every page. There is always something behind it
-   now — the campus photo strip (.nav-photo, below) at the top of the page, and
-   the page itself once it scrolls — so a solid bar would only hide it. It used
+   now: the campus photo strip (.nav-photo, below) at the top of the page, and
+   the page itself once it scrolls. So a solid bar would only hide it. It used
    to turn to glass only after 8px of scroll; .scrolled now adds just the
    shadow that tells the bar apart from content passing under it. The frost is
    a token, so dark mode gets the dark surface rather than washed-out white. */
@@ -223,11 +238,12 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
    (240px, 190px, 150px at the breakpoints), plus the navbar, the 36px crumb
    strip, and the part of the search field below the banner (26px, 46px,
    38px); object-fit: cover then takes the middle of the picture. This box is
-   built from the same numbers — change the banner's height in
+   built from the same numbers: change the banner's height in
    archive/index.php and these have to follow. --nav-h is the navbar's height,
    measured by site_header.php, since the bar wraps taller on a phone. */
 :root {
     --nav-h: 37px;
+    --crumb-h: 36px;
     --nav-photo-h: 240px;
     --nav-photo-tail: 26px;
 }
@@ -242,15 +258,26 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
     overflow: hidden;
     pointer-events: none;
 }
+/* Cut at the bottom of the maroon strip rather than at the top of it, so the
+   strip has the photo behind its glass too. Only where there is a strip: a few
+   pages have none, and there the photo would spill 36px over the page. */
+body:has(.crumb-bar) .nav-photo { height: calc(var(--nav-h) + var(--crumb-h)); }
 .nav-photo img {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
-    height: calc(var(--nav-photo-h) + var(--nav-h) + 36px + var(--nav-photo-tail));
+    height: calc(var(--nav-photo-h) + var(--nav-h) + var(--crumb-h) + var(--nav-photo-tail));
     object-fit: cover;
     display: block;
 }
+/* The same slideshow the repository's banner runs, in the same shuffled order
+   it was given: every photo stacked in one place, and only the active one
+   opaque. A slide still waiting in data-src stays transparent whatever its
+   class, so a slow connection holds the photo it has rather than fading to a
+   gap. */
+.nav-photo img.nav-slide { opacity: 0; transition: opacity 1.2s ease; }
+.nav-photo img.nav-slide.is-active[src] { opacity: 1; }
 
 .nav-icon-btn {
     display: inline-flex;
@@ -301,7 +328,7 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
 .avatar-group .material-symbols-outlined { font-size: 18px; }
 /* Turned over while the menu is open, as the Resources chevron is. Read off
    the menu rather than a class on this button: the menu is closed from
-   several places — this button, its own ×, the bell, a click anywhere else —
+   several places (this button, its own ×, the bell, a click anywhere else)
    and every one of them already clears .open there. */
 .avatar-group .avatar-caret { transition: transform .2s ease; }
 .avatar-group:has(+ .user-dropdown.open) .avatar-caret { transform: rotate(180deg); }
@@ -328,7 +355,7 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
 }
 /* The logo is a raster wrapped in an SVG, so `fill` cannot touch it. It is
    painted rather than drawn: the artwork supplies only the stencil, through
-   mask-image, and the colour underneath is the theme's own accent token — so
+   mask-image, and the colour underneath is the theme's own accent token, so
    the mark follows every palette and dark mode alike, exactly as the wordmark
    it replaced did. The mask is a 4KB alpha-only crop of
    Logo-Papel-Transparent.svg; the SVG itself is 900KB, which is far too much
@@ -348,12 +375,12 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
 .brand:hover .brand-mark { background-color: var(--maroon); }
 /* The name, drawn out on hover from behind a thin rule set just right of the
    mark, and put back behind it on the way out. Absolutely placed, so the
-   brand keeps the mark's width either way — were it in the flow, the link
+   brand keeps the mark's width either way: were it in the flow, the link
    would grow as it opened and the centred nav beside it would lurch sideways
    on every pass of the mouse.
 
    The rule is .brand::after: a 1.25rem strip hugging the mark with a 1px line
-   down its middle. It only fades — it is the fixed edge the word appears from.
+   down its middle. It only fades: it is the fixed edge the word appears from.
    The strip also bridges the gap between mark and word, so the pointer can
    cross from one to the other without leaving the link and closing it. It
    takes pointer events only while open; otherwise the empty space beside the
@@ -469,7 +496,7 @@ h1, h2, h3, .font-head { font-family: var(--font-head); }
    sat on the bar like a sticker. A bar drawn under the label rather than
    text-decoration, so the links and the Resources button (whose chevron is a
    glyph, and would be underlined along with the word) come out identical.
-   It spans the label only — inset by the item's own side padding — and grows
+   It spans the label only (inset by the item's own side padding) and grows
    from the middle on hover; the current page's is solid and stays.
    Direct children only: the Resources dropdown's own links sit inside
    .main-nav too, and keep their menu-row highlight. */
@@ -570,7 +597,7 @@ html.nav-open .nav-burger .burger-open { display: inline-flex; }
 
 /* The same underline as the bar above, so the menu does not go back to cream
    tiles one level down. The row stays full-width to keep its hit area, so
-   the bar hangs off the label's span instead — on the row it would run the
+   the bar hangs off the label's span instead, on the row it would run the
    width of the menu. The drop matches how far the navbar's bar sits below
    "Resources"; any closer and it touches the descenders in "Support". */
 .nav-more-label { position: relative; }
@@ -618,7 +645,7 @@ html.nav-open .nav-burger .burger-open { display: inline-flex; }
 }
 .btn-login-nav:hover { color: var(--dark-maroon); }
 /* The navbar's underline rather than a cream tile, for the same reason the
-   links lost theirs — see .main-nav > a::after. It runs under the icon as
+   links lost theirs: see .main-nav > a::after. It runs under the icon as
    well as the word, the two being one control. The extra 1px at the right:
    the icon's glyph sits 2.5px inside its box, the L's 1.6px inside its own,
    so ending at the box left the bar hanging further past one end than the
@@ -743,34 +770,46 @@ html.nav-open .nav-burger .burger-open { display: inline-flex; }
 .notif-dropdown-header,
 .notif-tabs,
 .notif-view-all { flex: 0 0 auto; }
+/* White, with the writing in the dark maroon: the panel is one pale card
+   from its top edge down, and the maroon band across it had it reading as
+   two things stacked. The rule under it is what marks the head off now. */
 .notif-dropdown-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: .75rem 1rem;
-    background: var(--maroon-surface-hover);
-    color: #fff;
+    background: var(--white);
+    color: var(--dark-maroon);
+    border-bottom: 1px solid var(--border-soft);
 }
-.notif-dropdown-header span { font-weight: 700; font-size: .8125rem; }
+/* The title and the tools beside it, not the words inside the buttons. */
+.notif-dropdown-header > span { font-weight: 700; font-size: .8125rem; }
 .notif-mark-all {
+    display: inline-flex;
+    align-items: center;
+    gap: .2rem;
+    padding: .15rem .3rem;
     background: none;
     border: none;
-    color: rgba(255,255,255,.85);
+    border-radius: var(--r-control, 4px);
+    color: var(--maroon);
     font-size: .6875rem;
     cursor: pointer;
     font-family: inherit;
+    transition: background .15s;
 }
-.notif-mark-all:hover { color: #fff; }
+.notif-mark-all:hover { background: var(--cream); }
 .notif-header-tools { display: inline-flex; align-items: center; gap: .25rem; }
 .notif-close {
     display: inline-flex; align-items: center; justify-content: center;
     width: 1.5rem; height: 1.5rem; padding: 0;
     border: none; border-radius: var(--r-control, 4px); background: none;
-    color: rgba(255, 255, 255, .8); cursor: pointer;
+    color: var(--maroon); cursor: pointer;
+    transition: background .15s;
 }
-.notif-close:hover { background: rgba(255, 255, 255, .18); color: #fff; }
+.notif-close:hover { background: var(--cream); }
 
-/* Two views of the same list, filtered in the browser — the eight most recent
+/* Two views of the same list, filtered in the browser: the eight most recent
    are already loaded, so switching should not cost a round trip. */
 .notif-tabs {
     display: flex; gap: .375rem;
@@ -784,8 +823,8 @@ html.nav-open .nav-burger .burger-open { display: inline-flex; }
     cursor: pointer;
 }
 .notif-tab:hover { color: var(--maroon); }
-/* No outline. Which tab is on is already said three times over — the cream
-   pill, the accent text and the heavier weight — so the border was the one
+/* No outline. Which tab is on is already said three times over (the cream
+   pill, the accent text and the heavier weight) so the border was the one
    part that could go without taking the state with it. */
 .notif-tab.is-on { background: var(--cream); color: var(--maroon); font-weight: 500; }
 
@@ -833,9 +872,9 @@ html.nav-open .nav-burger .burger-open { display: inline-flex; }
     text-decoration: none;
     font-weight: 500;
 }
-.notif-view-all:hover { background: var(--soft-maroon); color: #fff; }
+.notif-view-all:hover { background: var(--maroon-surface); color: #fff; }
 
-/* Shown once, centred, right after signing in — everything inside it is the
+/* Shown once, centred, right after signing in: everything inside it is the
    same .notif-dropdown-header / .notif-item / .notif-view-all vocabulary
    above, just no longer pinned under the bell. Not .modal-backdrop: that name
    collides with one Bootstrap generates for its own dialogs (see
@@ -897,7 +936,7 @@ html.nav-open .nav-burger .burger-open { display: inline-flex; }
 .footer-links a:hover { color: #fff; text-decoration: underline; }
 
 /* ===== Login modal / slide-in panel =====
-   This used to be called .modal-backdrop — the same class Bootstrap generates
+   This used to be called .modal-backdrop: the same class Bootstrap generates
    for its own dialogs. Every Bootstrap modal in PAPEL therefore picked up this
    blur and this z-index, which sits above Bootstrap's dialog layer (1055), so
    the dialog appeared behind its own veil. The name is ours now. */
@@ -918,8 +957,8 @@ html.nav-open .nav-burger .burger-open { display: inline-flex; }
     top: 0; right: 0;
     height: 100%;
     /* Narrow enough to read as a panel beside the page rather than half of
-       it. The floor is the role row — three 105px tiles and two 1rem gaps,
-       347px — which is why the body's side padding below comes in to 2rem at
+       it. The floor is the role row (three 105px tiles and two 1rem gaps,
+       347px) which is why the body's side padding below comes in to 2rem at
        the same time. Expanding it (the arrows in its corner) is unaffected. */
     width: 430px;
     background: var(--white);
@@ -957,7 +996,7 @@ html.nav-open .nav-burger .burger-open { display: inline-flex; }
 }
 .panel-ctrl-btn .material-symbols-outlined { font-size: 24px; }
 /* The expand glyph runs corner to corner while the close X sits inside a
-   smaller square, so at a shared font-size it draws about a third larger —
+   smaller square, so at a shared font-size it draws about a third larger:
    18x18 against 14x14, measured. Sized down until the ink matches, so the two
    controls beside each other finally read as one pair rather than a big
    button and a small one. */
@@ -1170,8 +1209,8 @@ select.lf-input {
 .panel-alert.success { background: #e7f6ed; color: #1b5e35; }
 
 @media (max-width: 900px) {
-    /* These links used to be thrown away at this width — display:none and
-       nothing in their place — so a phone had no way to reach About, Help
+    /* These links used to be thrown away at this width (display:none and
+       nothing in their place) so a phone had no way to reach About, Help
        Center, Contact Support, or, signed in, any role page at all. They drop
        into a sheet under the bar instead.
 
@@ -1208,12 +1247,12 @@ select.lf-input {
     html.nav-open .main-nav { display: flex; }
 
     .main-nav a {
-        padding: .8rem 1.25rem;   /* ~46px tall — sized for a fingertip */
+        padding: .8rem 1.25rem;   /* ~46px tall: sized for a fingertip */
         border-radius: 0;
         font-size: .9375rem;
     }
-    /* In the sheet each link is a full-width row, so the bar — which spans
-       the item between its side paddings — would run the width of the sheet.
+    /* In the sheet each link is a full-width row, so the bar (which spans
+       the item between its side paddings) would run the width of the sheet.
        The word itself is underlined instead, and the Resources links that
        join the list here follow suit rather than keeping their cream rows. */
     .main-nav > a::after,
@@ -1246,7 +1285,7 @@ select.lf-input {
         /* The desktop rule centres this under its button with left:50% and a
            -50% translate. Going static drops the offset but NOT the transform,
            which then shifted the links half the sheet's width off the left
-           edge — space reserved, nothing painted in it. */
+           edge: space reserved, nothing painted in it. */
         transform: none;
         left: auto;
         top: auto;
@@ -1271,7 +1310,7 @@ select.lf-input {
     .role-icon { width: 64px; height: 64px; }
     .role-icon .material-symbols-outlined { font-size: 28px; }
 }
-/* The narrowest phones still in use — an SE, or an Android held in a case that
+/* The narrowest phones still in use: an SE, or an Android held in a case that
    reports 320. Every element in the bar has to give up a little for the row to
    stay on one line. */
 @media (max-width: 380px) {
@@ -1282,7 +1321,7 @@ select.lf-input {
     .btn-login-nav { font-size: .8125rem; }
 }
 </style>
-<?php /* Which side the sidebar sits on, read before anything is painted — the
+<?php /* Which side the sidebar sits on, read before anything is painted: the
          same reason the palette is read here rather than at the foot of the
          page. Restored late, the column would draw on one side and jump to the
          other, which reads as a bug rather than a preference. Harmless on the
@@ -1301,3 +1340,7 @@ select.lf-input {
 <?php require_once __DIR__ . '/theme.php'; ?>
 <?php require_once __DIR__ . '/focus_ring.php'; ?>
 <?php require_once __DIR__ . '/select_skin.php'; ?>
+<?php /* The snackbars. In the head, not at the foot of the page: a banner
+         bound for one has to be held back before it is drawn, or the page
+         opens with it in place and blinks it away a moment later. */ ?>
+<?php require_once __DIR__ . '/flash_dismiss.php'; ?>

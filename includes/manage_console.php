@@ -3,7 +3,7 @@
  * The staff management pages, in PAPEL's own clothes.
  *
  * Manage Students, Manage Faculty and Manage Admins were written against
- * Bootstrap's defaults — blue buttons, its greys, its rounded corners — so they
+ * Bootstrap's defaults (blue buttons, its greys, its rounded corners) so they
  * read as a different product from the rest of the site. All three use the same
  * handful of Bootstrap classes, so re-skinning those classes brings the three
  * into line at once, without rewriting two thousand lines of markup that is
@@ -18,7 +18,7 @@
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 /* ---- Type ----
    Bootstrap sets its own system font stack on <body>, which these pages then
-   inherited — so they were the only screens in PAPEL not set in Inter and Plus
+   inherited, so they were the only screens in PAPEL not set in Inter and Plus
    Jakarta Sans. Headings take the display face, everything else the body face,
    exactly as the rest of the site does. */
 body,
@@ -128,7 +128,7 @@ h1, h2, h3, h4, h5, h6,
     background: var(--cream) !important;
     border-color: var(--soft-maroon) !important;
 }
-/* Deleting stays visually distinct — it is the one action that cannot be undone. */
+/* Deleting stays visually distinct: it is the one action that cannot be undone. */
 .btn-danger, .btn-outline-danger {
     background: var(--white) !important;
     border-color: var(--soft-maroon) !important;

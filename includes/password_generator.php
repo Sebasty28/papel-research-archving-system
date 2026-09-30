@@ -12,8 +12,8 @@
  * used to carry their own copy of a twelve-character random generator. They
  * share this one instead, so the format cannot drift apart between them.
  *
- * There is no First name / Last name pair anywhere in this system — the name is
- * one `full_name` column — so the two halves are read off the ends of whatever
+ * There is no First name / Last name pair anywhere in this system (the name is
+ * one `full_name` column) so the two halves are read off the ends of whatever
  * was typed, and the middle is dropped.
  *
  * The ID field is whichever of `#student_id` / `#faculty_id` the page has; the
@@ -24,8 +24,8 @@
  *     FAC-2026-001     ->  001        (adviser)
  *     COORDINATOR-01   ->  01         (admin, no 3-digit run to find)
  *
- * The result satisfies the password rule the services enforce on save — six
- * characters plus an uppercase and a digit — for any name of two characters or
+ * The result satisfies the password rule the services enforce on save (six
+ * characters plus an uppercase and a digit) for any name of two characters or
  * more. Where it cannot (an ID with no digits in it at all), a random tail
  * stands in rather than letting the form fail validation on submit.
  *
@@ -48,8 +48,8 @@ document.addEventListener('DOMContentLoaded', function () {
        full of "Dr. Maria Santos", and DrSantos would be the wrong password. */
     var SKIP = /^(dr|prof|professor|engr|arch|atty|hon|rev|mr|mrs|ms|miss|sir|maam|jr|sr|ii|iii|iv)$/i;
 
-    /* Surname particles belong to the surname — "Juan Dela Cruz" is a Dela Cruz,
-       not a Cruz — so they are glued back on rather than dropped as middles. */
+    /* Surname particles belong to the surname ("Juan Dela Cruz" is a Dela Cruz,
+       not a Cruz) so they are glued back on rather than dropped as middles. */
     var PARTICLE = /^(dela|delos|delas|de|del|dos|das|da|di|la|las|los|san|santa|sta|sto|van|von|bin)$/i;
 
     function nameWords(full) {
@@ -107,14 +107,14 @@ document.addEventListener('DOMContentLoaded', function () {
     btn.addEventListener('click', function () {
         var name = nameHalf(nameField ? nameField.value : '');
         if (!name) {
-            say('Type the full name first — the password is built from it.', nameField);
+            say('Type the full name first. The password is built from it.', nameField);
             return;
         }
 
         var tail = idTail(idField ? idField.value : '');
         if (!tail) {
             if (idField && idField.value.trim() === '') {
-                say('Type the ID number first — the password ends with it.', idField);
+                say('Type the ID number first. The password ends with it.', idField);
                 return;
             }
             /* An ID with letters but no digits at all: keep the shape and stay

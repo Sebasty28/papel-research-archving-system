@@ -161,7 +161,7 @@ if ($papers) {
 }
 
 // The student's Research Adviser is the faculty member who created their
-// account — shown even before that adviser has acted on a paper.
+// account: shown even before that adviser has acted on a paper.
 $adviser_name = null;
 $ad = $conn->prepare("SELECT f.full_name FROM users s JOIN users f ON f.user_id = s.created_by WHERE s.user_id = ?");
 $ad->bind_param('i', $u['user_id']);
@@ -208,7 +208,7 @@ ob_start();
 }
 .btn-card-delete:hover { color: var(--maroon); background: #fdeaea; border-color: var(--soft-maroon); }
 .btn-card-delete:focus-visible { outline: 2px solid var(--maroon); outline-offset: 1px; }
-/* Withdraw control — plain for now, styling to follow. */
+/* Withdraw control: plain for now, styling to follow. */
 .cancel-window { font-size: .6875rem; color: var(--grey); align-self: center; }
 </style>
 </head>
@@ -228,7 +228,7 @@ ob_start();
 </div>
 
 <main class="wrap layout">
-    <?php /* Marks this as a page whose #mainCol renders .paper-card items —
+    <?php /* Marks this as a page whose #mainCol renders .paper-card items:
              see includes/review_console.php's own copy of this comment for
              why browse_console_js.php needs it rather than checking for
              .paper-card directly. */ ?>
@@ -238,7 +238,7 @@ ob_start();
         <?php /* Deleting, withdrawing and submitting all land back here, and
                  the ones that can fail set a message to say so. This page never
                  read them, so a message sat in the session and turned up on
-                 whichever page next did — Settings, Contact Support, a paper —
+                 whichever page next did (Settings, Contact Support, a paper)
                  long after the action it was about. The review desks had the
                  same fault and the same fix (includes/review_console.php). */ ?>
         <?php require_once ROOT_PATH.'/includes/flash_banner.php'; flash_banner(); ?>
@@ -280,7 +280,7 @@ ob_start();
                     <?php endforeach; ?>
                     <?php /* Refresh clears the search box and every filter, then
                              reloads the list for the tab you are on. */ ?>
-                    <a class="toolbar-btn" href="student_dashboard.php?tab=<?= e($tab) ?>" title="Refresh — clears search and filters">
+                    <a class="toolbar-btn" href="student_dashboard.php?tab=<?= e($tab) ?>" title="Refresh (clears search and filters)">
                         <span class="material-symbols-outlined">refresh</span>
                     </a>
                     <a class="toolbar-btn" href="<?= e(BASE_URL) ?>/pages/help_center.php" title="Help">
@@ -340,7 +340,7 @@ ob_start();
                         <div class="card-head">
                             <div>
                                 <?php
-                                /* The title opens the author's own record of the submission —
+                                /* The title opens the author's own record of the submission:
                                    what they filed, the reviewer's feedback and the checklist.
                                    Not the repository page, which is written for a reader looking
                                    a published paper up.
@@ -348,7 +348,7 @@ ob_start();
                                    A returned paper carries the status 'draft' too, but it has a
                                    decline on record and plenty worth reading, so it links like
                                    the rest. Only a draft that has never been submitted stays as
-                                   plain text — there is nothing to show yet, and its Continue
+                                   plain text: there is nothing to show yet, and its Continue
                                    editing button is the way in. */
                                 $isDraftOnly = ($status === 'draft' && !$fb);
                                 ?>
@@ -451,12 +451,12 @@ ob_start();
                         <?php if ($status === 'draft'): ?>
                             <?php /* No submit button here. Sending a paper for review is a
                                      one-way step, and a card list is exactly where a stray
-                                     click happens — it is done deliberately from the upload
+                                     click happens: it is done deliberately from the upload
                                      page instead, after the work has been reviewed. */ ?>
                             <?php
                             /* A paper carrying revision feedback was sent back by a
                                reviewer, so the work ahead is correcting and returning
-                               it — not the same task as finishing a draft that has
+                               it, not the same task as finishing a draft that has
                                never been seen. The label says which. */
                             $editLabel = $fb ? 'Edit and Re-submit' : 'Continue editing';
                             ?>
@@ -515,7 +515,7 @@ ob_start();
             <div class="sidebar-card-header is-toggle">
                 <button class="card-title-btn js-card-toggle" type="button" data-card="filterCard">Filter</button>
                 <span class="card-header-tools">
-                    <?php /* A crossed-out funnel, not a plain X — the X sits next to a
+                    <?php /* A crossed-out funnel, not a plain X: the X sits next to a
                              collapse chevron and reads as "close the card". */ ?>
                     <a class="card-tool" href="student_dashboard.php?tab=<?= e($tab) ?>" title="Clear all filters" aria-label="Clear all filters"><span class="material-symbols-outlined">filter_alt_off</span></a>
                     <button class="card-tool card-chevron js-card-toggle" type="button" data-card="filterCard" aria-label="Collapse Filter"><span class="material-symbols-outlined">expand_more</span></button>
@@ -623,7 +623,7 @@ ob_start();
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 document.addEventListener('DOMContentLoaded', function () {
 
-// ===== AJAX result loading — search, tabs, filters and pagination swap
+// ===== AJAX result loading: search, tabs, filters and pagination swap
 // just the results column instead of reloading the page. =====
 var mainCol = document.getElementById('mainCol');
 // searchForm is resolved per-submit via delegation (it is inside #mainCol)
@@ -676,7 +676,7 @@ document.addEventListener('click', function (e) {
 });
 
 // The search form lives inside #mainCol, so an AJAX swap replaces it and any
-// directly-bound handler would be left on a detached node — delegate instead.
+// directly-bound handler would be left on a detached node: delegate instead.
 document.addEventListener('submit', function (e) {
     var form = e.target.closest('#searchForm');
     if (!form) return;
@@ -695,8 +695,8 @@ document.addEventListener('change', function (e) {
 });
 window.addEventListener('popstate', function () { loadResults(window.location.href, false); });
 
-/* Deleting a draft cannot be undone, so it is confirmed first — in the site's
-   own dialog rather than the browser's — and the title is named in the
+/* Deleting a draft cannot be undone, so it is confirmed first (in the site's
+   own dialog rather than the browser's) and the title is named in the
    question, because "are you sure?" alone does not tell you which card you
    clicked. Delegated, since the list is swapped by AJAX. */
 const delDialog      = document.getElementById('draftDeleteDialog');
@@ -720,7 +720,7 @@ document.addEventListener('submit', function (e) {
     e.preventDefault();
     pendingForm = form;
 
-    // Withdrawing is reversible — the paper returns as a draft — so it is
+    // Withdrawing is reversible (the paper returns as a draft) so it is
     // worded as a question rather than a warning about losing anything.
     const withdrawing = form.classList.contains('cancel-submit-form');
     delDialogTitle.textContent = withdrawing ? 'Withdraw this submission?' : 'Delete this item?';

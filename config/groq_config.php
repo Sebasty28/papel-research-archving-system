@@ -40,9 +40,65 @@ if (!defined('GROQ_API_KEY')) {
     // Beyond this the caller is better off being told than left hanging.
     define('GROQ_RETRY_MAX_WAIT',     12);
     // Llama 3.3 70B Versatile was decommissioned on Groq (2026-08-16).
-    // Override with GROQ_MODEL in .env if the model id changes again — every
+    // Override with GROQ_MODEL in .env if the model id changes again: every
     // call site reads this constant, so that is a one-line change.
     define('GROQ_MODEL',              $_ENV['GROQ_MODEL'] ?? 'openai/gpt-oss-120b');
+}
+
+/* ===== The two AI engines =====
+   Aincrad and Alfheim are not two models. They are one model reached on two
+   API keys, and a key carries its own usage window, so when one is spent the
+   other still answers.
+
+   Which of the two is in use is no longer a question put to the student: it is
+   kept here, in the session, and flipped the moment a call is refused for the
+   quota. The next call then starts on the engine that has room rather than on
+   the one that has just run out. The names stay because the log lines, and
+   anyone reading this code, need a way to say which key is meant. */
+function ai_engine_names(): array {
+    return [1 => 'Aincrad', 2 => 'Alfheim'];
+}
+
+/* The endpoints that use this do not all go through core.php. */
+function ai_engine_session(): void {
+    if (session_status() !== PHP_SESSION_NONE) return;
+    if (function_exists('start_session_once')) { start_session_once(); return; }
+    @session_start();
+}
+
+function ai_engine_current(): int {
+    ai_engine_session();
+    return ((int)($_SESSION['ai_engine'] ?? 1)) === 2 ? 2 : 1;
+}
+
+function ai_engine_name(?int $engine = null): string {
+    $names = ai_engine_names();
+    return $names[$engine ?? ai_engine_current()] ?? $names[1];
+}
+
+/* Called when an engine has had to hand a call over: the one that answered is
+   the one to start from next time. */
+function ai_engine_switch(): int {
+    ai_engine_session();
+    $was  = ai_engine_current();
+    $next = $was === 1 ? 2 : 1;
+    $_SESSION['ai_engine'] = $next;
+    error_log(sprintf('AI engine: %s is spent for now, switching to %s.',
+                      ai_engine_name($was), ai_engine_name($next)));
+    return $next;
+}
+
+/**
+ * Did the last call have to fall back to the other key?
+ *
+ * call_groq_api swaps keys inside one request, so the caller sees a success
+ * and cannot otherwise tell that the engine it asked for had nothing left.
+ * Read by the pages that keep the session on whichever engine is answering.
+ */
+function groq_used_fallback($set = null) {
+    static $used = false;
+    if ($set !== null) $used = (bool)$set;
+    return $used;
 }
 
 /**
@@ -80,7 +136,7 @@ function call_groq_api($systemPrompt, $userPrompt, $maxTokens = 1024, $apiKey = 
 
     /* Ask the API for a raw JSON object rather than trusting the model to
        return one. Without this, the callers that parse JSON have to strip
-       markdown fences and reasoning preambles — habits that differ per model,
+       markdown fences and reasoning preambles: habits that differ per model,
        so a model swap can silently break parsing instead of failing loudly. */
     if ($jsonMode) {
         $payload['response_format'] = ['type' => 'json_object'];
@@ -106,7 +162,7 @@ function call_groq_api($systemPrompt, $userPrompt, $maxTokens = 1024, $apiKey = 
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $curlError = curl_error($ch);
-    curl_close($ch); // suppress PHP 8.5 deprecation — curl handle auto-closes on GC
+    curl_close($ch); // suppress PHP 8.5 deprecation: curl handle auto-closes on GC
 
     // Check if there was a connection error
     if ($curlError) {
@@ -120,7 +176,7 @@ function call_groq_api($systemPrompt, $userPrompt, $maxTokens = 1024, $apiKey = 
        per *organisation*, so the second key runs into the identical ceiling
        and the retry is spent for nothing. One upload sends a metadata call
        and an analysis call back to back, which together can exceed a free
-       tier's TPM — and the analysis then came back empty.
+       tier's TPM, and the analysis then came back empty.
 
        Groq's reply says exactly how long to wait, so short waits are honoured
        before falling back to the key swap, which still helps for the per-key
@@ -132,13 +188,16 @@ function call_groq_api($systemPrompt, $userPrompt, $maxTokens = 1024, $apiKey = 
         $wait    = preg_match('/try again in ([0-9.]+)\s*s/i', $detail, $m) ? (float)$m[1] : 0.0;
 
         if ($attempt < 1 && $wait > 0 && $wait <= GROQ_RETRY_MAX_WAIT) {
-            error_log(sprintf('Groq 429 (%s) — waiting %.1fs, then retrying.', $isTpm ? 'tokens/min' : 'rate limit', $wait));
+            error_log(sprintf('Groq 429 (%s): waiting %.1fs, then retrying.', $isTpm ? 'tokens/min' : 'rate limit', $wait));
             usleep((int)(($wait + 0.25) * 1000000));   // a little past the window
             return call_groq_api($systemPrompt, $userPrompt, $maxTokens, $key, $fallbackKey, $jsonMode, $attempt + 1);
         }
 
         if (!$isTpm && !empty($fallbackKey) && $fallbackKey !== $key) {
-            error_log('Groq 429 on the primary key — retrying with the fallback key.');
+            error_log('Groq 429 on the primary key, retrying with the fallback key.');
+            /* Noted for the caller: the engine it asked for is out of room for
+               now, whatever this retry comes back with. */
+            groq_used_fallback(true);
             return call_groq_api($systemPrompt, $userPrompt, $maxTokens, $fallbackKey, null, $jsonMode, $attempt);
         }
 
@@ -280,7 +339,7 @@ function extract_pdf_text($filePath) {
  *
  * Callers only see null when extraction fails, which cannot distinguish "the
  * model could not read this document" from "we are out of quota for the next
- * minute" — two problems with very different advice for the student.
+ * minute": two problems with very different advice for the student.
  *
  * @param array|null|false $set Pass an array to record, null to clear, omit to read
  * @return array|null ['error' => string, 'http_code' => int] or null
@@ -324,8 +383,9 @@ function extract_metadata_with_groq($pdfText, $modelChoice = '1') {
     
     $userPrompt .= "Research Paper Text (first 8000 characters):\n" . substr($pdfText, 0, 8000);
 
-    // Use dedicated upload key with backup fallback on rate-limit
-    if ($modelChoice === '2') {
+    /* The engine in play and the other one behind it. Which is which comes
+       from ai_engine_current(); nobody picks it on the form any more. */
+    if ((string)$modelChoice === '2') {
         $uploadKey = defined('GROQ_API_KEY_UPLOAD_2') ? GROQ_API_KEY_UPLOAD_2 : null;
         $uploadFallback = defined('GROQ_API_KEY_UPLOAD') ? GROQ_API_KEY_UPLOAD : null;
     } else {

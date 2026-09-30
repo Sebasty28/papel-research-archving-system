@@ -1,7 +1,7 @@
 <?php
 
 /* workflow_statuses() and workflow_stage_definitions() used to sit here. Both
-   were dead — nothing called either — and the second still laid out four stages
+   were dead (nothing called either) and the second still laid out four stages
    ending at the Director, contradicting workflow_progress_steps() below, which
    correctly stops at the Research Coordinator. Since this file is where anyone
    would come to look the chain up, a wrong answer in it is worse than no
@@ -74,7 +74,7 @@ function workflow_progress_steps(string $status, bool $hasFeedback = false): arr
     $labels = ['Research Adviser', 'Research Coordinator', 'Approved'];
 
     if ($status === 'approved')                        $reached = 3;
-    // Past the Coordinator under the old chain — awaiting publication.
+    // Past the Coordinator under the old chain: awaiting publication.
     elseif (in_array($status, ['pending_head_academic', 'pending_admin_l2', 'pending_super_admin'], true)) $reached = 3;
     elseif (in_array($status, ['pending_admin', 'pending_admin_l1'], true)) $reached = 2;
     elseif ($status === 'pending_faculty')             $reached = 1;

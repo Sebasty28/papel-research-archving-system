@@ -72,7 +72,7 @@ document.addEventListener('DOMContentLoaded', function () {
         btn.title = goingUp ? 'Back to top' : 'Skip to the end';
         btn.setAttribute('aria-label', btn.title);
 
-        // Shown the whole way down a long page — it is the direction that
+        // Shown the whole way down a long page: it is the direction that
         // changes, not whether there is anywhere to go.
         btn.classList.add('is-visible');
     }

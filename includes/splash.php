@@ -2,7 +2,7 @@
 /**
  * The start-up splash: the PAPEL logo animation over the whole window, shown
  * when the site is first opened in a tab and whenever a page is refreshed.
- * Ordinary navigation from page to page does not show it — the loading bar
+ * Ordinary navigation from page to page does not show it: the loading bar
  * (includes/loading_bar.php) covers that, with its own small copy of the same
  * animation.
  *
@@ -14,14 +14,14 @@
  * <body> and nothing that depends on the page's markup: a class on <html> turns
  * it on, and removing the class takes it away.
  *
- * It stays up for at least 2.5s, however quickly the page loads — a set
+ * It stays up for at least 2.5s, however quickly the page loads: a set
  * minimum, not just however long loading happens to take. The GIF itself runs
  * 5.33s; the whole of it was tried and was too long a wait on every refresh,
  * so the splash leaves once the wordmark is drawn rather than at the end.
  * The fade begins at the latest of three moments:
  *   - 2.5s after the splash first appeared, the required minimum;
- *   - 2.45s after the GIF is ready: the animation builds the wordmark up — P,
- *     the rule, then P|PAPEL — and holds it from about 2.43s to 2.87s, so this
+ *   - 2.45s after the GIF is ready: the animation builds the wordmark up (P,
+ *     the rule, then P|PAPEL) and holds it from about 2.43s to 2.87s, so this
  *     keeps the 0.35s fade on the finished wordmark even when the GIF arrived
  *     late;
  *   - the page finishing loading, so the splash never lifts off a half-built
@@ -35,7 +35,7 @@
  * leaves a note in sessionStorage, which the page being signed in to reads
  * here to play it through properly.
  *
- * Skipped for anyone who has asked for less motion — the operating system's
+ * Skipped for anyone who has asked for less motion: the operating system's
  * setting, or the site's own "Stop animations" in the accessibility widget,
  * read here from the same localStorage entry that widget writes.
  */
@@ -86,7 +86,7 @@ html.papel-splash.papel-splash-out::before {
     }
 
     /* Signing in shows this instead of the small pill, and the sign-in page is
-       gone the moment the form goes out — so it is put up here and asked for
+       gone the moment the form goes out, so it is put up here and asked for
        again on the page being signed in to, which plays it properly timed.
        show() reports back, so a caller can fall back to the pill when a
        reduced-motion setting means nothing will be shown. */

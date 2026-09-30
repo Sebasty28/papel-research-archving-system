@@ -96,7 +96,7 @@
             section.appendChild(list);
 
             /* Appended, so it lands after whatever syncQuickSettings() has
-               already built above it (Density, then Card Details — called
+               already built above it (Density, then Card Details: called
                in that order for exactly this reason). This used to insert
                itself above the last section, which was the Theme rows; with
                those gone that rule would have put the colours above Density
@@ -110,7 +110,7 @@
 
     /* Only the dashboards and review desks build a paper-card toggle
        (includes/browse_console_js.php's own "Collapsible paper cards" IIFE,
-       further down this file) — the public repository's rows have no
+       further down this file): the public repository's rows have no
        progress tracker to fold away, so there is nothing for this row to
        control there. Checked at build time rather than baked into a role
        list, so it stays correct on whatever page actually has the cards.
@@ -171,7 +171,7 @@
         document.querySelectorAll('input[name="qs_card_detail"]').forEach(function (i) { i.checked = (i.value === cardDetail); });
 
         /* review_console.php replaces #mainCol by AJAX on every tab/filter
-           change and calls this function afterwards — the "Collapsible paper
+           change and calls this function afterwards: the "Collapsible paper
            cards" IIFE further down only ever ran once, on the cards present
            at initial load, so a swapped-in card kept its progress tracker
            but lost the toggle that folds it away. Not yet defined the first
@@ -206,7 +206,7 @@
             return;
         }
         if (e.target.closest('#quickSettingsClose')) { e.stopPropagation(); closeQuickSettings(); return; }
-        // "View Full Settings" is a plain link — let it navigate, just tidy up.
+        // "View Full Settings" is a plain link: let it navigate, just tidy up.
         if (e.target.closest('#quickSettingsFull')) { closeQuickSettings(); return; }
         // Clicks inside the panel shouldn't dismiss it; anything else should.
         if (e.target.closest('#quickSettingsDropdown')) { e.stopPropagation(); return; }
@@ -289,7 +289,7 @@
                     data.forEach(function (item, idx) {
                         var div = document.createElement('div');
                         div.className = 'suggestion-item';
-                        // Escape first, then highlight — never inject raw text.
+                        // Escape first, then highlight: never inject raw text.
                         var safe = document.createElement('span');
                         safe.innerText = item;
                         div.innerHTML = safe.innerHTML.replace(new RegExp('(' + esc + ')', 'gi'), '<strong>$1</strong>');
@@ -336,8 +336,8 @@
 
 /* ===== Which side the sidebar sits on =====
    The control is placed here rather than written into each console's markup.
-   Which card comes first varies with the data — the review desks only render
-   "What you can do" when there is something to put in it — so hand-placing the
+   Which card comes first varies with the data (the review desks only render
+   "What you can do" when there is something to put in it) so hand-placing the
    button would land it on a different card from one page to the next, and on
    none at all when the top card is absent. Finding the first card header at
    run time puts it in the same corner every time. */
@@ -361,7 +361,7 @@
         btn.className = 'card-tool js-side-swap';
         btn.setAttribute('aria-controls', 'sidebarCol');
         /* Two glyphs, and the stylesheet shows whichever matches the side it
-           would move to — the same rule the banner eye follows: the control
+           would move to: the same rule the banner eye follows: the control
            shows the action, not the state. */
         ['side-icon-left:dock_to_right', 'side-icon-right:dock_to_left']
             .forEach(function (pair) {
@@ -400,28 +400,28 @@
    Every dashboard and review desk shows the same card: title, authors and
    status up top, then a progress tracker and (on a review desk) the
    supporting files and the approve/return buttons underneath. Read once,
-   that underneath is rarely needed again — the title, who is on it and
+   that underneath is rarely needed again: the title, who is on it and
    where it stands is the part worth scanning a long list for, which is also
    exactly what the public repository's own plain list shows. This folds
    the rest away without losing it.
 
    Unlike includes/card_collapse.php, the part that stays visible is not a
-   bare <h2> — .card-status sits beside the title and has to stay put — so
+   bare <h2> (.card-status sits beside the title and has to stay put) so
    .card-head is the head instead. The toggle is appended into .card-status
    but pinned there with CSS (position: absolute, in a padding-right gutter
-   that column reserves), not inserted into the text itself — otherwise its
+   that column reserves), not inserted into the text itself: otherwise its
    own width would push "Status: ..." out further than "View Details" below
    it, or than .card-people's Research Adviser/Coordinator lines in the
    track underneath, and the three would no longer share a right edge.
    student_dashboard.php never replaces its list by AJAX, but review_console.php
-   does — every tab and filter change swaps #mainCol's whole innerHTML in,
+   does: every tab and filter change swaps #mainCol's whole innerHTML in,
    fresh cards with no toggle of their own. So this also runs from
    window.papelSyncQuickSettings(), the hook review_console.php's loadResults()
    already calls after each swap; the data-collapsed guard below skips a card
    that already has one, which a plain page load's cards do by the time that
    hook is reachable at all.
 
-   Starting state follows Quick Settings' own "Card Details" row — read
+   Starting state follows Quick Settings' own "Card Details" row: read
    directly here rather than through the other IIFE above, the same way
    that one reads papel_sidebar_side independently of theme.php: one stored
    key, read wherever it is needed, rather than a shared helper threaded

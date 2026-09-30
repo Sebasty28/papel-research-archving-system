@@ -2,14 +2,14 @@
 /**
  * Load environment variables from .env.
  *
- * This defaulted to __DIR__ . '/.env' — that is config/.env, and the file has
+ * This defaulted to __DIR__ . '/.env', that is config/.env, and the file has
  * always lived at the project root. file_exists() therefore failed, load_env()
  * returned immediately, and *nothing* in .env was ever read: every setting
  * below silently fell back to its hardcoded default, on every machine, always.
  *
  * It went unnoticed because the database defaults (localhost / capstone_db /
  * root / no password) happen to match XAMPP, so the app ran. What did not run
- * was everything whose default is a placeholder or empty — SMTP_USER and
+ * was everything whose default is a placeholder or empty: SMTP_USER and
  * SMTP_PASS were blank, which is why no email has ever been delivered, and
  * CSRF_KEY stayed on the literal string CHANGE_THIS_TO_A_LONG_RANDOM_SECRET.
  *
@@ -74,7 +74,7 @@ define('DB_CHARSET', $_ENV['DB_CHARSET'] ?? 'utf8mb4');
    these are empty for XAMPP, where the defaults are right and there is no
    certificate to present, so nothing changes locally until .env says otherwise.
 
-   DB_SSL_CA is the path to the provider's CA certificate — Aiven hands you one
+   DB_SSL_CA is the path to the provider's CA certificate: Aiven hands you one
    as ca.pem. Setting it is what turns the connection encrypted *and verified*;
    without verification an encrypted connection still trusts whoever answers. */
 define('DB_PORT',   (int)($_ENV['DB_PORT'] ?? 3306));
@@ -89,13 +89,13 @@ define('COOKIE_SECURE', filter_var($_ENV['COOKIE_SECURE'] ?? 'false', FILTER_VAL
 define('MAIL_PROVIDER', 'gmail');
 
 /* Where messages from the contact form land, and the address shown to anyone
-   looking for help. Defined once so the two cannot drift apart — it used to be
+   looking for help. Defined once so the two cannot drift apart: it used to be
    written out separately in each place, which meant the page could invite
    people to write to one address while the form delivered to another. */
 /* Falls back to the account PAPEL sends from, because those two being different
    is silent: the send succeeds, the message is accepted, and it lands in a
    mailbox nobody reads. The literal below was one letter off from the real
-   account — "vew" for "view" — so every contact form message and every support
+   account ("vew" for "view") so every contact form message and every support
    request went to an address the office does not own. */
 define('SUPPORT_EMAIL',
     $_ENV['SUPPORT_EMAIL'] ?? $_ENV['SMTP_USER'] ?? 'clarionlessonviewsystem@gmail.com');
@@ -103,11 +103,11 @@ define('SUPPORT_EMAIL',
 if (MAIL_PROVIDER === 'gmail') {
     // Gmail Settings
     /* The account PAPEL sends from. Both of these live in .env, which git is
-       told to ignore — a password written here would be committed and would
+       told to ignore: a password written here would be committed and would
        stay in the repository's history for good. */
     define('SMTP_HOST', $_ENV['SMTP_HOST'] ?? 'smtp.gmail.com');
     define('SMTP_USER', $_ENV['SMTP_USER'] ?? '');
-    define('SMTP_PASS', $_ENV['SMTP_PASS'] ?? '');   // Gmail app password — set in .env
+    define('SMTP_PASS', $_ENV['SMTP_PASS'] ?? '');   // Gmail app password: set in .env
     define('SMTP_PORT', $_ENV['SMTP_PORT'] ?? 587);
     define('SMTP_SECURE', 'tls');
 } else {

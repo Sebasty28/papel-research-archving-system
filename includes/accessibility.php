@@ -26,7 +26,7 @@ body {
 }
 
 /* ===== Toggle button ===== */
-/* The same tab as the PDF preview's restore control — same padding, radius,
+/* The same tab as the PDF preview's restore control: same padding, radius,
    shadow and type, and the site's own accent rather than a green that matches
    nothing else on the page. A floating circle sat on top of whatever was
    underneath it; a tab sits beside it. */
@@ -129,7 +129,7 @@ body {
    Settings' "Open" still brings the panel up. */
 html.a11y-tab-hidden #a11y-toggle { display: none; }
 /* With the tab hidden, the panel opens against whatever button asked for it
-   (Settings' "Open") instead of at the edge where the tab would have been —
+   (Settings' "Open") instead of at the edge where the tab would have been:
    above or below that button, placed by positionAgainst(). Fixed to the
    window rather than to the widget, whose centring transform would otherwise
    become its containing block and drag it back to the edge. */
@@ -260,7 +260,7 @@ body.a11y-line-height * { line-height: 2 !important; }
 
 body.a11y-font-weight * { font-weight: 700 !important; }
 
-/* Filters on body — widget is moved outside body in JS so these
+/* Filters on body: widget is moved outside body in JS so these
    won't break its position:fixed containing block */
 body.a11y-dark-contrast { filter: invert(1) hue-rotate(180deg); background: #000; }
 body.a11y-dark-contrast img, body.a11y-dark-contrast video { filter: invert(1) hue-rotate(180deg); }
@@ -489,7 +489,7 @@ try {
 
         /* ---- Panel open / close ---- */
         /* The panel opened to a fixed height regardless of where the tab was,
-           so with the tab near an edge it ran off the screen — and its own
+           so with the tab near an edge it ran off the screen, and its own
            scrollbar could not help, because the part that was cut off was
            outside the window rather than inside the panel. It now opens into
            whichever side has more room and is never taller than that room. */
@@ -583,7 +583,7 @@ try {
         });
         if (closeBtn) closeBtn.addEventListener('click', closePanel);
 
-        /* Opening from somewhere else on the page — the Settings page has an
+        /* Opening from somewhere else on the page: the Settings page has an
            "Open" button for it. Going through a synthetic click on the tab does
            not work: the original click carries on bubbling to <html>, where the
            close-on-outside-click listener below sees a click that did not come
@@ -595,7 +595,7 @@ try {
             toggle: function (anchor) {
                 menu.classList.contains('visible') ? closePanel() : openPanel(anchor);
             },
-            /* The tab on the edge of the page, hidden or shown — Settings has
+            /* The tab on the edge of the page, hidden or shown: Settings has
                the switch. Saved per browser, like everything else here. */
             tabHidden: tabHidden,
             setTabHidden: function (hide) {
@@ -610,7 +610,7 @@ try {
             }
         };
 
-        /* Close on outside click — listener on <html> since widget is there */
+        /* Close on outside click: listener on <html> since widget is there */
         document.documentElement.addEventListener('click', function (e) {
             if (menu && menu.classList.contains('visible') &&
                 !widget.contains(e.target)) {
@@ -633,16 +633,16 @@ try {
             return { w: r.width || 44, h: r.height || 96 };
         }
 
-        /* Park against one edge. `offset` runs along that edge — a distance
-           down the page for the sides, across it for the top and bottom — and
+        /* Park against one edge. `offset` runs along that edge (a distance
+           down the page for the sides, across it for the top and bottom) and
            is clamped so the whole tab stays on screen. */
         function placeWidget(edge, offset, save) {
             widget.classList.remove('edge-left', 'edge-right', 'edge-top', 'edge-bottom');
             widget.classList.add('edge-' + edge);
 
-            /* Measure last, not first. The class changes the tab's shape — down
+            /* Measure last, not first. The class changes the tab's shape (down
                one edge it is a narrow vertical strip, along the top or bottom a
-               wider horizontal one — and the offsets left over from wherever it
+               wider horizontal one) and the offsets left over from wherever it
                was before change it again. Measured before those are cleared,
                the width came back short and the clamp below let the tab hang a
                few pixels past the edge, which is how a saved position could
@@ -682,7 +682,7 @@ try {
 
         /* Wherever it was last dragged to, on every page and on every visit.
            The position lives in localStorage rather than the session, so it
-           survives closing the browser as well as moving between pages — the
+           survives closing the browser as well as moving between pages: the
            tab someone put out of their way stays out of their way. */
         /* Below this the page is full-bleed, so there is no margin for the
            tab to sit in and every position is over something. */
@@ -691,7 +691,7 @@ try {
 
         /* A spot chosen on a desktop means nothing on a phone. A drag that
            parked the tab halfway down a wide window leaves it sitting on top
-           of the reading once the text runs edge to edge — which is exactly
+           of the reading once the text runs edge to edge, which is exactly
            what it looked like. Narrow screens get their own resting place,
            low on the right where the text has already ended, and the saved
            desktop position is deliberately not overwritten, so it comes back
@@ -792,7 +792,7 @@ try {
 
             /* Put it back on its edge at the size it actually is. Passed
                save:false, so a position squeezed to fit a small window is not
-               written back over the one the person chose — open the same page
+               written back over the one the person chose: open the same page
                on a big screen again and the tab returns to where they put it. */
             function reclamp() {
                 var edge = ['left', 'right', 'top', 'bottom'].filter(function (e) {
@@ -822,13 +822,13 @@ try {
             /* And once the icon font has arrived. Until the glyph exists the
                tab is measured with fallback metrics and comes out narrower
                than it ends up, so a position clamped against that measurement
-               let it hang past the edge — which is how a saved position could
+               let it hang past the edge, which is how a saved position could
                reopen looking cut off. */
             if (document.fonts && document.fonts.ready) {
                 document.fonts.ready.then(reclamp).catch(function () {});
             }
 
-            toggle.title = 'Accessibility options — drag it to any edge';
+            toggle.title = 'Accessibility options (drag it to any edge)';
             restorePosition();
         }
 
@@ -875,7 +875,7 @@ try {
         /* ---- Right-click ----
            Kept off the page at large, but never off a link: "Open link in new
            tab", "Open in new window" and "Copy link address" are how people
-           read a repository — a paper in one tab, the list still in another —
+           read a repository (a paper in one tab, the list still in another)
            and there is nothing to protect on a link that its own href does not
            already say. The menu on a notification (includes/notif_actions.php)
            is that page's own and still takes precedence. */
@@ -949,7 +949,7 @@ try {
 
         // Defer one tick so we can detect if a validator / AJAX handler cancelled the submit.
         setTimeout(function () {
-            if (e.defaultPrevented) return;   // navigation was stopped — don't get stuck spinning
+            if (e.defaultPrevented) return;   // navigation was stopped: don't get stuck spinning
             startLoading(btn);
         }, 0);
     }, false);

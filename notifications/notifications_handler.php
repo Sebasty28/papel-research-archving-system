@@ -3,8 +3,8 @@
  * What the notification list can do to a notification: mark one read or unread,
  * mark the lot read, or delete one.
  *
- * Every branch is scoped to the signed-in user's own rows — `AND user_id = ?`
- * on each statement — so an id belonging to somebody else does nothing rather
+ * Every branch is scoped to the signed-in user's own rows (`AND user_id = ?`
+ * on each statement) so an id belonging to somebody else does nothing rather
  * than something.
  *
  * The token check is not optional here. Deleting is destructive and a plain

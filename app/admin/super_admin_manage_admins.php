@@ -12,7 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     try {
-        /* The Drive folder is set on its own page — Storage Folder in the nav —
+        /* The Drive folder is set on its own page (Storage Folder in the nav)
            so this page no longer carries a second copy of that form. */
         if ($action === 'toggle_active') {
             $user_id = (int) ($_POST['user_id'] ?? 0);
@@ -42,7 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 flash('error', 'Failed to reset password.');
             }
         } elseif ($action === 'update_user') {
-            /* Same panel, same fields — only the action underneath it changed.
+            /* Same panel, same fields, only the action underneath it changed.
                A blank password means "leave theirs alone". */
             $edited = (int) ($_POST['user_id'] ?? 0);
             $before = account_snapshot($edited);
@@ -127,7 +127,7 @@ function admin_table(array $rows, string $position): void {
                             <span class="mgmt-sub" title="<?= e($r['email']) ?>"><?= e($r['email']) ?></span>
                         </td>
                         <td class="mgmt-id">
-                            <?= e($r['faculty_id'] ?: '—') ?>
+                            <?= e($r['faculty_id'] ?: 'N/A') ?>
                             <span class="mgmt-sub">Added <?= e(date('M j, Y', strtotime($r['created_at']))) ?></span>
                         </td>
                         <td>
@@ -292,7 +292,7 @@ $password_rows = password_audit_rows(['admin', 'head_academic', 'librarian']);
                     </div>
 
                     <!-- The label names the role being created, and follows the
-                         level chosen above it — the same box is a Coordinator's
+                         level chosen above it: the same box is a Coordinator's
                          ID or a HAP's depending on that answer. -->
                     <div class="mgmt-field">
                         <label for="faculty_id">
@@ -371,11 +371,11 @@ $password_rows = password_audit_rows(['admin', 'head_academic', 'librarian']);
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 document.addEventListener('DOMContentLoaded', function () {
 
-    /* The Generate button lives in includes/password_generator.php — it needs
+    /* The Generate button lives in includes/password_generator.php: it needs
        the name and ID fields, which are shared by all three create forms. */
 
     /* The ID field names whichever role is being created, so it re-labels when
-       the level changes — and when a row is loaded for editing. */
+       the level changes, and when a row is loaded for editing. */
     var positionSelect = document.getElementById('position');
     var idLabel = document.getElementById('idLabel');
     var idInput = document.getElementById('faculty_id');
@@ -447,7 +447,7 @@ document.addEventListener('DOMContentLoaded', function () {
         pw.placeholder = 'Min 6 chars, 1 uppercase, 1 number';
         cancel.hidden = true;
         form.reset();
-        // form.reset() restores the markup's values, not these — set them after.
+        // form.reset() restores the markup's values, not these: set them after.
         document.getElementById('formAction').value = 'create_user';
         document.getElementById('formUserId').value = '';
         relabelId();          // the level went back to blank with the reset

@@ -2,8 +2,8 @@
 /**
  * Delete one of the signed-in student's own drafts.
  *
- * Deliberately narrow. The WHERE clause carries three conditions — the paper
- * id, the owner, and a status of 'draft' — so this can only ever remove an
+ * Deliberately narrow. The WHERE clause carries three conditions (the paper
+ * id, the owner, and a status of 'draft') so this can only ever remove an
  * unsubmitted paper belonging to the person asking. A paper that has been sent
  * for review, or that belongs to somebody else, is untouchable here whatever is
  * posted.
@@ -105,13 +105,13 @@ foreach (array_merge([$draft['file_path']], $docPaths) as $stored) {
 
     $candidate = realpath(__DIR__ . '/' . $relative);
     if ($candidate === false || $base === false) continue;
-    // Must resolve inside uploads/ — this is what stops "../" walking out.
+    // Must resolve inside uploads/: this is what stops "../" walking out.
     if (strpos($candidate, $base . DIRECTORY_SEPARATOR) !== 0) continue;
     if (is_file($candidate)) @unlink($candidate);
 }
 
 /* No "Deleted" message. The dashboard's own dialog has already named the item
-   and asked, and the card is gone when the page comes back — a banner saying
+   and asked, and the card is gone when the page comes back: a banner saying
    so again was one thing too many. Failures above still set one, since
    nothing else would tell the student it did not work. */
 header('Location: ' . $back);

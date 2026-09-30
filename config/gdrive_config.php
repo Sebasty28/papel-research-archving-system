@@ -124,7 +124,7 @@ function update_gdrive_parent_folder_id(string $folderId, int $userId): bool
 /**
  * Returns an authenticated Google_Client using the system OAuth token.
  * Auto-refreshes when expired and persists the new token.
- * $userId kept for backward compatibility — ignored; all uploads use system token.
+ * $userId kept for backward compatibility: ignored; all uploads use system token.
  */
 function get_gdrive_client($userId = null): Google_Client
 {
@@ -155,7 +155,7 @@ function get_gdrive_client($userId = null): Google_Client
             } else {
                 /* Why it failed is the whole story, and it used to be thrown
                    away. Google answers `invalid_grant` when the refresh token
-                   itself is dead — revoked, password changed, or expired
+                   itself is dead: revoked, password changed, or expired
                    because the OAuth consent screen is still in Testing, where
                    refresh tokens last seven days. Anything else is usually the
                    network, and reconnecting would not have helped. */
@@ -219,7 +219,7 @@ function gdrive_last_refresh(): ?array
  * true long after Google has stopped honouring it. The effect was the worst
  * kind of failure: the upload page decided all was well and showed the form,
  * then every submission died at the Drive call with an error the student could
- * do nothing about. So the question asked here is now the real one — after
+ * do nothing about. So the question asked here is now the real one, after
  * get_gdrive_client() has had its chance to refresh, do we hold a usable access
  * token? Cached per request, because several includes ask on one page load.
  */
@@ -268,7 +268,7 @@ function render_gdrive_signin_button(): void
     }
 }
 
-/** No longer needed — kept as stub. */
+/** No longer needed: kept as stub. */
 function user_has_own_gdrive_token(int $userId): bool { return false; }
 
 // ── Drive Operations ──────────────────────────────────────────────────────────
@@ -416,14 +416,14 @@ function get_gdrive_link(string $fileId): string
 /**
  * The bytes of a file held on Drive.
  *
- * Drive is where a submitted paper lives — the local copy is only ever the
+ * Drive is where a submitted paper lives: the local copy is only ever the
  * staging file the upload is read from, and is removed once Drive has it. So
  * anything that needs to hand the PDF to a browser has to fetch it back, which
  * is what this does.
  *
  * Never throws: Drive being unreachable should degrade to "file not available"
  * rather than a stack trace in the middle of a download. Callers fall back to a
- * local copy where one still exists — older papers, and the archived rows that
+ * local copy where one still exists: older papers, and the archived rows that
  * never got a Drive id.
  *
  * @return string|null The file's contents, or null if it could not be fetched.
@@ -455,8 +455,58 @@ function download_from_gdrive(string $fileId): ?string
 }
 
 /**
+ * Sends a Drive file straight on to the browser, a piece at a time.
+ *
+ * download_from_gdrive() above holds the whole file in memory, which suits a
+ * caller that needs the bytes; a reader only needs them passed along. This asks
+ * Drive for a streamed body, so nothing is gathered up on this server first and
+ * nothing is written to its disk.
+ *
+ * Headers are the caller's to send, and are only safe to send once this has
+ * returned the size: before that nothing has gone out, and a failure can still
+ * be answered with an error page.
+ *
+ * @return array{0: ?callable, 1: ?int}  [send the body, size in bytes or null],
+ *                                       or [null, null] if Drive would not give
+ *                                       the file.
+ */
+function stream_from_gdrive(string $fileId): array
+{
+    $fileId = trim($fileId);
+    if ($fileId === '' || !is_gdrive_connected()) return [null, null];
+
+    try {
+        $client = get_gdrive_client();
+        if (!$client->getAccessToken()) return [null, null];
+
+        $response = $client->authorize()->request('GET',
+            'https://www.googleapis.com/drive/v3/files/' . rawurlencode($fileId),
+            ['query' => ['alt' => 'media'], 'stream' => true, 'http_errors' => false]);
+
+        if ($response->getStatusCode() !== 200) {
+            error_log('GDrive stream refused for ' . $fileId . ': HTTP ' . $response->getStatusCode());
+            return [null, null];
+        }
+        $size = $response->getHeaderLine('Content-Length');
+        $body = $response->getBody();
+
+        $send = function () use ($body) {
+            while (!$body->eof()) {
+                echo $body->read(65536);
+                flush();
+                if (connection_aborted()) break;   // the reader went away; stop fetching
+            }
+        };
+        return [$send, $size !== '' ? (int)$size : null];
+    } catch (Throwable $e) {
+        error_log('GDrive stream failed for ' . $fileId . ': ' . $e->getMessage());
+        return [null, null];
+    }
+}
+
+/**
  * Permanently deletes a single file from Google Drive by its file ID.
- * Never throws — returns false and logs on failure so callers (e.g. the decline
+ * Never throws: returns false and logs on failure so callers (e.g. the decline
  * flow) are not interrupted when Drive is unreachable.
  */
 function delete_from_gdrive(string $fileId): bool
@@ -474,7 +524,7 @@ function delete_from_gdrive(string $fileId): bool
         $service->files->delete($fileId);
         return true;
     } catch (Exception $e) {
-        // A 404 means the file is already gone — treat that as success.
+        // A 404 means the file is already gone: treat that as success.
         if (strpos($e->getMessage(), '404') !== false || stripos($e->getMessage(), 'notFound') !== false) {
             return true;
         }
@@ -531,7 +581,7 @@ function purge_paper_drive_files(int $paperId): int
     return $deleted;
 }
 
-/** No-op stub — system token handles all Drive access. */
+/** No-op stub: system token handles all Drive access. */
 function grant_gdrive_access(string $userEmail): array
 {
     return ['success' => true, 'message' => 'System token handles all Drive access.'];

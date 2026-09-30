@@ -1,0 +1,241 @@
+/* PAPEL Workflow Handbook - print stylesheet.
+   Printed by headless Chrome, so it leans on what Chrome's print engine does:
+   @page margin boxes for the running header and page number (Chrome 131+),
+   a named page for the full-bleed cover, and break-* rules to keep a figure
+   or a table row from being cut across two pages.
+   The palette is PAPEL's own. Hex values are fine here: this is a printed
+   document with no dark mode, not a page of the app. */
+
+:root {
+  --maroon: #820707; --dark: #630000; --ink: #2B1616; --grey: #6B5A5A;
+  --border: #E6D4D4; --cream: #FFF5F5; --soft: #F8ECEC;
+  --gold: #DCA92C; --goldbg: #FDF4DC; --golddark: #7A5A00;
+  --blue: #1B5E9E; --bluebg: #EAF2FB; --green: #2E7D32; --greenbg: #EAF5EB;
+  --head: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif;
+  --body: Inter, 'Segoe UI', Arial, sans-serif;
+  --mono: 'JetBrains Mono', Consolas, 'Courier New', monospace;
+}
+
+@page {
+  size: A4;
+  margin: 17mm 16mm 16mm 16mm;
+  @top-left {
+    content: "PAPEL Workflow Handbook";
+    font-family: Inter, 'Segoe UI', sans-serif; font-size: 7.5pt; font-weight: 600;
+    color: #8F7373; vertical-align: bottom; padding-bottom: 4mm;
+  }
+  @top-right {
+    content: "PUP Biñan Campus";
+    font-family: Inter, 'Segoe UI', sans-serif; font-size: 7.5pt;
+    color: #8F7373; vertical-align: bottom; padding-bottom: 4mm;
+  }
+  @bottom-center {
+    content: counter(page);
+    font-family: Inter, 'Segoe UI', sans-serif; font-size: 8.5pt; font-weight: 700;
+    color: #820707; vertical-align: top; padding-top: 4mm;
+  }
+}
+@page cover {
+  margin: 0;
+  @top-left { content: none; } @top-right { content: none; } @bottom-center { content: none; }
+}
+
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body {
+  margin: 0; background: #FFFFFF; color: var(--ink);
+  font-family: var(--body); font-size: 10.8pt; line-height: 1.58;
+  font-feature-settings: "cv11", "ss01";
+}
+
+h1, h2, h3 { font-family: var(--head); color: var(--maroon); line-height: 1.25; }
+h1 { font-size: 23pt; font-weight: 800; margin: 1mm 0 4mm; letter-spacing: -.01em; }
+h2 { font-size: 14.5pt; font-weight: 800; margin: 7mm 0 2.5mm; break-after: avoid; }
+h3 { font-size: 12pt; font-weight: 700; margin: 5.5mm 0 2mm; color: var(--dark); break-after: avoid; }
+p { margin: 0 0 3mm; }
+p.lead { font-size: 12.5pt; line-height: 1.5; color: var(--dark); font-weight: 500; }
+p.small { font-size: 8.5pt; color: var(--grey); margin-top: 6mm; }
+strong { font-weight: 700; color: #1E0E0E; }
+code {
+  font-family: var(--mono); font-size: .86em; background: var(--soft); color: var(--dark);
+  padding: .05em .35em; border-radius: 3px; overflow-wrap: anywhere;
+}
+
+.front, .chapter { break-before: page; }
+.kicker {
+  font-family: var(--head); font-weight: 800; font-size: 8.5pt; letter-spacing: .08em;
+  color: #B8871A;
+}
+.kicker-part { color: var(--grey); font-weight: 700; }
+
+/* ------------------------------------------------------------ cover */
+.cover {
+  page: cover; position: relative; overflow: hidden;
+  width: 210mm; height: 297mm; padding: 22mm 20mm;
+  background: linear-gradient(160deg, #8E0B0B 0%, #820707 45%, #5A0000 100%);
+  color: #FFFFFF;
+}
+.cover-ring {
+  position: absolute; right: -60mm; top: -50mm; width: 190mm; height: 190mm;
+  border-radius: 50%; border: 18mm solid rgba(255, 255, 255, .05);
+}
+.cover-ring.two { right: -20mm; top: 150mm; width: 120mm; height: 120mm; border-width: 10mm; border-color: rgba(220, 169, 44, .10); }
+.cover-brand { position: relative; display: flex; align-items: center; gap: 6mm; }
+.cover-logo {
+  width: 30mm; height: 30mm; border-radius: 7mm; overflow: hidden; background: #FFF9E8;
+  display: flex; align-items: center; justify-content: center; box-shadow: 0 3mm 8mm rgba(0, 0, 0, .25);
+}
+.cover-logo img { width: 27mm; height: auto; display: block; }
+.cover-name { font-family: var(--head); font-weight: 800; font-size: 26pt; letter-spacing: .06em; line-height: 1; }
+.cover-org { font-size: 10pt; color: #F4D7D7; margin-top: 2mm; line-height: 1.4; }
+.cover-main { position: relative; margin-top: 52mm; }
+.cover-kicker { font-family: var(--head); font-weight: 800; font-size: 9pt; letter-spacing: .14em; color: var(--gold); }
+.cover h1 { color: #FFFFFF; font-size: 52pt; line-height: 1.02; margin: 5mm 0 7mm; letter-spacing: -.02em; }
+.cover-sub { font-size: 14pt; line-height: 1.5; color: #F9E6E6; max-width: 140mm; }
+.cover-facts { position: absolute; left: 20mm; right: 20mm; bottom: 38mm; display: flex; gap: 6mm; }
+.cover-facts div {
+  flex: 1; border-top: .8mm solid var(--gold); padding-top: 3.5mm;
+  display: flex; flex-direction: column; gap: 1mm;
+}
+.cover-facts b { font-family: var(--head); font-size: 24pt; font-weight: 800; line-height: 1; }
+.cover-facts span { font-size: 9.5pt; color: #F4D7D7; line-height: 1.35; }
+.cover-foot { position: absolute; left: 20mm; bottom: 18mm; font-size: 9pt; color: #E9BDBD; letter-spacing: .04em; }
+
+/* ------------------------------------------------------------ contents */
+.toc-lead { color: var(--grey); margin-bottom: 5mm; }
+.toc-group {
+  font-family: var(--head); font-weight: 800; font-size: 10pt; color: var(--maroon);
+  margin: 5mm 0 1.5mm; padding-bottom: 1.2mm; border-bottom: .4mm solid var(--border);
+  break-after: avoid;
+}
+.toc-row {
+  display: flex; align-items: baseline; gap: 2.5mm; color: var(--ink); text-decoration: none;
+  padding: 1.1mm 0; font-size: 10.8pt;
+}
+.toc-n {
+  flex: 0 0 7mm; font-family: var(--head); font-weight: 800; color: #B8871A; text-align: right;
+}
+.toc-t { flex: 0 1 auto; }
+.toc-dots { flex: 1 1 auto; border-bottom: .35mm dotted #C9AFAF; transform: translateY(-1mm); min-width: 6mm; }
+.toc-p { flex: 0 0 auto; font-family: var(--head); font-weight: 800; color: var(--maroon); min-width: 7mm; text-align: right; }
+
+/* ------------------------------------------------------------ chapter head */
+.ch-head {
+  background: var(--cream); border-left: 2.4mm solid var(--maroon); border-radius: 0 3mm 3mm 0;
+  padding: 5mm 6mm 4.5mm; margin: 0 0 6mm;
+}
+.ch-head h1 { margin: 1.5mm 0 2.5mm; }
+.short { font-size: 12pt; line-height: 1.45; color: var(--dark); font-weight: 500; margin-bottom: 3.5mm; }
+.short span {
+  display: inline-block; font-family: var(--head); font-weight: 800; font-size: 8pt; letter-spacing: .06em;
+  text-transform: uppercase; background: var(--maroon); color: #FFFFFF; border-radius: 1.2mm;
+  padding: .6mm 2mm; margin-right: 2.5mm; transform: translateY(-.4mm);
+}
+.who-row { display: flex; flex-wrap: wrap; align-items: center; gap: 1.6mm; margin-top: 1.6mm; }
+.who-label { font-size: 8.5pt; font-weight: 700; color: var(--grey); margin-right: 1.5mm; min-width: 27mm; }
+.chip {
+  display: inline-block; font-size: 9pt; font-weight: 600; background: #FFFFFF; color: var(--dark);
+  border: .3mm solid #E2C3C3; border-radius: 10mm; padding: .5mm 2.8mm;
+}
+.chip.ext { background: var(--bluebg); color: var(--blue); border-color: #BBD3EC; }
+
+/* ------------------------------------------------------------ lists */
+ol.steps { list-style: none; counter-reset: s; padding: 0; margin: 1mm 0 4mm; }
+ol.steps > li {
+  counter-increment: s; position: relative; padding: 1.1mm 0 1.1mm 10.5mm; break-inside: avoid;
+}
+ol.steps > li::before {
+  content: counter(s); position: absolute; left: 0; top: 1.1mm;
+  width: 6.6mm; height: 6.6mm; border-radius: 50%; background: var(--maroon); color: #FFFFFF;
+  font-family: var(--head); font-weight: 800; font-size: 9pt; line-height: 6.6mm; text-align: center;
+}
+ul.dots { padding: 0; margin: 1mm 0 4mm; list-style: none; }
+ul.dots > li { position: relative; padding: .7mm 0 .7mm 6mm; break-inside: avoid; }
+ul.dots > li::before {
+  content: ""; position: absolute; left: 1mm; top: 3.1mm; width: 2mm; height: 2mm;
+  border-radius: 50%; background: var(--gold);
+}
+
+/* ------------------------------------------------------------ boxes */
+.box { border-radius: 2.5mm; padding: 3.5mm 5mm 2mm; margin: 4.5mm 0; break-inside: avoid; }
+.box-title { font-family: var(--head); font-weight: 800; font-size: 10.5pt; margin-bottom: 1.5mm; }
+.box ul { margin: 0 0 1.5mm; padding-left: 5mm; }
+.box li { margin-bottom: 1.2mm; }
+.box p { margin-bottom: 1.5mm; }
+.box.remember { background: var(--goldbg); border-left: 1.6mm solid var(--gold); }
+.box.remember .box-title { color: var(--golddark); }
+.box.remember li::marker { color: var(--gold); }
+.box.words { background: var(--bluebg); border-left: 1.6mm solid var(--blue); }
+.box.words .box-title { color: var(--blue); }
+.box.words dl { margin: 0 0 1.5mm; display: grid; grid-template-columns: 1fr; gap: 1.2mm; }
+.box.words dt { display: inline; font-weight: 700; color: var(--blue); }
+.box.words dt::after { content: " \2014 "; font-weight: 400; color: var(--grey); }
+.box.words dd { display: inline; margin: 0; }
+.box.tip { background: var(--greenbg); border-left: 1.6mm solid var(--green); }
+.box.tip .box-title { color: var(--green); }
+
+/* ------------------------------------------------------------ tables */
+table { width: 100%; border-collapse: collapse; margin: 2mm 0 4.5mm; font-size: 9.8pt; line-height: 1.45; }
+thead { display: table-header-group; }
+th {
+  background: var(--maroon); color: #FFFFFF; text-align: left; font-weight: 700;
+  padding: 2mm 3mm; font-size: 9.3pt;
+}
+th strong { color: inherit; }   /* the body's near-black bold vanished on maroon */
+th:first-child { border-radius: 2mm 0 0 0; }
+th:last-child { border-radius: 0 2mm 0 0; }
+td { padding: 2mm 3mm; border-bottom: .3mm solid var(--border); vertical-align: top; }
+tr { break-inside: avoid; }
+tbody tr:nth-child(even) td { background: #FCF7F7; }
+td:first-child { font-weight: 600; }
+table.tight { font-size: 9pt; }
+table.tight td, table.tight th { padding: 1.5mm 2.5mm; }
+table.tight td:first-child { font-weight: 500; }
+
+/* ------------------------------------------------------------ figures */
+/* The diagrams follow the text on the same page when they fit. Forcing a new
+   page left a third of the chapters with a page holding one small box. The
+   heading is wrapped with the first figure so it cannot be stranded alone at
+   the foot of a page. */
+.diagrams-keep { break-inside: avoid; }
+.diagrams-head { margin-top: 8mm; padding-top: 4mm; border-top: .5mm solid var(--border); }
+figure.fig {
+  margin: 0 0 6mm; padding: 3.5mm 3.5mm 3mm; border: .35mm solid var(--border); border-radius: 3mm;
+  break-inside: avoid; background: #FFFFFF;
+}
+.fig-head { display: flex; align-items: center; gap: 2.5mm; }
+.fig-no { font-family: var(--head); font-weight: 800; font-size: 9.5pt; color: var(--maroon); }
+.fig-kind {
+  font-size: 7.8pt; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+  color: var(--golddark); background: var(--goldbg); border-radius: 1.2mm; padding: .5mm 2mm;
+}
+.fig-title { font-family: var(--head); font-weight: 700; font-size: 11pt; color: var(--dark); margin: 1mm 0 2.5mm; }
+figure.fig svg { display: block; width: 100%; height: auto; }
+figcaption {
+  margin-top: 2.5mm; padding-top: 2.2mm; border-top: .3mm dashed var(--border);
+  font-size: 9.6pt; line-height: 1.5; color: var(--ink);
+}
+figcaption strong { color: var(--maroon); }
+
+/* ------------------------------------------------------------ how to read */
+.legend { break-inside: avoid; margin-bottom: 3mm; }
+.legend-art { border: .35mm solid var(--border); border-radius: 3mm; padding: 3mm; margin-bottom: 2.5mm; }
+.legend-art svg { display: block; width: 100%; height: auto; }
+.k {
+  display: inline-block; font-size: 7.5pt; font-weight: 800; border-radius: 1mm; padding: 0 1.4mm;
+  line-height: 1.6; vertical-align: .1em;
+}
+.k.pk { background: var(--gold); color: #3D2A00; }
+.k.fk { background: var(--bluebg); color: var(--blue); border: .25mm solid var(--blue); }
+
+/* ------------------------------------------------------------ appendices */
+.faq { break-inside: avoid; border-left: 1.2mm solid var(--border); padding: .5mm 0 .5mm 4.5mm; margin: 0 0 4mm; }
+.faq-q { font-family: var(--head); font-weight: 800; color: var(--maroon); font-size: 11pt; margin-bottom: 1mm; }
+.faq p { margin: 0; }
+dl.glossary { margin: 0; }
+dl.glossary > div {
+  display: grid; grid-template-columns: 42mm 1fr; gap: 4mm; padding: 2mm 0;
+  border-bottom: .3mm solid var(--border); break-inside: avoid;
+}
+dl.glossary dt { font-weight: 700; color: var(--maroon); }
+dl.glossary dd { margin: 0; }

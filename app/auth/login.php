@@ -5,8 +5,8 @@ $conn = db();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   /* Send a stale sign-in back to the login modal rather than a bare 419.
-     Signing out clears the token, so a login page left open beforehand — or
-     reached with the Back button afterwards — carries one that no longer
+     Signing out clears the token, so a login page left open beforehand (or
+     reached with the Back button afterwards) carries one that no longer
      matches. That is a expired form, not an attack, and the person simply
      needs to sign in again on a page that has a current token. */
   $role_for_redirect = in_array($_POST['selected_role'] ?? '', ['student', 'faculty', 'guest'], true)
@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
       $error_redirect = BASE_URL.'/archive/index.php?login_modal=1&role='.$role_hint;
       /* An ID and a password. The birthdate used to be a third factor here,
-         which meant an account with none on file could not sign in at all — and
+         which meant an account with none on file could not sign in at all, and
          a date of birth is not a secret, so it was never adding much. */
       if ($id === '' || $pw === '') { flash('login_error','Enter your ID and password.'); header('Location: '.$error_redirect); exit; }
 
@@ -45,7 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
       /* A guest pass is not an account.
          Guests live in guest_sessions, not users, so the query below could
-         never find one — yet the modal offers a Guest tab on every page of the
+         never find one, yet the modal offers a Guest tab on every page of the
          site. Anyone issued a pass who used it there was told their credentials
          were wrong, and the only place that actually worked was
          archive/login.php, which the credentials email happens to link to.
@@ -85,8 +85,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       }
 
       /* Whatever ID this person was given, it signs them in.
-         Students carry theirs in student_id and staff in faculty_id — which
-         column depends on who created the account — so both are matched here.
+         Students carry theirs in student_id and staff in faculty_id (which
+         column depends on who created the account) so both are matched here.
          Without faculty_id, a newly created adviser or coordinator could only
          get in with the username derived from their Employee ID, which nobody
          ever tells them. Email and username still work as before. */
@@ -122,7 +122,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       }
 
       /* The password was right, so this person is not the one being guarded
-         against — whatever happens below is about which desk they land on. */
+         against: whatever happens below is about which desk they land on. */
       login_throttle_clear($id);
 
       // Enforce that the user's actual role matches the tab they logged in from
@@ -137,7 +137,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           exit;
       }
 
-      /* A student account is given a life when it is created — five academic
+      /* A student account is given a life when it is created: five academic
          years for a first year, down to two for a fourth year or a ladderized
          intake. Past that date it stops working, and the way back is for their
          adviser to move them on, which recalculates the date. The password was
@@ -157,7 +157,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       }
 
       /*
-       * OTP TEMPORARILY DISABLED — uncomment the block below to re-enable email OTP verification.
+       * OTP TEMPORARILY DISABLED: uncomment the block below to re-enable email OTP verification.
        *
        * $otp = sprintf("%06d", mt_rand(1, 999999));
        * $_SESSION['pending_login'] = [
@@ -192,7 +192,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
       /* admin_level rides along with the rest.
          Without it every "$u['admin_level'] ?? 1" on the site read 1, so a Head
-         of Academic Programs got the Research Coordinator's navbar and title —
+         of Academic Programs got the Research Coordinator's navbar and title:
          the dashboards only avoided it by asking the database again themselves. */
       login_user([
           'user_id'     => $user_id,
@@ -212,7 +212,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       exit;
 
   } elseif ($action === 'verify_otp') {
-      /* OTP step is currently disabled — this block is kept for when OTP is re-enabled */
+      /* OTP step is currently disabled: this block is kept for when OTP is re-enabled */
       $entered_otp = trim($_POST['otp'] ?? '');
 
       if (!isset($_SESSION['pending_login'])) {
@@ -262,12 +262,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   }
 }
 
-// GET requests — the login UI is now the modal on the public archive page
+// GET requests: the login UI is now the modal on the public archive page
 header('Location: ' . BASE_URL . '/archive/index.php');
 exit;
 
 /* -----------------------------------------------------------------------
- * DEAD CODE BELOW — kept for reference only; never reached on GET requests.
+ * DEAD CODE BELOW: kept for reference only; never reached on GET requests.
  * The standalone login page was replaced by a slide-in modal on archive/index.php.
  * To restore it: remove the redirect above and uncomment this block.
  * ----------------------------------------------------------------------- */
@@ -279,8 +279,8 @@ if (false):
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sign in · PAPEL - PUP Biñan Digital Research Repository</title>
-<?php /* No site_head.php on this page, so the start-up animation — which the
-         sign-in form below puts up as well — has to be asked for by name.
+<?php /* No site_head.php on this page, so the start-up animation (which the
+         sign-in form below puts up as well) has to be asked for by name.
          First in the head, so it decides before anything is painted. */ ?>
 <?php require_once ROOT_PATH . '/includes/splash.php'; ?>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
@@ -1031,7 +1031,7 @@ if (false):
       <?php endif; ?>
       
       <?php /* data-splash: the full-screen logo animation stands in for the
-               small pill here — see includes/loading_bar.php. */ ?>
+               small pill here: see includes/loading_bar.php. */ ?>
       <form method="post" data-splash id="<?= $step === 'otp' ? 'otpForm' : 'loginForm' ?>">
         <!-- CSRF token placeholder -->
         <?= csrf_field(); ?>
@@ -1231,8 +1231,8 @@ if (false):
     });
   }
 </script>
-<?php /* No site_footer.php here, so signing in — one of the workflows the logo
-         pill marks — has to ask for the loader itself. */ ?>
+<?php /* No site_footer.php here, so signing in (one of the workflows the logo
+         pill marks) has to ask for the loader itself. */ ?>
 <?php require_once ROOT_PATH . '/includes/loading_bar.php'; ?>
 <?php /* Same reason: the sign-in messages on this page are banners like any
          other, and the footer is not here to say so. */ ?>

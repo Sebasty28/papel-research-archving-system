@@ -1,11 +1,11 @@
 <?php
 /**
- * Shared review console — the student dashboard's layout, for the four roles
+ * Shared review console: the student dashboard's layout, for the four roles
  * that read papers rather than write them.
  *
  * A review desk is the student dashboard with different verbs: same search row,
  * same tab strip with counts, same card list, same right-hand sidebar. Only the
- * questions differ — whose papers, which statuses, and what the reader is
+ * questions differ, whose papers, which statuses, and what the reader is
  * allowed to do about it. So the page itself lives here once and each role
  * describes its own desk in a $RC array, rather than four near-copies drifting
  * apart the first time one of them is touched.
@@ -19,19 +19,19 @@
  *   title     string  browser title and breadcrumb leaf
  *   role      string  the role's name, shown to the reader
  *   blurb     string  one line on what this desk is for
- *   scope     array   ['sql'=>, 'params'=>, 'types'=>] — narrows every query to
+ *   scope     array   ['sql'=>, 'params'=>, 'types'=>]: narrows every query to
  *                     the papers this role may see. May reference rp and u.
  *   tabs      array   key => ['label'=>, 'where'=>, 'act'=>bool]
  *                     'act' marks the tab whose cards carry review controls.
- *   review    string  'faculty' | 'admin' | null — the review_level written to
+ *   review    string  'faculty' | 'admin' | null: the review_level written to
  *                     approval_workflow; null makes the desk read-only.
  *   checklist bool    show the section checklist when approving
- *   primary   array   ['href'=>,'icon'=>,'label'=>] — the button beside search
- *   quick     array   list of ['href'=>,'icon'=>,'label'=>,'desc'=>] — the
+ *   primary   array   ['href'=>,'icon'=>,'label'=>]: the button beside search
+ *   quick     array   list of ['href'=>,'icon'=>,'label'=>,'desc'=>]: the
  *                     role's own tools, listed first in the sidebar
- *   cards     array   list of ['id'=>,'title'=>,'html'=>] — extra sidebar cards
+ *   cards     array   list of ['id'=>,'title'=>,'html'=>]: extra sidebar cards
  *                     for powers that are this role's alone
- *   card_extra callable  fn(array $paper): string — extra controls on a card,
+ *   card_extra callable  fn(array $paper): string, returning extra controls on a card,
  *                     again for one role's own powers
  *   empty     array   ['icon'=>,'text'=>] for an empty list
  */
@@ -63,7 +63,7 @@ $rc_scope = $RC['scope'] + ['sql' => '1', 'params' => [], 'types' => ''];
 $rc_from  = "FROM research_papers rp JOIN users u ON u.user_id = rp.uploaded_by";
 
 /* ---- Search suggestions ------------------------------------------------
-   Titles first, then author names, both inside this role's scope — a desk
+   Titles first, then author names, both inside this role's scope: a desk
    must never suggest a paper its owner is not allowed to open. */
 if (isset($_GET['ajax_search'])) {
     while (ob_get_level() > 0) { ob_end_clean(); }
@@ -112,10 +112,10 @@ $filter_year   = (int)($_GET['year'] ?? 0);
 $filter_month  = (int)($_GET['month'] ?? 0);
 $filter_day    = (int)($_GET['day'] ?? 0);
 // The student's own year-and-section string (e.g. "4-1"), not the paper's
-// research year above — a free-text match rather than a dropdown, since
+// research year above: a free-text match rather than a dropdown, since
 // there is no fixed list of sections to offer.
 $filter_section = trim($_GET['section'] ?? '');
-// The school year the student's section was for (e.g. "26-27") — a
+// The school year the student's section was for (e.g. "26-27"): a
 // different thing from $filter_year above, which is when the paper itself
 // was completed. Its own parameter, so the two never fight over one.
 $filter_ay = trim($_GET['ay'] ?? '');
@@ -161,15 +161,15 @@ if ($row = $cs->get_result()->fetch_assoc()) {
 }
 $cs->close();
 
-/* ---- Export: CSV, Excel, Word, PDF — the same four formats and the same
+/* ---- Export: CSV, Excel, Word, PDF: the same four formats and the same
    includes/*_writer.php classes analytics/analytics_dashboard.php exports
    with, applied to a desk's own papers instead of the whole repository's
    figures. There are no charts to carry here, which is what let the other
    three formats stay a plain POST rather than analytics' canvas-capturing
    one.
 
-   $where is exactly what built the list above — this tab, this search,
-   these filters — so export always means what is currently in view, never
+   $where is exactly what built the list above (this tab, this search,
+   these filters) so export always means what is currently in view, never
    the whole desk, the same promise analytics' own CSV link makes. CSV is a
    plain GET link for the same reason analytics' is: reading data out is not
    a state change, so it does not need a token and can be right-clicked,
@@ -228,7 +228,7 @@ if (in_array($rcExportFormat, ['csv', 'xlsx', 'docx', 'pdf'], true)) {
         header('Content-Disposition: attachment; filename="' . $slug . '_' . $stamp . '.csv"');
         $out = fopen('php://output', 'w');
         fputs($out, "\xEF\xBB\xBF");
-        fputcsv($out, [$exportTitle . ' — ' . $when]);
+        fputcsv($out, [$exportTitle . ', ' . $when]);
         fputcsv($out, [$filterLine]);
         fputcsv($out, []);
         fputcsv($out, ['SUMMARY']);
@@ -427,23 +427,23 @@ ob_start();
 .rc-intro p { font-size: .8125rem; color: var(--grey); margin: 0; line-height: 1.6; }
 
 /* ---- Filter bar, above the search field ----
-   Styled after analytics/analytics_dashboard.php's own .an-filters — same
-   layout, same rounded cream strip — so a reviewer who has used one has
+   Styled after analytics/analytics_dashboard.php's own .an-filters (same
+   layout, same rounded cream strip) so a reviewer who has used one has
    already used the other. It differs in one way on purpose: there is no
    Apply button. Analytics is a report someone sits and studies, so batching
    several changes before re-running it is normal; a desk is scanned in
    passing, and every change here is meant to be seen immediately, so each
    one submits itself (see the change/submit handlers a little further down,
-   which route this the same way the sidebar's own #filterForm already does
-   — an AJAX swap of #mainCol and #sidebarCol, not a full reload). */
+   which route this the same way the sidebar's own #filterForm already does:
+   an AJAX swap of #mainCol and #sidebarCol, not a full reload). */
 .rc-filters { background: var(--cream); border-radius: var(--r-card, 8px); padding: .75rem .875rem; margin-bottom: 1.25rem; }
 .rc-filter-row { display: flex; flex-wrap: wrap; gap: .625rem; align-items: flex-end; }
 /* Un-boxes the <form> so its .rc-filter fields sit directly in the flex row
-   above, as though the form were never there — form-ness (submission, field
+   above, as though the form were never there: form-ness (submission, field
    association) is unaffected, only its own box is. */
 .rc-filter-form { display: contents; }
 /* Each field grows to fill the row instead of sitting at its minimum width
-   with the leftover space going nowhere — "maximize the size of this". */
+   with the leftover space going nowhere: "maximize the size of this". */
 .rc-filter { display: flex; flex-direction: column; gap: .2rem; min-width: 9rem; flex: 1 1 9rem; }
 .rc-filter-section { flex: 1 1 12rem; }
 /* The one field that does not grow, and the reason any of the others can:
@@ -454,7 +454,7 @@ ob_start();
 .rc-filter label {
     font-size: .625rem; text-transform: uppercase; letter-spacing: .04em; color: var(--grey);
 }
-/* One fixed height for every control in the bar — field or button — so nothing
+/* One fixed height for every control in the bar (field or button) so nothing
    reads as slightly taller or shorter than its neighbours. */
 .rc-filter select, .rc-filter input, .rc-filter-action button {
     height: 2.375rem; box-sizing: border-box;
@@ -562,7 +562,7 @@ ob_start();
 .sidebar-card-body .filter-select { width: calc(100% - 1.5rem); margin: .25rem .75rem; }
 
 @media (max-width: 600px) {
-    /* One field per line — the same reason .rc-filter-action drops its
+    /* One field per line: the same reason .rc-filter-action drops its
        margin-left:auto here: a right-pinned button on a row of its own
        would just leave the same wasted space on the left instead. */
     .rc-filter, .rc-filter-action { flex: 1 1 100%; margin-left: 0; min-width: 0; }
@@ -586,7 +586,7 @@ ob_start();
 
 <main class="wrap layout">
     <?php /* data-card-console marks a page whose #mainCol renders .paper-card
-             items, for browse_console_js.php's buildCardDetailSection() —
+             items, for browse_console_js.php's buildCardDetailSection():
              this div itself survives every AJAX swap (only its innerHTML is
              replaced), unlike .paper-card, which vanishes on whatever tab
              the current filters happen to return zero results for. Without
@@ -610,7 +610,7 @@ ob_start();
 
         <?php
         /* Program / Paper Type / Grade and Section / Academic Year, styled
-           after Analytics — see the .rc-filters rule above for why this
+           after Analytics: see the .rc-filters rule above for why this
            applies itself instead of waiting for an Apply click. The Paper
            Type options are the same three the sidebar Filter card already
            offers (both post to the same 'type' parameter), so the two stay
@@ -618,7 +618,7 @@ ob_start();
            what a paper type is.
 
            The paper's own research year (what the sidebar's Date section
-           still filters by) is not offered here any more — Academic Year,
+           still filters by) is not offered here any more: Academic Year,
            beside Grade and Section, is the year that actually pairs with a
            section: the year the student was in when they were in it, not
            the year their paper happened to be finished. It is carried as a
@@ -629,8 +629,8 @@ ob_start();
             <div class="rc-filter-row">
             <?php /* display:contents on the form itself (see .rc-filter-form
                      below) puts its fields directly into this flex row, so
-                     the export control — its own <form>, since Excel/Word/PDF
-                     post — can sit beside them as an ordinary sibling. Forms
+                     the export control (its own <form>, since Excel/Word/PDF
+                     post) can sit beside them as an ordinary sibling. Forms
                      cannot nest, which ruled out the simpler option of just
                      dropping that markup inside this one. */ ?>
             <form class="rc-filter-form js-rc-filter-form" id="rcFiltersForm" action="<?= e($rc_self) ?>" method="get">
@@ -676,7 +676,7 @@ ob_start();
                     </select>
                 </div>
             </form>
-            <?php /* CSV is a plain link — see the export block above for why —
+            <?php /* CSV is a plain link (see the export block above for why)
                      so it needs nothing from JS. The other three are posted by
                      the click handler further down, onto the hidden form that
                      follows this widget. */ ?>
@@ -767,7 +767,7 @@ ob_start();
                             <?= e($def['label']) ?> <span class="count"><?= (int)$counts[$key] ?></span>
                         </a>
                     <?php endforeach; ?>
-                    <a class="toolbar-btn" href="<?= e($rc_self) ?>?tab=<?= e($tab) ?>" title="Refresh — clears search and filters">
+                    <a class="toolbar-btn" href="<?= e($rc_self) ?>?tab=<?= e($tab) ?>" title="Refresh (clears search and filters)">
                         <span class="material-symbols-outlined">refresh</span>
                     </a>
                     <a class="toolbar-btn" href="<?= e(BASE_URL) ?>/pages/help_center.php" title="Help">
@@ -827,7 +827,7 @@ ob_start();
                     <article class="paper-card">
                         <div class="card-head">
                             <div class="paper-info">
-                                <?php /* The title opens the full record — what was filed, the sections
+                                <?php /* The title opens the full record: what was filed, the sections
                                          as written, the files, and the checklist. Reviewers get it
                                          live; the read-only desks get the same page without controls. */ ?>
                                 <h2 class="paper-title">
@@ -930,7 +930,7 @@ ob_start();
 
                 <?php if (!$papers): ?>
                     <?php /* An empty queue is the normal state of a review desk, not an
-                             error — so each tab says what its own emptiness means. */ ?>
+                             error, so each tab says what its own emptiness means. */ ?>
                     <div class="empty-state">
                         <span class="material-symbols-outlined"><?= e($rc_tabs[$tab]['empty_icon'] ?? $RC['empty']['icon']) ?></span>
                         <p><?= e($rc_tabs[$tab]['empty'] ?? $RC['empty']['text']) ?></p>
@@ -968,7 +968,7 @@ ob_start();
             </div>
             <div class="sidebar-card-body">
                 <?php /* Plain text links, the same as the Browse card on the student
-                         dashboard and the public repository — a sidebar list reads
+                         dashboard and the public repository: a sidebar list reads
                          faster without an icon beside every line. The longer
                          description stays on hover. */ ?>
                 <?php
@@ -1182,7 +1182,7 @@ document.addEventListener('DOMContentLoaded', function () {
 var SELF = <?= json_encode($rc_self) ?>;
 
 // ===== Search, tabs, filters and pagination swap the results column instead
-// of reloading the page — the same behaviour the student dashboard has. =====
+// of reloading the page: the same behaviour the student dashboard has. =====
 var mainCol = document.getElementById('mainCol');
 var loadingTimer = null;
 
@@ -1246,7 +1246,7 @@ window.addEventListener('popstate', function () { loadResults(window.location.hr
 
 // ===== Export dropdown =====
 // Same open/close/outside-click behaviour as analytics_dashboard.php's own
-// #anExport — Excel/Word/PDF simply set the hidden form's format and submit
+// #anExport: Excel/Word/PDF simply set the hidden form's format and submit
 // it, with none of that page's canvas-to-image work, since a review desk has
 // no charts to carry along.
 (function () {
@@ -1277,7 +1277,7 @@ window.addEventListener('popstate', function () { loadResults(window.location.hr
             document.getElementById('rcExportFormat').value = item.getAttribute('data-export');
             form.submit();
             // The page never navigates for a download, so nothing else would
-            // bring the button back — the same reason includes/loading_bar.php
+            // bring the button back: the same reason includes/loading_bar.php
             // gives its own beforeunload counter a timed fallback.
             setTimeout(function () { wrap.classList.remove('is-busy'); }, 2500);
         });
@@ -1363,7 +1363,7 @@ document.addEventListener('click', function (e) {
     if (dList) {
         dList.style.display = approving ? '' : 'none';
         /* A paper written in IMRaD has no numbered chapters, so it is not asked
-           about them — an unticked "Chapter 4" would otherwise show on the
+           about them: an unticked "Chapter 4" would otherwise show on the
            student's record as though part of the paper were missing. */
         var imradOnly = (btn.dataset.format || '').toUpperCase() === 'IMRAD';
         var fullBox = dList.querySelector('[data-group-box="full"]');
@@ -1395,7 +1395,7 @@ document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && dlg.classList.contains('open')) closeDialog();
 });
 
-// "Tick all" for a checklist group — the common case is that everything is
+// "Tick all" for a checklist group: the common case is that everything is
 // present, and ticking eleven boxes one at a time invites skipping the read.
 dlg.addEventListener('click', function (e) {
     var all = e.target.closest('.rc-check-all');

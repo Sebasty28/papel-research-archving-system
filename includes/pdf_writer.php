@@ -3,7 +3,7 @@
  * A small PDF writer: headings, paragraphs, tables and figures.
  *
  * There is no PDF library in this project and none can be assumed on the host,
- * so this writes the file itself. It is deliberately narrow — it does what the
+ * so this writes the file itself. It is deliberately narrow: it does what the
  * analytics export needs and nothing more:
  *
  *   - A4 pages with automatic breaks and a running footer.

@@ -2,8 +2,8 @@
 /**
  * The one-time question: which colour, and light or dark.
  *
- * Shown on a reader's first visit only. Everything already works without it —
- * PAPEL opens in Old Classic and light — so this is an offer, not a gate:
+ * Shown on a reader's first visit only. Everything already works without it
+ * (PAPEL opens in Old Classic and light) so this is an offer, not a gate:
  * dismissing it keeps those defaults and it never asks again. That is why it
  * is a small card rather than a modal that blocks the page.
  *
@@ -107,8 +107,8 @@ document.addEventListener('DOMContentLoaded', function () {
             chosenColour = c[0];
             host.querySelectorAll('.tw-swatch').forEach(function (s) { s.classList.remove('is-on'); });
             b.classList.add('is-on');
-            /* Show it straight away — choosing blind is not much of a
-               choice — and that includes going dark, which Old Night is. */
+            /* Show it straight away (choosing blind is not much of a
+               choice) and that includes going dark, which Old Night is. */
             document.documentElement.setAttribute('data-color', chosenColour);
             document.documentElement.setAttribute('data-mode', modeFor(chosenColour));
         });
@@ -126,7 +126,7 @@ document.addEventListener('DOMContentLoaded', function () {
         close();
     });
 
-    /* Keeping the defaults still counts as an answer — the preview is undone
+    /* Keeping the defaults still counts as an answer: the preview is undone
        so the page ends up as classic and light, which is what was offered. */
     document.getElementById('twSkip').addEventListener('click', function () {
         document.documentElement.setAttribute('data-color', 'classic');

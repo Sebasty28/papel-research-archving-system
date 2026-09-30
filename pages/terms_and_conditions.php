@@ -68,7 +68,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
     <div class="page-card">
         <div class="page-card-body">
         <p class="updated-note">Last updated: <?= date('F d, Y') ?></p>
-        <p class="lead-text">Welcome to <strong><?= e(APP_NAME) ?></strong>, the official digital research repository of the <em>Polytechnic University of the Philippines – Biñan Campus</em>. These Terms &amp; Conditions govern your access to and use of the platform. By logging in or using any part of the system, you agree to be bound by the terms below.</p>
+        <p class="lead-text">Welcome to <strong><?= e(APP_NAME) ?></strong>, a digital research repository built for the <em>Polytechnic University of the Philippines – Biñan Campus</em>. These Terms &amp; Conditions govern your access to and use of the platform. By logging in or using any part of the system, you agree to be bound by the terms below.</p>
         </div>
     </div>
 
@@ -82,7 +82,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
 
         <div class="terms-section">
             <h2><span class="num">1.</span> Acceptance of These Terms</h2>
-            <p>By accessing <?= e(APP_NAME) ?> — whether to browse the public repository or to log in to an account — you accept these Terms &amp; Conditions in full. If you do not agree with any part of these terms, please discontinue use of the platform.</p>
+            <p>By accessing <?= e(APP_NAME) ?>, whether to browse the public repository or to log in to an account, you accept these Terms &amp; Conditions in full. If you do not agree with any part of these terms, please discontinue use of the platform.</p>
         </div>
 
         <div class="terms-section">
@@ -104,14 +104,14 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
                 <li>The work is your own original research and properly attributes any sources used.</li>
                 <li>You have secured any required ethics clearances and consent or permission forms.</li>
                 <li>The submission does not infringe the copyright or intellectual property rights of others.</li>
-                <li>The information you provide — including title, authors, abstract, program, and year — is accurate and complete.</li>
+                <li>The information you provide, including title, authors, abstract, program, and year, is accurate and complete.</li>
             </ul>
             <p>You retain ownership of your work and remain responsible for its content and accuracy.</p>
         </div>
 
         <div class="terms-section">
             <h2><span class="num">4.</span> The Review &amp; Approval Process</h2>
-            <p>Submitted papers are not published automatically. Each submission passes through a multi-stage review — your faculty adviser, the Research Coordinator, the Head of Academic Programs, and finally the Director. You agree that:</p>
+            <p>Submitted papers are not published automatically. Each submission passes through a multi-stage review: your faculty adviser, the Research Coordinator, the Head of Academic Programs, and finally the Director. You agree that:</p>
             <ul>
                 <li>A reviewer at any stage may approve your paper and forward it onward, or return it to you with feedback for correction and resubmission.</li>
                 <li>A paper only becomes visible in the public repository after it receives final approval from the Director.</li>
@@ -143,7 +143,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
 
         <div class="terms-section">
             <h2><span class="num">8.</span> Data Privacy</h2>
-            <p>Personal information collected by the system — such as names, email addresses, student IDs, programs, and dates of birth — is used solely to operate the repository, verify identities, route submissions, and send notifications. Our handling of personal data is described further in our <a href="privacy.php">Privacy Policy</a>.</p>
+            <p>Personal information collected by the system (such as names, email addresses, student IDs, programs, and dates of birth) is used solely to operate the repository, verify identities, route submissions, and send notifications. Our handling of personal data is described further in our <a href="privacy.php">Privacy Policy</a>.</p>
         </div>
 
         <div class="terms-section">

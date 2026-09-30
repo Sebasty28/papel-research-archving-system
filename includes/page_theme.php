@@ -1,6 +1,6 @@
 <?php
 /**
- * Shared "content page" theme — the look established on pages/settings.php:
+ * Shared "content page" theme: the look established on pages/settings.php:
  *   • maroon breadcrumb strip (no gradient hero banner)
  *   • page title on plain white
  *   • soft-cream panel carrying white cards on top (mirrors the archive sidebar)
@@ -31,8 +31,9 @@ body {
     min-height: 100vh;
 }
 
-/* ===== Breadcrumb strip — same maroon bar the archive pages use ===== */
-.crumb-bar { background: var(--maroon-surface-hover); }
+/* ===== Breadcrumb strip: same maroon bar the archive pages use =====
+   Its background lives in site_head.php, which makes it tinted glass over the
+   photo strip behind it. A copy of the solid colour here painted over that. */
 .crumb-inner {
     display: flex;
     align-items: center;
@@ -120,7 +121,7 @@ body {
 
 .page-card-body { padding: 1.25rem; }
 
-/* ===== Body copy inside cards — nothing bolded ===== */
+/* ===== Body copy inside cards: nothing bolded ===== */
 .page-card-body p { color: var(--ink); line-height: 1.75; font-size: .875rem; margin-bottom: .875rem; }
 .page-card-body p:last-child { margin-bottom: 0; }
 .page-card-body strong { font-weight: 400; color: var(--maroon); }

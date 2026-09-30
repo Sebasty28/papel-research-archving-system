@@ -3,7 +3,7 @@
  * A content page split into sections: a list down the left, and the chosen
  * section's card beside it, one card showing at a time.
  *
- * Include inside <head>, AFTER includes/page_theme.php — the cards are its
+ * Include inside <head>, AFTER includes/page_theme.php: the cards are its
  * .page-card, and the shell is its .page-shell with one class added.
  *
  * Markup shape (the ids pair up by name: tab-<name> ↔ sec-<name>):
@@ -59,8 +59,8 @@
     transition: color .15s;
 }
 .page-sections-tab .material-symbols-outlined { font-size: 20px; color: var(--grey); transition: color .15s; }
-/* Marked the way the navbar marks the page you are on — a bar rather than a
-   filled block — turned on its side to run down the left of the list: soft
+/* Marked the way the navbar marks the page you are on (a bar rather than a
+   filled block) turned on its side to run down the left of the list: soft
    where the pointer is, solid on the section that is open. */
 .page-sections-tab::before {
     content: '';
@@ -135,7 +135,7 @@ document.addEventListener('DOMContentLoaded', function () {
         return tab.dataset.section;
     }
     /* The #fragment is usually a section's own name, but it can also be the id
-       of something inside one — help_center.php#forgot-password, linked from
+       of something inside one: help_center.php#forgot-password, linked from
        the sign-in panel, is a single question in the FAQ. That opens the
        section holding it, so the page's own script can then find it on screen;
        left to fall back to the first section, it would only work while that
