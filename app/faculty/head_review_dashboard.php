@@ -38,6 +38,12 @@ $RC = [
     'tabs'  => [
         'published' => ['label' => 'Published', 'icon' => 'verified',
                         'where' => "rp.current_status = 'approved'"],
+        /* Papers the Director has taken out of the public repository. Read
+           only, as everything on this desk is. */
+        'archived'  => ['label' => 'Archived', 'icon' => 'inventory_2', 'src' => 'archive',
+                        'where' => '1',
+                        'empty' => 'No paper has been archived yet.',
+                        'empty_icon' => 'inventory_2'],
     ],
     'review'  => null,        // read-only: no approve, no return
     'primary' => ['href' => BASE_URL.'/analytics/analytics_dashboard.php', 'icon' => 'insights', 'label' => 'Analytics'],

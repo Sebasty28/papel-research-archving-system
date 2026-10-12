@@ -1,5 +1,5 @@
 {
- "built": "2026-10-01 07:10",
+ "built": "2026-10-12 16:54",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -29,7 +29,7 @@
    "lines": 526
   },
   "app/admin/admin_review_dashboard.php": {
-   "lines": 127
+   "lines": 134
   },
   "app/admin/gdrive_settings.php": {
    "lines": 326
@@ -38,7 +38,7 @@
    "lines": 503
   },
   "app/admin/super_admin_review_dashboard.php": {
-   "lines": 99
+   "lines": 108
   },
   "app/auth/login.php": {
    "lines": 1243
@@ -50,13 +50,13 @@
    "lines": 214
   },
   "app/faculty/faculty_manage_students.php": {
-   "lines": 1127
+   "lines": 1172
   },
   "app/faculty/faculty_review_dashboard.php": {
    "lines": 153
   },
   "app/faculty/head_review_dashboard.php": {
-   "lines": 58
+   "lines": 64
   },
   "app/helpers/UploadHelper.php": {
    "lines": 68
@@ -146,7 +146,7 @@
    "lines": 121
   },
   "config/core.php": {
-   "lines": 2406
+   "lines": 2441
   },
   "config/error_handler.php": {
    "lines": 169
@@ -206,7 +206,7 @@
    "lines": 325
   },
   "includes/focus_ring.php": {
-   "lines": 143
+   "lines": 170
   },
   "includes/key_nav.php": {
    "lines": 232
@@ -221,7 +221,7 @@
    "lines": 252
   },
   "includes/manage_page.php": {
-   "lines": 403
+   "lines": 644
   },
   "includes/manage_save_confirm.php": {
    "lines": 168
@@ -260,7 +260,7 @@
    "lines": 217
   },
   "includes/review_console.php": {
-   "lines": 1418
+   "lines": 1698
   },
   "includes/scroll_jump.php": {
    "lines": 93
@@ -281,7 +281,7 @@
    "lines": 156
   },
   "includes/theme.php": {
-   "lines": 308
+   "lines": 336
   },
   "includes/theme_welcome.php": {
    "lines": 140

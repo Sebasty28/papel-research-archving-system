@@ -99,6 +99,11 @@
 .mgmt-help:hover { border-color: var(--maroon); color: var(--maroon); background: var(--cream); }
 .mgmt-help:focus-visible { outline: 2px solid var(--maroon); outline-offset: 1px; }
 .mgmt-field input::placeholder { color: var(--grey); }
+/* A hint that is a complaint: said under the field it is about, while the
+   value is still being typed. The border is left alone on purpose, since
+   every control's border comes from one rule in focus_ring.php whose chain
+   of :not()s outweighs a plain class here. */
+.mgmt-hint.is-bad { color: var(--bad-text); }
 .mgmt-hint { display: block; font-size: .6875rem; color: var(--grey); margin-top: .25rem; }
 /* The hint doubles as the Generate button's only way to answer back (there is
    no alert() on this site) so it needs a state that reads as a correction. */
@@ -323,8 +328,136 @@
 .mgmt-flash.is-good { background: var(--ok-bg); border-color: var(--ok-border); color: var(--ok-text); }
 .mgmt-flash.is-bad  { background: var(--bad-bg); border-color: var(--bad-border); color: var(--bad-text); }
 
+/* ---- Where the form sits ----
+   The roll is the page; the form beside it is a tool, and which hand it is
+   held in is a preference. Left is how it has always been. Right suits a
+   reader working down the roll with the form out of the way of the first
+   column. Centre drops the two-column shell altogether: the roll takes the
+   full width and the form sits above it, which is the only arrangement that
+   gives a long table room on a laptop.
+
+   Set on <html> rather than on the grid, so the choice is applied before the
+   page paints (see the script at the foot of this file) and holds across all
+   four consoles. */
+html.mgmt-dock-right .mgmt-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 19rem); }
+html.mgmt-dock-right .mgmt-grid > #formPanel { order: 2; }
+html.mgmt-dock-right .mgmt-grid > :not(#formPanel) { order: 1; }
+
+html.mgmt-dock-center .mgmt-grid { grid-template-columns: minmax(0, 1fr); }
+/* The full width of the shell, the same as the roll below it: held in to a
+   column of its own it left a wide empty margin down either side. */
+html.mgmt-dock-center .mgmt-grid > #formPanel { width: 100%; }
+
+/* The control itself: a row of three in the panel's top right corner. It is
+   the first thing in the body rather than a header strip of its own, because
+   this panel deliberately has no heading. The negative margins pull it into
+   the corner so it costs the form almost no height. */
+.mgmt-dock {
+    display: flex; justify-content: flex-end; gap: .125rem;
+    margin: -.375rem -.375rem .25rem 0;
+}
+.mgmt-dock-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px;
+    border: none; border-radius: var(--r-control, 4px);
+    background: none; color: var(--grey);
+    cursor: pointer; transition: background .15s, color .15s;
+}
+.mgmt-dock-btn .material-symbols-outlined { font-size: 18px; }
+.mgmt-dock-btn:hover { background: var(--cream); color: var(--maroon); }
+/* The one in force is the state, not an action, so it is marked rather than
+   left looking like the two that would move something. */
+.mgmt-dock-btn[aria-pressed="true"] { background: var(--cream); color: var(--maroon); }
+/* The chevron is at the far left of the strip, the three positions at the
+   right. Apart from them because it does a different job, and read as a
+   fourth position when it was flush against them; on the left because that
+   is where it stays once the panel is folded, so it does not jump across the
+   page as it is pressed. */
+.mgmt-dock-fold { margin-right: auto; }
+.mgmt-dock-fold .material-symbols-outlined { transition: transform .18s ease; }
+
+/* Folded: the card goes altogether, not just its contents. What is left is the
+   chevron that brings it back, at the left where the panel began, and the roll
+   with the whole width to itself. The three position buttons go with the card:
+   there is nothing to position while it is away.
+
+   Keyed off <html> rather than the panel so the state is settled before the
+   page paints, the same way the position is. Collapsed shows ">", the
+   convention card_collapse.php set. */
+html.mgmt-form-folded .mgmt-grid { grid-template-columns: minmax(0, 1fr); }
+/* Right-docked, #formPanel is ordered after the roll. Folded there is one
+   column, and that order would drop the chevron below the whole table. Named
+   by its id, because the rule it has to beat is.
+   Both selectors below, so neither the panel nor the roll keeps an order. */
+html.mgmt-form-folded .mgmt-grid > #formPanel,
+html.mgmt-form-folded .mgmt-grid > :not(#formPanel) { order: 0; }
+html.mgmt-form-folded #formPanel {
+    background: none; border: 0; border-radius: 0; overflow: visible;
+}
+html.mgmt-form-folded #formPanel .mgmt-panel-body { padding: 0; }
+html.mgmt-form-folded #formPanel .mgmt-panel-body > :not(.mgmt-dock) { display: none; }
+html.mgmt-form-folded #formPanel .mgmt-dock { justify-content: flex-start; margin: 0 0 .25rem; }
+html.mgmt-form-folded .mgmt-dock-btn:not(.mgmt-dock-fold) { display: none; }
+html.mgmt-form-folded .mgmt-dock-fold { margin-left: 0; }
+html.mgmt-form-folded .mgmt-dock-fold .material-symbols-outlined { transform: rotate(-90deg); }
+
+/* Folded, the chevron is the only thing left on the page saying what it does,
+   so it says it: Show form slides out from behind a thin rule beside it, the
+   way the mark in the navbar draws out the name (.brand-word in site_head.php,
+   where the mechanics are explained at length). Absolutely placed, so the
+   button keeps its 26px either way and the roll below does not shift as the
+   label opens. Out is quicker than in; leaving should not make anyone wait. */
+.mgmt-dock-word { display: none; }
+html.mgmt-form-folded .mgmt-dock-fold { position: relative; }
+html.mgmt-form-folded .mgmt-dock-fold::after {
+    content: "";
+    position: absolute;
+    left: 100%;
+    top: 50%;
+    width: 1rem;
+    height: 1.125rem;
+    transform: translateY(-50%);
+    background: linear-gradient(var(--soft-maroon), var(--soft-maroon)) center / 1px 100% no-repeat;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .22s ease-in;
+}
+html.mgmt-form-folded .mgmt-dock-fold:hover::after,
+html.mgmt-form-folded .mgmt-dock-fold:focus-visible::after {
+    opacity: 1;
+    transition: opacity .3s ease-out;
+}
+html.mgmt-form-folded .mgmt-dock-word {
+    display: block;
+    position: absolute;
+    left: calc(100% + .5rem);
+    top: 50%;
+    padding-left: .5rem;
+    font-family: var(--font-head);
+    font-size: .8125rem;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+    color: var(--maroon);
+    clip-path: inset(-.3rem 100% -.3rem .6rem);
+    opacity: 0;
+    transform: translate(-.6rem, -50%);
+    pointer-events: none;
+    transition: clip-path .22s ease-in, opacity .22s ease-in, transform .22s ease-in;
+}
+html.mgmt-form-folded .mgmt-dock-fold:hover .mgmt-dock-word,
+html.mgmt-form-folded .mgmt-dock-fold:focus-visible .mgmt-dock-word {
+    clip-path: inset(-.3rem -.25rem -.3rem 0);
+    opacity: 1;
+    transform: translate(0, -50%);
+    transition: clip-path .38s cubic-bezier(.2, .8, .2, 1), opacity .3s ease-out,
+                transform .38s cubic-bezier(.2, .8, .2, 1);
+}
+
 @media (max-width: 1100px) {
     .mgmt-grid { grid-template-columns: 1fr; }
+    /* One column either way down here, so there is nothing to choose. */
+    .mgmt-dock { display: none; }
 }
 @media (max-width: 600px) {
     .mgmt-pair { grid-template-columns: 1fr; }
@@ -342,6 +475,7 @@
 .mgmt-table tbody tr.is-found > td:first-child {
     box-shadow: inset 3px 0 0 var(--maroon);
 }
+
 </style>
 
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
@@ -398,5 +532,112 @@
             else hit.scrollIntoView({ block: 'center', behavior: 'smooth' });
         }, 0);
     });
+})();
+
+/* ---- Where the form sits: left, centre or right ----
+   Three buttons in the form panel's top right corner. The choice is kept on
+   this device and applied to all four consoles, so a reader sets it once.
+
+   Read and applied as this file is parsed, which is inside <head>: waiting
+   for DOMContentLoaded would paint the form on the left first and move it
+   afterwards, which reads as the page correcting itself. The buttons are put
+   in once there is a panel to put them in. */
+(function () {
+    var KEY   = 'papel_manage_dock';
+    var FOLD  = 'papel_manage_folded';
+    var SIDES = ['left', 'center', 'right'];
+    var ICONS = {
+        left:   'dock_to_left',
+        /* A plain window beside the two docked ones: the same drawing, put in
+           the middle rather than against an edge. */
+        center: 'web_asset',
+        right:  'dock_to_right'
+    };
+    var NAMES = { left: 'the left', center: 'the centre', right: 'the right' };
+    var root  = document.documentElement;
+
+    function current() {
+        var v;
+        try { v = localStorage.getItem(KEY); } catch (e) {}
+        return SIDES.indexOf(v) === -1 ? 'left' : v;
+    }
+
+    function apply(side, remember) {
+        root.classList.toggle('mgmt-dock-right',  side === 'right');
+        root.classList.toggle('mgmt-dock-center', side === 'center');
+        if (remember) { try { localStorage.setItem(KEY, side); } catch (e) {} }
+        document.querySelectorAll('.mgmt-dock-btn').forEach(function (b) {
+            b.setAttribute('aria-pressed', b.dataset.side === side ? 'true' : 'false');
+        });
+    }
+
+    function folded() {
+        try { return localStorage.getItem(FOLD) === '1'; } catch (e) { return false; }
+    }
+
+    function fold(on, remember) {
+        root.classList.toggle('mgmt-form-folded', on);
+        if (remember) { try { localStorage.setItem(FOLD, on ? '1' : '0'); } catch (e) {} }
+        document.querySelectorAll('.mgmt-dock-fold').forEach(function (b) {
+            b.setAttribute('aria-expanded', on ? 'false' : 'true');
+            var say = on ? 'Show the form' : 'Hide the form';
+            b.title = say;
+            b.setAttribute('aria-label', say);
+        });
+    }
+
+    apply(current(), false);          // before the first paint
+    fold(folded(), false);
+
+    function addControl() {
+        var body = document.querySelector('#formPanel .mgmt-panel-body');
+        if (!body || body.querySelector('.mgmt-dock')) return;
+
+
+        var bar = document.createElement('div');
+        bar.className = 'mgmt-dock';
+        bar.setAttribute('role', 'group');
+        bar.setAttribute('aria-label', 'Where this form sits');
+
+        SIDES.forEach(function (side) {
+            var b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'mgmt-dock-btn';
+            b.dataset.side = side;
+            b.title = 'Move this form to ' + NAMES[side];
+            b.setAttribute('aria-label', 'Move this form to ' + NAMES[side]);
+            b.innerHTML = '<span class="material-symbols-outlined">' + ICONS[side] + '</span>';
+            b.addEventListener('click', function () { apply(side, true); });
+            bar.appendChild(b);
+        });
+
+        var chev = document.createElement('button');
+        chev.type = 'button';
+        chev.className = 'mgmt-dock-btn mgmt-dock-fold';
+        chev.setAttribute('aria-controls', 'formPanel');
+        /* The word is for the eye only: the button already says what it does
+           through aria-label, and reading both would say it twice. */
+        chev.innerHTML = '<span class="material-symbols-outlined">expand_more</span>'
+                       + '<span class="mgmt-dock-word" aria-hidden="true">Show form</span>';
+        chev.addEventListener('click', function () {
+            fold(!root.classList.contains('mgmt-form-folded'), true);
+        });
+        bar.insertBefore(chev, bar.firstChild);   // the left end of the strip
+
+        body.insertBefore(bar, body.firstChild);
+        apply(current(), false);      // marks the one in force
+        fold(folded(), false);
+
+        /* Pressing Edit on a row fills this form in. Folded, that happens out of
+           sight and the row looks as though nothing happened, so the panel opens
+           itself. The three account consoles mark the panel is-editing; the
+           guest console has no edit mode and never trips this. */
+        var panel = document.getElementById('formPanel');
+        new MutationObserver(function () {
+            if (panel.classList.contains('is-editing')) fold(false, true);
+        }).observe(panel, { attributes: true, attributeFilter: ['class'] });
+    }
+
+    document.addEventListener('DOMContentLoaded', addControl);
 })();
 </script>

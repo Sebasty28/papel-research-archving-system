@@ -55,10 +55,10 @@
     --scroll-thumb:        var(--maroon-surface, #820707);
     --scroll-thumb-strong: var(--maroon-surface-hover, #630000);
 }
-html[data-color="classic"]   { --border-control: #A4906A; }
+html[data-color="classic"]   { --border-control: #A68C86; }   /* 3.13:1 on white */
 /* Old Night's surface is a warm espresso, so the outline is a muted gold
    rather than the grey-blue the old blue-black dark used. */
-html[data-mode="dark"]       { --border-control: #8C7A5C; }   /* 4.23:1 on #1E1813 */
+html[data-mode="dark"]       { --border-control: #8A7F7C; }   /* 4.52:1 on #1E1813 */
 /* A dark maroon thumb on Old Night's near-black page would be barely there,
    so the dark palette keeps its own accent: muted gold, brightening as the
    thumb is pointed at or dragged. */
@@ -85,6 +85,33 @@ summary:focus-visible,
 [role="tab"]:focus-visible {
     outline: 2px solid var(--focus-ring) !important;
     outline-offset: 2px !important;
+}
+
+/* The things you type into are sealed by their own edge rather than ringed.
+   An outline sits outside the border, so a focused field showed two lines
+   with a sliver of page between them; what is wanted is one line all the way
+   round. So the outline goes and the field's own border becomes the mark,
+   taking the focus colour at the weight it already has. The halo some pages
+   add on focus goes with it, for the same reason: it is a second edge.
+
+   Only the colour is set, never the width. A field with no border of its own
+   is a field inside something else that is already drawing one: the search
+   box is an input with border:none sitting in a bordered shell. Giving that
+   input an edge put a second rectangle inside the first. Colouring an edge
+   that is not there paints nothing, which is exactly right.
+
+   Checkboxes and radios keep the full ring. They are small, they have no
+   border of their own to colour, and the outline is the only mark focus
+   makes on them. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+/* A skinned dropdown is a button standing in for a select (select_skin.php),
+   and it sits in the same row as the fields it is drawn to match. */
+.sel-btn:focus-visible {
+    outline: none !important;
+    border-color: var(--focus-ring) !important;
+    box-shadow: none !important;
 }
 
 /* A mouse click should not leave a ring behind. */

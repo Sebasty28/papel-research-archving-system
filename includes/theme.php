@@ -85,15 +85,33 @@
 /* Old Classic is the default palette: bundled onto the bare :root so a
    reader whose browser never runs the script above (data-color absent
    entirely) still lands here. */
+/* The muted tones are the maroon itself, drained almost to a neutral, rather
+   than the gold they used to be. Gold at the quantity a sidebar uses it
+   (every rule, every panel edge, the wash behind every card) reads as
+   decoration, where a repository wants to read as paper.
+
+   The first attempt at that was a true stone, mixed from brown and grey, and
+   it was right on paper and miserable on screen: with no hue in common with
+   the accent, the page read as drained rather than restrained. These are the
+   same lightness, pulled back towards the maroon, so the warmth comes from
+   the palette's own colour instead of from a second one.
+
+   The gold has not left the site: it is still the colour of the seal in the
+   mark, and still the accent Old Night reads by. It is only off the chrome.
+
+   Measured on #FFFFFF, and on the tint where text sits:
+     --grey  #545054  7.92:1 on white, 7.39:1 on the tint   (AAA both)
+     --ink   #2B1B0E  15.2:1 on the tint
+   See focus_ring.php for --border-control, which moved with these. */
 :root,
 html[data-color="classic"] {
     --accent:       #6B0F0F;
     --accent-dark:  #4A0A0A;
-    --accent-soft:  #C0A062;
-    --accent-tint:  #FBF5E9;
+    --accent-soft:  #BFA6A0;
+    --accent-tint:  #FBF6F4;
     --accent-light: #D8B472;
     --ink-base:     #2B1B0E;
-    --border-base:  #E6D9BF;
+    --border-base:  #EADFDC;
 }
 
 /* Old Night: Old Classic after dark. The same two colours carry it: the
@@ -103,15 +121,25 @@ html[data-color="classic"] {
    espresso rather than the generic blue-black, so the page keeps the parchment
    feel of its daytime twin instead of turning into somebody else's theme.
 
-   Measured against the surface #1E1813 and the tint over it (#2B231A):
-     --accent-light  #D8B472   8.94:1 and 7.87:1   (text, so held to AAA)
+   The muted tone and the wash followed Old Classic across: the maroon drained
+   almost to a neutral rather than a true grey, for the same reason. The accent
+   did not follow: --accent-light is the only colour this palette has for text,
+   and a neutral one would have been within a shade of --ink, leaving headings
+   and links indistinguishable from body copy. Gold earns its place here, which
+   is exactly the argument for taking it off the daylight chrome.
+
+   Measured against the surface #1E1813 and the tint over it (#2D2621):
+     --accent-light  #D8B472   8.94:1 and 7.60:1   (text, so held to AAA)
+     --ink           #F0E6D4   14.20:1 and 12.07:1
+     --grey          #C4B69C   8.80:1 and 7.48:1
+     --accent-soft   #8A7470   4.03:1 on the surface (a border, not text)
      white on --accent       #7A1A1A  10.55:1
      white on --accent-dark  #5A1010  13.85:1      (the crumb strip, pressed) */
 html[data-color="old-night"] {
     --accent:       #7A1A1A;
     --accent-dark:  #5A1010;
-    --accent-soft:  #8A7348;
-    --accent-tint:  rgba(216, 180, 114, .07);
+    --accent-soft:  #8A7470;
+    --accent-tint:  rgba(238, 218, 212, .07);
     --accent-light: #D8B472;
     --ink-base:     #F0E6D4;
     --border-base:  #3B3026;
@@ -252,9 +280,9 @@ html[data-mode="dark"] body { background: #14171E; }
    --------------------------------------------------------------- */
 html[data-mode="dark"][data-color="old-night"] {
     --white:        #1E1813;      /* warm espresso rather than blue-black      */
-    --cream:        rgba(216, 180, 114, .07);   /* a gold wash; #2B231A over --white */
-    --ink:          #F0E6D4;      /* parchment: 14.20:1 on the surface, 12.50:1 on the tint */
-    --grey:         #C4B69C;      /*  8.80:1 and 7.75:1, so AAA on both         */
+    --cream:        rgba(238, 218, 212, .07);   /* a warm wash; #2D2621 over --white */
+    --ink:          #F0E6D4;      /* parchment: 14.20:1 on the surface, 12.07:1 on the tint */
+    --grey:         #C4B69C;      /*  8.80:1 and 7.48:1, so AAA on both         */
     --border:       #3B3026;
     --border-soft:  rgba(240, 230, 212, .12);
     --header-frost:        rgba(30, 24, 19, .74);

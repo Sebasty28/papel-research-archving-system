@@ -96,6 +96,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if (!preg_match('/^[A-Za-z\s.]+$/', $full))     { $fail('Full name cannot contain numbers.'); }
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) { $fail('Invalid email format.'); }
+    /* The expiry is counted from this, so an intake that has not started yet
+       would quietly buy the account another year. */
+    if (academic_year_is_future($ay)) {
+      $fail('That academic year has not started yet. The latest you can use is '
+          . academic_year_current() . '.');
+    }
 
     $check = $conn->prepare(
       "SELECT COUNT(*) AS cnt FROM users WHERE (email=? OR student_id=?) AND user_id<>?");
@@ -164,6 +170,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   // Validate required fields
   if (!$full || !$email || !$pass || !$program || !$academic_year || !$section) {
     flash('error','Full name, Student ID, email, program, academic year, section and password are all needed.');
+    header('Location: faculty_manage_students.php'); exit;
+  }
+
+  /* See the edit handler: the account's expiry is counted from the academic
+     year on it, so one that has not started yet is refused. */
+  if (academic_year_is_future($academic_year)) {
+    flash('error', 'That academic year has not started yet. The latest you can use is '
+        . academic_year_current() . '.');
     header('Location: faculty_manage_students.php'); exit;
   }
 
@@ -313,15 +327,20 @@ try {
    in core.php now, because the analytics tables need the same short codes. */
 $PROGRAMS = programs_map();
 
-/* Suggestions, not rules. The academic year list begins at the intake now
-   running and looks forward: accounts are being made for students starting
-   now or soon, not for years already gone. The sections cover the four year
-   levels plus the ladderized intake. Both fields stay open, so an adviser can
-   still type a past year or a section this list has never heard of. */
-$ay_start = (int)date('n') >= 6 ? (int)date('y') : (int)date('y') - 1;
+/* The academic year list runs back from the intake now running, newest first.
+   It used to look forward instead, which offered years that have not started:
+   an account's life is counted from the year written on it, so an intake still
+   to come hands the student an extra year before the account expires. A past
+   year is still fine, and still typed by hand if it is older than this list,
+   but a future one is refused on both sides of the form. The sections cover
+   the four year levels plus the ladderized intake, and that field stays open
+   for a programme that names its own. */
+$AY_CURRENT = academic_year_current();
+$ay_start   = (int)substr($AY_CURRENT, 0, 2);
 $ACADEMIC_YEARS = [];
 for ($i = 0; $i <= 3; $i++) {
-    $ACADEMIC_YEARS[] = sprintf('%02d-%02d', $ay_start + $i, $ay_start + $i + 1);
+    $y = $ay_start - $i;
+    $ACADEMIC_YEARS[] = sprintf('%02d-%02d', $y, ($y + 1) % 100);
 }
 $SECTIONS = [];
 for ($year = 1; $year <= 4; $year++) {
@@ -636,6 +655,7 @@ $password_rows = password_audit_rows(['student'], (int)$u['user_id']);
                             </div>
                         </div>
                         <small class="mgmt-hint">Pick a suggestion or type your own.</small>
+                        <small class="mgmt-hint is-bad" id="ayNote" hidden></small>
                         <datalist id="ayList">
                             <?php foreach ($ACADEMIC_YEARS as $ay): ?><option value="<?= e($ay) ?>"><?php endforeach; ?>
                         </datalist>
@@ -837,6 +857,31 @@ document.addEventListener('DOMContentLoaded', function () {
             var ok = v.length === 0 || (/[A-Za-z]/.test(v) && /[0-9]/.test(v));
             this.setCustomValidity(ok ? '' : 'Student ID needs at least one letter and one number.');
         });
+    }
+
+    /* An academic year that has not started yet is refused by the handler,
+       because the account's expiry is counted from it. Said here as it is
+       typed, so nobody fills the rest of the form in first. The comparison is
+       on the starting year alone: "27-28", "2027-2028" and "27/28" are the
+       same intake written three ways. */
+    var AY_LATEST = <?= json_encode(academic_year_current()) ?>;
+    var AY_LATEST_START = parseInt(AY_LATEST.slice(0, 2), 10) + 2000;
+    var ayBox = document.getElementById('academic_year');
+    if (ayBox) {
+        var sayAy = function () {
+            var m = /(\d{2,4})\s*[-\/]\s*\d{2,4}/.exec(ayBox.value);
+            var start = m ? parseInt(m[1], 10) : null;
+            if (start !== null && start < 100) start += 2000;
+            var future = start !== null && start > AY_LATEST_START;
+            var say = future
+                ? 'That academic year has not started yet. The latest you can use is ' + AY_LATEST + '.'
+                : '';
+            ayBox.setCustomValidity(say);
+            var note = document.getElementById('ayNote');
+            if (note) { note.hidden = !future; note.textContent = say; }
+        };
+        ayBox.addEventListener('input', sayAy);
+        ayBox.addEventListener('change', sayAy);
     }
 
     /* The Generate button lives in includes/password_generator.php: it needs

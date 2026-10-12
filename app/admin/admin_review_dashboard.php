@@ -102,6 +102,13 @@ $RC = [
         'returned'  => ['label' => 'Returned',        'icon' => 'undo',
                         'where' => "rp.current_status = 'draft' AND $declined_exists",
                         'empty' => 'No paper has been sent back for revision.'],
+        /* Papers the Director has taken out of the public repository. They are
+           rows of papers_archive rather than research_papers, so the tab names
+           its own source instead of filtering on a status. */
+        'archived'  => ['label' => 'Archived', 'icon' => 'inventory_2', 'src' => 'archive',
+                        'where' => '1',
+                        'empty' => 'No paper has been archived yet.',
+                        'empty_icon' => 'inventory_2'],
     ],
     'review'        => 'admin',
     'checklist'     => false,

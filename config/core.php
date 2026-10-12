@@ -1203,15 +1203,50 @@ function student_account_years(?string $section): ?int {
  *
  * Returns null when the section carries no rule, meaning "no expiry".
  */
+/**
+ * The calendar year an academic year string starts in, or null if unreadable.
+ *
+ * Reads "26-27", "2026-2027" and "26/27" alike, since the field is typed by
+ * hand. A two-digit year is read as this century.
+ */
+function academic_year_start_year(?string $ay): ?int {
+    if (!preg_match('/(\d{2,4})\s*[-\/]\s*\d{2,4}/', (string)$ay, $m)) return null;
+    $start = (int)$m[1];
+    return $start < 100 ? $start + 2000 : $start;
+}
+
+/**
+ * The academic year now running, written the way the forms write it.
+ *
+ * An academic year begins mid-calendar-year, so anything before June still
+ * belongs to the intake that started the previous calendar year: the same rule
+ * student_expiry_date() falls back on, kept in one place so the two cannot
+ * drift apart.
+ */
+function academic_year_current(): string {
+    $start = (int)date('n') >= 6 ? (int)date('y') : (int)date('y') - 1;
+    return sprintf('%02d-%02d', $start, ($start + 1) % 100);
+}
+
+/**
+ * Is this academic year one that has not started yet?
+ *
+ * An account's life is counted from the academic year written on it, so an
+ * intake still to come would quietly hand the student an extra year before
+ * their account expires. The year now running is as far forward as the forms
+ * accept; past years stay open, because a roll is sometimes filled in late.
+ */
+function academic_year_is_future(?string $ay): bool {
+    $start = academic_year_start_year($ay);
+    if ($start === null) return false;          // unreadable is a separate complaint
+    return $start > academic_year_start_year(academic_year_current());
+}
+
 function student_expiry_date(?string $section, ?string $academicYear, ?string $createdAt = null): ?string {
     $years = student_account_years($section);
     if ($years === null) return null;
 
-    $startYear = null;
-    if (preg_match('/(\d{2,4})\s*[-\/]\s*\d{2,4}/', (string)$academicYear, $m)) {
-        $startYear = (int)$m[1];
-        if ($startYear < 100) $startYear += 2000;
-    }
+    $startYear = academic_year_start_year($academicYear);
     if ($startYear === null) {
         // An academic year begins mid-calendar-year, so anything made before
         // June belongs to the intake that started the previous calendar year.

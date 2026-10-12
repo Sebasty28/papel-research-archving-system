@@ -21,8 +21,10 @@
  *   blurb     string  one line on what this desk is for
  *   scope     array   ['sql'=>, 'params'=>, 'types'=>]: narrows every query to
  *                     the papers this role may see. May reference rp and u.
- *   tabs      array   key => ['label'=>, 'where'=>, 'act'=>bool]
+ *   tabs      array   key => ['label'=>, 'where'=>, 'act'=>bool, 'src'=>string]
  *                     'act' marks the tab whose cards carry review controls.
+ *                     'src' is 'papers' (the default) or 'archive': see
+ *                     rc_from_for() for why a tab can read a second table.
  *   review    string  'faculty' | 'admin' | null: the review_level written to
  *                     approval_workflow; null makes the desk read-only.
  *   checklist bool    show the section checklist when approving
@@ -31,8 +33,10 @@
  *                     role's own tools, listed first in the sidebar
  *   cards     array   list of ['id'=>,'title'=>,'html'=>]: extra sidebar cards
  *                     for powers that are this role's alone
- *   card_extra callable  fn(array $paper): string, returning extra controls on a card,
- *                     again for one role's own powers
+ *   card_extra callable  fn(array $paper, string $src): string, returning extra
+ *                     controls on a card, again for one role's own powers. $src
+ *                     is the active tab's source, so a control can tell a live
+ *                     paper from an archived one.
  *   empty     array   ['icon'=>,'text'=>] for an empty list
  */
 
@@ -60,7 +64,32 @@ $u    = $u    ?? current_user();
 
 $rc_self  = $RC['self'];
 $rc_scope = $RC['scope'] + ['sql' => '1', 'params' => [], 'types' => ''];
-$rc_from  = "FROM research_papers rp JOIN users u ON u.user_id = rp.uploaded_by";
+
+/**
+ * Where a tab's papers are read from.
+ *
+ * Archiving is not a status: it moves the row to papers_archive and deletes it
+ * from research_papers, so an archived paper cannot be found by any WHERE on
+ * the live table. A tab marked 'src' => 'archive' reads the other table
+ * instead. Every column these queries name travels with the paper (see
+ * ArchiveRepository::ARCHIVED_COLUMNS), so only the FROM changes.
+ *
+ * The uploader is joined loosely there on purpose: papers_archive is meant to
+ * outlive what it names, and an inner join would quietly drop an archived paper
+ * whose author's account has gone.
+ */
+function rc_from_for(string $src): string {
+    return $src === 'archive'
+        ? "FROM papers_archive rp LEFT JOIN users u ON u.user_id = rp.uploaded_by"
+        : "FROM research_papers rp JOIN users u ON u.user_id = rp.uploaded_by";
+}
+
+/* Which tab is open decides which table everything below reads, so this is
+   settled before the first query rather than with the rest of the view state. */
+$rc_tabs = $RC['tabs'];
+$tab     = isset($_GET['tab']) && isset($rc_tabs[$_GET['tab']]) ? $_GET['tab'] : array_key_first($rc_tabs);
+$rc_src  = $rc_tabs[$tab]['src'] ?? 'papers';
+$rc_from = rc_from_for($rc_src);
 
 /* ---- Search suggestions ------------------------------------------------
    Titles first, then author names, both inside this role's scope: a desk
@@ -98,9 +127,6 @@ if (isset($_GET['ajax_search'])) {
 }
 
 /* ---- View state -------------------------------------------------------- */
-$rc_tabs = $RC['tabs'];
-$tab     = isset($_GET['tab']) && isset($rc_tabs[$_GET['tab']]) ? $_GET['tab'] : array_key_first($rc_tabs);
-
 // Shared by the filter bar's own select and the export's "filtered by" line
 // further down, so the two can never disagree about what a type is called.
 $rcTypeLabels = ['capstone' => 'Capstone Project', 'research' => 'Research Paper', 'thesis' => 'Thesis'];
@@ -119,11 +145,36 @@ $filter_section = trim($_GET['section'] ?? '');
 // different thing from $filter_year above, which is when the paper itself
 // was completed. Its own parameter, so the two never fight over one.
 $filter_ay = trim($_GET['ay'] ?? '');
-// Whitelisted, so it is safe to drop straight into ORDER BY.
-$sort_dir   = (($_GET['sort'] ?? '') === 'asc') ? 'ASC' : 'DESC';
-$sort_param = $sort_dir === 'ASC' ? 'asc' : 'desc';
+/* Three orders, whitelisted, so the choice can be dropped straight into
+   ORDER BY. 'wait' is the one a desk with a backlog actually needs: the
+   paper that has sat longest without a decision, first. A tab that can be
+   acted on opens that way unless the reader says otherwise; the reading
+   tabs keep newest-first, which is how a library is browsed. */
+$rc_sorts   = ['desc', 'asc', 'wait'];
+$rc_act_tab = !empty($rc_tabs[$tab]['act']) && $RC['review'];
+$sort_param = in_array($_GET['sort'] ?? '', $rc_sorts, true)
+            ? $_GET['sort']
+            : ($rc_act_tab ? 'wait' : 'desc');
+// Kept for the markup that still reads it; the clause itself is below.
+$sort_dir   = $sort_param === 'asc' ? 'ASC' : 'DESC';
+$rc_order   = [
+    'desc' => 'COALESCE(rp.research_date, rp.upload_date) DESC',
+    'asc'  => 'COALESCE(rp.research_date, rp.upload_date) ASC',
+    'wait' => 'rc_waiting_since ASC',
+][$sort_param];
 
-$per_page = 10;
+/* How long a paper has been sitting where it is. The last decision anybody
+   recorded is when it arrived at the desk that holds it now; a paper nobody
+   has touched has been waiting since it was handed in. Selected as well as
+   sorted on, so the card can say it in days. */
+$rc_waiting = 'COALESCE((SELECT MAX(aw.reviewed_at) FROM approval_workflow aw'
+            . ' WHERE aw.paper_id = rp.paper_id), rp.upload_date)';
+
+/* How many rows at a time. Ten is a short page for a desk holding two
+   hundred papers, and the reader is the one who knows which they want. */
+$rc_per_sizes = [10, 25, 50];
+$per_page = (int)($_GET['per'] ?? 0);
+if (!in_array($per_page, $rc_per_sizes, true)) $per_page = 10;
 $page     = max(1, (int)($_GET['page'] ?? 1));
 $offset   = ($page - 1) * $per_page;
 
@@ -147,19 +198,26 @@ if ($filter_month >= 1 && $filter_month <= 12) { $where .= " AND MONTH(rp.resear
 if ($filter_day   >= 1 && $filter_day   <= 31) { $where .= " AND DAY(rp.research_date) = ?";   $params[] = $filter_day;   $types .= 'i'; }
 
 /* ---- Counts per tab ---------------------------------------------------- */
-$counts = [];
-$sums   = [];
+/* One query per table rather than one for the lot: the tabs no longer all
+   count rows of the same thing. */
+$counts   = [];
+$rc_bySrc = [];
 foreach ($rc_tabs as $k => $def) {
-    $sums[] = "SUM(" . $def['where'] . ") AS `$k`";
     $counts[$k] = 0;
+    $rc_bySrc[$def['src'] ?? 'papers'][$k] = $def['where'];
 }
-$cs = $conn->prepare("SELECT " . implode(', ', $sums) . " $rc_from WHERE ({$rc_scope['sql']})");
-if ($rc_scope['types'] !== '') $cs->bind_param($rc_scope['types'], ...$rc_scope['params']);
-$cs->execute();
-if ($row = $cs->get_result()->fetch_assoc()) {
-    foreach ($counts as $k => $_) $counts[$k] = (int)($row[$k] ?? 0);
+foreach ($rc_bySrc as $src => $defs) {
+    $sums = [];
+    foreach ($defs as $k => $w) $sums[] = "SUM($w) AS `$k`";
+    $cs = $conn->prepare("SELECT " . implode(', ', $sums) . " " . rc_from_for($src)
+                       . " WHERE ({$rc_scope['sql']})");
+    if ($rc_scope['types'] !== '') $cs->bind_param($rc_scope['types'], ...$rc_scope['params']);
+    $cs->execute();
+    if ($row = $cs->get_result()->fetch_assoc()) {
+        foreach ($defs as $k => $_) $counts[$k] = (int)($row[$k] ?? 0);
+    }
+    $cs->close();
 }
-$cs->close();
 
 /* ---- Export: CSV, Excel, Word, PDF: the same four formats and the same
    includes/*_writer.php classes analytics/analytics_dashboard.php exports
@@ -181,7 +239,9 @@ if (in_array($rcExportFormat, ['csv', 'xlsx', 'docx', 'pdf'], true)) {
     if ($rcExportFormat !== 'csv') csrf_verify();
 
     $exq = $conn->prepare("SELECT rp.title, rp.paper_type, rp.current_status, rp.upload_date,
-                                   u.full_name AS student, u.program AS student_program,
+                                   COALESCE(NULLIF(u.full_name, ''), NULLIF(rp.author_names, ''),
+                                            'Account removed') AS student,
+                                   u.program AS student_program,
                                    u.section AS student_section, u.academic_year AS student_ay
                             $rc_from WHERE $where
                             ORDER BY COALESCE(rp.research_date, rp.upload_date) DESC");
@@ -311,10 +371,19 @@ $end_item    = min($offset + $per_page, $total_papers);
 $sql = "SELECT rp.paper_id, rp.title, rp.author_names, rp.year, rp.keywords, rp.abstract,
                rp.upload_date, rp.research_date, rp.paper_type, rp.manuscript_type, rp.current_status,
                rp.file_path, rp.gdrive_file_id,
-               u.user_id AS author_id, u.full_name AS author_name, u.program AS author_program
+               $rc_waiting AS rc_waiting_since,
+               u.user_id AS author_id, u.program AS author_program,
+               /* The archive is joined loosely, because papers_archive is meant to
+                  outlive the accounts it names: a paper whose author has since been
+                  deleted has no u.full_name at all. The card prints this in three
+                  places and e() refuses null, so the fallback is made here, once,
+                  rather than guarded at each of them. The paper's own author list is
+                  the honest second answer; failing that, say so plainly. */
+               COALESCE(NULLIF(u.full_name, ''), NULLIF(rp.author_names, ''),
+                        'Account removed') AS author_name
         $rc_from
         WHERE $where
-        ORDER BY COALESCE(rp.research_date, rp.upload_date) $sort_dir
+        ORDER BY $rc_order
         LIMIT ? OFFSET ?";
 $stmt = $conn->prepare($sql);
 $stmt->bind_param($types.'ii', ...array_merge($params, [$per_page, $offset]));
@@ -395,7 +464,7 @@ function rc_qs(array $over = []): string {
         'year' => $_GET['year'] ?? null, 'month'   => $_GET['month']   ?? null,
         'day'  => $_GET['day']  ?? null, 'sort'    => $_GET['sort']    ?? null,
         'page' => $_GET['page'] ?? null, 'section' => $_GET['section'] ?? null,
-        'ay'   => $_GET['ay']   ?? null,
+        'ay'   => $_GET['ay']   ?? null, 'per'     => $_GET['per']     ?? null,
     ];
     return http_build_query(array_filter(array_merge($base, $over), fn($v) => $v !== null && $v !== ''));
 }
@@ -417,6 +486,17 @@ ob_start();
 <?php require_once ROOT_PATH.'/includes/site_head.php'; ?>
 <?php require_once ROOT_PATH.'/includes/browse_console.php'; ?>
 <?php require_once ROOT_PATH.'/includes/console_shell.php'; ?>
+<script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
+/* Cards or rows, applied before the first paint: read it afterwards and the
+   desk would draw as cards and then collapse, which on a long list is a
+   visible lurch. Kept per device, beside the density and palette the rest of
+   Quick Settings remembers. */
+(function () {
+    var v;
+    try { v = localStorage.getItem('papel_desk_view'); } catch (e) {}
+    document.documentElement.setAttribute('data-view', v === 'rows' ? 'rows' : 'cards');
+})();
+</script>
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 /* ---- What this desk is, said once at the top ---- */
 .rc-intro { margin-bottom: 1.25rem; }
@@ -512,6 +592,142 @@ ob_start();
 
 /* ---- Review controls on a card ---- */
 .rc-actions { margin-top: .875rem; display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+
+/* ---- The line above the list ----
+   What is on screen, how much of it to show, and the pager. Each is given
+   room of its own: unspaced they read as one long sentence with numbers
+   scattered through it. */
+.toolbar-right { gap: .625rem; }
+.rc-count { font-size: .75rem; color: var(--grey); white-space: nowrap; }
+.rc-per {
+    display: inline-flex; align-items: center; gap: .125rem;
+    font-size: .75rem; color: var(--grey); white-space: nowrap;
+    /* The rule marks where the count ends and the control begins. */
+    padding-left: .625rem; border-left: 1px solid var(--border);
+}
+.rc-per-label { margin-right: .25rem; }
+.rc-per a, .rc-per-on {
+    min-width: 1.35rem; padding: .1rem .25rem;
+    border-radius: var(--r-control, 4px);
+    text-align: center; text-decoration: none;
+}
+.rc-per a { color: var(--grey); }
+.rc-per a:hover { color: var(--maroon); background: var(--white); }
+/* White rather than the tint: this strip is already tinted, so a tinted chip
+   on it would be no chip at all. */
+.rc-per-on {
+    color: var(--maroon); font-weight: 600;
+    background: var(--white); border: 1px solid var(--border);
+    padding: .05rem .2rem;
+}
+/* The arrows are the pager, so they sit apart from the numbers that are not. */
+.toolbar-right .toolbar-btn:first-of-type { margin-left: .25rem; }
+@media (max-width: 700px) {
+    /* Too little room for three groups: the count is the one that can go,
+       since the pager says which page and the sizes say how many. */
+    .rc-count { display: none; }
+    .rc-per { padding-left: 0; border-left: 0; }
+}
+
+/* ---- How long it has been waiting ----
+   Only shown where somebody is expected to act. On a reading tab it would
+   be a number with nothing to do about it. */
+.rc-waited {
+    display: inline-flex; align-items: center; gap: .25rem;
+    font-size: .75rem; color: var(--grey);
+}
+.rc-waited .material-symbols-outlined { font-size: 15px; }
+/* A week is the point at which it stops being a queue and starts being a
+   backlog, so that is where it is marked rather than merely stated. */
+.rc-waited.is-stale { color: var(--bad-text); }
+
+/* ---- Rows ----
+   The card is built for reading one paper; a desk holding two hundred is
+   scanned instead. This lays the same markup out as a line: title and
+   author on the left, status and actions on the right, and the parts that
+   repeat on every card (the tracker, the attachments, the feedback) put
+   away. Nothing is removed from the page, so the toggle is instant and the
+   AJAX swaps need to know nothing about it.
+
+   The tracker is the one real loss, so the status text stays: it is the
+   same fact in four words instead of three dots and a rail. */
+html[data-view="rows"] .paper-list .paper-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    column-gap: 1rem;
+    padding: .5rem .875rem;
+    margin-bottom: .375rem;
+}
+html[data-view="rows"] .paper-list .card-head { display: contents; }
+html[data-view="rows"] .paper-list .paper-info {
+    min-width: 0; overflow: hidden;
+    display: flex; align-items: baseline; gap: .5rem;
+}
+html[data-view="rows"] .paper-list .paper-title {
+    font-size: .875rem; margin: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    flex: 1 1 auto; min-width: 0;
+}
+html[data-view="rows"] .paper-list .paper-authors {
+    margin: 0; flex: 0 1 14rem; min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* The meta is a flex row of its own, and it wraps by default: left to do
+   that inside a narrow column it stacked four deep and the row stopped
+   being a row. */
+html[data-view="rows"] .paper-list .paper-meta {
+    flex: 0 1 auto; min-width: 0; flex-wrap: nowrap;
+    white-space: nowrap; overflow: hidden;
+    /* The meta is a row of separate spans, so text-overflow has nothing to
+       put an ellipsis on: it would cut a word in half at the edge and read as
+       a glitch. Faded out instead, which says the same thing. */
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 1.75rem), transparent);
+            mask-image: linear-gradient(to right, #000 calc(100% - 1.75rem), transparent);
+}
+/* How long it has waited is the one thing a queue is read by, so it goes to
+   the front of the meta line and is never the part that gets clipped. */
+html[data-view="rows"] .paper-list .paper-meta .rc-waited { order: -1; flex: 0 0 auto; }
+html[data-view="rows"] .paper-list .paper-meta .sep { flex: 0 0 auto; }
+
+/* Smaller buttons, so the decision still fits beside the title rather than
+   taking half the row from it. */
+html[data-view="rows"] .paper-list .rc-actions .btn-sm-maroon,
+html[data-view="rows"] .paper-list .rc-actions .btn-sm-outline {
+    padding: .3rem .55rem; font-size: .7rem;
+}
+html[data-view="rows"] .paper-list .card-status {
+    display: flex; align-items: center; gap: .75rem;
+    white-space: nowrap; text-align: left;
+}
+html[data-view="rows"] .paper-list .rc-actions { margin-top: 0; flex-wrap: nowrap; }
+/* Everything under the head sits in one wrapper, so the row keeps the part
+   that is a decision and puts the rest away: the tracker, the reviewers, the
+   attachments and any returned feedback are all what the card view is for.
+
+   Named twice on purpose. That wrapper is built by script, and a page of
+   results fetched by AJAX is laid out before the script gets to it: for those
+   few frames the tracker is a direct child of the card, and a row would open
+   as a card and then collapse. */
+html[data-view="rows"] .paper-list .paper-card-body { min-width: 0; }
+html[data-view="rows"] .paper-list .paper-card-body > :not(.rc-actions),
+html[data-view="rows"] .paper-list .paper-card > .card-track,
+html[data-view="rows"] .paper-list .paper-card > .rc-feedback,
+html[data-view="rows"] .paper-list .paper-card > .rc-docs,
+html[data-view="rows"] .paper-list .paper-card > .rc-reviewers { display: none; }
+/* The title is the link to the record, so the pair of links beside the
+   status would only be saying it twice. */
+html[data-view="rows"] .paper-list .card-status .paper-action,
+html[data-view="rows"] .paper-list .paper-card-toggle { display: none; }
+/* Below this the three columns have nowhere to go, so a row is a card
+   again rather than a line squeezed to nothing. */
+@media (max-width: 820px) {
+    html[data-view="rows"] .paper-list .paper-card {
+        display: block; padding: .875rem 1rem;
+    }
+    html[data-view="rows"] .paper-list .card-head { display: flex; }
+    html[data-view="rows"] .paper-list .paper-info { display: block; }
+}
 .rc-actions .rc-spacer { margin-left: auto; }
 .rc-docs { display: flex; gap: .375rem; flex-wrap: wrap; margin-top: .625rem; }
 .rc-doc-chip {
@@ -786,6 +1002,11 @@ ob_start();
                                 <a class="qs-link" id="quickSettingsFull" href="<?= e(BASE_URL.'/pages/settings.php') ?>">View Full Settings</a>
                             </div>
                             <div class="qs-section">
+                                <span class="qs-section-label">View</span>
+                                <label class="qs-radio"><input type="radio" name="qs_view" value="cards"> Cards</label>
+                                <label class="qs-radio"><input type="radio" name="qs_view" value="rows"> Rows</label>
+                            </div>
+                            <div class="qs-section">
                                 <span class="qs-section-label">Density</span>
                                 <label class="qs-radio"><input type="radio" name="qs_density" value="default"> Default</label>
                                 <label class="qs-radio"><input type="radio" name="qs_density" value="comfortable"> Comfortable</label>
@@ -796,7 +1017,23 @@ ob_start();
                 </div>
 
                 <div class="toolbar-right">
-                    <span>Showing items <?= $total_papers ? $start_item : 0 ?>-<?= $end_item ?> of <?= number_format($total_papers) ?></span>
+                    <?php /* Three things that were running into one another: what is on
+                             screen, how much of it to show, and how to move. Said in that
+                             order, with a rule between the first two and the arrows kept
+                             to the end where a pager belongs. */ ?>
+                    <span class="rc-count">Showing <?= $total_papers ? $start_item : 0 ?>&ndash;<?= $end_item ?> of <?= number_format($total_papers) ?></span>
+                    <?php /* A plain link per size rather than a select: the list is fetched
+                             by AJAX from the same query string everything else here uses. */ ?>
+                    <span class="rc-per">
+                        <span class="rc-per-label">Show</span>
+                        <?php foreach ($rc_per_sizes as $size): ?>
+                            <?php if ($size === $per_page): ?>
+                                <span class="rc-per-on"><?= $size ?></span>
+                            <?php else: ?>
+                                <a href="<?= e($rc_self) ?>?<?= rc_qs(['per' => $size, 'page' => null]) ?>"><?= $size ?></a>
+                            <?php endif; ?>
+                        <?php endforeach; ?>
+                    </span>
                     <?php if ($page > 1): ?>
                         <a class="toolbar-btn" href="<?= e($rc_self) ?>?<?= rc_qs(['page' => $page - 1]) ?>" aria-label="Previous page"><span class="material-symbols-outlined">chevron_left</span></a>
                     <?php else: ?>
@@ -831,7 +1068,12 @@ ob_start();
                                          as written, the files, and the checklist. Reviewers get it
                                          live; the read-only desks get the same page without controls. */ ?>
                                 <h2 class="paper-title">
-                                    <?php if (in_array($u['user_role'], ['faculty', 'admin'], true)): ?>
+                                    <?php /* The review page reads research_papers, which an archived
+                                             paper has left, so its record is opened on the repository
+                                             page instead: that one falls back to papers_archive. */ ?>
+                                    <?php if ($rc_src === 'archive'): ?>
+                                        <a href="<?= e(BASE_URL) ?>/archive/view_paper.php?id=<?= $pid ?>"><?= e($r['title']) ?></a>
+                                    <?php elseif (in_array($u['user_role'], ['faculty', 'admin'], true)): ?>
                                         <a href="<?= e(BASE_URL) ?>/app/review_paper.php?id=<?= $pid ?>"><?= e($r['title']) ?></a>
                                     <?php elseif ($status === 'approved'): ?>
                                         <a href="<?= e(BASE_URL) ?>/archive/view_paper.php?id=<?= $pid ?>"><?= e($r['title']) ?></a>
@@ -847,6 +1089,16 @@ ob_start();
                                     <?php endif; ?>
                                     <span class="sep">•</span>
                                     <span>Submitted <?= e(date('M j, Y', strtotime($r['upload_date']))) ?></span>
+                                    <?php /* Only where somebody is expected to act: on a reading tab
+                                             this would be a number with nothing to do about it. */ ?>
+                                    <?php if ($actionable && !empty($r['rc_waiting_since'])):
+                                        $waitedDays = (int)floor((time() - strtotime($r['rc_waiting_since'])) / 86400); ?>
+                                        <span class="rc-waited <?= $waitedDays >= 7 ? 'is-stale' : '' ?>">
+                                            <span class="material-symbols-outlined">schedule</span>
+                                            <?= $waitedDays < 1 ? 'Waiting today'
+                                                : 'Waiting ' . $waitedDays . ' day' . ($waitedDays === 1 ? '' : 's') ?>
+                                        </span>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                             <div class="card-status">
@@ -854,8 +1106,12 @@ ob_start();
                                 <?php if ($open): ?>
                                     <a class="paper-action" href="<?= e($open) ?>" target="_blank" rel="noopener">Open paper</a>
                                 <?php endif; ?>
-                                <?php if ($status === 'approved'): ?>
+                                <?php /* Not offered on an archived paper: it is out of the public
+                                         repository, which is what archiving it meant. */ ?>
+                                <?php if ($status === 'approved' && $rc_src !== 'archive'): ?>
                                     <a class="paper-action" href="<?= e(BASE_URL) ?>/archive/view_paper.php?id=<?= $pid ?>">View in repository</a>
+                                <?php elseif ($rc_src === 'archive'): ?>
+                                    <a class="paper-action" href="<?= e(BASE_URL) ?>/archive/view_paper.php?id=<?= $pid ?>">Open record</a>
                                 <?php endif; ?>
                             </div>
                         </div>
@@ -903,7 +1159,7 @@ ob_start();
                             </div>
                         <?php endif; ?>
 
-                        <?php $extra = $RC['card_extra'] ? ($RC['card_extra'])($r) : ''; ?>
+                        <?php $extra = $RC['card_extra'] ? ($RC['card_extra'])($r, $rc_src) : ''; ?>
                         <?php if ($actionable || $extra): ?>
                             <div class="rc-actions">
                                 <?php if ($actionable): ?>
@@ -1048,6 +1304,10 @@ ob_start();
 
                 <div class="filter-section">
                     <span class="filter-section-label">Order By</span>
+                    <?php /* Waiting longest is what a queue is read by, so it is first and
+                             it is what an actionable tab opens on. The other two order by
+                             the paper's own date, which is how a shelf is browsed. */ ?>
+                    <label class="filter-radio"><input type="radio" name="sort" value="wait" <?= $sort_param === 'wait' ? 'checked' : '' ?>> Waiting longest</label>
                     <label class="filter-radio"><input type="radio" name="sort" value="desc" <?= $sort_param === 'desc' ? 'checked' : '' ?>> Newest first</label>
                     <label class="filter-radio"><input type="radio" name="sort" value="asc"  <?= $sort_param === 'asc'  ? 'checked' : '' ?>> Oldest first</label>
                 </div>
@@ -1193,6 +1453,25 @@ function setLoading(on) {
     else mainCol.classList.remove('is-loading');
 }
 
+/* Cards or rows. The attribute is set before the page paints (see the head
+   of this file); this is the part that answers the switch and puts the tick
+   back after a swap, since the panel holding it lives inside the column the
+   AJAX replaces. */
+function rcTickView() {
+    var v = document.documentElement.getAttribute('data-view') === 'rows' ? 'rows' : 'cards';
+    document.querySelectorAll('input[name="qs_view"]').forEach(function (i) {
+        i.checked = (i.value === v);
+    });
+}
+document.addEventListener('change', function (e) {
+    if (e.target.name !== 'qs_view') return;
+    var v = e.target.value === 'rows' ? 'rows' : 'cards';
+    document.documentElement.setAttribute('data-view', v);
+    try { localStorage.setItem('papel_desk_view', v); } catch (err) {}
+    rcTickView();
+});
+document.addEventListener('DOMContentLoaded', rcTickView);
+
 function loadResults(url, push) {
     if (!mainCol) { window.location.href = url; return; }
     setLoading(true);
@@ -1206,6 +1485,7 @@ function loadResults(url, push) {
             }
             setLoading(false);
             if (window.papelSyncQuickSettings) window.papelSyncQuickSettings();
+            rcTickView();
             if (data.crumb) {
                 var crumb = document.querySelector('.crumb-current');
                 if (crumb) crumb.textContent = data.crumb;

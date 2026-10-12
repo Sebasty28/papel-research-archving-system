@@ -56,6 +56,13 @@ $RC = [
     'tabs'  => [
         'published' => ['label' => 'Published', 'icon' => 'verified',
                         'where' => "rp.current_status = 'approved'"],
+        /* What has been taken out of the public repository. These rows live in
+           papers_archive, not research_papers, which is why the tab names its
+           own source rather than filtering on a status. */
+        'archived'  => ['label' => 'Archived', 'icon' => 'inventory_2', 'src' => 'archive',
+                        'where' => '1',
+                        'empty' => 'No paper has been archived yet.',
+                        'empty_icon' => 'inventory_2'],
     ],
     'review'  => null,        // read-only: approving is not this desk's step
     'primary' => ['href' => 'super_admin_manage_admins.php', 'icon' => 'admin_panel_settings', 'label' => 'Manage Admins'],
@@ -73,9 +80,11 @@ $RC = [
         ['href' => BASE_URL.'/notifications/notification_center.php', 'icon' => 'notifications', 'label' => 'Notifications',
          'desc' => 'Every alert sent to you'],
     ],
-    // Archiving applies to what is published, so the control only appears there.
-    'card_extra' => function (array $r) use ($SELF): string {
-        if ($r['current_status'] !== 'approved') return '';
+    /* Archiving applies to what is published, so the control only appears there,
+       and never on the Archived tab: those papers carry the status they were
+       approved with and would otherwise offer to be archived twice. */
+    'card_extra' => function (array $r, string $src) use ($SELF): string {
+        if ($src === 'archive' || $r['current_status'] !== 'approved') return '';
         ob_start(); ?>
         <form method="post" action="<?= e($SELF) ?>" class="js-confirm-form rc-spacer"
               data-title="Archive this paper?"
