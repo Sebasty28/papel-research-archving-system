@@ -1,0 +1,67 @@
+# Production deploy: only when you push a version tag, for example
+#
+#     git tag -a v1.0.0 -m "UAT build 1"
+#     git push origin v1.0.0
+#
+# Same build as staging, different account. Staging moves on every push so you
+# can see your work; production moves only when you decide a build is ready,
+# so UAT testers never meet a half finished change.
+name: Deploy to production
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:        # for a rollback: run this on an older tag
+
+concurrency:
+  group: production
+  cancel-in-progress: false  # a production deploy finishes, it is not cancelled
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: PHP, matching the host
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+
+      - name: Install dependencies, trimmed
+        run: composer install --no-dev --optimize-autoloader --no-interaction
+
+      - name: Fail if anything is too big for the host
+        run: |
+          big=$(find . -type f -size +10M -not -path './.git/*' | head -20)
+          if [ -n "$big" ]; then echo "Over 10 MB:"; echo "$big"; exit 1; fi
+
+      - name: Send to InfinityFree
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ftpupload.net
+          port: 21
+          protocol: ftp
+          username: ${{ secrets.PROD_FTP_USER }}
+          password: ${{ secrets.PROD_FTP_PASS }}
+          local-dir: ./
+          server-dir: /htdocs/
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/.github/**
+            **/.env
+            **/config/gdrive_token.json
+            **/mailer/composer.phar
+            **/uploads/research/**
+            **/uploads/supporting_docs/**
+            **/uploads/drafts/**
+            **/uploads/temp/**
+            **/uploads/section_images/**
+            **/docs/**
+            **/tests/**
+            **/scripts/**
+            **/database/**
+            **/backups/**
+            **/*.md
+            reset_system_data.php

@@ -24,10 +24,29 @@
    single column above. */
 .pd-layout { display: grid; grid-template-columns: minmax(0, 1fr) 16rem; gap: 1.75rem; align-items: start; }
 .pd-main { min-width: 0; }
+/* The column ends where its last card ends. The gap each card keeps beneath it
+   is for the next one; left on the final card it is space below the last
+   border, which the rail beside it then matches and overhangs by. */
+.pd-main > :last-child { margin-bottom: 0; }
 .pd-side {
     position: sticky; top: 76px; display: flex; flex-direction: column; gap: 1.125rem;
-    max-height: calc(100vh - 96px); overflow-y: auto; overflow-x: hidden;
+    /* Two ceilings: the window, and the record beside it. Without the second,
+       a rail holding a long contents list and the citation card outgrew a
+       record whose cards were folded, and hung below the last one, so the page
+       appeared to end twice, once for each column. It is capped instead and
+       scrolls inside itself, which it was already set up to do.
+
+       The record's height arrives as --pd-main-h from the script at the foot of
+       this file: no selector can ask a sibling how tall it is. The fallback is
+       the window on its own, which is what this was before. */
+    max-height: min(calc(100vh - 96px), var(--pd-main-h, calc(100vh - 96px)));
+    overflow-y: auto; overflow-x: hidden;
 }
+/* Both cards keep the height they ask for. The rail is what scrolls when they
+   do not fit, not the contents list inside it: squeezing that list into a box
+   of its own put a second scrollbar inside the first and left the contents
+   reading as a cramped window onto a page that has plenty of room. */
+.pd-side > .pd-card { flex: 0 0 auto; }
 /* Collapsed by the toggle beneath the status badge in .pd-top: the rail
    leaves the grid entirely rather than shrinking to nothing, so .pd-main
    retakes the width instead of leaving an empty column behind. */
@@ -319,6 +338,28 @@ html.sidebar-left .pd-side-swap .side-icon-right { display: inline-flex; }
 .pd-note:last-child { margin-bottom: 0; }
 .pd-note--after { margin: 1.25rem 0 0; }        /* a footnote, not a banner */
 .pd-note .material-symbols-outlined { font-size: 18px; color: var(--maroon); flex: 0 0 auto; }
+/* The site's own link colour. A browser's default blue belongs to nothing
+   else on these pages. */
+.pd-note a { color: var(--maroon); }
+.pd-note a:hover { color: var(--dark-maroon); }
+
+/* The way to the public copy of a record, in the corner that holds what can
+   be done with it rather than what is written in it: under the panel toggle,
+   beneath the status badge. Both the student's copy of a record and the
+   reviewer's show it, so it lives here rather than in either page.
+
+   A row of its own under the toggle, and flex rather than inline-flex so it
+   takes that row instead of trailing along beside the button. The column is
+   right-aligned text, so its contents are pushed right to line up with the
+   status and the toggle above them, and it is held to one line: wrapped,
+   "View in public repository" ladders down the corner a word at a time. */
+.pd-repo-link {
+    display: flex; justify-content: flex-end; align-items: center; gap: .25rem;
+    margin-top: .35rem; font-size: .75rem;
+    white-space: nowrap;
+    color: var(--maroon); text-decoration: none;
+}
+.pd-repo-link:hover { color: var(--dark-maroon); text-decoration: underline; }
 
 /* Room between the heading of a group and the rows under it. */
 .pd-check-grid { margin-top: .25rem; }
@@ -333,3 +374,45 @@ html.sidebar-left .pd-side-swap .side-icon-right { display: inline-flex; }
     .pd-card { padding: 1.125rem; }
 }
 </style>
+
+<script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
+/* How tall the record is, handed to the stylesheet above so the rail beside
+   it can be capped to the same height. CSS cannot ask a sibling, and the
+   answer changes as cards are folded and unfolded, so it is measured and
+   re-measured rather than worked out once.
+
+   Writing the property cannot start a loop: it only feeds the rail's
+   max-height, and the rail getting shorter does not change the record. */
+(function () {
+    /* This file is included in the head, so the record does not exist yet when
+       it runs: the measuring waits for the document the same way the rest of
+       the site's head scripts do. */
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', start);
+    } else {
+        start();
+    }
+
+    function start() {
+        var layout = document.querySelector('.pd-layout');
+        var main   = layout && layout.querySelector('.pd-main');
+        if (!layout || !main) return;
+
+        function sync() {
+            layout.style.setProperty('--pd-main-h', Math.round(main.offsetHeight) + 'px');
+        }
+        sync();
+
+        if (window.ResizeObserver) {
+            new ResizeObserver(sync).observe(main);
+        } else {
+            /* Older browsers get the two moments that matter: the cards being
+               folded, and the window changing shape. */
+            document.addEventListener('click', function (e) {
+                if (e.target.closest && e.target.closest('.card-collapse-btn')) setTimeout(sync, 0);
+            });
+            window.addEventListener('resize', sync);
+        }
+    }
+})();
+</script>

@@ -24,6 +24,11 @@
  * inside panels with `overflow: hidden` and an absolutely positioned list would
  * be cut off at the panel's edge.
  *
+ * The same clothes are available to a box that can be typed in as well as
+ * picked from: put `data-combo` on an `<input list="...">` and it gains the
+ * chevron, the site's own list and the same keyboard, while staying the input
+ * the form submits. See the combo section near the bottom.
+ *
  * Anything that should keep the native control can say so with `data-no-skin`.
  */
 ?>
@@ -103,6 +108,24 @@ select.is-skinned {
     font-size: .6875rem; letter-spacing: .04em; text-transform: uppercase;
     color: var(--grey, #545054);
 }
+
+/* ---- A dropdown that can be typed in ----
+   The input stays the real control, so it keeps the page's own field styling
+   and only gains room for the handle on its right. */
+.sel-combo { position: relative; display: block; width: 100%; }
+.sel-combo > .sel-field { width: 100%; padding-right: 1.9rem; }
+.sel-arrow {
+    position: absolute; right: .4rem; top: 50%; transform: translateY(-50%);
+    display: flex; align-items: center; justify-content: center;
+    width: 1.15rem; height: 1.15rem; padding: 0;
+    background: none; border: 0; border-radius: var(--r-control, 4px);
+    color: var(--grey, #545054); cursor: pointer;
+}
+.sel-arrow:hover { color: var(--maroon, #820707); }
+.sel-field[aria-expanded="true"] ~ .sel-arrow .sel-chev { transform: rotate(180deg); }
+/* Said rather than shown as an empty box: a list that opens with nothing in it
+   reads as broken, where this reads as an answer. */
+.sel-none { padding: .4rem .55rem; font-size: .8125rem; color: var(--grey, #545054); }
 </style>
 
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
@@ -153,7 +176,10 @@ select.is-skinned {
         var label = select.id && document.querySelector('label[for="' + select.id + '"]');
         if (label) btn.setAttribute('aria-labelledby', (label.id || (label.id = id + 'l')));
 
-        var state = { select: select, btn: btn, menu: menu, active: -1 };
+        /* build and paint are carried on the state because open() serves two
+           kinds of control now: this one, and the typeable combo below. */
+        var state = { select: select, btn: btn, menu: menu, active: -1,
+                      build: build, paint: paint };
         btn._sel = state;
         menu._sel = state;
 
@@ -244,8 +270,8 @@ select.is-skinned {
     function open(state) {
         if (state.btn.disabled) return;
         if (openOne && openOne !== state) close(openOne);
-        build(state);
-        paint(state);
+        state.build(state);
+        state.paint(state);
         state.menu.hidden = false;
         state.btn.setAttribute('aria-expanded', 'true');
         place(state);
@@ -367,8 +393,201 @@ select.is-skinned {
             .observe(el, { attributes: true, attributeFilter: ['disabled'] });
     }
 
+    /* ======================= a dropdown that can be typed in ================
+       An `<input list="...">` is the right control for a short list somebody
+       may also want to search by typing, but the browser draws the suggestions
+       itself: no chevron, so it does not read as a dropdown at all, and the
+       popup that eventually appears is the operating system's again, the very
+       thing the skin above exists to avoid.
+
+       This gives it the same clothes: the handle on the right, the site's own
+       list, the same keyboard. The input is left in place as the real control,
+       so it keeps its name, its value, its `required` flag and its validity,
+       and the page's own script sees exactly what it saw before.
+
+       Opt in with `data-combo`. The `<datalist>` stays in the markup and
+       remains the source of the options, so a page that rebuilds the list is
+       followed, and nothing is lost if this script never runs. */
+    function combo(input) {
+        if (input.dataset.noSkin !== undefined) return;
+        if (input.classList.contains('is-combo')) return;
+        var data = document.getElementById(input.getAttribute('list') || '');
+        if (!data) return;
+
+        var id = 'sel' + (++seq);
+        var wrap = document.createElement('div');
+        wrap.className = 'sel sel-combo';
+
+        /* Out of the tab order, and hidden from a reader: the input beside it
+           is the control, and this only opens what the keyboard opens with the
+           down arrow anyway. */
+        var arrow = document.createElement('button');
+        arrow.type = 'button';
+        arrow.className = 'sel-arrow';
+        arrow.tabIndex = -1;
+        arrow.setAttribute('aria-hidden', 'true');
+        arrow.innerHTML = CHEV;
+
+        var menu = document.createElement('div');
+        menu.className = 'sel-menu';
+        menu.id = id + 'm';
+        menu.setAttribute('role', 'listbox');
+        menu.hidden = true;
+
+        input.parentNode.insertBefore(wrap, input);
+        wrap.appendChild(input);
+        wrap.appendChild(arrow);
+        document.body.appendChild(menu);            // fixed: nothing can clip it
+        input.classList.add('is-combo', 'sel-field');
+        input.setAttribute('role', 'combobox');
+        input.setAttribute('aria-expanded', 'false');
+        input.setAttribute('aria-controls', id + 'm');
+        input.setAttribute('aria-autocomplete', 'list');
+        input.setAttribute('autocomplete', 'off');
+        /* Taken off only now that the list is drawn here: with the attribute
+           still on, Chrome shows its own popup on top of this one. Kept as
+           data-list so the list can be found again. */
+        input.dataset.list = data.id;
+        input.removeAttribute('list');
+
+        var state = { input: input, data: data, btn: input, menu: menu, active: -1,
+                      build: comboBuild, paint: comboPaint, filter: false };
+        input._sel = state;
+        menu._sel = state;
+
+        comboBuild(state);
+        comboPaint(state);
+
+        // The caret should not move because the handle was clicked.
+        arrow.addEventListener('mousedown', function (e) { e.preventDefault(); });
+        arrow.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!state.menu.hidden) { close(state); return; }
+            /* The handle is the dropdown, so it shows the whole list whatever
+               has been typed; typing is what narrows it. */
+            state.filter = false;
+            open(state);
+            input.focus();
+        });
+        input.addEventListener('click', function (e) {
+            e.stopPropagation();
+            if (state.menu.hidden) { state.filter = false; open(state); }
+        });
+        input.addEventListener('input', function () {
+            state.filter = true;
+            open(state);
+        });
+        input.addEventListener('keydown', function (e) { onComboKey(state, e); });
+
+        new MutationObserver(function () { comboBuild(state); comboPaint(state); })
+            .observe(data, { childList: true, subtree: true });
+    }
+
+    /** The list, narrowed to what has been typed if anything has. */
+    function comboBuild(state) {
+        var menu = state.menu;
+        var want = state.filter ? state.input.value.trim().toLowerCase() : '';
+        menu.innerHTML = '';
+        var shown = 0;
+        Array.prototype.forEach.call(state.data.querySelectorAll('option'), function (o) {
+            /* A datalist option carries its text in `value`; `label` or child
+               text is optional, and is the label when it is there. */
+            var value = (o.value || o.textContent || '').trim();
+            var text  = (o.getAttribute('label') || o.textContent || '').trim() || value;
+            if (value === '') return;
+            if (want && (value + ' ' + text).toLowerCase().indexOf(want) < 0) return;
+            menu.appendChild(comboRow(state, value, text));
+            shown++;
+        });
+        if (!shown) {
+            var none = document.createElement('div');
+            none.className = 'sel-none';
+            none.textContent = 'Nothing on the list matches that.';
+            menu.appendChild(none);
+        }
+    }
+
+    function comboRow(state, value, text) {
+        var el = document.createElement('div');
+        el.className = 'sel-opt';
+        el.setAttribute('role', 'option');
+        el.innerHTML = TICK + '<span></span>';
+        el.lastChild.textContent = text;
+        el.dataset.value = value;
+        // Picked on the click, so the box must not lose the caret on the press.
+        el.addEventListener('mousedown', function (e) { e.preventDefault(); });
+        el.addEventListener('click', function (e) {
+            e.stopPropagation();
+            comboChoose(state, value);
+        });
+        el.addEventListener('mousemove', function () {
+            setActive(state, options(state).indexOf(el));
+        });
+        return el;
+    }
+
+    /** Tick whichever row is what the box already says. */
+    function comboPaint(state) {
+        var now = state.input.value.trim().toLowerCase();
+        options(state).forEach(function (el) {
+            el.setAttribute('aria-selected', el.dataset.value.toLowerCase() === now);
+        });
+    }
+
+    function comboChoose(state, value) {
+        var el = state.input;
+        el.value = value;
+        /* Told the way a page expects to be told. Both, because a page that
+           watches a text box watches `input`, and one that watches a dropdown
+           watches `change`; neither fires on assignment. */
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        close(state);
+        state.filter = false;
+        el.focus();
+    }
+
+    function onComboKey(state, e) {
+        var openNow = !state.menu.hidden;
+        var rows = options(state);
+
+        switch (e.key) {
+            case 'ArrowDown':
+                e.preventDefault();
+                if (openNow) setActive(state, state.active + 1);
+                else { state.filter = false; open(state); }
+                return;
+            case 'ArrowUp':
+                e.preventDefault();
+                if (openNow) setActive(state, state.active - 1);
+                else { state.filter = false; open(state); }
+                return;
+            case 'Home':
+            case 'End':
+                return;            // the caret's, in a box that can be typed in
+            case 'Enter':
+                /* Only while the list is open: with it closed this is the
+                   submit the form is expecting, and taking that would be a
+                   dropdown stopping somebody from sending the form. */
+                if (!openNow) return;
+                e.preventDefault();
+                if (rows[state.active]) comboChoose(state, rows[state.active].dataset.value);
+                else close(state);
+                return;
+            case 'Escape':
+                if (openNow) { e.preventDefault(); e.stopPropagation(); close(state); }
+                return;
+            case 'Tab':
+                if (openNow) close(state);
+                return;
+        }
+    }
+
     function skinAll(root) {
         (root || document).querySelectorAll('select:not(.is-skinned)').forEach(skin);
+        (root || document).querySelectorAll('input[list][data-combo]:not(.is-combo)')
+            .forEach(combo);
     }
 
     document.addEventListener('click', function () { if (openOne) close(openOne); });
@@ -384,7 +603,9 @@ select.is-skinned {
                     var n = records[i].addedNodes[j];
                     if (n.nodeType !== 1) continue;
                     if (n.tagName === 'SELECT') skin(n);
-                    else skinAll(n);
+                    else if (n.tagName === 'INPUT') {
+                        if (n.hasAttribute('list') && n.dataset.combo !== undefined) combo(n);
+                    } else skinAll(n);
                 }
             }
         }).observe(document.body, { childList: true, subtree: true });

@@ -79,6 +79,21 @@ About 59 of these attributes are still scattered through the app. Most are
 harmless (duplicating a rule the stylesheet already has) but none of them do
 anything.
 
+### An invalid ENUM value is silently thrown away
+
+MariaDB runs here without `STRICT_TRANS_TABLES`. Writing a value the ENUM does
+not list stores an **empty string** and the insert still reports success; the
+only sign is a warning nobody reads.
+
+`notifications.notification_type` accepts `submission`, `approval`, `decline`,
+`reminder`, `comment`, `manuscript`, `security`, `support`, `account`. The
+approval path passed `progress` for months, so every "your paper is published"
+notice was stored with no kind and drew the generic bell in the notification
+centre instead of the approval tick. Repaired by
+`scripts/migrations/run_notification_type_repair.php`.
+
+Check the column's ENUM before inventing a value for it.
+
 ### `bind_param` type-string length
 
 `'sssisssi'` must have exactly one character per parameter. A mismatch fails at
@@ -177,7 +192,9 @@ the history.
 
 ## Login
 
-Sign-in is **ID + password**. No usernames, no birthdate (both were removed).
+Sign-in is **ID + password**. No usernames, no birthdate, no emailed one-time
+code (all three were removed; the code step was deleted outright in October
+2026, so there is no commented-out block to revive).
 
 The lookup matches `username`, `email`, `student_id` **or** `faculty_id` —
 students carry their ID in `student_id`, staff in `faculty_id`, and which column
@@ -189,6 +206,31 @@ gave a HAP the Coordinator's navbar for months.
 
 Staff, librarians and the Director all sign in on the **faculty** tab. Only
 `selected_role` values `student`, `faculty` and `guest` exist.
+
+---
+
+## Email
+
+Every message goes through `send_email()` in `config/core.php`, which wraps the
+body in `email_layout()`: the maroon PUP letterhead, the PAPEL band, the
+sign-off and the footer. **The subject is also printed as the heading inside
+the letter**, so changing one changes both.
+
+Bodies are built from `email_para()`, `email_details()` (the label/value table,
+with IDs and passwords in monospace) and `email_action()` (the link). Never
+concatenate raw HTML; `email_plain()` derives the plain-text copy from the same
+markup and only understands those blocks.
+
+`create_notification()` posts the in-app notice **and** emails it. Its subject
+comes from a map keyed on the notification type; pass the fifth argument when
+one type means two different things (an approval is "forwarded" to one reader
+and "published" to another, a manuscript notice is a request to a librarian and
+an answer to a student).
+
+**Mail actually sends from this machine.** Anything that creates a notification
+reaches a real inbox, so test against `@example.com` addresses, which are
+reserved and cannot receive mail. Seeding a paper on a real student's account
+and approving it will email that student.
 
 ---
 
@@ -235,7 +277,9 @@ php scripts/migrations/run_student_cohort_migration.php
 ```
 
 Recent ones: `run_student_cohort_migration.php` (academic_year, section),
-`run_account_expiry_migration.php` (expires_on).
+`run_account_expiry_migration.php` (expires_on),
+`run_notification_type_repair.php` (notices that lost their kind),
+`run_drop_otp_column.php` (removed `users.is_otp_exempt`; already applied).
 
 Papers deleted from `research_papers` leave rows behind in `approval_workflow`,
 `paper_checklist` and `supporting_documents`. `papers_archive` is *meant* to
@@ -277,9 +321,9 @@ Seed realistic data, assert, then clean up. Never leave test rows behind.
 
 ## Known gaps
 
-- **`time_to_approval` is never written.** The `analytics` table has the column
-  and the dashboard has a tile for it, but nothing populates it on approval, so
-  it always reads "—".
+- **`time_to_approval` is only written from now on.** `PaperService` stamps it
+  on the Coordinator's approval, so the tile fills for papers approved since
+  that was added. Papers approved before it have no figure and never will.
 - **`CSRF_KEY` is still the placeholder** in `.env`. Changing it logs everyone
   out once.
 - **The Director's password is unrecoverable.** Testing Director-only pages

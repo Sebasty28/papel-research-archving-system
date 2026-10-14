@@ -55,7 +55,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($upd->affected_rows > 0) {
                 create_notification((int)$row['student_user_id'], (int)$row['paper_id'], 'manuscript',
                     'Your request for manuscript access was granted, until '
-                    . date('F j, Y g:i A', strtotime($expires)) . '.');
+                    . date('F j, Y g:i A', strtotime($expires)) . '.',
+                    'Your Manuscript Request Was Granted');
                 flash('success', 'Access granted.');
             } else {
                 flash('error', 'That request is no longer pending.');
@@ -77,7 +78,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($row && $upd->affected_rows > 0) {
             create_notification((int)$row['student_user_id'], (int)$row['paper_id'], 'manuscript',
-                'Your request for manuscript access was denied.');
+                'Your request for manuscript access was denied.',
+                'Your Manuscript Request Was Not Granted');
             flash('success', 'Request denied.');
         } else {
             flash('error', 'That request is no longer pending.');

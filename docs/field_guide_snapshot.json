@@ -1,5 +1,5 @@
 {
- "built": "2026-10-12 16:54",
+ "built": "2026-10-14 23:32",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -8,7 +8,7 @@
    "lines": 306
   },
   "ai/help_chatbot.php": {
-   "lines": 146
+   "lines": 149
   },
   "ai/prompt_guard.php": {
    "lines": 188
@@ -29,7 +29,7 @@
    "lines": 526
   },
   "app/admin/admin_review_dashboard.php": {
-   "lines": 134
+   "lines": 139
   },
   "app/admin/gdrive_settings.php": {
    "lines": 326
@@ -38,10 +38,10 @@
    "lines": 503
   },
   "app/admin/super_admin_review_dashboard.php": {
-   "lines": 108
+   "lines": 135
   },
   "app/auth/login.php": {
-   "lines": 1243
+   "lines": 1108
   },
   "app/auth/logout.php": {
    "lines": 36
@@ -53,19 +53,19 @@
    "lines": 1172
   },
   "app/faculty/faculty_review_dashboard.php": {
-   "lines": 153
+   "lines": 165
   },
   "app/faculty/head_review_dashboard.php": {
    "lines": 64
   },
   "app/helpers/UploadHelper.php": {
-   "lines": 68
+   "lines": 72
   },
   "app/librarian/librarian_manage_guests.php": {
    "lines": 456
   },
   "app/librarian/manuscript_requests.php": {
-   "lines": 567
+   "lines": 569
   },
   "app/models/AdminManagementService.php": {
    "lines": 183
@@ -83,7 +83,7 @@
    "lines": 99
   },
   "app/models/PaperService.php": {
-   "lines": 71
+   "lines": 84
   },
   "app/models/UserRepository.php": {
    "lines": 144
@@ -92,22 +92,22 @@
    "lines": 128
   },
   "app/review_paper.php": {
-   "lines": 837
+   "lines": 831
   },
   "app/student/paper_details.php": {
-   "lines": 706
+   "lines": 717
   },
   "app/student/pdf_viewer.php": {
    "lines": 312
   },
   "app/student/student_cancel_submission.php": {
-   "lines": 101
+   "lines": 104
   },
   "app/student/student_chatbot.php": {
-   "lines": 162
+   "lines": 165
   },
   "app/student/student_dashboard.php": {
-   "lines": 761
+   "lines": 816
   },
   "app/student/student_draft_delete.php": {
    "lines": 119
@@ -119,7 +119,7 @@
    "lines": 433
   },
   "app/student/student_upload_ai.php": {
-   "lines": 7807
+   "lines": 7873
   },
   "app/support_requests.php": {
    "lines": 289
@@ -134,19 +134,19 @@
    "lines": 954
   },
   "archive/index.php": {
-   "lines": 1276
+   "lines": 1279
   },
   "archive/login.php": {
    "lines": 1081
   },
   "archive/view_paper.php": {
-   "lines": 898
+   "lines": 980
   },
   "config/config.php": {
-   "lines": 121
+   "lines": 131
   },
   "config/core.php": {
-   "lines": 2441
+   "lines": 2629
   },
   "config/error_handler.php": {
    "lines": 169
@@ -167,7 +167,7 @@
    "lines": 231
   },
   "database/seeds/install_super_admin.php": {
-   "lines": 9
+   "lines": 12
   },
   "includes/accessibility.php": {
    "lines": 965
@@ -182,16 +182,16 @@
    "lines": 176
   },
   "includes/browse_console.php": {
-   "lines": 680
+   "lines": 895
   },
   "includes/browse_console_js.php": {
-   "lines": 487
+   "lines": 974
   },
   "includes/card_collapse.php": {
    "lines": 94
   },
   "includes/console_shell.php": {
-   "lines": 202
+   "lines": 346
   },
   "includes/docx_writer.php": {
    "lines": 230
@@ -206,7 +206,7 @@
    "lines": 325
   },
   "includes/focus_ring.php": {
-   "lines": 170
+   "lines": 182
   },
   "includes/key_nav.php": {
    "lines": 232
@@ -236,7 +236,7 @@
    "lines": 241
   },
   "includes/paper_record_css.php": {
-   "lines": 336
+   "lines": 419
   },
   "includes/password_audit_tab.php": {
    "lines": 201
@@ -260,13 +260,13 @@
    "lines": 217
   },
   "includes/review_console.php": {
-   "lines": 1698
+   "lines": 1733
   },
   "includes/scroll_jump.php": {
    "lines": 93
   },
   "includes/select_skin.php": {
-   "lines": 394
+   "lines": 615
   },
   "includes/site_footer.php": {
    "lines": 488
@@ -299,7 +299,7 @@
    "lines": 23
   },
   "notifications/cron/send_notifications.php": {
-   "lines": 32
+   "lines": 34
   },
   "notifications/notification_center.php": {
    "lines": 479
@@ -308,10 +308,10 @@
    "lines": 109
   },
   "pages/about_us.php": {
-   "lines": 226
+   "lines": 222
   },
   "pages/contact_support.php": {
-   "lines": 791
+   "lines": 851
   },
   "pages/error_page.php": {
    "lines": 190
@@ -329,7 +329,7 @@
    "lines": 219
   },
   "pages/settings.php": {
-   "lines": 710
+   "lines": 732
   },
   "pages/terms_and_conditions.php": {
    "lines": 172
@@ -367,6 +367,9 @@
   "scripts/migrations/run_drive_only_cleanup.php": {
    "lines": 107
   },
+  "scripts/migrations/run_drop_otp_column.php": {
+   "lines": 53
+  },
   "scripts/migrations/run_drop_plain_password_migration.php": {
    "lines": 54
   },
@@ -390,6 +393,9 @@
   },
   "scripts/migrations/run_notification_migration.php": {
    "lines": 11
+  },
+  "scripts/migrations/run_notification_type_repair.php": {
+   "lines": 62
   },
   "scripts/migrations/run_password_audit_migration.php": {
    "lines": 73
@@ -430,6 +436,9 @@
   "scripts/utilities/fix_nonces.py": {
    "lines": 30
   },
+  "scripts/utilities/hostcheck.php": {
+   "lines": 259
+  },
   "scripts/utilities/migrate_gdrive.php": {
    "lines": 17
   },
@@ -452,7 +461,7 @@
    "lines": 299
   },
   "tests/m1_auth.py": {
-   "lines": 304
+   "lines": 309
   },
   "tests/m3_dashboard.py": {
    "lines": 135
@@ -476,7 +485,7 @@
    "lines": 290
   },
   "tests/make_artifact.py": {
-   "lines": 557
+   "lines": 558
   },
   "tests/report.py": {
    "lines": 150

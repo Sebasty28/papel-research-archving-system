@@ -93,15 +93,20 @@ $RC = [
                         'where' => "rp.current_status IN ('pending_admin','pending_admin_l1')",
                         'empty' => 'Nothing is waiting for you. Papers arrive here once a Research Adviser approves them.',
                         'empty_icon' => 'task_alt'],
+        /* The three tabs that move: what is waiting here, what is still with an
+           adviser, and what went back to a student. They are read together,
+           several times a day, so they sit together. Published and Archived
+           below are the settled ones, looked at when somebody wants the record
+           rather than the queue. */
         'adviser'   => ['label' => 'With Advisers',   'icon' => 'schedule',
                         'where' => "rp.current_status = 'pending_faculty'",
                         'empty' => 'No paper is sitting with a Research Adviser right now.'],
-        'published' => ['label' => 'Published',       'icon' => 'verified',
-                        'where' => "rp.current_status = 'approved'",
-                        'empty' => 'Nothing has been published yet.'],
         'returned'  => ['label' => 'Returned',        'icon' => 'undo',
                         'where' => "rp.current_status = 'draft' AND $declined_exists",
                         'empty' => 'No paper has been sent back for revision.'],
+        'published' => ['label' => 'Published',       'icon' => 'verified',
+                        'where' => "rp.current_status = 'approved'",
+                        'empty' => 'Nothing has been published yet.'],
         /* Papers the Director has taken out of the public repository. They are
            rows of papers_archive rather than research_papers, so the tab names
            its own source instead of filtering on a status. */

@@ -125,8 +125,9 @@ MODULES = [
  },
  {
   'id': 'm3', 'num': 3, 'title': 'Signing in',
-  'blurb': 'ID and password. No usernames, no birthdate, no OTP — all three '
-           'were removed, though the OTP code is still there, commented out.',
+  'blurb': 'ID and password, and nothing else. The birthdate and the emailed '
+           'one-time code were both factors here once; both have been taken '
+           'out, code and all.',
   'features': [
     {'title': 'The sign-in itself',
      'blurb': 'One ID box. It matches against four columns, because which one '
@@ -397,7 +398,6 @@ MODULES = [
         'read from the theme at draw time and rebuilt when the theme changes, '
         'so they survive dark mode.'),
        ('analytics/paper_analysis.php', 'One paper in detail.'),
-       ('app/models/AnalyticsService.php', 'The counting queries.'),
        ('analytics/dashboard.php',
         'Nineteen lines, and all of them a redirect. There used to be two '
         'analytics pages for two audiences; they were merged, and this stays '

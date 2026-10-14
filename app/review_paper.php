@@ -171,14 +171,6 @@ $approveLead  = $isAdviser
 <?php require_once ROOT_PATH.'/includes/console_shell.php'; ?>
 <?php require_once ROOT_PATH.'/includes/paper_record_css.php'; ?>
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
-/* The site's own link colour: the browser's default blue belongs to nothing
-   else on the page. */
-.pd-repo-link {
-    display: inline-flex; align-items: center; gap: .25rem;
-    margin-top: .4rem; font-size: .75rem;
-    color: var(--maroon); text-decoration: none;
-}
-.pd-repo-link:hover { color: var(--dark-maroon); text-decoration: underline; }
 
 /* The checklist is filled in here rather than read, so its rows are controls. */
 .rv-check-row {
@@ -262,14 +254,6 @@ $approveLead  = $isAdviser
                     <span class="sep">•</span><span><?= e(paper_type_label($paper['paper_type'])) ?></span>
                     <span class="sep">•</span><span>Submitted by <?= e($submittedBy) ?></span>
                 </div>
-                <?php /* Only once published, before that there is no repository
-                         page to open. */ ?>
-                <?php if ($status === 'approved'): ?>
-                    <a class="pd-repo-link" href="<?= e(BASE_URL) ?>/archive/view_paper.php?id=<?= (int)$paper_id ?>">
-                        <span class="material-symbols-outlined mi-18">open_in_new</span>
-                        View in public repository
-                    </a>
-                <?php endif; ?>
             </div>
             <div class="pd-status">
                 Status
@@ -279,6 +263,16 @@ $approveLead  = $isAdviser
                         title="Hide the contents panel" aria-label="Hide the contents panel" aria-pressed="false">
                     <span class="material-symbols-outlined" id="pdRailToggleIcon">right_panel_close</span>
                 </button>
+                <?php /* Under the panel toggle, with the other thing this corner is
+                         for: what to do with the record rather than what to read of
+                         it. Only once published, because before that there is no
+                         repository page to open. */ ?>
+                <?php if ($status === 'approved'): ?>
+                    <a class="pd-repo-link" href="<?= e(BASE_URL) ?>/archive/view_paper.php?id=<?= (int)$paper_id ?>">
+                        <span class="material-symbols-outlined mi-18">open_in_new</span>
+                        View in public repository
+                    </a>
+                <?php endif; ?>
             </div>
         </div>
 

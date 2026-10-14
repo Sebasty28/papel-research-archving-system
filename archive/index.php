@@ -781,7 +781,10 @@ ob_start();
 
 <!-- ===== 6. Main content + sidebar ===== -->
 <main class="wrap layout">
-    <div class="main-col" id="mainCol">
+    <?php /* The list here can be read as cards or as rows, so Quick Settings
+             draws the switch: see buildViewSection() in browse_console_js.php
+             for why the marker sits on the column rather than on the list. */ ?>
+    <div class="main-col" id="mainCol" data-view-console="1">
         <?php ob_start(); ?>
         <h1 class="section-heading"><?= $has_filters ? 'Search Results' : 'Recent Researches' ?></h1>
 

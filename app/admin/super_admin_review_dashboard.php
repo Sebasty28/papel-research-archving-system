@@ -34,6 +34,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['export'])) {
         } else {
             flash('error', 'That paper could not be archived.');
         }
+    } elseif ($action === 'restore' && $paper_id > 0) {
+        /* And back again. A paper taken out of the repository by mistake, or
+           one wanted again, should not need the database to put right. */
+        if (restore_paper($paper_id)) {
+            flash('success', 'Paper restored. It is back in the public repository.');
+        } else {
+            flash('error', 'That paper could not be restored.');
+        }
+        header("Location: $SELF?tab=archived");
+        exit;
     }
 
     header("Location: $SELF");
@@ -80,11 +90,28 @@ $RC = [
         ['href' => BASE_URL.'/notifications/notification_center.php', 'icon' => 'notifications', 'label' => 'Notifications',
          'desc' => 'Every alert sent to you'],
     ],
-    /* Archiving applies to what is published, so the control only appears there,
-       and never on the Archived tab: those papers carry the status they were
-       approved with and would otherwise offer to be archived twice. */
+    /* Archiving applies to what is published; the Archived tab offers the
+       other direction instead, so each row carries the one move it has left
+       rather than the one it has already made. */
     'card_extra' => function (array $r, string $src) use ($SELF): string {
-        if ($src === 'archive' || $r['current_status'] !== 'approved') return '';
+        if ($src === 'archive') {
+            ob_start(); ?>
+            <form method="post" action="<?= e($SELF) ?>" class="js-confirm-form rc-spacer"
+                  data-title="Restore this paper?"
+                  data-icon="unarchive"
+                  data-body="It goes back into the public repository, where readers can find it again."
+                  data-ok="Restore it"
+                  data-cancel="Leave it archived">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="restore">
+                <input type="hidden" name="paper_id" value="<?= (int)$r['paper_id'] ?>">
+                <button type="submit" class="btn-sm-outline">
+                    <span class="material-symbols-outlined mi-18">unarchive</span> Unarchive
+                </button>
+            </form>
+            <?php return ob_get_clean();
+        }
+        if ($r['current_status'] !== 'approved') return '';
         ob_start(); ?>
         <form method="post" action="<?= e($SELF) ?>" class="js-confirm-form rc-spacer"
               data-title="Archive this paper?"

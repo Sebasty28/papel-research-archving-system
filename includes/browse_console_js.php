@@ -105,6 +105,65 @@
         });
     }
 
+    /* ---- Cards or rows ----
+       Offered on every page that lists papers: the repository, the student's
+       own submissions and the four review desks. The attribute is already on
+       <html> before the first paint (browse_console.php); this draws the
+       switch and remembers the answer.
+
+       papel_desk_view is the key this started life under, when only the
+       review desks had the switch, and is read as a fallback so nobody who
+       set rows there is handed cards back. */
+    var VIEW_KEY = 'papel_view';
+    var VIEW_OPTIONS = [['cards', 'Cards'], ['rows', 'Rows']];
+
+    function currentView() {
+        var v = getStored(VIEW_KEY, '') || getStored('papel_desk_view', '');
+        return v === 'rows' ? 'rows' : 'cards';
+    }
+
+    /* Marked on #mainCol rather than looked for in the list itself: the three
+       consoles that have one replace that column by AJAX, so a tab with no
+       results would otherwise drop the switch out of Quick Settings on the
+       very page that still offers it. The marker sits on the column, which
+       the swap never replaces. */
+    function buildViewSection() {
+        if (!document.querySelector('#mainCol[data-view-console]')) return;
+        document.querySelectorAll('.quick-settings-dropdown').forEach(function (panel) {
+            if (panel.querySelector('.qs-view')) return;          // already built
+
+            var section = document.createElement('div');
+            section.className = 'qs-section qs-view';
+
+            var label = document.createElement('span');
+            label.className = 'qs-section-label';
+            label.textContent = 'View';
+            section.appendChild(label);
+
+            VIEW_OPTIONS.forEach(function (opt) {
+                var row = document.createElement('label');
+                row.className = 'qs-radio';
+                var input = document.createElement('input');
+                input.type = 'radio';
+                input.name = 'qs_view';
+                input.value = opt[0];
+                row.appendChild(input);
+                row.appendChild(document.createTextNode(opt[1]));
+                section.appendChild(row);
+            });
+
+            /* Above Density, which is the first section the pages write by
+               hand; the link to the full settings is a section too, and it
+               stays at the top, so the one to go in front of is the first
+               with a heading of its own. */
+            var before = null;
+            panel.querySelectorAll('.qs-section').forEach(function (sec) {
+                if (!before && sec.querySelector('.qs-section-label')) before = sec;
+            });
+            before ? panel.insertBefore(section, before) : panel.appendChild(section);
+        });
+    }
+
     var CARD_DETAIL_KEY = 'papel_card_detail';
     var CARD_DETAIL_OPTIONS = [['expanded', 'Expanded'], ['collapsed', 'Collapsed']];
 
@@ -153,19 +212,147 @@
         });
     }
 
+    /* ---- The same choices, on the list itself ----
+       Right-clicking a paper puts View, Density and Card Details under the
+       pointer rather than across the page on the gear. The controls are the
+       panel's own, names included, so the change handler further down applies
+       and stores them exactly as it does there and the sync puts every copy of
+       them back in step. Nothing here is a second source of truth.
+
+       Which sections appear is decided the same way the panel decides: the
+       markers on #mainCol, so the repository is not offered a Card Details row
+       for cards it has never had. */
+    var DENSITY_OPTIONS = [['default', 'Default'],
+                           ['comfortable', 'Comfortable'],
+                           ['compact', 'Compact']];
+    var ctxMenu = null;
+
+    /* A form, not a div, and that is the whole reason it is one: radios with
+       the same name belong to one group per form owner, so outside a form the
+       menu's "Compact" and the panel's "Compact" were the same radio. Choosing
+       in the menu silently unchecked the panel's copy and left that panel
+       showing nothing selected at all. Inside a form of its own the menu has
+       its own group, while the names stay what the change handler listens for. */
+    function ctxBox() {
+        if (!ctxMenu) {
+            ctxMenu = document.createElement('form');
+            ctxMenu.className = 'qs-context';
+            ctxMenu.setAttribute('role', 'menu');
+            ctxMenu.hidden = true;
+            // Nothing to send: Enter on a radio would otherwise reload the page.
+            ctxMenu.addEventListener('submit', function (e) { e.preventDefault(); });
+            document.body.appendChild(ctxMenu);
+        }
+        return ctxMenu;
+    }
+
+    function ctxGroup(label, name, options, current) {
+        var section = document.createElement('div');
+        section.className = 'qs-section';
+
+        var head = document.createElement('span');
+        head.className = 'qs-section-label';
+        head.textContent = label;
+        section.appendChild(head);
+
+        options.forEach(function (opt) {
+            var row = document.createElement('label');
+            row.className = 'qs-radio';
+            var input = document.createElement('input');
+            input.type = 'radio';
+            input.name = name;
+            input.value = opt[0];
+            input.checked = (opt[0] === current);
+            row.appendChild(input);
+            row.appendChild(document.createTextNode(opt[1]));
+            section.appendChild(row);
+        });
+        return section;
+    }
+
+    function closeCtx() {
+        if (ctxMenu) ctxMenu.hidden = true;
+    }
+
+    function openCtx(x, y) {
+        var m = ctxBox();
+        m.innerHTML = '';
+        if (document.querySelector('#mainCol[data-view-console]')) {
+            m.appendChild(ctxGroup('View', 'qs_view', VIEW_OPTIONS, currentView()));
+        }
+        m.appendChild(ctxGroup('Density', 'qs_density', DENSITY_OPTIONS,
+                               getStored('papel_density', 'default')));
+        if (document.querySelector('#mainCol[data-card-console]')) {
+            m.appendChild(ctxGroup('Card Details', 'qs_card_detail', CARD_DETAIL_OPTIONS,
+                                   getStored(CARD_DETAIL_KEY, 'expanded')));
+        }
+
+        // Measured while shown, then nudged back inside the window.
+        m.hidden = false;
+        var w = m.offsetWidth, h = m.offsetHeight;
+        m.style.left = Math.round(Math.max(8, Math.min(x, window.innerWidth - w - 8))) + 'px';
+        m.style.top  = Math.round(Math.max(8, Math.min(y, window.innerHeight - h - 8))) + 'px';
+
+        var first = m.querySelector('input:checked') || m.querySelector('input');
+        if (first) first.focus();
+    }
+
+    document.addEventListener('contextmenu', function (e) {
+        var row = e.target.closest
+            ? e.target.closest('.paper-list .paper-card, .paper-list .paper-item')
+            : null;
+        if (!row) { closeCtx(); return; }
+        /* A link keeps the browser's own menu, which is where "open link in a
+           new tab" lives and how a repository is read: a paper in one tab, the
+           list still in another. accessibility.php suppresses that menu
+           everywhere else on the page and lets it through on links, so leaving
+           links alone here is all that is needed. Everywhere else on the row,
+           these settings. */
+        if (e.target.closest('a[href], button, input, textarea, select')) { closeCtx(); return; }
+
+        e.preventDefault();
+        openCtx(e.clientX, e.clientY);
+    });
+
+    /* Chosen, applied by the handler below, and gone: a menu that stays open
+       after an answer is a panel, and there is already one of those.
+
+       The sync waits a tick. This listener is registered before the one that
+       actually applies and stores the choice, so running it straight away read
+       the old value back out of storage and re-ticked the panel to the setting
+       that had just been replaced. */
+    document.addEventListener('change', function (e) {
+        if (!ctxMenu || ctxMenu.hidden || !ctxMenu.contains(e.target)) return;
+        closeCtx();
+        setTimeout(syncQuickSettings, 0);
+    });
+
+    document.addEventListener('click', function (e) {
+        if (ctxMenu && !ctxMenu.hidden && !ctxMenu.contains(e.target)) closeCtx();
+    }, true);
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeCtx();
+    });
+    window.addEventListener('scroll', closeCtx, true);
+    window.addEventListener('resize', closeCtx);
+
     // Reflect saved preferences onto <html> and tick the matching controls.
     function syncQuickSettings() {
         var density    = getStored('papel_density', 'default');
         var colour     = currentColour();
         var cardDetail = getStored(CARD_DETAIL_KEY, 'expanded');
+        var view       = currentView();
         var el         = document.documentElement;
 
         el.setAttribute('data-density', density);
         el.setAttribute('data-color', colour);
         el.setAttribute('data-mode', modeFor(colour));
+        el.setAttribute('data-view', view);
 
+        buildViewSection();
         buildCardDetailSection();
         buildColourSection();
+        document.querySelectorAll('input[name="qs_view"]').forEach(function (i) { i.checked = (i.value === view); });
         document.querySelectorAll('input[name="qs_density"]').forEach(function (i) { i.checked = (i.value === density); });
         document.querySelectorAll('input[name="qs_color"]').forEach(function (i) { i.checked = (i.value === colour); });
         document.querySelectorAll('input[name="qs_card_detail"]').forEach(function (i) { i.checked = (i.value === cardDetail); });
@@ -215,7 +402,16 @@
 
     // Every one of these takes effect at once and is remembered.
     document.addEventListener('change', function (e) {
-        if (e.target.name === 'qs_density') {
+        if (e.target.name === 'qs_view') {
+            var view = e.target.value === 'rows' ? 'rows' : 'cards';
+            document.documentElement.setAttribute('data-view', view);
+            try { localStorage.setItem(VIEW_KEY, view); } catch (err) {}
+            /* The same switch is drawn in more than one panel on a page that
+               has both a toolbar and a settings page open behind it. */
+            document.querySelectorAll('input[name="qs_view"]').forEach(function (i) {
+                i.checked = (i.value === view);
+            });
+        } else if (e.target.name === 'qs_density') {
             document.documentElement.setAttribute('data-density', e.target.value);
             try { localStorage.setItem('papel_density', e.target.value); } catch (err) {}
         } else if (e.target.name === 'qs_color') {
@@ -309,7 +505,8 @@
     });
 
     document.addEventListener('keydown', function (e) {
-        var input = e.target.closest('.search-input[data-suggest-url]');
+        // A key event can be dispatched at the document, which has no closest().
+        var input = e.target.closest && e.target.closest('.search-input[data-suggest-url]');
         if (!input) return;
         var box = suggestBox(input);
         if (!box || box.style.display !== 'block') return;
@@ -482,5 +679,295 @@
 
     buildCardToggles();
     window.papelBuildCardToggles = buildCardToggles;
+})();
+
+
+/* ===== The card behind a row =====
+   A row says what a long list is scanned by and puts the rest away. Resting
+   on one brings the rest back: the card it came from, cloned, shown beside
+   it until the pointer leaves.
+
+   Cloned rather than rebuilt from the same data, so there is nothing to keep
+   in step: whatever the card shows on this page, this shows. The rows
+   layout is written as `html[data-view="rows"] .paper-list ...`, so a copy
+   that lives on <body> instead of in the list matches none of it and draws
+   as a card without being told to.
+
+   Only where there is a pointer that hovers. On a touch screen every tap
+   would open one of these over the thing that was tapped. */
+(function () {
+    if (!window.matchMedia || !matchMedia("(hover: hover)").matches) return;
+
+    var ROWS = ".paper-list .paper-card, .paper-list .paper-item";
+    var DELAY = 220;          // long enough that passing over a list is quiet
+    var peek = null, timer = null, shownFor = null;
+
+    function panel() {
+        if (!peek) {
+            peek = document.createElement("div");
+            peek.className = "row-peek";
+            /* It repeats what is already on the row for anyone reading the
+               page rather than looking at it, so it is not announced twice. */
+            peek.setAttribute("aria-hidden", "true");
+            peek.hidden = true;
+            document.body.appendChild(peek);
+        }
+        return peek;
+    }
+
+    function inRows() {
+        return document.documentElement.getAttribute("data-view") === "rows";
+    }
+
+    function rowOf(node) {
+        return (node && node.closest) ? node.closest(ROWS) : null;
+    }
+
+    function fill(row) {
+        var p = panel();
+        var copy = row.cloneNode(true);
+        /* Every id would now be in the document twice, and a label, a toggle
+           or an aria-controls pointing at one would find whichever came
+           first. Names go for the same reason: a form control with a name is
+           a form control the page can be asked for. */
+        copy.querySelectorAll("[id]").forEach(function (el) { el.removeAttribute("id"); });
+        copy.querySelectorAll("[name]").forEach(function (el) { el.removeAttribute("name"); });
+        copy.querySelectorAll(".paper-card-toggle").forEach(function (el) { el.remove(); });
+        // What Card Details folded away is exactly the detail this is for.
+        if (copy.hasAttribute("data-collapsed")) copy.setAttribute("data-collapsed", "0");
+        p.innerHTML = "";
+        p.appendChild(copy);
+        return p;
+    }
+
+    /* Under the row, over it when the page runs out below, and lined up with
+       the list so it reads as that row opening rather than as something
+       arriving from elsewhere. */
+    function place(row) {
+        var p = panel();
+        var r = row.getBoundingClientRect();
+        var list = (row.parentElement || row).getBoundingClientRect();
+        p.style.width = Math.round(Math.min(Math.max(list.width, 320),
+                                            window.innerWidth - 16)) + "px";
+        p.hidden = false;
+        var h = p.offsetHeight;
+        var top = r.bottom + 6;
+        if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
+        p.style.top = Math.round(top) + "px";
+        p.style.left = Math.round(Math.max(8,
+            Math.min(list.left, window.innerWidth - p.offsetWidth - 8))) + "px";
+    }
+
+    function open(row) {
+        if (!inRows() || !document.body.contains(row)) return;
+        /* Something deliberate is already open over this row: the right-click
+           menu, or the window a click opened. Either outranks a card that
+           appears merely because the pointer is resting. */
+        if (document.querySelector(".qs-context:not([hidden]), .row-view-back:not([hidden])")) return;
+        shownFor = row;
+        fill(row);
+        place(row);
+        requestAnimationFrame(function () {
+            if (peek && shownFor === row) peek.classList.add("is-open");
+        });
+    }
+
+    function close() {
+        clearTimeout(timer);
+        shownFor = null;
+        if (peek) { peek.classList.remove("is-open"); peek.hidden = true; }
+    }
+
+    document.addEventListener("mouseover", function (e) {
+        if (!inRows()) return;
+        var row = rowOf(e.target);
+        if (!row) { if (shownFor) close(); return; }
+        if (row === shownFor) return;      // moving about inside the same row
+        clearTimeout(timer);
+        timer = setTimeout(function () { open(row); }, DELAY);
+    });
+
+    document.addEventListener("mouseout", function (e) {
+        var row = rowOf(e.target);
+        if (!row) return;
+        // Still inside the same row: a move between its own children.
+        if (e.relatedTarget && row.contains(e.relatedTarget)) return;
+        close();
+    });
+
+    /* The same card for the keyboard, since a row is reached by tabbing to
+       the title inside it. */
+    document.addEventListener("focusin", function (e) {
+        if (!inRows()) return;
+        var row = rowOf(e.target);
+        if (row) open(row); else close();
+    });
+
+    document.addEventListener("focusout", function (e) {
+        var row = rowOf(e.target);
+        if (!row) return;
+        // Still inside the same row: the tab moved between its own links.
+        if (e.relatedTarget && row.contains(e.relatedTarget)) return;
+        close();
+    });
+
+    /* It is placed against the viewport, so anything that moves the row out
+       from under it takes it away: scrolling (the list has its own scroller,
+       hence the capture), resizing, a click, Escape, or going back to cards. */
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    document.addEventListener("click", close, true);
+    document.addEventListener("contextmenu", close, true);
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") close(); });
+    document.addEventListener("change", function (e) {
+        if (e.target.name === "qs_view" || e.target.name === "qs_density") close();
+    });
+})();
+
+
+/* ===== The record, opened small =====
+   A click on a row opens that paper's own page in a window in the middle of
+   the screen; two clicks go to it properly, the same place the title link
+   goes. The page is framed rather than rebuilt, so there is nothing here that
+   can fall behind what the record actually says.
+
+   The single click waits a quarter of a second before it does anything, which
+   is how it tells one click from the first of two. That delay is invisible for
+   what it opens, and it is the only way both gestures can live on the same
+   spot. The title link and the buttons keep their own behaviour: they are the
+   parts of a row that already do something. */
+(function () {
+    /* Not inside the window this very feature opens. The record page carries a
+       Back link to the list, and a list that can open records in a window is a
+       list that opens one inside the one it is already in, and again inside
+       that. One level is a preview; two is a hall of mirrors. */
+    if (window.self !== window.top) return;
+
+    var ROWS = ".paper-list .paper-card, .paper-list .paper-item";
+    var WAIT = 260;
+    var timer = null, back = null, frame = null, name = null, go = null;
+
+    function recordUrl(row) {
+        var a = row.querySelector(".paper-title a[href]");
+        return a ? a.getAttribute("href") : null;
+    }
+
+    function panel() {
+        if (back) return back;
+        back = document.createElement("div");
+        back.className = "row-view-back";
+        back.hidden = true;
+        back.setAttribute("role", "dialog");
+        back.setAttribute("aria-modal", "true");
+        back.setAttribute("aria-label", "Paper preview");
+        back.innerHTML =
+            '<div class="row-view">'
+          +   '<div class="row-view-head">'
+          +     '<span class="row-view-name"></span>'
+          +     '<a class="row-view-btn" data-go target="_self">'
+          +       '<span class="material-symbols-outlined mi-18">open_in_full</span>Open the page</a>'
+          +     '<button type="button" class="row-view-btn" data-close aria-label="Close the preview">'
+          +       '<span class="material-symbols-outlined mi-18">close</span></button>'
+          +   '</div>'
+          +   '<iframe class="row-view-frame" title="Paper preview" referrerpolicy="same-origin"></iframe>'
+          + '</div>';
+        document.body.appendChild(back);
+        frame = back.querySelector(".row-view-frame");
+        name  = back.querySelector(".row-view-name");
+        go    = back.querySelector("[data-go]");
+
+        /* The page inside brings its own navbar, breadcrumb and footer, and in a
+           window of this size that is a second set of site furniture wrapped
+           around the one thing being looked at. They are hidden through the
+           frame's own DOM (same origin, so this is allowed) rather than by
+           asking the page to render differently: no shared include has to learn
+           about being embedded, and a style element injected there would be
+           refused by the CSP for having no nonce. Re-run on every load, since
+           the reader can follow links inside the window. */
+        frame.addEventListener("load", function () {
+            var doc;
+            try { doc = frame.contentDocument; } catch (err) { return; }   // not ours
+            if (!doc) return;
+            [".site-header", ".nav-photo", ".crumb-bar", ".site-footer"].forEach(function (sel) {
+                doc.querySelectorAll(sel).forEach(function (el) { el.style.display = "none"; });
+            });
+
+            /* Back belongs to the page, and inside a window the page's "back"
+               is the window itself: following it would leave the list showing
+               inside a box on top of the same list. So it closes this instead.
+               Bound on every load, since each one brings a new document. */
+            doc.querySelectorAll(".pd-back").forEach(function (b) {
+                b.addEventListener("click", function (e) { e.preventDefault(); shut(); });
+            });
+
+            /* And if the frame ends up anywhere that is not a paper's record,
+               there is nothing left for the window to be showing. */
+            if (!doc.querySelector(".pd-heading")) shut();
+        });
+
+        back.addEventListener("click", function (e) {
+            if (e.target === back || e.target.closest("[data-close]")) shut();
+        });
+        return back;
+    }
+
+    function shut() {
+        if (!back || back.hidden) return;
+        back.classList.remove("is-open");
+        back.hidden = true;
+        // Emptied, so the page inside stops running the moment it is closed.
+        frame.setAttribute("src", "about:blank");
+        document.body.style.overflow = "";
+    }
+
+    function show(row) {
+        var url = recordUrl(row);
+        if (!url) return;                     // nothing to open: a draft, or a guest
+        var p = panel();
+        var title = row.querySelector(".paper-title");
+        name.textContent = title ? title.textContent.replace(/\s+/g, " ").trim() : "Paper";
+        go.setAttribute("href", url);
+        frame.setAttribute("src", url);
+        p.hidden = false;
+        document.body.style.overflow = "hidden";
+        requestAnimationFrame(function () { p.classList.add("is-open"); });
+    }
+
+    function rowFor(e) {
+        if (!e.target.closest) return null;
+        var row = e.target.closest(ROWS);
+        if (!row) return null;
+        // The title and the buttons already have a job on a single click.
+        if (e.target.closest("a[href], button, input, textarea, select")) return null;
+        return row;
+    }
+
+    document.addEventListener("click", function (e) {
+        var row = rowFor(e);
+        if (!row) return;
+        if (e.detail > 1) return;             // the second of a pair; dblclick has it
+        // A click that dismisses the right-click menu is not a click on the row.
+        var menu = document.querySelector(".qs-context");
+        if (menu && !menu.hidden) return;
+        // Nor is the one that ends a drag across the text.
+        var sel = window.getSelection && window.getSelection();
+        if (sel && String(sel).trim() !== "") return;
+
+        clearTimeout(timer);
+        timer = setTimeout(function () { show(row); }, WAIT);
+    });
+
+    document.addEventListener("dblclick", function (e) {
+        var row = rowFor(e);
+        if (!row) return;
+        clearTimeout(timer);                  // the preview the first click had queued
+        shut();
+        var url = recordUrl(row);
+        if (url) window.location.href = url;
+    });
+
+    document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") shut();
+    });
 })();
 </script>

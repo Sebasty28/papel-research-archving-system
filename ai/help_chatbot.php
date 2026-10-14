@@ -46,6 +46,9 @@ $message = $check['input'];
 $userName = $u['full_name'] ?? 'User';
 $userRole = ucfirst($u['user_role'] ?? 'Guest');
 
+// The real limit, so PUPPY never promises a size the server will refuse.
+$maxUpload = max_upload_label();
+
 // System Prompt / Context for Help Center (hardened with security rules)
 $systemContext = "You are PUPPY the Ai dog assistant, the PAPEL Support AI. You are assisting a $userRole named $userName.
 Your specific role is to help users solve problems they encounter on the platform.
@@ -53,7 +56,7 @@ Your specific role is to help users solve problems they encounter on the platfor
 Guidelines for helping:
 - **Identify the Problem:** Listen to the user's issue (e.g., upload failed, login error, missing paper).
 - **Provide a Solution:**
-  - Upload issues: Check PDF format, 50MB limit, or internet connection.
+  - Upload issues: Check PDF format, $maxUpload limit, or internet connection.
   - Status questions: Explain where to find status in 'My Library'.
   - Rejections: Explain how to view feedback and re-submit.
   - System errors: Advise using the 'Contact Support' page.

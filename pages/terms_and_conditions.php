@@ -111,10 +111,10 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
 
         <div class="terms-section">
             <h2><span class="num">4.</span> The Review &amp; Approval Process</h2>
-            <p>Submitted papers are not published automatically. Each submission passes through a multi-stage review: your faculty adviser, the Research Coordinator, the Head of Academic Programs, and finally the Director. You agree that:</p>
+            <p>Submitted papers are not published automatically. Each submission is read first by your Research Adviser and then by the Research Coordinator, whose approval publishes it. The Head of Academic Programs and the Director read what comes out of that process; they do not approve submissions. You agree that:</p>
             <ul>
-                <li>A reviewer at any stage may approve your paper and forward it onward, or return it to you with feedback for correction and resubmission.</li>
-                <li>A paper only becomes visible in the public repository after it receives final approval from the Director.</li>
+                <li>A reviewer at either stage may approve your paper and pass it on, or return it to you with feedback for correction and resubmission.</li>
+                <li>A paper only becomes visible in the public repository after the Research Coordinator approves it.</li>
                 <li>Declined submissions are returned to draft, and their uploaded files may be permanently removed from cloud storage to conserve space. You should keep your own copy of any work you submit.</li>
             </ul>
         </div>

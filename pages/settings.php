@@ -454,6 +454,16 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
         <div class="page-card-body">
             <div class="option-row">
                 <div class="option-text">
+                    <strong>Result view</strong>
+                    <span>How research listings are laid out: a card for each paper, or one line each for scanning a long list.</span>
+                </div>
+                <div class="segmented">
+                    <input type="radio" name="qs_view" id="view_cards" value="cards"><label for="view_cards">Cards</label>
+                    <input type="radio" name="qs_view" id="view_rows" value="rows"><label for="view_rows">Rows</label>
+                </div>
+            </div>
+            <div class="option-row">
+                <div class="option-text">
                     <strong>Result density</strong>
                     <span>How much spacing to use in research listings.</span>
                 </div>
@@ -568,6 +578,15 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
+    /* Cards or rows, the same key and the same attribute the Quick Settings
+       panel on every browsing page uses, so setting it in either place is the
+       same act. papel_desk_view is the key it started life under, when only
+       the review desks offered it. */
+    var view = getStored('papel_view', '') || getStored('papel_desk_view', '');
+    view = (view === 'rows') ? 'rows' : 'cards';
+    document.documentElement.setAttribute('data-view', view);
+    document.querySelectorAll('input[name="qs_view"]').forEach(function (i) { i.checked = (i.value === view); });
+
     var density = getStored('papel_density', 'default');
     document.documentElement.setAttribute('data-density', density);
     document.querySelectorAll('input[name="qs_density"]').forEach(function (i) { i.checked = (i.value === density); });
@@ -616,7 +635,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.addEventListener('change', function (e) {
         var input = e.target;
-        if (input.name === 'qs_density') {
+        if (input.name === 'qs_view') {
+            document.documentElement.setAttribute('data-view', input.value);
+            try { localStorage.setItem('papel_view', input.value); } catch (err) {}
+        } else if (input.name === 'qs_density') {
             document.documentElement.setAttribute('data-density', input.value);
             try { localStorage.setItem('papel_density', input.value); } catch (err) {}
         } else if (input.name === 'qs_color') {

@@ -57,6 +57,35 @@
 # Disable Server Signature (ID-015)
 ServerSignature Off
 
+# Nothing below is part of the running site, and a deploy that forgets to
+# exclude one of them should not make it reachable. .git in particular would
+# hand over the whole history, .env.example and all, at /.git/config.
+# reset_system_data.php empties the system; it is guarded by a role check and
+# a token, and it still has no business answering a request on a live server.
+# Nothing in the app links into these folders, so denying them costs nothing.
+#
+# RewriteRule, not RedirectMatch, because a RedirectMatch pattern is matched
+# against the whole URL path: "^/scripts/" would fire on a server where the
+# site is the domain root and quietly do nothing here, where it is served
+# from /capstone/. A RewriteRule in .htaccess is matched relative to this
+# folder, so one rule covers both. The RedirectMatch lines after it are the
+# fallback for a server without mod_rewrite, where they are better than
+# nothing even though they only cover the domain root case.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule (^|/)\.git(/|$)                             - [R=404,L]
+    RewriteRule ^(scripts|tests|docs|database|backups)(/|$) - [R=404,L]
+    RewriteRule ^reset_system_data\.php$                    - [R=404,L]
+</IfModule>
+<IfModule !mod_rewrite.c>
+    RedirectMatch 404 /\.git(/|$)
+    RedirectMatch 404 ^/(scripts|tests|docs|database|backups)(/|$)
+    RedirectMatch 404 ^/reset_system_data\.php$
+</IfModule>
+
+# No directory listings anywhere.
+Options -Indexes
+
 <IfModule mod_php.c>
     # Try to disable expose_php via php_flag if permitted
     php_flag expose_php Off

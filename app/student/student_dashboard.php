@@ -46,8 +46,24 @@ $tabs = [
     'process'  => 'Under Review',
     'declined' => 'Needs Revision',
     'drafts'   => 'Drafts',
+    /* Papers the Director has taken out of the public repository. Nothing to
+       do with an account's own expiry: a paper can be archived the day after
+       it is published if that is the decision. Without this tab such a paper
+       simply vanished from its author's dashboard, since archiving moves the
+       row out of research_papers altogether. */
+    'archived' => 'Archived',
 ];
 $tab = isset($_GET['tab']) && isset($tabs[$_GET['tab']]) ? $_GET['tab'] : 'approved';
+
+/* Archiving is not a status: the row is moved to papers_archive and deleted
+   from research_papers, so the archived tab reads the other table and every
+   query below picks its FROM from here. Each column these queries name
+   travels with the paper, so only the table changes.
+
+   approval_workflow rows stay behind when a paper is archived, which is why
+   the reviewers and any feedback still appear on an archived card. */
+$from_table = $tab === 'archived' ? 'papers_archive' : 'research_papers';
+$is_archived_tab = $tab === 'archived';
 
 $search       = trim($_GET['q'] ?? '');
 $filter_type  = trim($_GET['type'] ?? '');
@@ -75,6 +91,8 @@ switch ($tab) {
     case 'process':  $where .= " AND rp.current_status IN ($process_list)"; break;
     case 'declined': $where .= " AND rp.current_status = 'draft' AND $declined_exists"; break;
     case 'drafts':   $where .= " AND rp.current_status = 'draft' AND NOT $declined_exists"; break;
+    /* No status to narrow by: being in that table is what the tab means. */
+    case 'archived': break;
 }
 if ($search) {
     $where .= " AND (rp.title LIKE ? OR rp.keywords LIKE ? OR rp.abstract LIKE ?)";
@@ -86,7 +104,7 @@ if ($filter_month >= 1 && $filter_month <= 12) { $where .= " AND MONTH(rp.resear
 if ($filter_day   >= 1 && $filter_day   <= 31) { $where .= " AND DAY(rp.research_date) = ?";   $params[] = $filter_day;   $types .= 'i'; }
 
 // ---- Counts per tab (for the tab labels) ------------------------------
-$counts = ['approved' => 0, 'process' => 0, 'declined' => 0, 'drafts' => 0];
+$counts = ['approved' => 0, 'process' => 0, 'declined' => 0, 'drafts' => 0, 'archived' => 0];
 $cs = $conn->prepare(
     "SELECT
         SUM(rp.current_status = 'approved') AS approved,
@@ -102,8 +120,16 @@ if ($row = $cs->get_result()->fetch_assoc()) {
 }
 $cs->close();
 
+/* Counted on its own, because it is the one tab whose papers are in the
+   other table. */
+$ac = $conn->prepare("SELECT COUNT(*) AS n FROM papers_archive WHERE uploaded_by = ?");
+$ac->bind_param('i', $u['user_id']);
+$ac->execute();
+$counts['archived'] = (int)($ac->get_result()->fetch_assoc()['n'] ?? 0);
+$ac->close();
+
 // ---- Total for the active view ----------------------------------------
-$ct = $conn->prepare("SELECT COUNT(*) AS total FROM research_papers rp WHERE $where");
+$ct = $conn->prepare("SELECT COUNT(*) AS total FROM $from_table rp WHERE $where");
 $ct->bind_param($types, ...$params);
 $ct->execute();
 $total_papers = (int)($ct->get_result()->fetch_assoc()['total'] ?? 0);
@@ -113,9 +139,11 @@ $start_item  = $offset + 1;
 $end_item    = min($offset + $per_page, $total_papers);
 
 // ---- Page of results ---------------------------------------------------
+$archived_col = $is_archived_tab ? ', rp.archived_date' : '';
 $sql = "SELECT rp.paper_id, rp.title, rp.author_names, rp.year, rp.abstract, rp.keywords,
-               rp.upload_date, rp.research_date, rp.paper_type, rp.publication_status, rp.current_status
-        FROM research_papers rp
+               rp.upload_date, rp.research_date, rp.paper_type, rp.publication_status,
+               rp.current_status$archived_col
+        FROM $from_table rp
         WHERE $where
         ORDER BY COALESCE(rp.research_date, MAKEDATE(rp.year, 1)) $sort_dir
         LIMIT ? OFFSET ?";
@@ -232,7 +260,7 @@ ob_start();
              see includes/review_console.php's own copy of this comment for
              why browse_console_js.php needs it rather than checking for
              .paper-card directly. */ ?>
-    <div class="main-col" id="mainCol" data-card-console="1">
+    <div class="main-col" id="mainCol" data-card-console="1" data-view-console="1">
         <?php ob_start(); ?>
 
         <?php /* Deleting, withdrawing and submitting all land back here, and
@@ -272,7 +300,12 @@ ob_start();
             <div class="dash-bar">
                 <div class="dash-tabs">
                     <?php foreach ($tabs as $key => $label): ?>
-                        <?php if ($key === 'drafts' && $counts['drafts'] === 0 && $tab !== 'drafts') continue; ?>
+                        <?php /* Drafts and Archived appear only when there is something
+                                 in them, or while they are the tab being read: most
+                                 students have neither, and an always-empty tab teaches
+                                 nothing. */ ?>
+                        <?php if (in_array($key, ['drafts', 'archived'], true)
+                                  && $counts[$key] === 0 && $tab !== $key) continue; ?>
                         <a class="dash-tab <?= $tab === $key ? 'active' : '' ?>"
                            href="student_dashboard.php?<?= dash_qs(['tab' => $key, 'page' => null]) ?>">
                             <?= e($label) ?> <span class="count"><?= (int)$counts[$key] ?></span>
@@ -355,6 +388,12 @@ ob_start();
                                 <h2 class="paper-title">
                                     <?php if ($isDraftOnly): ?>
                                         <?= e($r['title']) ?>
+                                    <?php elseif ($is_archived_tab): ?>
+                                        <?php /* paper_details.php reads research_papers, which an
+                                                 archived paper has left. Its record is on the
+                                                 repository page instead, which falls back to
+                                                 papers_archive. */ ?>
+                                        <a href="<?= e(BASE_URL) ?>/archive/view_paper.php?id=<?= $pid ?>"><?= e($r['title']) ?></a>
                                     <?php else: ?>
                                         <a href="paper_details.php?id=<?= $pid ?>"><?= e($r['title']) ?></a>
                                     <?php endif; ?>
@@ -372,11 +411,27 @@ ob_start();
                                         <span class="sep">•</span>
                                         <span><?= e($r['publication_status']) ?></span>
                                     <?php endif; ?>
+                                    <?php /* When it left the repository, said here rather than
+                                             left to be guessed at: a paper that disappears from
+                                             public view without a date is one its author cannot
+                                             ask a sensible question about. */ ?>
+                                    <?php if ($is_archived_tab && !empty($r['archived_date'])): ?>
+                                        <span class="sep">•</span>
+                                        <span>Archived <?= e(date('M j, Y', strtotime($r['archived_date']))) ?></span>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                             <div class="card-status">
-                                <span>Status: <span class="status-value"><?= e(workflow_status_badge_text($status, (bool)$fb)) ?></span></span>
-                                <?php if (!$isDraftOnly): ?>
+                                <?php /* An archived paper still carries the status it was
+                                         approved with, which is not what has happened to it
+                                         most recently and not why it is on this tab. */ ?>
+                                <span>Status: <span class="status-value"><?=
+                                    $is_archived_tab ? 'ARCHIVED'
+                                                     : e(workflow_status_badge_text($status, (bool)$fb))
+                                ?></span></span>
+                                <?php if ($is_archived_tab): ?>
+                                    <a class="paper-action" href="<?= e(BASE_URL) ?>/archive/view_paper.php?id=<?= $pid ?>">View Details</a>
+                                <?php elseif (!$isDraftOnly): ?>
                                     <a class="paper-action" href="paper_details.php?id=<?= $pid ?>">View Details</a>
                                 <?php endif; ?>
                             </div>

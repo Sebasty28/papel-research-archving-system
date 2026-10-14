@@ -21,7 +21,7 @@ SCHEMA = {
         ('birthdate', 'DATE', ''), ('password', 'VARCHAR', ''), ('full_name', 'VARCHAR', ''),
         ('user_role', 'ENUM', ''), ('admin_type', 'ENUM', ''), ('created_by', 'INT', 'FK'),
         ('created_at', 'TIMESTAMP', ''), ('last_login', 'TIMESTAMP', ''), ('is_active', 'TINYINT', ''),
-        ('is_otp_exempt', 'TINYINT', ''), ('gdrive_token', 'TEXT', ''), ('reset_token', 'VARCHAR', ''),
+        ('gdrive_token', 'TEXT', ''), ('reset_token', 'VARCHAR', ''),
         ('reset_expires', 'DATETIME', ''), ('title', 'VARCHAR', ''), ('faculty_id', 'VARCHAR', ''),
         ('program', 'VARCHAR', ''), ('academic_year', 'VARCHAR', ''), ('section', 'VARCHAR', ''),
         ('expires_on', 'DATE', ''), ('student_id', 'VARCHAR', ''), ('admin_level', 'TINYINT', '')]),

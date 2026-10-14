@@ -240,6 +240,17 @@ $fill  = count($steps) > 1 ? max(0, min(100, ($done - 1) / (count($steps) - 1) *
                         title="Hide the contents panel" aria-label="Hide the contents panel" aria-pressed="false">
                     <span class="material-symbols-outlined" id="pdRailToggleIcon">right_panel_close</span>
                 </button>
+                <?php /* The published copy, in the corner that holds what can be
+                         done with the record rather than what is written in it,
+                         the same place the reviewer's page keeps it. Only once
+                         approved: before that there is no repository page. The
+                         note at the foot still explains what readers see there. */ ?>
+                <?php if ($status === 'approved'): ?>
+                    <a class="pd-repo-link" href="<?= e(BASE_URL) ?>/archive/view_paper.php?id=<?= (int)$paper['paper_id'] ?>">
+                        <span class="material-symbols-outlined mi-18">open_in_new</span>
+                        View in public repository
+                    </a>
+                <?php endif; ?>
             </div>
         </div>
 

@@ -273,7 +273,7 @@ function user_has_own_gdrive_token(int $userId): bool { return false; }
 
 // ── Drive Operations ──────────────────────────────────────────────────────────
 
-function get_or_create_folder(Google_Service_Drive $service, string $folderName, string $parentId = null): string
+function get_or_create_folder(Google_Service_Drive $service, string $folderName, ?string $parentId = null): string
 {
     $q = "name='" . addslashes($folderName) . "' and mimeType='application/vnd.google-apps.folder' and trashed=false";
     if ($parentId) $q .= " and '$parentId' in parents";
@@ -290,7 +290,7 @@ function get_or_create_folder(Google_Service_Drive $service, string $folderName,
     return $folder->id;
 }
 
-function upload_to_gdrive(string $filePath, string $fileName, string $folderId = null, string $program = null, string $year = null, $userId = null): ?string
+function upload_to_gdrive(string $filePath, string $fileName, ?string $folderId = null, ?string $program = null, ?string $year = null, $userId = null): ?string
 {
     if (!is_gdrive_connected())
         throw new Exception("Google Drive is not connected. An administrator must connect Google Drive first.");

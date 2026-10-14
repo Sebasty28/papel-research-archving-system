@@ -31,8 +31,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         }
         
         $pdf = $_FILES['research_pdf'];
-        if ($pdf['size']> 50*1024*1024) { 
-            throw new Exception('PDF too large (max 50MB)'); 
+        if ($pdf['size']> max_upload_bytes()) {
+            throw new Exception('PDF too large (max ' . max_upload_label() . ')');
         }
         
         $finfo = new finfo(FILEINFO_MIME_TYPE);
@@ -272,7 +272,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                                 <input type="file" class="form-control" id="research_pdf" name="research_pdf" 
                                        accept="application/pdf" required>
                             </div>
-                            <small class="text-muted">Maximum 50MB</small>
+                            <small class="text-muted">Maximum <?= e(max_upload_label()) ?></small>
                         </div>
 
                         <div class="row g-3">

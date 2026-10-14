@@ -72,13 +72,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['export'])) {
         add_workflow($paper_id, $u['user_id'], 'faculty', 'approved', $feedback);
         set_status($paper_id, 'pending_admin');
 
+        $student_id   = paper_owner($paper_id);
+        $student_name = 'a student';
+        if ($student_id && ($s_user = get_user($student_id))) $student_name = $s_user['full_name'];
+
         $admin_id = creator_of($u['user_id']);
         if ($admin_id) {
-            $student_id   = paper_owner($paper_id);
-            $student_name = 'a student';
-            if ($student_id && ($s_user = get_user($student_id))) $student_name = $s_user['full_name'];
             create_notification($admin_id, $paper_id, 'submission',
                 "Research Adviser approved {$student_name}'s paper. Pending your review.");
+        }
+
+        /* And the author, who until now heard nothing at this step. Only the
+           Coordinator was told, so a student whose paper had been signed off
+           saw it leave Under Review with no word of why or where it went, and
+           the next thing they heard was either publication or a return. */
+        if ($student_id) {
+            create_notification($student_id, $paper_id, 'approval',
+                'Your Research Adviser approved your paper and sent it on to the '
+                . 'Research Coordinator for the final review.',
+                'Your Paper Has Been Approved & Forwarded');
         }
         flash('success', 'Paper forwarded to the Research Coordinator.');
 

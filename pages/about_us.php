@@ -131,15 +131,15 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
                 </tr>
                 <tr>
                     <td><span class="role-badge">Research Coordinator</span></td>
-                    <td>Creates and manages faculty accounts, and reviews papers endorsed by advisers, approving and forwarding them to the Head of Academic Programs, or returning them with feedback.</td>
+                    <td>Creates and manages faculty accounts, and reviews papers endorsed by advisers. This is the approval that publishes a paper to the public repository, or returns it with feedback.</td>
                 </tr>
                 <tr>
                     <td><span class="role-badge">Head of Academic Programs</span></td>
-                    <td>Reviews papers forwarded by the Research Coordinator and either approves and forwards them to the Director for final sign-off, or returns them to the student with feedback.</td>
+                    <td>Reads the published output across all programs. This desk reviews what has been published; approving a submission is the Research Coordinator's step.</td>
                 </tr>
                 <tr>
                     <td><span class="role-badge">Director</span></td>
-                    <td>Manages administrator accounts and system settings, and gives the final approval that publishes a paper to the public repository.</td>
+                    <td>Manages administrator accounts and system settings, archives papers, and reads the whole published repository.</td>
                 </tr>
                 <tr>
                     <td><span class="role-badge">Guest</span></td>
@@ -157,7 +157,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
         </div>
         <div class="page-card-body">
         
-        <p>Every submission travels through a structured, four-stage review pipeline before it appears in the public repository. At any stage a reviewer may return the paper with feedback so the student can correct and resubmit, ensuring only vetted research is published.</p>
+        <p>Every submission travels through a two-stage review before it appears in the public repository. At either stage a reviewer may return the paper with feedback so the student can correct and resubmit, ensuring only vetted research is published.</p>
         <table class="role-table">
             <thead>
                 <tr>
@@ -176,15 +176,11 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
                 </tr>
                 <tr>
                     <td><span class="role-badge">3 · Coordinator Review</span></td>
-                    <td>The Research Coordinator reviews the endorsed paper and forwards it to the Head of Academic Programs.</td>
+                    <td>The Research Coordinator reviews the endorsed paper and approves it, which publishes it to the public repository. At either stage a reviewer may instead return the paper for correction.</td>
                 </tr>
                 <tr>
-                    <td><span class="role-badge">4 · Academic Review</span></td>
-                    <td>The Head of Academic Programs reviews the paper and forwards it to the Director.</td>
-                </tr>
-                <tr>
-                    <td><span class="role-badge">5 · Final Approval</span></td>
-                    <td>The Director gives final approval, publishing the paper to the public repository. At any stage a reviewer may instead return the paper for correction.</td>
+                    <td><span class="role-badge">4 · Reading</span></td>
+                    <td>The Head of Academic Programs and the Director read the published work. Neither desk approves submissions.</td>
                 </tr>
             </tbody>
         </table>

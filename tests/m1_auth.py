@@ -2,11 +2,11 @@
 """MODULE 1 — Authentication, and MODULE 2 — User account creation.
 
 Several cases in the tracker describe a sign-in with a birthdate and an emailed
-OTP. Neither exists any more: the birthdate was dropped as a factor (it is not a
-secret, and an account without one on file could not sign in at all) and the OTP
-block is commented out in app/auth/login.php. Those cases are re-tested against
-what the login actually does now and reported as superseded rather than failed,
-because nothing is broken — the design changed.
+one-time code. Neither exists any more: the birthdate was dropped as a factor
+(it is not a secret, and an account without one on file could not sign in at
+all) and the code step has been taken out of app/auth/login.php altogether.
+Those cases are re-tested against what the login actually does now and reported
+as superseded rather than failed, because nothing is broken: the design changed.
 """
 import re
 import harness as H
@@ -72,27 +72,32 @@ def t004():
 
 
 def t005():
-    """OTP expiry — the step no longer exists."""
+    """One-time code expiry: the step no longer exists.
+
+    Asserted against the file rather than assumed, so that if the step is ever
+    brought back these three cases stop reporting it as gone.
+    """
     src = open(r'c:\xampp\htdocs\capstone\app\auth\login.php',
                encoding='utf-8', errors='replace').read()
-    disabled = 'OTP TEMPORARILY DISABLED' in src
-    R.record('ID-005', 'NOT IMPLEMENTED' if disabled else 'UNTESTED',
-             'superseded: the OTP step is commented out in login.php, so there '
-             'is no expiry to test. Sign-in is ID + password.',
-             'login.php: OTP TEMPORARILY DISABLED')
+    gone = 'otp' not in src.lower()
+    R.record('ID-005', 'NOT IMPLEMENTED' if gone else 'UNTESTED',
+             'superseded: the one-time code step has been removed from '
+             'login.php, so there is no expiry to test. Sign-in is ID + '
+             'password.',
+             'login.php holds no OTP code')
 
 
 def t006():
     R.record('ID-006', 'NOT IMPLEMENTED',
-             'superseded: no OTP is sent, so there is nothing to resend.',
-             'login.php: OTP block commented out')
+             'superseded: no code is sent, so there is nothing to resend.',
+             'login.php holds no OTP code')
 
 
 def t007():
     R.record('ID-007', 'NOT IMPLEMENTED',
-             'superseded: no OTP is asked for. The verify_otp branch is kept '
-             'but unreachable, as no login ever sets pending_login.',
-             'login.php action=verify_otp is dead code')
+             'superseded: no code is asked for. The verify_otp branch has been '
+             'removed, and nothing sets pending_login.',
+             'login.php holds no OTP code')
 
 
 def t008():

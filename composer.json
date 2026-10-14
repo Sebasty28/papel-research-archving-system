@@ -2,5 +2,11 @@
     "require": {
         "google/apiclient": "2.15",
         "smalot/pdfparser": "^2.12"
+    },
+    "scripts": {
+        "pre-autoload-dump": "Google\\Task\\Composer::cleanup"
+    },
+    "extra": {
+        "google/apiclient-services": ["Drive"]
     }
 }

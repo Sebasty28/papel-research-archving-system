@@ -40,14 +40,14 @@ def try_send(to, subject, body):
 
 
 def t080():
-    """The OTP email — the step no longer runs, but the mailer still must."""
-    out = try_send('autotest.otp@example.com', 'AUTOTEST delivery check',
+    """The one-time code email: the step is gone, but the mailer still must work."""
+    out = try_send('autotest.mail@example.com', 'AUTOTEST delivery check',
                    'Sent by the automated suite to an unreachable address.')
     works = 'SENT' in out
     R.record('ID-080', 'NOT IMPLEMENTED' if works else 'FAILED',
-             'superseded: no OTP is sent, because the OTP step is commented '
-             'out in login.php. The mail path underneath it does work — a '
-             'test message was accepted for delivery (%s).' % out[:40]
+             'superseded: no code is sent, because the one-time code step has '
+             'been removed from login.php. The mail path underneath it does '
+             'work: a test message was accepted for delivery (%s).' % out[:40]
              if works else
              'the mailer itself failed: %s' % out)
 

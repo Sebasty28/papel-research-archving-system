@@ -92,7 +92,10 @@ try {
 $who = $u['full_name'] ?? 'A student';
 $message = $who . ' withdrew their submission "' . $paper['title'] . '" and returned it to draft.';
 foreach ($audience as $reviewerId) {
-    create_notification($reviewerId, $paper_id, 'submission', $message);
+    /* Not "a new submission needs your review", which is the default subject
+       for this type and the opposite of what has happened. */
+    create_notification($reviewerId, $paper_id, 'submission', $message,
+        'A Submission Has Been Withdrawn');
 }
 
 flash('success', 'Submission withdrawn. "' . $paper['title'] . '" is back in your drafts.');

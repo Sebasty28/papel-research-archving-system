@@ -1,0 +1,70 @@
+# Staging deploy: every push to main.
+#
+# The host has no SSH, no Composer and no git, so the build happens here and
+# only the result is sent over FTP. The cleanup hook in composer.json runs
+# during install, which is what keeps vendor at about 900 files instead of
+# 26,000; a free account allows roughly 30,000 files in total.
+name: Deploy to staging
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:        # so you can redeploy without making a commit
+
+concurrency:
+  group: staging            # never let two deploys write over each other
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: PHP, matching the host
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+
+      - name: Install dependencies, trimmed
+        run: composer install --no-dev --optimize-autoloader --no-interaction
+
+      - name: Fail if anything is too big for the host
+        # Free hosting refuses any file over 10 MB, by FTP and by file manager
+        # alike, and the upload would fail halfway with a confusing error.
+        run: |
+          big=$(find . -type f -size +10M -not -path './.git/*' | head -20)
+          if [ -n "$big" ]; then echo "Over 10 MB:"; echo "$big"; exit 1; fi
+
+      - name: Send to InfinityFree
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ftpupload.net
+          port: 21
+          protocol: ftp
+          username: ${{ secrets.STAGE_FTP_USER }}
+          password: ${{ secrets.STAGE_FTP_PASS }}
+          local-dir: ./
+          server-dir: /htdocs/
+          # .env and the Drive token are written once on the server and must
+          # survive every deploy. The rest is either not part of the running
+          # site or is students' own work.
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/.github/**
+            **/.env
+            **/config/gdrive_token.json
+            **/mailer/composer.phar
+            **/uploads/research/**
+            **/uploads/supporting_docs/**
+            **/uploads/drafts/**
+            **/uploads/temp/**
+            **/uploads/section_images/**
+            **/docs/**
+            **/tests/**
+            **/scripts/**
+            **/database/**
+            **/backups/**
+            **/*.md
+            reset_system_data.php

@@ -177,7 +177,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
                     <i class="bi bi-plus faq-icon"></i>
                 </button>
                 <div class="faq-body" id="q1">
-                    Go to the <strong>Upload Research</strong> page from your student dashboard. You will need your research paper in PDF format (max 50 MB). You can use the "Extract with AI" feature to auto-fill details like Title, Abstract, and Keywords. Don't forget to attach required documents such as Ethics Clearance and Consent Forms.
+                    Go to the <strong>Upload Research</strong> page from your student dashboard. You will need your research paper in PDF format (max <?= e(max_upload_label()) ?>). You can use the "Extract with AI" feature to auto-fill details like Title, Abstract, and Keywords. Don't forget to attach required documents such as Ethics Clearance and Consent Forms.
                 </div>
             </div>
 

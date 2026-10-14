@@ -9,6 +9,22 @@
  * AFTER includes/site_head.php (which supplies the design tokens).
  */
 ?>
+<script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
+/* Cards or rows, applied before the first paint: read it afterwards and a
+   list would draw as cards and then collapse, which on a long page is a
+   visible lurch. Kept per device, beside the density and the palette the
+   rest of Quick Settings remembers.
+
+   papel_desk_view is the key this started life under, when only the review
+   desks offered the switch; it is read as a fallback so nobody who set rows
+   there is handed cards back. */
+(function () {
+    var v;
+    try { v = localStorage.getItem('papel_view') || localStorage.getItem('papel_desk_view'); }
+    catch (e) {}
+    document.documentElement.setAttribute('data-view', v === 'rows' ? 'rows' : 'cards');
+})();
+</script>
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 /* ===== Search field ===== */
 .search-form {
@@ -162,6 +178,115 @@ html[data-mode="dark"] { --search-clear: #CFC3AE; }
 .paper-action:hover { color: var(--dark-maroon); text-decoration: underline; }
 .paper-program { display: block; color: var(--maroon); }
 
+/* ===== Rows =====
+   The block above is built for reading one paper at a time: a title, then
+   who wrote it and what it is underneath. A page holding fifty is scanned
+   instead, and scanning wants one line each. Nothing is removed from the
+   markup, so the switch is instant and an AJAX swap need know nothing
+   about it: .paper-foot stops being a box of its own and its two columns
+   join the title on one line.
+
+   The switch itself is drawn by browse_console_js.php into whatever Quick
+   Settings panel the page has, and the attribute is set above before the
+   first paint. */
+html[data-view="rows"] .paper-list .paper-item {
+    display: grid;
+    /* Shares of the line rather than content widths. Letting the middle
+       column take what it wanted left the title at 144px of its 716; giving
+       the title everything clipped the date mid-word. The title is what the
+       row is read by, so it gets the larger share and the rest is capped. */
+    grid-template-columns: minmax(10rem, 1.3fr) minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 1rem;
+    padding: .45rem 1.25rem;
+}
+html[data-view="rows"] .paper-list .paper-foot { display: contents; }
+/* A row sets its own padding, which would otherwise outrank the density
+   rules above and leave that setting doing nothing at all here. */
+html[data-view="rows"][data-density="compact"] .paper-list .paper-item { padding: .3rem 1.25rem; }
+html[data-view="rows"][data-density="comfortable"] .paper-list .paper-item { padding: .7rem 1.25rem; }
+html[data-view="rows"] .paper-list .paper-item .paper-title {
+    margin: 0; font-size: .875rem;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+html[data-view="rows"] .paper-list .paper-item .paper-info {
+    display: flex; align-items: baseline; gap: .5rem;
+    min-width: 0; overflow: hidden;
+}
+html[data-view="rows"] .paper-list .paper-item .paper-authors {
+    margin: 0; flex: 0 0 auto; min-width: 0; max-width: 10rem;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* The meta is a flex row that wraps by default. Left to do that inside a
+   narrow column it stacks three deep and the row stops being a row. */
+html[data-view="rows"] .paper-list .paper-item .paper-meta {
+    flex: 0 1 auto; min-width: 0; flex-wrap: nowrap;
+    white-space: nowrap; overflow: hidden;
+    /* A row of separate spans, so text-overflow has nothing to put an
+       ellipsis on: it would cut a word in half at the edge and read as a
+       rendering fault. Faded out instead. */
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 1.75rem), transparent);
+            mask-image: linear-gradient(to right, #000 calc(100% - 1.75rem), transparent);
+}
+html[data-view="rows"] .paper-list .paper-item .paper-side {
+    display: flex; align-items: center; gap: .75rem;
+    white-space: nowrap; line-height: 1.4;
+}
+html[data-view="rows"] .paper-list .paper-item .paper-program { display: inline; }
+/* Below this the three columns have nowhere to go, so a row is a block
+   again rather than a line squeezed to nothing. */
+@media (max-width: 820px) {
+    html[data-view="rows"] .paper-list .paper-item { display: block; padding: .875rem 1.25rem; }
+    html[data-view="rows"] .paper-list .paper-foot { display: grid; }
+    html[data-view="rows"] .paper-list .paper-item .paper-info { display: block; }
+    html[data-view="rows"] .paper-list .paper-item .paper-title { white-space: normal; }
+}
+
+/* ===== The card behind a row =====
+   Rows trade the detail for the overview, so resting on one brings its card
+   back for as long as the pointer stays there. It is the card itself,
+   cloned: a second rendering of the same facts would be one more thing to
+   keep in step with the first, and it would drift.
+
+   Never interactive. Pointer events are off, so the row underneath keeps the
+   hover (no flicker as the pointer crosses into it) and nothing in here can
+   be clicked by mistake. The buttons that decide something are taken out for
+   the same reason: a row has its own, and these would be dead copies. */
+.row-peek {
+    position: fixed; z-index: 1300;
+    pointer-events: none;
+    max-width: calc(100vw - 1rem);
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: var(--r-card, 8px);
+    box-shadow: var(--shadow-md, 0 6px 18px rgba(51,0,0,.14));
+    opacity: 0; transform: translateY(-.25rem);
+    transition: opacity .12s ease, transform .12s ease;
+}
+.row-peek[hidden] { display: none; }
+.row-peek.is-open { opacity: 1; transform: none; }
+/* The clone keeps its own class, so it is drawn as the card it is; what it
+   must not keep is the frame, which this panel is already drawing. */
+.row-peek .paper-card,
+.row-peek .paper-item {
+    margin: 0; border: 0; background: none; box-shadow: none;
+    padding: .875rem 1.125rem;
+}
+.row-peek .paper-item::after { display: none; }
+/* Room to read: this is the view that has it. */
+.row-peek .paper-title { white-space: normal; overflow: visible; }
+/* The link beside the status is named through its own box as well: console_shell
+   sets .card-status .paper-action to block, and that sheet loads after this one,
+   so an unqualified rule here lost on load order alone. */
+.row-peek .rc-actions,
+.row-peek .card-actions,
+.row-peek .paper-action,
+.row-peek .card-status .paper-action,
+.row-peek .paper-side .paper-action { display: none; }
+@media (prefers-reduced-motion: reduce) {
+    .row-peek { transition: none; }
+}
+
 /* ===== Member browse console (signed-in only) =====
    Toolbar directly under the search bar + scrollable result well. */
 .browse-toolbar {
@@ -283,6 +408,96 @@ html[data-mode="dark"] { --search-clear: #CFC3AE; }
 }
 .qs-radio input[type="radio"]:checked { background: var(--pup-maroon); }
 
+/* ===== The same choices, on the list itself =====
+   Right-clicking a paper opens them where the pointer already is, instead of
+   sending the reader across the page to the gear. It is the panel's own
+   sections, with the panel's own controls, so there is one setting and two
+   places to reach it. */
+/* Dressed as the notification menu is (includes/notif_actions.php), since that
+   is the site's other right-click menu and two of them should not look like
+   two different ideas. */
+.qs-context {
+    position: fixed;
+    z-index: 1400;                 /* over the hover card, which is 1300 */
+    width: 200px;
+    padding: .25rem;
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: var(--r-card, 8px);
+    box-shadow: 0 8px 24px rgba(51, 0, 0, .18);
+    font-family: var(--font-body);
+    overflow: hidden;
+}
+.qs-context[hidden] { display: none; }
+/* Tighter than the panel's, because this one opens under the pointer and a
+   tall menu would reach off the bottom of the screen. */
+.qs-context .qs-section { padding: .4rem .5rem; }
+.qs-context .qs-section:last-child { border-bottom: none; }
+.qs-context .qs-section-label { margin-bottom: .25rem; }
+.qs-context .qs-radio {
+    padding: .3rem .375rem;
+    border-radius: var(--r-control, 4px);
+}
+.qs-context .qs-radio:hover { background: var(--cream); color: var(--maroon); }
+
+/* ===== The record, opened small =====
+   One click on a row opens the paper's own page in the middle of the screen,
+   at about the size it is read at, and the list stays where it was underneath.
+   Two clicks go to the page properly. It is the record page itself in a frame,
+   not a second rendering of it: whatever that page shows, this shows, and the
+   site frames its own pages by policy (frame-src 'self' in config/core.php).
+
+   The window is capped to the screen it is on, so it never opens larger than
+   the room it has. */
+.row-view-back {
+    position: fixed; inset: 0; z-index: 1500;
+    display: flex; align-items: center; justify-content: center;
+    padding: 1rem;
+    background: rgba(51, 0, 0, .38);
+    opacity: 0; transition: opacity .14s ease;
+}
+.row-view-back[hidden] { display: none; }
+.row-view-back.is-open { opacity: 1; }
+.row-view {
+    width: min(1690px, 96vw);
+    height: min(766px, 88vh);
+    display: flex; flex-direction: column; overflow: hidden;
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: var(--r-card, 8px);
+    box-shadow: 0 20px 56px rgba(51, 0, 0, .3);
+    transform: translateY(.4rem);
+    transition: transform .14s ease;
+}
+.row-view-back.is-open .row-view { transform: none; }
+.row-view-head {
+    display: flex; align-items: center; gap: .5rem;
+    padding: .5rem .75rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--cream);
+}
+.row-view-name {
+    flex: 1 1 auto; min-width: 0;
+    font-family: var(--font-head); font-size: .8125rem; font-weight: 600; color: var(--ink);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* No box of its own: these sit on a tinted strip of their own already, and an
+   outline around each made the head read as three panels rather than one. */
+.row-view-btn {
+    flex: 0 0 auto;
+    display: inline-flex; align-items: center; gap: .3rem;
+    padding: .25rem .5rem;
+    border: 0; border-radius: var(--r-control, 4px);
+    background: none; color: var(--maroon);
+    font-family: inherit; font-size: .75rem; text-decoration: none; cursor: pointer;
+}
+.row-view-btn:hover { background: var(--white); }
+/* The frame carries the page's own scrolling, so this one has none of its own. */
+.row-view-frame { flex: 1 1 auto; width: 100%; border: 0; display: block; }
+@media (prefers-reduced-motion: reduce) {
+    .row-view-back, .row-view { transition: none; }
+}
+
 /* Density: applied to a stable ancestor so it survives AJAX result swaps */
 /* Applies to both result shapes: .paper-item (public repository rows) and
    .paper-card (dashboard cards). Default deliberately sets explicit values
@@ -293,7 +508,7 @@ html[data-mode="dark"] { --search-clear: #CFC3AE; }
 [data-density="default"] .paper-card .paper-title { font-size: 1rem; }
 
 [data-density="compact"] .paper-item { padding: .5rem 1.25rem; }
-[data-density="compact"] .paper-card { padding: .625rem .875rem; margin-bottom: .5rem; }
+[data-density="compact"] .paper-card { padding: .625rem .875rem; }
 [data-density="compact"] .paper-item .paper-title { font-size: .8125rem; }
 [data-density="compact"] .paper-card .paper-title { font-size: .875rem; margin-bottom: .2rem; }
 [data-density="compact"] .paper-authors,
@@ -302,7 +517,7 @@ html[data-mode="dark"] { --search-clear: #CFC3AE; }
 [data-density="compact"] .card-track { margin-top: .625rem; }
 
 [data-density="comfortable"] .paper-item { padding: 1.25rem 1.25rem; }
-[data-density="comfortable"] .paper-card { padding: 1.5rem 1.5rem; margin-bottom: 1rem; }
+[data-density="comfortable"] .paper-card { padding: 1.5rem 1.5rem; }
 [data-density="comfortable"] .paper-item .paper-title { font-size: 1rem; margin-bottom: .45rem; }
 [data-density="comfortable"] .paper-card .paper-title { font-size: 1.0625rem; margin-bottom: .5rem; }
 [data-density="comfortable"] .paper-authors,

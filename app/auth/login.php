@@ -156,36 +156,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
       }
 
-      /*
-       * OTP TEMPORARILY DISABLED: uncomment the block below to re-enable email OTP verification.
-       *
-       * $otp = sprintf("%06d", mt_rand(1, 999999));
-       * $_SESSION['pending_login'] = [
-       *     'user_id'     => $user_id,
-       *     'username'    => $username,
-       *     'email'       => $email,
-       *     'full_name'   => $full_name,
-       *     'user_role'   => $user_role,
-       *     'otp'         => $otp,
-       *     'otp_expires' => time() + 300,
-       *     'redirect'    => $_GET['redirect'] ?? null
-       * ];
-       * $emailBody = "Hello {$full_name},\n\nYour One-Time Password (OTP) for login is: {$otp}\n\nThis OTP will expire in 5 minutes. Do not share this with anyone.";
-       * try {
-       *     send_email($email, "Your Login OTP", $emailBody);
-       *     $masked_email = preg_replace('/(?<=.{2}).(?=.*@)/', '*', $email);
-       *     flash('success', "An OTP has been sent to your email: {$masked_email}.");
-       * } catch (Exception $e) {
-       *     flash('login_error', "Failed to send OTP email. Please try again or contact support.");
-       *     unset($_SESSION['pending_login']);
-       *     header('Location: '.$error_redirect);
-       *     exit;
-       * }
-       * header('Location: login.php?step=otp');
-       * exit;
-       */
-
-      // Direct login (OTP bypassed)
       $stmt2 = $conn->prepare("UPDATE users SET last_login = NOW() WHERE user_id = ?");
       $stmt2->bind_param('i', $user_id);
       $stmt2->execute();
@@ -208,55 +178,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           header('Location: '.BASE_URL.'/archive/index.php');
       } else {
           header('Location: '.role_home($user_role));
-      }
-      exit;
-
-  } elseif ($action === 'verify_otp') {
-      /* OTP step is currently disabled: this block is kept for when OTP is re-enabled */
-      $entered_otp = trim($_POST['otp'] ?? '');
-
-      if (!isset($_SESSION['pending_login'])) {
-          flash('login_error', 'Session expired. Please login again.');
-          header('Location: '.BASE_URL.'/archive/index.php?login_modal=1');
-          exit;
-      }
-
-      $pending = $_SESSION['pending_login'];
-
-      if (time() > $pending['otp_expires']) {
-          unset($_SESSION['pending_login']);
-          flash('login_error', 'OTP has expired. Please login again.');
-          header('Location: '.BASE_URL.'/archive/index.php?login_modal=1');
-          exit;
-      }
-
-      if ($entered_otp !== $pending['otp']) {
-          flash('login_error', 'Invalid OTP. Please try again.');
-          header('Location: '.BASE_URL.'/archive/index.php?login_modal=1');
-          exit;
-      }
-      
-      // OTP matches! Complete login
-      $user_id = $pending['user_id'];
-      $stmt2 = $conn->prepare("UPDATE users SET last_login = NOW() WHERE user_id = ?");
-      $stmt2->bind_param('i', $user_id);
-      $stmt2->execute();
-
-      login_user([
-          'user_id' => $pending['user_id'],
-          'username' => $pending['username'],
-          'email' => $pending['email'],
-          'full_name' => $pending['full_name'],
-          'user_role' => $pending['user_role']
-      ]);
-      
-      $redirect = $pending['redirect'];
-      unset($_SESSION['pending_login']);
-      
-      if($redirect === 'archive') {
-        header('Location: '.BASE_URL.'/archive/index.php');
-      } else {
-        header('Location: '.role_home($pending['user_role']));
       }
       exit;
   }
@@ -1003,13 +924,8 @@ if (false):
       <!-- Form Card -->
       <div class="form-card">
       <div class="form-header">
-        <?php if ($step === 'otp'): ?>
-            <h2>OTP Verification</h2>
-            <p>Enter the 6-digit code sent to your email.</p>
-        <?php else: ?>
-            <h2>Welcome Back</h2>
-            <p>Sign in to continue to your account</p>
-        <?php endif; ?>
+        <h2>Welcome Back</h2>
+        <p>Sign in to continue to your account</p>
       </div>
 
       <!-- Alert placeholder for PHP flash messages -->
@@ -1032,32 +948,10 @@ if (false):
       
       <?php /* data-splash: the full-screen logo animation stands in for the
                small pill here: see includes/loading_bar.php. */ ?>
-      <form method="post" data-splash id="<?= $step === 'otp' ? 'otpForm' : 'loginForm' ?>">
+      <form method="post" data-splash id="loginForm">
         <!-- CSRF token placeholder -->
         <?= csrf_field(); ?>
         
-        <?php if ($step === 'otp'): ?>
-            <input type="hidden" name="action" value="verify_otp">
-            
-            <div class="form-group">
-              <label class="form-label" for="otp">One-Time Password</label>
-              <div class="input-wrapper">
-                <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
-                  <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
-                  <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3.5a.5.5 0 0 1-.5-.5v-3.5A.5.5 0 0 1 8 4z"/>
-                </svg>
-                <input type="text" class="form-control" name="otp" id="otp" placeholder="Enter 6-digit OTP" required autocomplete="one-time-code" maxlength="6" pattern="\d{6}" style="letter-spacing: 0.5em; text-align: center; padding-left: 1rem; font-weight: 700; font-size: 1.2rem;">
-              </div>
-              <div id="otpFeedback" class="invalid-feedback">Please enter a valid 6-digit OTP.</div>
-            </div>
-            
-            <button type="submit" class="btn btn-sign-in" id="verifyBtn">
-              <span>VERIFY OTP</span>
-            </button>
-            <div class="form-footer mt-3" style="border-top: none;">
-                <p><a href="login.php?redirect=<?= e($_GET['redirect'] ?? '') ?>" style="color: var(--pup-maroon-900);">← Back to Login</a></p>
-            </div>
-        <?php else: ?>
             <input type="hidden" name="action" value="login">
             
             <div class="form-group">
@@ -1097,7 +991,6 @@ if (false):
             <button type="button" class="btn btn-public-archive" id="publicArchiveBtn">
               <span>PUBLIC ARCHIVE</span>
             </button>
-        <?php endif; ?>
       </form>
 
       <div class="form-footer">
@@ -1189,38 +1082,10 @@ if (false):
       });
   }
   
-  const otpForm = document.getElementById('otpForm');
-  if (otpForm) {
-    const otpInput = document.getElementById('otp');
-    const verifyBtn = document.getElementById('verifyBtn');
-    
-    otpForm.addEventListener('submit', function(e) {
-        if (otpInput.value.trim().length !== 6 || !/^\d{6}$/.test(otpInput.value.trim())) {
-            e.preventDefault();
-            otpInput.classList.add('is-invalid');
-            document.getElementById('otpFeedback').style.display = 'block';
-        } else {
-            verifyBtn.classList.add('btn-loading');
-            verifyBtn.querySelector('span').textContent = 'VERIFYING...';
-        }
-    });
-    
-    otpInput.addEventListener('input', function() {
-        // Only allow numbers
-        this.value = this.value.replace(/[^\d]/g, '');
-        if (this.classList.contains('is-invalid')) {
-            this.classList.remove('is-invalid');
-            document.getElementById('otpFeedback').style.display = 'none';
-        }
-    });
-  }
-
   // Auto-focus on first input
   window.addEventListener('load', function() {
     if (document.getElementById('identifier')) {
         document.getElementById('identifier').focus();
-    } else if (document.getElementById('otp')) {
-        document.getElementById('otp').focus();
     }
   });
 

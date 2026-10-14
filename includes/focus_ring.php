@@ -114,6 +114,18 @@ textarea:focus-visible,
     box-shadow: none !important;
 }
 
+/* Bootstrap repaints a focused field from its own --bs-body-bg, a white the
+   theme never swaps: in Old Night every box on the site turned white the
+   moment it was clicked into and dark again when it was left. Pointed back at
+   the tokens the field already carries unfocused, so focus changes the edge
+   and nothing else. The specificity is there to outrank .form-control:focus
+   whichever order the two stylesheets happen to load in. */
+:root .form-control:focus,
+:root .form-select:focus {
+    background-color: var(--white, #FFFFFF);
+    color: var(--ink, #2B1B0E);
+}
+
 /* A mouse click should not leave a ring behind. */
 :focus:not(:focus-visible) { outline: none; }
 

@@ -1,5 +1,8 @@
 <?php
-require_once __DIR__.'/core.php'; $conn=db();
+/* core.php is two folders up, in config/. This read __DIR__.'/core.php', which
+   is database/seeds/core.php and has never existed, so the seed fatalled on
+   its first line and the Director has always had to be made by hand. */
+require_once __DIR__.'/../../config/core.php'; $conn=db();
 $exists = $conn->query("SELECT COUNT(*) c FROM users WHERE user_role='super_admin'")->fetch_assoc()['c'] ?? 0;
 if ($exists> 0) { exit('A super admin already exists. Delete this file.'); }
 $username='superadmin'; $email='superadmin@example.com'; $full='Super Admin'; $pass='Admin123!';

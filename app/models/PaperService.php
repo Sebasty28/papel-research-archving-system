@@ -15,7 +15,20 @@ class PaperService {
         }
 
         $studentId = paper_owner($paperId);
-        if ($studentId) create_notification($studentId, $paperId, 'progress', $message);
+        if ($studentId) {
+            /* 'approval' is what notifications.notification_type accepts. This
+               passed 'progress', which the column silently truncated away, so
+               every one of these notices lost its kind: the notification
+               centre drew it as a generic notice instead of an approval.
+
+               The stage decides the subject. Both lines already existed in the
+               subject map and only the first was ever reachable, so a student
+               whose paper had been published was told it had been forwarded. */
+            create_notification($studentId, $paperId, 'approval', $message,
+                $targetStatus === 'approved'
+                    ? 'Congratulations! Your Paper Has Been Fully Approved'
+                    : 'Your Paper Has Been Approved & Forwarded');
+        }
     }
 
     /**

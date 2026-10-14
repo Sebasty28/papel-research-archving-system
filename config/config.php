@@ -84,6 +84,16 @@ define('DB_SSL_CA', $_ENV['DB_SSL_CA'] ?? '');
 define('CSRF_KEY', $_ENV['CSRF_KEY'] ?? 'CHANGE_THIS_TO_A_LONG_RANDOM_SECRET');
 define('COOKIE_SECURE', filter_var($_ENV['COOKIE_SECURE'] ?? 'false', FILTER_VALIDATE_BOOLEAN));
 
+/* The largest paper the server will take, in megabytes.
+ *
+ * Three separate numbers can each refuse an upload: upload_max_filesize,
+ * post_max_size, and a ceiling the host enforces underneath both, which on
+ * free hosting is lower than either and cannot be raised from PHP. This is
+ * that host ceiling. max_upload_bytes() in core.php takes whichever of the
+ * three is smallest, and every page and validator quotes it, so the figure a
+ * student is promised is the figure the server will actually accept. */
+define('UPLOAD_MAX_MB', (int)($_ENV['UPLOAD_MAX_MB'] ?? 50));
+
 // Email Settings
 // Set to 'gmail' or 'outlook' to switch modes
 define('MAIL_PROVIDER', 'gmail');

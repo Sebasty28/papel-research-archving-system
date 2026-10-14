@@ -3307,7 +3307,7 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
                 <div class="ai-extraction-zone">
                   <div class="upload-zone">
                                         <h4>Drop your PDF here or click to browse</h4>
-                    <p class="text-muted">Maximum file size: 50MB</p>
+                    <p class="text-muted">Maximum file size: <?= e(max_upload_label()) ?></p>
                     <input type="file" class="form-control file-input" id="pdfFile" name="research_pdf" accept="application/pdf" required>
                   </div>
 
@@ -6190,6 +6190,43 @@ const papelPdfPreview = (function () {
    have to be picked again. The restore prompt says so plainly rather than
    letting a student discover it at the submit button.
    ========================================================================= */
+/* ===== Signed out while this page was open =====
+   Signing out in another tab leaves this one looking perfectly alive: the form
+   still types, the steps still move, and nothing it sends can be accepted. The
+   server now says 401 to a background request from a session that has ended
+   (require_role() in config/core.php), and this is what the page does about it:
+   says so once, points at the sign-in page in a new tab so the form here is not
+   thrown away, and leaves the local copy of the work alone. */
+let papelSignedOutSaid = false;
+
+async function papelSignedOut() {
+    if (papelSignedOutSaid) return;
+    papelSignedOutSaid = true;
+
+    const again = await window.papelConfirm(
+        'You have been signed out, most likely in another tab, so nothing on this page can be '
+      + 'saved while that lasts. What you have typed is kept on this device: sign in again, come '
+      + 'back to this tab, and carry on where you left off.',
+        { title: 'You are signed out', icon: 'lock',
+          confirmText: 'Sign in, in a new tab', cancelText: 'Stay on this page' }
+    );
+    if (again) {
+        window.open(<?= json_encode(BASE_URL . '/archive/index.php?login_modal=1&role=student') ?>,
+                    '_blank', 'noopener');
+    }
+}
+
+/* Coming back to this tab is exactly when somebody has just signed out in
+   another one, so that is when it is worth asking. The search endpoint is the
+   cheapest thing on the page that goes through the same gate; what comes back
+   is thrown away, only its status matters. */
+document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState !== 'visible' || papelSignedOutSaid) return;
+    fetch('student_upload_ai.php?ajax_search=1&q=__ping__', { cache: 'no-store' })
+        .then(function (res) { if (res.status === 401) papelSignedOut(); })
+        .catch(function () { /* offline, or the server is down: not this to answer */ });
+});
+
 const papelDraft = (function () {
     const KEY = 'papel_upload_draft_' + <?= json_encode((string)($u['user_id'] ?? 'anon'), JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) ?>;
     /* Set when the dashboard sent us here with ?draft=<id>.
@@ -6393,10 +6430,17 @@ const papelDraft = (function () {
             if (window.papelLoading) window.papelLoading.work.start();
             try {
                 const res = await fetch('student_upload_ai.php', { method: 'POST', body: body });
+                /* Signed out, here or in another tab: the server says so plainly
+                   now (require_role() in config/core.php). Swallowed with
+                   everything else, this left somebody typing into a form that
+                   could not save a word of it. */
+                if (res.status === 401) { papelSignedOut(); return 0; }
                 const json = await res.json();
                 if (json && json.success) {
                     draftId = json.draft_id;
                     savedSignature = signature(collect());
+                    // Signed in again: worth saying if it ever happens twice.
+                    papelSignedOutSaid = false;
                     return draftId;
                 }
             } catch (err) { /* the local copy still holds everything */ }
@@ -6444,16 +6488,38 @@ const papelDraft = (function () {
                 return;
             }
 
+            /* And a copy with no draft id has nothing to check against: it was
+               never on the server, so the only thing that can date it is the
+               clock. This copy exists to rescue an interrupted session, a shut
+               tab or a misclicked link, and those are picked up within hours.
+               Days later it is a leftover: it cannot hold the PDF anyway, and
+               a student who has since thrown their draft away is asked about
+               work they believe they deleted, by a prompt that never stops
+               coming back. The autosave rewrites savedAt on every keystroke,
+               so this counts from the last thing they typed. */
+            const STALE_AFTER = 48 * 60 * 60 * 1000;
+            if (Date.now() - (data.savedAt || 0) > STALE_AFTER) {
+                papelDraft.clear();
+                return;
+            }
+
             const when = new Date(data.savedAt || Date.now());
             const files = Object.keys(data.files || {});
             const note = files.length
                 ? ' You will need to attach ' + files.join(', ') + ' again. A browser cannot keep a file between visits.'
                 : '';
 
+            /* Only call it a draft when there is one. A copy with no draft id
+               has never been saved anywhere, and calling that "your draft" is
+               what made a deleted draft look as though it had come back. */
+            const isDraft = !!data.draftId;
             const restore = await window.papelConfirm(
-                'You have an unfinished paper saved on this device from ' +
+                (isDraft
+                    ? 'Your draft has changes on this device that were never saved, from '
+                    : 'You have unfinished work on this device, from ') +
                 when.toLocaleString() + '.' + note,
-                { title: 'Continue your draft?', icon: 'history',
+                { title: isDraft ? 'Continue your draft?' : 'Continue where you left off?',
+                  icon: 'history',
                   confirmText: 'Continue', cancelText: 'Start fresh' }
             );
 

@@ -487,14 +487,13 @@ ob_start();
 <?php require_once ROOT_PATH.'/includes/browse_console.php'; ?>
 <?php require_once ROOT_PATH.'/includes/console_shell.php'; ?>
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
-/* Cards or rows, applied before the first paint: read it afterwards and the
-   desk would draw as cards and then collapse, which on a long list is a
-   visible lurch. Kept per device, beside the density and palette the rest of
-   Quick Settings remembers. */
+/* Whether the filter strip is folded, applied before the first paint:
+   read afterwards, a folded desk would draw the strip and then take it
+   away, and the whole list under it would jump. */
 (function () {
     var v;
-    try { v = localStorage.getItem('papel_desk_view'); } catch (e) {}
-    document.documentElement.setAttribute('data-view', v === 'rows' ? 'rows' : 'cards');
+    try { v = localStorage.getItem('papel_desk_tools'); } catch (e) {}
+    if (v === 'folded') document.documentElement.classList.add('rc-tools-folded');
 })();
 </script>
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
@@ -516,7 +515,43 @@ ob_start();
    one submits itself (see the change/submit handlers a little further down,
    which route this the same way the sidebar's own #filterForm already does:
    an AJAX swap of #mainCol and #sidebarCol, not a full reload). */
-.rc-filters { background: var(--cream); border-radius: var(--r-card, 8px); padding: .75rem .875rem; margin-bottom: 1.25rem; }
+.rc-filters { position: relative; background: var(--cream); border-radius: var(--r-card, 8px); padding: .75rem .875rem; margin-bottom: 1.25rem; }
+
+/* ---- Folding the top of the desk away ----
+   One chevron for the whole preamble: who the desk belongs to, what it is
+   for, and the four filters with the Export button. A reviewer who already
+   knows all three reads none of them again, and on a laptop they are the
+   difference between seeing four papers and seeing eight.
+
+   It sits in a row of its own above them rather than inside either, because
+   what it hides includes the thing it would otherwise sit in. The row is
+   26px whichever way it is set, so opening and closing moves the list and
+   nothing else. */
+.rc-fold-bar { display: flex; justify-content: flex-end; min-height: 26px; }
+.rc-fold {
+    display: inline-flex; align-items: center; gap: .3rem;
+    padding: .15rem .25rem; border: none; border-radius: var(--r-control, 4px);
+    background: none; color: var(--maroon); cursor: pointer;
+    transition: background .15s;
+}
+.rc-fold:hover { background: var(--cream); }
+.rc-fold:focus-visible { outline: 2px solid var(--maroon); outline-offset: 1px; }
+.rc-fold .material-symbols-outlined { transition: transform .18s ease; }
+/* Folded, the chevron is the only thing left saying what it does, so it
+   says it. Open, the heading beside it says it already. */
+.rc-fold-word { display: none; font-size: .75rem; font-weight: 500; }
+
+html.rc-tools-folded .rc-intro,
+html.rc-tools-folded .rc-filter-row,
+html.rc-tools-folded #rcExportForm { display: none; }
+html.rc-tools-folded .rc-fold .material-symbols-outlined { transform: rotate(180deg); }
+html.rc-tools-folded .rc-fold-word { display: inline; }
+/* The strip stays only to carry the chips: a filtered desk that looks
+   unfiltered is worse than one control too many. With the row gone it is a
+   line of chips, so it is padded as one rather than as a panel. */
+html.rc-tools-folded .rc-filters { padding: .3rem .5rem; margin-bottom: .75rem; }
+html.rc-tools-folded .rc-filters:not(:has(.rc-active)) { display: none; }
+html.rc-tools-folded .rc-active { margin-top: 0; padding-top: 0; border-top: 0; }
 .rc-filter-row { display: flex; flex-wrap: wrap; gap: .625rem; align-items: flex-end; }
 /* Un-boxes the <form> so its .rc-filter fields sit directly in the flex row
    above, as though the form were never there: form-ness (submission, field
@@ -597,13 +632,13 @@ ob_start();
    What is on screen, how much of it to show, and the pager. Each is given
    room of its own: unspaced they read as one long sentence with numbers
    scattered through it. */
-.toolbar-right { gap: .625rem; }
+.toolbar-right { gap: .5rem; flex: 0 0 auto; }
 .rc-count { font-size: .75rem; color: var(--grey); white-space: nowrap; }
 .rc-per {
     display: inline-flex; align-items: center; gap: .125rem;
     font-size: .75rem; color: var(--grey); white-space: nowrap;
     /* The rule marks where the count ends and the control begins. */
-    padding-left: .625rem; border-left: 1px solid var(--border);
+    padding-left: .5rem; border-left: 1px solid var(--border);
 }
 .rc-per-label { margin-right: .25rem; }
 .rc-per a, .rc-per-on {
@@ -612,21 +647,42 @@ ob_start();
     text-align: center; text-decoration: none;
 }
 .rc-per a { color: var(--grey); }
-.rc-per a:hover { color: var(--maroon); background: var(--white); }
-/* White rather than the tint: this strip is already tinted, so a tinted chip
-   on it would be no chip at all. */
+.rc-per a:hover { color: var(--maroon); background: var(--cream); }
+/* Marked by weight and colour, with no box of its own. It used to be a white
+   chip with a border, which read as a chip while this strip was tinted; the
+   console sits on the page now, and a white box on a white page is an outline
+   around nothing. */
 .rc-per-on {
     color: var(--maroon); font-weight: 600;
-    background: var(--white); border: 1px solid var(--border);
     padding: .05rem .2rem;
 }
 /* The arrows are the pager, so they sit apart from the numbers that are not. */
 .toolbar-right .toolbar-btn:first-of-type { margin-left: .25rem; }
-@media (max-width: 700px) {
-    /* Too little room for three groups: the count is the one that can go,
-       since the pager says which page and the sizes say how many. */
+/* What actually decides whether the toolbar fits is how many tabs the desk has,
+   and that is not something a width query can see: the console is the same width
+   on the Director's two-tab desk as on the Coordinator's five-tab one. So the
+   count gives way from the fourth tab onwards, measured on the markup itself.
+   It is the one of the three that can go, since the list below already shows
+   what is on screen and the pager says where in it you are; the Director and
+   anyone else with room keeps it. */
+.dash-bar:has(.dash-tabs .dash-tab:nth-child(4)) .rc-count { display: none; }
+.dash-bar:has(.dash-tabs .dash-tab:nth-child(4)) .rc-per { padding-left: 0; border-left: 0; }
+
+/* And on a console too narrow even for two tabs and the count, measured on the
+   console rather than the window: a desk sits beside a sidebar and has far less
+   room than the viewport suggests, so the old window rule only noticed at 700px,
+   by which point the toolbar had been wrapping for hundreds of pixels. */
+@container desk (max-width: 620px) {
     .rc-count { display: none; }
     .rc-per { padding-left: 0; border-left: 0; }
+}
+/* Where container queries are not understood, the old window rule still
+   applies, so such a browser behaves exactly as it did before. */
+@supports not (container-type: inline-size) {
+    @media (max-width: 700px) {
+        .rc-count { display: none; }
+        .rc-per { padding-left: 0; border-left: 0; }
+    }
 }
 
 /* ---- How long it has been waiting ----
@@ -641,54 +697,13 @@ ob_start();
    backlog, so that is where it is marked rather than merely stated. */
 .rc-waited.is-stale { color: var(--bad-text); }
 
-/* ---- Rows ----
-   The card is built for reading one paper; a desk holding two hundred is
-   scanned instead. This lays the same markup out as a line: title and
-   author on the left, status and actions on the right, and the parts that
-   repeat on every card (the tracker, the attachments, the feedback) put
-   away. Nothing is removed from the page, so the toggle is instant and the
-   AJAX swaps need to know nothing about it.
+/* ---- Rows: the parts only a desk has ----
+   The layout itself is in console_shell.php, with the card it rearranges.
+   These are the pieces no other list carries. */
 
-   The tracker is the one real loss, so the status text stays: it is the
-   same fact in four words instead of three dots and a rail. */
-html[data-view="rows"] .paper-list .paper-card {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    align-items: center;
-    column-gap: 1rem;
-    padding: .5rem .875rem;
-    margin-bottom: .375rem;
-}
-html[data-view="rows"] .paper-list .card-head { display: contents; }
-html[data-view="rows"] .paper-list .paper-info {
-    min-width: 0; overflow: hidden;
-    display: flex; align-items: baseline; gap: .5rem;
-}
-html[data-view="rows"] .paper-list .paper-title {
-    font-size: .875rem; margin: 0;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    flex: 1 1 auto; min-width: 0;
-}
-html[data-view="rows"] .paper-list .paper-authors {
-    margin: 0; flex: 0 1 14rem; min-width: 0;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-/* The meta is a flex row of its own, and it wraps by default: left to do
-   that inside a narrow column it stacked four deep and the row stopped
-   being a row. */
-html[data-view="rows"] .paper-list .paper-meta {
-    flex: 0 1 auto; min-width: 0; flex-wrap: nowrap;
-    white-space: nowrap; overflow: hidden;
-    /* The meta is a row of separate spans, so text-overflow has nothing to
-       put an ellipsis on: it would cut a word in half at the edge and read as
-       a glitch. Faded out instead, which says the same thing. */
-    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 1.75rem), transparent);
-            mask-image: linear-gradient(to right, #000 calc(100% - 1.75rem), transparent);
-}
 /* How long it has waited is the one thing a queue is read by, so it goes to
    the front of the meta line and is never the part that gets clipped. */
 html[data-view="rows"] .paper-list .paper-meta .rc-waited { order: -1; flex: 0 0 auto; }
-html[data-view="rows"] .paper-list .paper-meta .sep { flex: 0 0 auto; }
 
 /* Smaller buttons, so the decision still fits beside the title rather than
    taking half the row from it. */
@@ -696,38 +711,17 @@ html[data-view="rows"] .paper-list .rc-actions .btn-sm-maroon,
 html[data-view="rows"] .paper-list .rc-actions .btn-sm-outline {
     padding: .3rem .55rem; font-size: .7rem;
 }
-html[data-view="rows"] .paper-list .card-status {
-    display: flex; align-items: center; gap: .75rem;
-    white-space: nowrap; text-align: left;
-}
 html[data-view="rows"] .paper-list .rc-actions { margin-top: 0; flex-wrap: nowrap; }
-/* Everything under the head sits in one wrapper, so the row keeps the part
-   that is a decision and puts the rest away: the tracker, the reviewers, the
-   attachments and any returned feedback are all what the card view is for.
-
-   Named twice on purpose. That wrapper is built by script, and a page of
-   results fetched by AJAX is laid out before the script gets to it: for those
-   few frames the tracker is a direct child of the card, and a row would open
-   as a card and then collapse. */
-html[data-view="rows"] .paper-list .paper-card-body { min-width: 0; }
-html[data-view="rows"] .paper-list .paper-card-body > :not(.rc-actions),
-html[data-view="rows"] .paper-list .paper-card > .card-track,
+/* Named as direct children as well as inside the body wrapper: that wrapper
+   is built by script, and a page of results fetched by AJAX is laid out
+   before the script gets to it. */
 html[data-view="rows"] .paper-list .paper-card > .rc-feedback,
 html[data-view="rows"] .paper-list .paper-card > .rc-docs,
 html[data-view="rows"] .paper-list .paper-card > .rc-reviewers { display: none; }
-/* The title is the link to the record, so the pair of links beside the
-   status would only be saying it twice. */
-html[data-view="rows"] .paper-list .card-status .paper-action,
-html[data-view="rows"] .paper-list .paper-card-toggle { display: none; }
-/* Below this the three columns have nowhere to go, so a row is a card
-   again rather than a line squeezed to nothing. */
-@media (max-width: 820px) {
-    html[data-view="rows"] .paper-list .paper-card {
-        display: block; padding: .875rem 1rem;
-    }
-    html[data-view="rows"] .paper-list .card-head { display: flex; }
-    html[data-view="rows"] .paper-list .paper-info { display: block; }
-}
+/* The title is the link to the record, so the link beside the status would
+   only be saying it twice; the row already carries the decision. */
+html[data-view="rows"] .paper-list .card-status .paper-action { display: none; }
+
 .rc-actions .rc-spacer { margin-left: auto; }
 .rc-docs { display: flex; gap: .375rem; flex-wrap: wrap; margin-top: .625rem; }
 .rc-doc-chip {
@@ -808,7 +802,7 @@ html[data-view="rows"] .paper-list .paper-card-toggle { display: none; }
              the current filters happen to return zero results for. Without
              a marker that survives that, "Card Details" would flicker out
              of Quick Settings on an empty tab like Waiting for you. */ ?>
-    <div class="main-col" id="mainCol" data-card-console="1">
+    <div class="main-col" id="mainCol" data-card-console="1" data-view-console="1">
         <?php ob_start(); ?>
 
         <?php /* Forwarding, returning and approving all set a message and land
@@ -817,8 +811,27 @@ html[data-view="rows"] .paper-list .paper-card-toggle { display: none; }
                  opened next. */ ?>
         <?php require_once ROOT_PATH.'/includes/flash_banner.php'; flash_banner(); ?>
 
+        <?php /* Folds the heading, the blurb and the filter strip away
+                 together, and the answer is kept per device beside the view
+                 and the density: a desk somebody reads rather than filters
+                 should not have to be folded again on every visit. The state
+                 lives on <html> (set before the first paint, at the head of
+                 this file), so it also survives the AJAX swaps that replace
+                 this column whole on every tab and filter change. */ ?>
+        <div class="rc-fold-bar">
+            <button type="button" class="rc-fold" id="rcFoldTools"
+                    aria-controls="rcIntro rcFilterRow" aria-expanded="true">
+                <?php /* The desk's own name is not repeated here: the crumb bar
+                         above already carries it, and a heading somebody has just
+                         hidden should not come back in miniature. What the word
+                         says is what the chevron will do. */ ?>
+                <span class="rc-fold-word" aria-hidden="true">Show heading and filters</span>
+                <span class="material-symbols-outlined mi-18">expand_less</span>
+            </button>
+        </div>
+
         <?php if ($RC['role'] || $RC['blurb']): ?>
-        <div class="rc-intro">
+        <div class="rc-intro" id="rcIntro">
             <?php if ($RC['role']): ?><h1><?= e($RC['role']) ?></h1><?php endif; ?>
             <?php if ($RC['blurb']): ?><p><?= e($RC['blurb']) ?></p><?php endif; ?>
         </div>
@@ -842,7 +855,7 @@ html[data-view="rows"] .paper-list .paper-card-toggle { display: none; }
            being silently cleared. */
         ?>
         <div class="rc-filters">
-            <div class="rc-filter-row">
+            <div class="rc-filter-row" id="rcFilterRow">
             <?php /* display:contents on the form itself (see .rc-filter-form
                      below) puts its fields directly into this flex row, so
                      the export control (its own <form>, since Excel/Word/PDF
@@ -1000,11 +1013,6 @@ html[data-view="rows"] .paper-list .paper-card-toggle { display: none; }
                             </div>
                             <div class="qs-section">
                                 <a class="qs-link" id="quickSettingsFull" href="<?= e(BASE_URL.'/pages/settings.php') ?>">View Full Settings</a>
-                            </div>
-                            <div class="qs-section">
-                                <span class="qs-section-label">View</span>
-                                <label class="qs-radio"><input type="radio" name="qs_view" value="cards"> Cards</label>
-                                <label class="qs-radio"><input type="radio" name="qs_view" value="rows"> Rows</label>
                             </div>
                             <div class="qs-section">
                                 <span class="qs-section-label">Density</span>
@@ -1453,24 +1461,30 @@ function setLoading(on) {
     else mainCol.classList.remove('is-loading');
 }
 
-/* Cards or rows. The attribute is set before the page paints (see the head
-   of this file); this is the part that answers the switch and puts the tick
-   back after a swap, since the panel holding it lives inside the column the
-   AJAX replaces. */
-function rcTickView() {
-    var v = document.documentElement.getAttribute('data-view') === 'rows' ? 'rows' : 'cards';
-    document.querySelectorAll('input[name="qs_view"]').forEach(function (i) {
-        i.checked = (i.value === v);
-    });
+/* The chevron over the filter strip. Delegated, because the column it
+   sits in is replaced wholesale by every AJAX swap, and what it toggles
+   is a class on <html>, which those swaps never touch. */
+function rcSyncFold() {
+    var folded = document.documentElement.classList.contains('rc-tools-folded');
+    var btn = document.getElementById('rcFoldTools');
+    if (!btn) return;
+    btn.setAttribute('aria-expanded', folded ? 'false' : 'true');
+    var say = folded ? 'Show the heading, filters and export'
+                     : 'Hide the heading, filters and export';
+    btn.title = say;
+    btn.setAttribute('aria-label', say);
 }
-document.addEventListener('change', function (e) {
-    if (e.target.name !== 'qs_view') return;
-    var v = e.target.value === 'rows' ? 'rows' : 'cards';
-    document.documentElement.setAttribute('data-view', v);
-    try { localStorage.setItem('papel_desk_view', v); } catch (err) {}
-    rcTickView();
+document.addEventListener('click', function (e) {
+    if (!e.target.closest || !e.target.closest('#rcFoldTools')) return;
+    var folded = document.documentElement.classList.toggle('rc-tools-folded');
+    try { localStorage.setItem('papel_desk_tools', folded ? 'folded' : 'open'); } catch (err) {}
+    rcSyncFold();
 });
-document.addEventListener('DOMContentLoaded', rcTickView);
+/* Straight away when the page is already parsed, which it is: this block sits
+   at the end of the body, and waiting for DOMContentLoaded there meant a desk
+   that opened folded announced itself as expanded. */
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', rcSyncFold);
+else rcSyncFold();
 
 function loadResults(url, push) {
     if (!mainCol) { window.location.href = url; return; }
@@ -1484,8 +1498,11 @@ function loadResults(url, push) {
                 if (side) side.innerHTML = data.sidebar;
             }
             setLoading(false);
+            /* Rebuilds and re-ticks the whole of Quick Settings, the switch
+               between cards and rows included: the panel holding it lives
+               inside the column this swap replaces. */
             if (window.papelSyncQuickSettings) window.papelSyncQuickSettings();
-            rcTickView();
+            rcSyncFold();          // the strip came back with the column
             if (data.crumb) {
                 var crumb = document.querySelector('.crumb-current');
                 if (crumb) crumb.textContent = data.crumb;
@@ -1529,38 +1546,56 @@ window.addEventListener('popstate', function () { loadResults(window.location.hr
 // #anExport: Excel/Word/PDF simply set the hidden form's format and submit
 // it, with none of that page's canvas-to-image work, since a review desk has
 // no charts to carry along.
+/* Every handler here is delegated off document and every element is looked up
+   at the moment of the click, because all of this markup lives inside #mainCol,
+   which loadResults() replaces wholesale on every tab, filter, page-size and
+   refresh click. Bound directly, as this was, the listeners went out with the
+   nodes they were attached to: the first AJAX refresh of the desk left an
+   Export button that opened nothing and could not be revived without reloading
+   the page. */
 (function () {
-    var wrap = document.getElementById('rcExport');
-    var btn  = document.getElementById('rcExportBtn');
-    var menu = document.getElementById('rcExportMenu');
-    var form = document.getElementById('rcExportForm');
-    if (!wrap || !btn || !menu || !form) return;
+    function el(id) { return document.getElementById(id); }
 
-    function shut() { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); }
+    function shut() {
+        var menu = el('rcExportMenu'), btn = el('rcExportBtn');
+        if (menu) menu.hidden = true;
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+    }
 
-    btn.addEventListener('click', function (e) {
-        e.stopPropagation();
-        menu.hidden = !menu.hidden;
-        btn.setAttribute('aria-expanded', menu.hidden ? 'false' : 'true');
-    });
     document.addEventListener('click', function (e) {
-        if (!wrap.contains(e.target)) shut();
-    });
-    document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') shut();
-    });
+        if (!e.target.closest) return;
 
-    menu.querySelectorAll('button[data-export]').forEach(function (item) {
-        item.addEventListener('click', function () {
+        var btn = e.target.closest('#rcExportBtn');
+        if (btn) {
+            e.stopPropagation();
+            var menu = el('rcExportMenu');
+            if (!menu) return;
+            menu.hidden = !menu.hidden;
+            btn.setAttribute('aria-expanded', menu.hidden ? 'false' : 'true');
+            return;
+        }
+
+        var item = e.target.closest('#rcExportMenu button[data-export]');
+        if (item) {
+            var wrap = el('rcExport'), form = el('rcExportForm'), fmt = el('rcExportFormat');
+            if (!wrap || !form || !fmt) return;
             shut();
             wrap.classList.add('is-busy');
-            document.getElementById('rcExportFormat').value = item.getAttribute('data-export');
+            fmt.value = item.getAttribute('data-export');
             form.submit();
-            // The page never navigates for a download, so nothing else would
-            // bring the button back: the same reason includes/loading_bar.php
-            // gives its own beforeunload counter a timed fallback.
+            /* The page never navigates for a download, so nothing else would
+               bring the button back: the same reason includes/loading_bar.php
+               gives its own beforeunload counter a timed fallback. */
             setTimeout(function () { wrap.classList.remove('is-busy'); }, 2500);
-        });
+            return;
+        }
+
+        var wrapNow = el('rcExport');
+        if (wrapNow && !wrapNow.contains(e.target)) shut();
+    });
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') shut();
     });
 })();
 

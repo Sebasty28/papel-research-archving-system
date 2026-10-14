@@ -51,13 +51,17 @@ function build_submission_folder(string $title): string {
     return uniqid('paper_', true) . "_{$safeTitle}";
 }
 
-function validate_pdf_upload(array $file, int $maxBytes = 52428800): void {
+function validate_pdf_upload(array $file, ?int $maxBytes = null): void {
+    // Null means "whatever this server actually allows", which is the only
+    // answer that stays right when the host changes.
+    $maxBytes = $maxBytes ?? max_upload_bytes();
+
     if (empty($file) || $file['error'] !== UPLOAD_ERR_OK) {
         throw new Exception('Research PDF is required and must be uploaded successfully.');
     }
 
     if ($file['size'] <= 0 || $file['size']> $maxBytes) {
-        throw new Exception('PDF too large (max 50MB)');
+        throw new Exception('PDF too large (max ' . max_upload_label() . ')');
     }
 
     $finfo = new finfo(FILEINFO_MIME_TYPE);

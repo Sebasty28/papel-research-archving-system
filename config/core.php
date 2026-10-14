@@ -41,8 +41,29 @@ function csp_nonce(): string {
 }
 csp_nonce(); // Ensure header is sent early
 
+/* How long a session survives with nothing happening on it.
+ *
+ * Until this was set the answer was whatever the server happened to be
+ * installed with: session.gc_maxlifetime, 1440 seconds on this one, swept by a
+ * collector that runs on one request in a thousand. So a session could be
+ * ended a minute after that mark or hours later, depending on how busy the
+ * site was, and the same site on another host would behave differently again.
+ * That is not a policy, it is a side effect.
+ *
+ * Thirty minutes, enforced on the request itself rather than left to the
+ * collector, and settable in one place. A reviewer reading a long paper with
+ * the desk open in another tab is not idle; somebody who walked away is.
+ */
+if (!defined('SESSION_IDLE_SECONDS')) {
+  define('SESSION_IDLE_SECONDS', 1800);
+}
+
 function start_session_once(): void {
   if (session_status() === PHP_SESSION_NONE) {
+    /* So the collector cannot take a session this considers alive. It is the
+       sweeping process's own value that decides, and every request here comes
+       through this function, so they all agree. */
+    ini_set('session.gc_maxlifetime', (string)SESSION_IDLE_SECONDS);
     session_set_cookie_params([
       'lifetime' => 0,
       'path'     => '/',
@@ -52,6 +73,25 @@ function start_session_once(): void {
     ]);
     session_name('papel_sid');
     session_start();
+
+    /* Idle for longer than the window: ended here and now, so the rule holds
+       whether or not the collector has run. 'seen' is written on every request,
+       so idle means nothing at all was asked for in that time, not merely that
+       nobody signed in again. */
+    $wasSignedIn = !empty($_SESSION['user']) || !empty($_SESSION['guest_login']);
+    if (!empty($_SESSION['seen']) && (time() - (int)$_SESSION['seen']) > SESSION_IDLE_SECONDS) {
+      $_SESSION = [];
+      session_regenerate_id(true);
+      if ($wasSignedIn) {
+        /* Said on the sign-in panel, the same way require_role() explains the
+           sign-out it causes: being returned to a login screen with no reason
+           given reads as the site having lost the session by accident. */
+        $_SESSION['flash']['login_error'] =
+          'You were signed out after ' . (int)round(SESSION_IDLE_SECONDS / 60)
+          . ' minutes with nothing happening. Please sign in again.';
+      }
+    }
+    $_SESSION['seen'] = time();
   }
 }
 
@@ -208,7 +248,7 @@ function csrf_verify(?string $redirect = null): void {
   exit('Invalid CSRF token');
 }
 
-function flash(string $key, string $msg = null): ?string {
+function flash(string $key, ?string $msg = null): ?string {
   start_session_once();
   if ($msg === null) {
     if (!empty($_SESSION['flash'][$key])) { $m = $_SESSION['flash'][$key]; unset($_SESSION['flash'][$key]); return $m; }
@@ -410,11 +450,58 @@ function current_user(): ?array {
    a blank sign-in screen. See openLoginModal() in site_footer.php if that
    needs to open already expanded to cover it: it does not today.
 
-   This is the one place this decision is made: require_role() calls this
-   before checking a role, so every protected page in the system already
-   goes through it without needing its own change. */
-function require_login(): void { if (!current_user()) { header('Location: '.BASE_URL.'/archive/index.php?login_modal=1'); exit; } }
-function require_role(array $roles): void { require_login(); $u=current_user(); if(!$u||!in_array($u['user_role'],$roles,true)){ http_response_code(403); exit('Forbidden'); } }
+   login_redirect() is the one place this destination is named: require_login()
+   and require_role() both go through it, so every protected page in the
+   system already lands there without needing its own change. */
+function login_redirect(string $tab = 'student'): void {
+  header('Location: '.BASE_URL.'/archive/index.php?login_modal=1&role='.rawurlencode($tab)); exit;
+}
+function require_login(): void { if (!current_user()) { login_redirect(); } }
+
+/* A browser signed in as the wrong account used to get a bare "Forbidden":
+   a student session opening a pasted Coordinator link, or a guest pass
+   opening any dashboard. The sign-in panel cannot help there, because it is
+   only drawn for someone signed out, so the session that cannot open the
+   page is ended first and the panel opens on the tab the page is meant for
+   (Faculty / Admin for a staff desk), with a line saying why.
+
+   Only for a page being opened, never for a background request. fetch() and
+   XHR carry Sec-Fetch-Mode: cors or same-origin, and ending the session from
+   one of those would sign someone out mid-work over a request they never saw.
+   Those still get the 403. A browser old enough to send no Sec-Fetch-Mode is
+   treated as opening a page, which is also what curl looks like. */
+function require_role(array $roles): void {
+  $u = current_user();
+  if ($u && in_array($u['user_role'], $roles, true)) { return; }
+
+  $tab = in_array('student', $roles, true) ? 'student' : 'faculty';
+
+  $opening_page = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET'
+      && ($_SERVER['HTTP_SEC_FETCH_MODE'] ?? 'navigate') === 'navigate';
+
+  /* Signed out, and this is not somebody opening a page: answer it, do not
+     redirect it. A page already open in another tab keeps working its autosaves
+     and lookups after the session ends elsewhere, and sending those an HTML
+     login panel with a 302 told them nothing they could act on: the JSON parse
+     failed, the catch swallowed it, and the reader went on typing into a form
+     that could no longer save a word of it. 401 says which of the two things is
+     wrong, in a shape a script can read. */
+  if (!$u && !$opening_page) {
+    http_response_code(401);
+    header('Content-Type: application/json');
+    exit(json_encode(['error' => 'signed_out', 'signed_in' => false]));
+  }
+  if (!$u) { login_redirect($tab); }
+
+  if (!$opening_page) { http_response_code(403); exit('Forbidden'); }
+
+  // A new id with nothing in it, so the flash below has somewhere to live and
+  // the old session's file is deleted rather than left behind.
+  $_SESSION = [];
+  session_regenerate_id(true);
+  flash('login_error', 'That page needs a different account, so you have been signed out. Sign in with an account that can open it.');
+  login_redirect($tab);
+}
 function role_home(string $role): string {
   if($role === 'super_admin') return BASE_URL.'/app/admin/super_admin_review_dashboard.php';
   if($role === 'admin') {
@@ -1089,6 +1176,36 @@ function paper_file_viewable(array $u, array $paper, bool $supporting): bool {
 }
 
 /**
+ * The largest upload this server will actually accept, in bytes.
+ *
+ * The smallest of three ceilings wins: PHP's upload_max_filesize, PHP's
+ * post_max_size, and UPLOAD_MAX_MB, which stands for a limit the host applies
+ * below PHP (free hosting caps every file at 10 MB in the file system, where
+ * no ini setting reaches). Pages and validators ask this rather than carrying
+ * their own number, because the figure was written into eight places and a
+ * host change made all eight a lie at once.
+ */
+function max_upload_bytes(): int {
+    $limits = [UPLOAD_MAX_MB * 1024 * 1024];
+    foreach (['upload_max_filesize', 'post_max_size'] as $key) {
+        $raw = trim((string)ini_get($key));
+        if ($raw === '' || $raw === '-1') continue;   // unlimited, so not a ceiling
+        $unit = strtolower($raw[strlen($raw) - 1]);
+        $n = (int)$raw;
+        if ($unit === 'g') $n *= 1024 * 1024 * 1024;
+        elseif ($unit === 'm') $n *= 1024 * 1024;
+        elseif ($unit === 'k') $n *= 1024;
+        if ($n > 0) $limits[] = $n;
+    }
+    return (int)min($limits);
+}
+
+/** The same limit as a label for a reader: "10MB". */
+function max_upload_label(): string {
+    return floor(max_upload_bytes() / 1048576) . 'MB';
+}
+
+/**
  * The URL of one of the site's own static files, stamped with when it last
  * changed.
  *
@@ -1336,7 +1453,25 @@ function creator_of(int $user_id): ?int {
   $stmt->bind_param('i',$user_id); $stmt->execute(); $stmt->bind_result($cid); $stmt->fetch(); return $cid ?: null;
 }
 
-function create_notification(int $user_id, ?int $paper_id, string $type, string $message): void {
+/**
+ * Post a notification, and email the same thing.
+ *
+ * $type must be one of the values notifications.notification_type accepts:
+ * submission, approval, decline, reminder, comment, manuscript, security,
+ * support, account. MariaDB is not in strict mode here, so anything else is
+ * truncated to an empty string and the insert still reports success. That is
+ * how every "approved and published" notice ended up typeless, and a typeless
+ * row loses its icon and its label in the notification centre.
+ *
+ * $subject is for the types that mean two different things depending on who is
+ * reading. An approval is "forwarded" to the student whose adviser has just
+ * signed off and "published" to the one whose paper has reached the
+ * repository; a manuscript notice is a request to a librarian and an answer to
+ * a student. The map below is the fallback for everything that reads the same
+ * way whoever receives it.
+ */
+function create_notification(int $user_id, ?int $paper_id, string $type,
+                             string $message, string $subject = ''): void {
   $conn = db();
   $stmt = $conn->prepare("INSERT INTO notifications (user_id, paper_id, notification_type, message) VALUES (?,?,?,?)");
   $stmt->bind_param('iiss',$user_id,$paper_id,$type,$message);
@@ -1349,13 +1484,37 @@ function create_notification(int $user_id, ?int $paper_id, string $type, string 
       // Map notification types to friendly email subject lines
       $subjects = [
         'submission'  => 'New Paper Submission Requires Your Review',
-        'progress'    => 'Your Paper Has Been Approved & Forwarded',
-        'approved'    => 'Congratulations! Your Paper Has Been Fully Approved',
+        'approval'    => 'Your Paper Has Been Approved',
         'decline'     => 'Your Paper Needs Revisions',
         'reminder'    => 'PAPEL Reminder: Papers Pending Your Action',
+        'manuscript'  => 'About Your Manuscript Request',
       ];
-      $subject = $subjects[$type] ?? ('PAPEL Notification: ' . ucfirst($type));
-      send_email($recipient['email'], $subject, $message);
+      if ($subject === '') {
+        $subject = $subjects[$type] ?? ('PAPEL Notification: ' . ucfirst($type));
+      }
+
+      /* Written as a letter rather than posted as a bare sentence. The message
+         is one line, which is right for the bell but arrived in the letterhead
+         with no greeting, nobody named and nothing to click: the reader was
+         told their paper had been returned and left to find it themselves. */
+      /* With no paper to open, the link is the reader's own desk, and
+         role_home() works that out for an admin by reading admin_level from
+         the session: here that is whoever triggered the notice, not the person
+         being written to. A Head of Academic Programs would have been sent to
+         the Coordinator's desk, and a Coordinator to the Head's. Level 2 is
+         named by the other role that shares that desk, which role_home()
+         answers without consulting the session. */
+      $toRole = (string)($recipient['user_role'] ?? '');
+      if (!$paper_id && $toRole === 'admin' && (int)($recipient['admin_level'] ?? 1) === 2) {
+          $toRole = 'head_academic';
+      }
+
+      $body  = email_para('Good day ' . trim((string)($recipient['full_name'] ?? '')) . ',');
+      $body .= email_para($message);
+      $body .= email_action('Open it in ' . APP_NAME,
+          notification_link($paper_id, $toRole, $type));
+
+      send_email($recipient['email'], $subject, $body);
     }
   } catch (\Throwable $e) {
     // Never let email failure block the main workflow
@@ -1413,6 +1572,31 @@ function email_details(array $pairs, array $mono = []): string {
               . '</tr>';
     }
     return $out . '</table>';
+}
+
+/**
+ * The same message as plain text, for the copy that rides alongside the HTML.
+ *
+ * This was strip_tags(), which removes a tag without leaving anything in its
+ * place: every paragraph ran into the next one, so the text copy opened
+ * "Good day Maria,Your paper has been returned" and a credentials table came
+ * out as one unbroken line of labels and values. A reader on a client that
+ * prefers text, or a screen reader, got that version.
+ *
+ * Block ends become line breaks and table cells become a gap, then the
+ * entities strip_tags() leaves behind are decoded, so a quoted title reads as
+ * "A Study" rather than &quot;A Study&quot;.
+ */
+function email_plain(string $html): string {
+    $text = preg_replace('#<br\s*/?>#i', "\n", $html);
+    $text = preg_replace('#</(p|div|h1|h2|h3|tr|table)>#i', "\n", $text);
+    // Label and value sit in separate cells; two spaces keep them apart.
+    $text = preg_replace('#</t[dh]>#i', '  ', $text);
+    $text = html_entity_decode(strip_tags($text), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    // Trailing spaces from the cell rule, and runs of blank lines from nesting.
+    $text = preg_replace('/[ \t]+\n/', "\n", $text);
+    $text = preg_replace('/\n{3,}/', "\n\n", $text);
+    return trim($text);
 }
 
 /** A single call to action, set as a plain link rather than a coloured pill. */
@@ -1522,9 +1706,13 @@ function email_layout(string $bodyHtml, string $heading = ''): string {
  * Send one email. Returns whether it actually went.
  *
  * This used to return void, so every caller announced "credentials sent to
- * email" whether or not anything was sent, and SMTP authentication has been
- * failing, so for a long time nothing was. A caller that cannot tell the
+ * email" whether or not anything was sent, and through a long spell of SMTP
+ * authentication failures nothing was. A caller that cannot tell the
  * difference cannot warn anybody, which is the worst of both.
+ *
+ * Mail does go out from this machine at present, so anything that triggers a
+ * notification reaches a real inbox. Test against addresses at example.com,
+ * which is reserved and cannot receive mail.
  *
  * A failed send still writes the message to the notifications log, so the
  * content is recoverable; false means "assume they did not receive it".
@@ -1564,7 +1752,7 @@ function send_email(string $to, string $subject, string $body): bool {
       $mail->isHTML(true);
       $mail->Subject = $subject;
       $mail->Body    = email_layout(nl2br($body), $subject);
-      $mail->AltBody = strip_tags($body);
+      $mail->AltBody = email_plain($body);
 
       $mail->send();
       return true;

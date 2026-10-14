@@ -387,7 +387,6 @@ CREATE TABLE IF NOT EXISTS `users` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `last_login` timestamp NULL DEFAULT NULL,
   `is_active` tinyint(1) DEFAULT 1,
-  `is_otp_exempt` tinyint(1) NOT NULL DEFAULT 0 COMMENT '1 = Exempt from OTP, 0 = Requires OTP',
   `gdrive_token` text DEFAULT NULL,
   `reset_token` varchar(64) DEFAULT NULL,
   `reset_expires` datetime DEFAULT NULL,

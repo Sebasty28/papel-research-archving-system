@@ -22,10 +22,10 @@ if ($mimeType !== 'application/pdf') {
     die(json_encode(['success' => false, 'error' => 'File must be a PDF']));
 }
 
-// Validate file size (max 50MB)
-if ($pdfFile['size']> 50 * 1024 * 1024) {
+// Validate file size against what this server will take, not a fixed number.
+if ($pdfFile['size']> max_upload_bytes()) {
     http_response_code(400);
-    die(json_encode(['success' => false, 'error' => 'PDF file too large (max 50MB)']));
+    die(json_encode(['success' => false, 'error' => 'PDF file too large (max ' . max_upload_label() . ')']));
 }
 
 try {

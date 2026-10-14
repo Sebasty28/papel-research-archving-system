@@ -22,8 +22,10 @@ while($s=$schedules->fetch_assoc()){
   } else { $q = "SELECT 0 c"; }
   $c = $conn->query($q)->fetch_assoc()['c'] ?? 0;
   if($c>0){
+    /* One message. create_notification() emails as well, so the send_email()
+       that used to follow it put two copies of the same reminder in the same
+       inbox, under two different subjects. */
     create_notification($uid, null, 'reminder', "You have {$c} paper(s) pending review.");
-    send_email($u['email'], 'PAPEL Reminder', "You have {$c} paper(s) pending review.");
   }
   // update last_sent
   $conn->query("UPDATE notification_schedule SET last_sent=NOW() WHERE schedule_id=".$s['schedule_id']);

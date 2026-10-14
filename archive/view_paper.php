@@ -39,6 +39,42 @@ if(!$paper) {
 }
 if(!$paper){ http_response_code(404); echo '<div style="padding:2rem;text-align:center;font-family:sans-serif;"><h2>Paper Not Found</h2><p>The requested paper could not be found.</p><a href="index.php">Back to Archive</a></div>'; exit; }
 
+/* Which of the two tables this record came out of. papers_archive carries
+   archived_date and research_papers does not, which is what the AI blocks
+   below already use to decide which table to write back to.
+
+   Archiving belongs to the Director and to nobody else (see
+   app/admin/super_admin_review_dashboard.php, where the same decision is
+   made about the desk's own button), so the control here answers to the
+   same role rather than to whoever can see the page. */
+$isArchived = array_key_exists('archived_date', $paper);
+$canArchive = $u && ($u['user_role'] ?? '') === 'super_admin';
+
+/* Archive or restore, from the record itself. The desk can do this from a
+   list; this is the same decision taken while actually reading the paper,
+   which is where it is usually made. */
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['archive_action'])) {
+    csrf_verify();
+    if (!$canArchive) { http_response_code(403); exit('Not yours to do.'); }
+    require_once ROOT_PATH.'/archive/archive_handler.php';
+
+    if ($_POST['archive_action'] === 'archive' && !$isArchived) {
+        if (archive_paper($id, (int)$u['user_id'])) {
+            flash('success', 'Paper archived. It is out of the public repository and kept in the archive record.');
+        } else {
+            flash('error', 'That paper could not be archived.');
+        }
+    } elseif ($_POST['archive_action'] === 'restore' && $isArchived) {
+        if (restore_paper($id)) {
+            flash('success', 'Paper restored. It is back in the public repository.');
+        } else {
+            flash('error', 'That paper could not be restored.');
+        }
+    }
+    header('Location: view_paper.php?id=' . $id);
+    exit;
+}
+
 // Resolve role-specific Groq key: must be defined before the AI extraction block below
 $_roleKeyMap = [
     'super_admin' => 'GROQ_API_KEY_SUPERADMIN',
@@ -214,7 +250,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_manuscript'])
             $lib = $conn->query("SELECT user_id FROM users WHERE user_role = 'librarian' AND is_active = 1");
             $note = $u['full_name'] . ' requested access to the manuscript for "' . $paper['title'] . '".';
             foreach ($lib->fetch_all(MYSQLI_ASSOC) as $librow) {
-                create_notification((int)$librow['user_id'], $id, 'manuscript', $note);
+                /* Said as a request, because the same type also carries the
+                   answer back to the student, and the default subject is
+                   written for them. */
+                create_notification((int)$librow['user_id'], $id, 'manuscript', $note,
+                    'A Manuscript Request Needs Your Attention');
             }
             flash('success', 'Request sent. A librarian will review it shortly.');
         }
@@ -234,6 +274,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_manuscript'])
 <?php require_once ROOT_PATH.'/includes/paper_record_css.php'; ?>
 <?php require_once ROOT_PATH.'/includes/flash_banner.php'; ?>
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
+/* ---- Archived, and what can be done about it ----
+   The badge is the page's own status line, so an archived record says so
+   there rather than in a banner of its own. The colour is the site's
+   "needs attention" pair, which is what archived is here: still on record,
+   no longer on the shelf. */
+.pd-badge.is-archived { background: var(--bad-bg, var(--cream)); color: var(--bad-text, var(--maroon)); }
+.pd-archive-form { margin-top: .35rem; }
+.pd-archive-btn {
+    display: inline-flex; align-items: center; gap: .3rem;
+    padding: .25rem .5rem;
+    border: 1px solid var(--border-control, var(--border)); border-radius: var(--r-control, 4px);
+    background: var(--white); color: var(--maroon);
+    font-family: inherit; font-size: .75rem; cursor: pointer;
+    transition: background .15s, border-color .15s;
+}
+.pd-archive-btn:hover { background: var(--cream); border-color: var(--maroon); }
+
 /* Short answers sit together on one line; the long ones are prose below. */
 .vp-ai-chips { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: .25rem; }
 .vp-ai-chip {
@@ -341,12 +398,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_manuscript'])
             </div>
             <div class="pd-status">
                 Status
-                <span class="pd-badge">Published</span>
+                <?php /* An archived paper is still readable here, and nothing else on
+                         the page says it has been taken out of the repository: a
+                         reader who followed an old link would have no way to know. */ ?>
+                <span class="pd-badge<?= $isArchived ? ' is-archived' : '' ?>">
+                    <?= $isArchived ? 'Archived' : 'Published' ?>
+                </span>
                 <br>
                 <button type="button" class="pd-rail-toggle" id="pdRailToggle"
                         title="Hide the contents and citation panel" aria-label="Hide the contents and citation panel" aria-pressed="false">
                     <span class="material-symbols-outlined" id="pdRailToggleIcon">right_panel_close</span>
                 </button>
+                <?php if ($canArchive): ?>
+                    <?php /* Under the panel toggle, because this is the other thing
+                             the top right corner is for: what to do with the record
+                             rather than what to read of it. */ ?>
+                    <?php /* Asked about on the button, through the site's own dialog
+                             (includes/action_dialogs.php, which site_footer.php carries
+                             on every page). The desk's js-confirm-form markup is
+                             review_console.php's and does nothing here. */ ?>
+                    <form method="post" class="pd-archive-form">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="archive_action" value="<?= $isArchived ? 'restore' : 'archive' ?>">
+                        <button type="submit" class="pd-archive-btn"
+                                data-confirm="<?= e($isArchived
+                                    ? 'Put this paper back into the public repository? Readers will be able to find it again.'
+                                    : 'Take this paper out of the public repository? It is kept in the archive record, and you can put it back from there.') ?>">
+                            <span class="material-symbols-outlined mi-18"><?= $isArchived ? 'unarchive' : 'inventory_2' ?></span>
+                            <?= $isArchived ? 'Unarchive' : 'Archive' ?>
+                        </button>
+                    </form>
+                <?php endif; ?>
             </div>
         </div>
 

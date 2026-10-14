@@ -65,6 +65,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $subject = trim($_POST['subject'] ?? '');
     $message = trim($_POST['message'] ?? '');
 
+    /* The topic box is typed into, so it arrives in whatever case the reader
+       used. The page tidies it as they leave the field; this is the same tidy
+       on the server, for a submission that did not go through that script. */
+    foreach (array_keys(SUPPORT_REQUEST_KINDS) as $rcTopic) {
+        if (strcasecmp($subject, $rcTopic) === 0) { $subject = $rcTopic; break; }
+    }
     $kind = SUPPORT_REQUEST_KINDS[$subject] ?? null;
 
     if ($name === '' || $email === '' || $message === '') {
@@ -434,15 +440,32 @@ textarea.form-control { resize: vertical; min-height: 104px; }
                     </div>
                     <div class="mb-form">
                         <label class="form-label">Subject <span style="color:var(--maroon)">*</span></label>
-                        <?php $presetSubject = trim($_GET['subject'] ?? ''); ?>
-                        <?php /* Upload Problem, Approval Inquiry and Other are gone: all
-                                 three were general prose to a mailbox. A paper already has
-                                 a review desk and a place to say what is wrong with it. */ ?>
-                        <select name="subject" id="subjectSelect" class="form-select" required>
-                            <option value="">Select a topic…</option>
-                            <option value="Forgotten Password" <?= $presetSubject === 'Forgotten Password' ? 'selected' : '' ?>>Forgotten Password</option>
-                            <option value="Account Issue" <?= $presetSubject === 'Account Issue' ? 'selected' : '' ?>>Account Issue</option>
-                        </select>
+                        <?php $presetSubject = trim($_GET['subject'] ?? '');
+                              /* Only a topic the form actually offers is put in the box:
+                                 anything else arriving in the query string would sit there
+                                 as a value the handler is bound to refuse. */
+                              if (!array_key_exists($presetSubject, SUPPORT_REQUEST_KINDS)) $presetSubject = ''; ?>
+                        <?php /* A dropdown that can also be typed in: the chevron opens the
+                                 topics, typing narrows them to the one wanted. data-combo is
+                                 what asks select_skin.php for that; without the script it
+                                 falls back to the browser's own suggestions, which is why the
+                                 list stays in the markup.
+
+                                 The list is the only thing the handler accepts, so the script
+                                 below says so as it is typed rather than leaving it to the
+                                 submit. Upload Problem, Approval Inquiry and Other are gone:
+                                 all three were general prose to a mailbox. A paper already
+                                 has a review desk and a place to say what is wrong with it. */ ?>
+                        <input type="text" name="subject" id="subjectSelect" class="form-control"
+                               list="subjectList" data-combo maxlength="80" autocomplete="off" required
+                               placeholder="Select or type a topic…" value="<?= e($presetSubject) ?>">
+                        <datalist id="subjectList">
+                            <?php foreach (array_keys(SUPPORT_REQUEST_KINDS) as $topic): ?>
+                                <option value="<?= e($topic) ?>">
+                            <?php endforeach; ?>
+                        </datalist>
+                        <small class="form-hint">Pick one from the list, or start typing to find it.</small>
+                        <small class="form-hint is-bad" id="subjectNote" hidden></small>
                     </div>
 
                     <div class="mb-form">
@@ -532,6 +555,10 @@ const HANDLER_ROLES_FOR = <?= json_encode(
         array_keys(support_requester_roles()), array_keys(support_requester_roles()))),
     JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?>;
 
+/* The only subjects the handler accepts, named here from the same list it
+   checks against, so the two cannot drift apart. */
+const SUBJECT_TOPICS = <?= json_encode(array_keys(SUPPORT_REQUEST_KINDS), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) ?>;
+
 const MESSAGE_PLACEHOLDER = {
     'Forgotten Password': 'Anything that helps them find you, and when you last signed in.',
     'Account Issue': 'What is wrong on your account, and what it should say instead.',
@@ -540,7 +567,8 @@ const MESSAGE_PLACEHOLDER = {
 
 (function () {
     const TOKEN     = (document.querySelector('input[name="_token"]') || {}).value || '';
-    const subject   = document.getElementById('subjectSelect');
+    const subject     = document.getElementById('subjectSelect');
+    const subjectNote = document.getElementById('subjectNote');
     const block     = document.getElementById('requestFields');
     const fullName  = document.getElementById('fullNameBox');
     const emailBox  = document.getElementById('emailBox');
@@ -554,7 +582,17 @@ const MESSAGE_PLACEHOLDER = {
     const message   = document.getElementById('messageBox');
     if (!subject || !block) return;
 
-    const NEEDS_DETAIL = ['Forgotten Password', 'Account Issue'];
+    const NEEDS_DETAIL = SUBJECT_TOPICS;
+
+    /* What was typed, as the handler spells it. Case and stray spaces are the
+       reader's business, not something to refuse them over. */
+    function canonicalSubject(v) {
+        const typed = (v || '').trim().toLowerCase();
+        for (let i = 0; i < SUBJECT_TOPICS.length; i++) {
+            if (SUBJECT_TOPICS[i].toLowerCase() === typed) return SUBJECT_TOPICS[i];
+        }
+        return null;
+    }
 
     /* Required only while they are on screen. A hidden field marked required is
        one the browser refuses to submit and refuses to explain, because it
@@ -568,9 +606,29 @@ const MESSAGE_PLACEHOLDER = {
     }
 
     function onSubject() {
-        const wanted = NEEDS_DETAIL.indexOf(subject.value) !== -1;
-        setRequired(wanted);
-        message.placeholder = MESSAGE_PLACEHOLDER[subject.value] || MESSAGE_PLACEHOLDER[''];
+        const topic  = canonicalSubject(subject.value);
+        const typed  = subject.value.trim();
+        const wrong  = typed !== '' && topic === null;
+
+        setRequired(topic !== null);
+        message.placeholder = MESSAGE_PLACEHOLDER[topic || ''] || MESSAGE_PLACEHOLDER[''];
+
+        /* Said here rather than after the form is sent, the same way the name,
+           the address and the ID are checked above. */
+        const say = wrong
+            ? 'Choose one of the topics offered: ' + SUBJECT_TOPICS.join(' or ') + '.'
+            : '';
+        subject.setCustomValidity(say);
+        if (subjectNote) { subjectNote.hidden = !wrong; subjectNote.textContent = say; }
+    }
+
+    /* Typed in any case, written back the way the handler spells it, once the
+       box is left alone. Done on the way out rather than on every keystroke,
+       which would fight the person still typing. */
+    function tidySubject() {
+        const topic = canonicalSubject(subject.value);
+        if (topic && subject.value !== topic) subject.value = topic;
+        onSubject();
     }
 
     /* The ID box names whichever kind of account was chosen. Before a role is
@@ -759,7 +817,9 @@ const MESSAGE_PLACEHOLDER = {
         typing = setTimeout(checkIdent, 450);
     }
 
-    subject.addEventListener('change', onSubject);
+    subject.addEventListener('input', onSubject);
+    subject.addEventListener('change', tidySubject);
+    subject.addEventListener('blur', tidySubject);
     if (rRole)  rRole.addEventListener('change', function () { onRequesterRole(); checkIdent(); });
     if (hRole)  hRole.addEventListener('change', onHandlerRole);
     if (rIdent) {

@@ -19,13 +19,16 @@ if (empty($message)) {
 $u = current_user();
 $studentName = $u['full_name'] ?? 'Student';
 
+// The real limit, so PUPPY never promises a size the server will refuse.
+$maxUpload = max_upload_label();
+
 // System Prompt / Context
 $systemContext = "You are PUPPY the Ai dog assistant, the Virtual Assistant for the PAPEL Research Repository. You are assisting a student named $studentName.
 Your primary goal is to guide them on how to upload their research and explain the requirements.
 
 Key Information for the Student:
 - Required Documents: Ethics Clearance, Consent Form, and Data Collection instruments.
-- File Requirements: PDF format only, maximum size 50MB.
+- File Requirements: PDF format only, maximum size $maxUpload.
 - Process: They can use the 'Extract with AI' button to auto-fill metadata from their PDF.
 - Tone: Be concise, friendly, and professional.
 

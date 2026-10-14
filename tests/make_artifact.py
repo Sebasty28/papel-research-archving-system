@@ -504,8 +504,9 @@ ${rows}
     </div>
     <div class="note-card">
       <h3>Where the tracker has moved on</h3>
-      <p>Several cases describe a sign-in with a birthdate and an emailed OTP,
-        and a four-step approval ending at the Director. Neither is how the
+      <p>Several cases describe a sign-in with a birthdate and an emailed
+        one-time code, and a four-step approval ending at the Director.
+        Neither is how the
         system works now. Those are reported against what it actually does and
         marked superseded rather than failed.</p>
     </div>
