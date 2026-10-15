@@ -146,10 +146,18 @@ $login_notif_popup_items = $show_login_notif_popup
                  aria-label, and both parts are hidden from assistive
                  technology, so it is announced once whatever state the word
                  is in. */ ?>
-        <a href="<?= e(BASE_URL.'/archive/index.php') ?>" class="brand" aria-label="<?= e(APP_NAME) ?>">
+        <a href="<?= e(BASE_URL.'/archive/index.php') ?>" class="brand" aria-label="<?= e(APP_NAME . (app_env_badge() !== '' ? ' (' . strtolower(app_env_badge()) . ')' : '')) ?>">
             <span class="brand-mark" aria-hidden="true"></span>
             <span class="brand-word" aria-hidden="true"><?= e(APP_NAME) ?></span>
         </a>
+        <?php /* Outside the link on purpose: .brand-word is absolutely placed
+                 and slides out from behind the mark on hover, so a chip inside
+                 would be slid over. Out here it simply sits beside the logo and
+                 stays put. The link's aria-label already says which copy this
+                 is, so the chip is decoration to a screen reader. */ ?>
+        <?php if (app_env_badge() !== ''): ?>
+            <span class="brand-env" aria-hidden="true"><?= e(app_env_badge()) ?></span>
+        <?php endif; ?>
         <nav class="main-nav" id="mainNav">
             <?php foreach ($nav_links as $link): ?>
                 <?php $is_active = !empty($link['match']) && in_array($current_script, $link['match'], true); ?>
@@ -439,10 +447,13 @@ $login_notif_popup_items = $show_login_notif_popup
                  out past its rule on hover, the name in aria-label) all from
                  the shared .brand rules. */ ?>
         <div class="panel-topbar-brand">
-            <a href="<?= e(BASE_URL.'/archive/index.php') ?>" class="brand" aria-label="<?= e(APP_NAME) ?>">
+            <a href="<?= e(BASE_URL.'/archive/index.php') ?>" class="brand" aria-label="<?= e(APP_NAME . (app_env_badge() !== '' ? ' (' . strtolower(app_env_badge()) . ')' : '')) ?>">
                 <span class="brand-mark" aria-hidden="true"></span>
                 <span class="brand-word" aria-hidden="true"><?= e(APP_NAME) ?></span>
             </a>
+            <?php if (app_env_badge() !== ''): ?>
+                <span class="brand-env" aria-hidden="true"><?= e(app_env_badge()) ?></span>
+            <?php endif; ?>
         </div>
         <?php /* open_in_full / close_fullscreen, the pair the upload wizard's
                  expand button already uses. The screen-corners icon reads as

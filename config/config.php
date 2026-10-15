@@ -75,11 +75,20 @@ ini_set('log_errors', '1');
 error_reporting(E_ALL);
 date_default_timezone_set('Asia/Manila');
 
-/* Read from .env so a second copy of the site can name itself. Staging runs
-   the same code against its own database, and two identical tabs are easy to
-   mix up: APP_NAME="PAPEL (Staging)" puts the difference in the page title,
-   the navbar and the subject line of every email it sends. */
 define('APP_NAME', $_ENV['APP_NAME'] ?? 'PAPEL');
+
+/* Which copy of the site this is. Anything other than "production" is a copy
+   that must never be mistaken for the real one, so the header marks it with a
+   chip beside the logo. The name itself stays "PAPEL" everywhere, because it
+   is printed in page titles and in the subject line of every email, and a
+   parenthesis in all of those reads worse than one small label in the one
+   place a person is actually looking. */
+define('APP_ENV', strtolower(trim((string)($_ENV['APP_ENV'] ?? 'production'))));
+
+/** The chip's text, or '' on production, where nothing is shown. */
+function app_env_badge(): string {
+    return APP_ENV === 'production' || APP_ENV === '' ? '' : strtoupper(APP_ENV);
+}
 define('BASE_URL', $_ENV['BASE_URL'] ?? 'http://localhost/capstone');
 
 /* The sign-in robot check. Blank until a site is registered at

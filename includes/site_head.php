@@ -442,6 +442,38 @@ body:has(.crumb-bar) .nav-photo { height: calc(var(--nav-h) + var(--crumb-h)); }
                 transform .38s cubic-bezier(.2, .8, .2, 1), color .2s;
 }
 .brand:hover .brand-word { color: var(--maroon); }
+
+/* The copy-of-the-site chip: STAGING, or whatever APP_ENV says. It sits
+   beside the logo rather than inside the link, because .brand-word slides out
+   from behind the mark on hover and would pass straight over it.
+
+   Outlined rather than filled, and in the accent rather than a warning red:
+   it has to be unmistakable at a glance without shouting over the masthead of
+   every page. Tokens only, so it follows the palette and dark mode like
+   everything else. */
+.brand-env {
+    flex-shrink: 0;
+    margin-left: .5rem;
+    padding: .1rem .4rem;
+    border: 1px solid var(--soft-maroon, var(--pup-maroon));
+    border-radius: var(--r-control, 4px);
+    font-family: var(--font-body);
+    font-size: .625rem;
+    font-weight: 700;
+    letter-spacing: .09em;
+    line-height: 1.4;
+    text-transform: uppercase;
+    color: var(--pup-maroon);
+    background: var(--cream);
+    white-space: nowrap;
+    /* The navbar is a 36px band, so the chip must not stretch it. */
+    align-self: center;
+}
+/* On a phone the header gives its room to the nav toggle, and the chip is the
+   first thing that can go: the page title still says which site this is. */
+@media (max-width: 420px) {
+    .brand-env { display: none; }
+}
 /* The navbar's stays shut below 1100px. Being out of the flow, the word
    overlays whatever is beside the mark rather than moving it, and in the bar
    something is: under 900px the header's controls sit straight after the
