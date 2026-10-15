@@ -46,11 +46,11 @@ $message = $check['input'];
 $userName = $u['full_name'] ?? 'User';
 $userRole = ucfirst($u['user_role'] ?? 'Guest');
 
-// The real limit, so PUPPY never promises a size the server will refuse.
+// The real limit, so the assistant never promises a size the server will refuse.
 $maxUpload = max_upload_label();
 
 // System Prompt / Context for Help Center (hardened with security rules)
-$systemContext = "You are PUPPY the Ai dog assistant, the PAPEL Support AI. You are assisting a $userRole named $userName.
+$systemContext = "You are Corpus, the PAPEL Support AI. You are assisting a $userRole named $userName.
 Your specific role is to help users solve problems they encounter on the platform.
 
 Guidelines for helping:

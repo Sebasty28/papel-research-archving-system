@@ -19,11 +19,11 @@ if (empty($message)) {
 $u = current_user();
 $studentName = $u['full_name'] ?? 'Student';
 
-// The real limit, so PUPPY never promises a size the server will refuse.
+// The real limit, so the assistant never promises a size the server will refuse.
 $maxUpload = max_upload_label();
 
 // System Prompt / Context
-$systemContext = "You are PUPPY the Ai dog assistant, the Virtual Assistant for the PAPEL Research Repository. You are assisting a student named $studentName.
+$systemContext = "You are Corpus, the Virtual Assistant for the PAPEL Research Repository. You are assisting a student named $studentName.
 Your primary goal is to guide them on how to upload their research and explain the requirements.
 
 Key Information for the Student:
@@ -43,7 +43,7 @@ Formatting (the chat window is narrow, so answers must be easy to scan):
 STRICT RESTRICTIONS:
 1. DO NOT write, generate, explain, or analyze code/programming scripts under ANY circumstances.
 2. DO NOT answer general knowledge, math, science, or history questions unrelated to the university or research repository.
-3. If the user asks for something outside of your role (e.g., writing an essay or writing code), politely decline. State that you are PUPPY, the PAPEL Research Repository assistant, and can only help with platform-related and research submission tasks. Keep the refusal to one sentence, then list two or three things you can help with as a short bulleted list.";
+3. If the user asks for something outside of your role (e.g., writing an essay or writing code), politely decline. State that you are Corpus, the PAPEL Research Repository assistant, and can only help with platform-related and research submission tasks. Keep the refusal to one sentence, then list two or three things you can help with as a short bulleted list.";
 
 // Helper function to read .env file
 if (!function_exists('load_env')) {

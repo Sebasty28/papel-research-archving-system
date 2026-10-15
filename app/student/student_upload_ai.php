@@ -1346,9 +1346,10 @@ body.pdf-docked .doc-editor.is-expanded { right: var(--pdf-dock-w, 460px); }
 html.doc-expanded #a11y-widget,
 body.doc-expanded #a11y-widget,
 body.doc-expanded #chat-widget { display: none !important; }
-/* Their reserved space goes with them, so the box gets the full width. */
-body.doc-expanded.chat-docked-left  { padding-left: 0; }
-body.doc-expanded.chat-docked-right { padding-right: 0; }
+/* Their reserved space goes with them, so the box gets the full width. The
+   inset the navbar reads is released with it: see --chat-inset-* below. */
+body.doc-expanded.chat-docked-left  { padding-left: 0;  --chat-inset-left: 0px; }
+body.doc-expanded.chat-docked-right { padding-right: 0; --chat-inset-right: 0px; }
 /* Holds the page's height so nothing jumps while a box is lifted out of flow. */
 .doc-editor-spacer { margin-bottom: 1.25rem; }
 .doc-expand { color: var(--grey); }
@@ -1995,7 +1996,10 @@ hr {
 #puppyHeader {
     width: 48px;
     height: 48px;
-    border: 2px solid var(--white);
+    /* The ring was white to lift the avatar off a maroon bar. The bar is cream
+       now and the artwork's own ground is cream too, so a white ring left the
+       circle with no edge at all: this is the site's hairline instead. */
+    border: 2px solid var(--border);
 }
 /* Smaller than the 56px button so the maroon shows as a ring around the dog. */
 #puppyFab { width: 48px; height: 48px; }
@@ -2013,8 +2017,13 @@ hr {
     margin-bottom: 14px;
 }
 #chat-header {
-    background: var(--maroon);
-    color: #fff;
+    /* The same ground the conversation sits on, so the panel reads as one
+       surface rather than as a coloured cap on a pale box. The hairline is
+       doing the work the colour change used to do: without it the header and
+       the first message run together, since they are now the same cream. */
+    background: var(--cream);
+    color: var(--maroon);
+    border-bottom: 1px solid var(--border);
     padding: 1rem;
     font-size: .875rem;
     display: flex;
@@ -2091,20 +2100,32 @@ hr {
 #chat-header > div:first-child > div { min-width: 0; }
 /* the selector + close button keep their size and never overlap the title */
 #chat-header > div:last-child { flex: 0 0 auto; }
+/* A name with a line about it underneath is a shape the site already has: the
+   avatar menu's .dd-name / .dd-role. These are those rules, so the assistant is
+   introduced in the same voice as the person signed in. On a pale header the
+   descriptor can take --grey exactly as .dd-role does, rather than the faded
+   white it needed while the bar behind it was maroon. */
 #chat-header h5 {
     margin: 0;
     font-family: var(--font-head);
-    font-size: .875rem;
-    font-weight: 500;
-    line-height: 1.25;
+    font-size: .9375rem;
+    font-weight: 700;
+    line-height: 1.3;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
-#chat-header p {
+/* The subtitle itself, named as the direct child rather than as any p in the
+   header. The hover card hanging below is also inside the header, and a plain
+   `#chat-header p` carried this nowrap and ellipsis into it: the card's
+   paragraphs were being cut off mid-sentence on one line, and an ID in the
+   selector meant the card's own rules could not win them back. */
+#chat-header .chat-identity > p {
     margin: 0;
-    font-size: .6875rem;
-    opacity: .85;
+    font-family: var(--font-body);
+    font-size: .8125rem;
+    font-weight: 400;
+    color: var(--grey);
     line-height: 1.3;
     white-space: nowrap;
     overflow: hidden;
@@ -2113,9 +2134,12 @@ hr {
 #chat-header .material-symbols-outlined { font-size: 22px; flex-shrink: 0; }
 
 /* The heading and subtitle are clipped to keep the header on two lines, so
-   hovering (or keyboard-focusing) the block reveals both in full. The card is
-   anchored to the header rather than to the text column so it always spans the
-   panel neatly, whether the chat is floating or docked to a side. */
+   hovering (or keyboard-focusing) the block reveals both in full, and with them
+   what the assistant is actually for. The card used to repeat the two lines
+   above it and nothing else, which told a reader who hovered it nothing they
+   could not already see. The card is anchored to the header rather than to the
+   text column so it always spans the panel neatly, whether the chat is floating
+   or docked to a side. */
 #chat-header { position: relative; }
 .chat-identity { cursor: default; outline: none; }
 .chat-identity-tip {
@@ -2141,11 +2165,13 @@ hr {
     visibility: visible;
     transform: translateY(0);
 }
+/* The same pair again, on white this time, so it can take --grey as .dd-role
+   does rather than fading itself. */
 .chat-identity-tip .tip-name {
     display: block;
     font-family: var(--font-head);
-    font-size: .8125rem;
-    font-weight: 500;
+    font-size: .9375rem;
+    font-weight: 700;
     line-height: 1.3;
     color: var(--maroon);
     white-space: normal;
@@ -2153,16 +2179,50 @@ hr {
 .chat-identity-tip .tip-desc {
     display: block;
     margin-top: .125rem;
-    font-size: .75rem;
+    font-family: var(--font-body);
+    font-size: .8125rem;
     line-height: 1.45;
     color: var(--grey);
     white-space: normal;
 }
+/* What it is for, under the name. Bootstrap gives a p a bottom margin and a ul
+   two rems of indent, both of which look like a mistake in a card this size. */
+.chat-identity-tip .tip-body {
+    margin: .5rem 0 0;
+    font-family: var(--font-body);
+    font-size: .8125rem;
+    line-height: 1.5;
+    color: var(--ink);
+    white-space: normal;
+}
+.chat-identity-tip .tip-list {
+    margin: .375rem 0 0;
+    padding-left: 1.05rem;
+    font-family: var(--font-body);
+    font-size: .8125rem;
+    line-height: 1.5;
+    color: var(--ink);
+}
+.chat-identity-tip .tip-list li {
+    margin-top: .25rem;
+    white-space: normal;
+}
+.chat-identity-tip .tip-list li::marker { color: var(--maroon); }
+/* The last line says what it will not do, so it reads as an aside. */
+.chat-identity-tip .tip-limit {
+    margin-top: .5rem;
+    padding-top: .5rem;
+    border-top: 1px solid var(--border);
+    color: var(--grey);
+}
 
+/* Drawn for a pale header now, so the white these carried would be invisible.
+   The site's own .nav-icon-btn tints to --cream on hover, which is this
+   header's own ground, so the chip is white here instead. */
 #chatCloseBtn {
     background: none;
     border: none;
-    color: rgba(255,255,255,.85);
+    color: var(--maroon);
     cursor: pointer;
     padding: 0;
     width: 26px;
@@ -2174,14 +2234,14 @@ hr {
     flex-shrink: 0;
     transition: background .15s, color .15s;
 }
-#chatCloseBtn:hover { background: rgba(255,255,255,.16); color: #fff; }
+#chatCloseBtn:hover { background: var(--white); color: var(--dark-maroon); }
 
 /* Dock + move-side controls, mirroring the close button's treatment. */
 #chatDockBtn,
 #chatSideBtn {
     background: none;
     border: none;
-    color: rgba(255,255,255,.85);
+    color: var(--maroon);
     cursor: pointer;
     padding: 0;
     width: 26px;
@@ -2194,7 +2254,7 @@ hr {
     transition: background .15s, color .15s;
 }
 #chatDockBtn:hover,
-#chatSideBtn:hover { background: rgba(255,255,255,.16); color: #fff; }
+#chatSideBtn:hover { background: var(--white); color: var(--dark-maroon); }
 /* Moving sides only makes sense once the panel is docked. */
 #chat-widget:not(.is-docked) #chatSideBtn { display: none; }
 /* The right edge is taken by the PDF preview. */
@@ -2203,16 +2263,33 @@ hr {
 /* ===== Docked side panel =====
    The panel takes a column at the edge of the viewport and the page is
    padded by the same amount, so content slides over to make room rather
-   than being covered: the navbar stays fully visible beside it. */
+   than being covered.
+
+   It starts below the whole top band rather than at the top of the screen.
+   Docked to the full height it stood in front of the bar, so the logo, the nav
+   links and the avatar menu were all pushed into the remaining width and the
+   panel held the corner the site's identity lives in.
+
+   The band is the navbar and the breadcrumb strip together: one campus photo
+   runs behind both (.nav-photo in site_head.php is sized nav + crumb), so
+   cutting into it anywhere leaves the photo starting partway across the window.
+   Both heights are published by site_header.php, measured from the elements
+   themselves, so this follows them when the bar wraps taller on a narrow window
+   or grows as the web fonts arrive.
+
+   The z-index goes under the header's 900 for the same reason: the notification
+   and avatar menus drop out of the bar, and at 950 the panel covered them. */
 #chat-widget.is-docked {
     position: fixed;
-    top: 0;
+    /* placeChatDockTop() keeps --chat-dock-top on the band's live bottom edge;
+       the sum is the resting value, and what is used if that never runs. */
+    top: var(--chat-dock-top, calc(var(--nav-h, 56px) + var(--crumb-h, 36px)));
     bottom: 0;
     left: auto;
     right: auto;
     width: var(--chat-dock-w, 380px);
     max-width: 100vw;
-    z-index: 950;
+    z-index: 880;
     display: block;
 }
 #chat-widget.is-docked.dock-left  { left: 0; }
@@ -2223,7 +2300,9 @@ hr {
     height: 100%;
     max-height: none;
     margin: 0;
-    border-radius: var(--r-card, 8px);
+    /* Square: three of its four edges are the edge of the screen, and a
+       rounded corner there shows the page through the gap. */
+    border-radius: 0;
     border: none;
     box-shadow: var(--shadow-md);
 }
@@ -2231,16 +2310,52 @@ hr {
 #chat-widget.is-docked.dock-right #chat-window { border-left: 1px solid var(--border); }
 #chat-widget.is-docked #chat-button { display: none !important; }
 
-/* The page gives way to the docked panel. */
-body { transition: padding-left .25s ease, padding-right .25s ease; }
-body.chat-docked-left  { padding-left:  var(--chat-dock-w, 380px); }
-body.chat-docked-right { padding-right: var(--chat-dock-w, 380px); }
+/* The page gives way to the docked panel.
+
+   The same figure is published as --chat-inset-*, because the navbar has to
+   undo exactly what the padding does and there is no way to read a computed
+   padding from CSS. Setting both together means anything that cancels the
+   padding cancels the navbar's correction with it; miss one and the bar hangs
+   off the side of the window. */
+/* Placed, not animated. The padding used to ease in over .25s while the
+   navbar's correction below applied at once, so the bar's width was being
+   worked out from a figure still in motion: it jumped to 1822px wide with the
+   logo 300px off the left edge and slid back over the next quarter second,
+   every time the panel was docked. Both now land together on the same frame. */
+body.chat-docked-left {
+    padding-left: var(--chat-dock-w, 380px);
+    --chat-inset-left: var(--chat-dock-w, 380px);
+}
+body.chat-docked-right {
+    padding-right: var(--chat-dock-w, 380px);
+    --chat-inset-right: var(--chat-dock-w, 380px);
+}
+
+/* The navbar and the breadcrumb strip run the full width of the window, over
+   the panel rather than beside it: the panel now starts below both, so a band
+   stopping at the panel's edge would leave an empty strip where the logo used
+   to be, and the campus photo behind the band would start partway across.
+
+   Only the chat's inset is given back. A docked PDF preview pads the right as
+   well and sits in front of everything, so the band is left stopping where that
+   panel starts, which is where it should stop. */
+body > .site-header,
+body > .crumb-bar {
+    margin-left:  calc(-1 * var(--chat-inset-left, 0px));
+    margin-right: calc(-1 * var(--chat-inset-right, 0px));
+    width: calc(100% + var(--chat-inset-left, 0px) + var(--chat-inset-right, 0px));
+}
 
 /* Too narrow to share the screen: overlay instead of squeezing the form. */
 @media (max-width: 900px) {
     #chat-widget.is-docked { width: 100vw; }
     body.chat-docked-left,
-    body.chat-docked-right { padding-left: 0; padding-right: 0; }
+    body.chat-docked-right {
+        padding-left: 0;
+        padding-right: 0;
+        --chat-inset-left: 0px;
+        --chat-inset-right: 0px;
+    }
 }
 
 /* Chat bubbles: same treatment as the Help Center's .chat-msg */
@@ -2322,17 +2437,14 @@ body.chat-docked-right { padding-right: var(--chat-dock-w, 380px); }
     50% { transform: translateY(-5px); }
 }
 
-/* Breadcrumb strip: same maroon bar used site-wide */
-.crumb-bar { background: var(--dark-maroon); }
-.crumb-inner {
-    display: flex; align-items: center; gap: .25rem;
-    padding-top: .5rem; padding-bottom: .5rem;
-    font-size: .75rem; color: rgba(255,255,255,.85);
-}
-.crumb-inner a { color: #fff; text-decoration: none; }
-.crumb-inner a:hover { text-decoration: underline; }
-.crumb-arrow { color: #fff; font-size: 20px; margin: 0 .125rem; --mi-fill: 1; }
-.crumb-current { color: #fff; }
+/* The breadcrumb strip is site_head.php's .crumb-bar and nothing more.
+   This page used to restate the whole block, from a time when the strip really
+   was a flat maroon bar. The shared one has since become frosted glass over the
+   campus photo that runs behind the navbar, and a local `background:
+   var(--dark-maroon)` loading after it put that back to opaque: the photo was
+   being fetched on this page and then hidden under it, so the upload page was
+   the one place the band did not match. The other rules here were duplicates of
+   the shared ones, character for character. */
 
 /* Step-by-step progress bar */
 .upload-steps {
@@ -3648,13 +3760,24 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
                     <span class="material-symbols-outlined mi-20" id="chatSideIcon">dock_to_right</span>
                 </button>
                 <img id="puppyHeader" class="puppy-avatar" width="34" height="34"
-                     alt="PUPPY" src="<?= BASE_URL ?>/assests/images/papel_red_welcome.gif">
+                     alt="Corpus" src="<?= BASE_URL ?>/assests/images/papel_red_welcome.gif">
                 <div class="chat-identity" tabindex="0" aria-describedby="chatIdentityTip">
-                    <h5 class="mb-0">PUPPY the Ai dog assistant</h5>
-                    <p class="mb-0 small">Here to help with uploading</p>
+                    <h5 class="mb-0">Corpus</h5>
+                    <p class="mb-0 small">AI Chatbot of the PAPEL</p>
+                    <?php /* The limit is read from the server rather than typed
+                             here, for the same reason the assistant's own prompt
+                             reads it: a figure in the description that the
+                             upload then refuses is worse than no figure. */ ?>
                     <div class="chat-identity-tip" id="chatIdentityTip" role="tooltip">
-                        <span class="tip-name">PUPPY the Ai dog assistant</span>
-                        <span class="tip-desc">Here to help with uploading</span>
+                        <span class="tip-name">Corpus</span>
+                        <span class="tip-desc">AI Chatbot of the PAPEL</span>
+                        <p class="tip-body">Corpus is here to get your paper handed in properly. It knows what the repository asks for and what belongs in each box on this form.</p>
+                        <ul class="tip-list">
+                            <li>What to attach: Ethics Clearance, Consent Form and Data Collection instruments</li>
+                            <li>What the file must be: a PDF, up to <?= e(max_upload_label()) ?></li>
+                            <li>How Extract with AI fills the form from your manuscript</li>
+                        </ul>
+                        <p class="tip-body tip-limit">It will not write your paper or answer questions outside PAPEL. For anything beyond the submission, ask your research adviser.</p>
                     </div>
                 </div>
             </div>
@@ -3664,9 +3787,9 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
         </div>
         <div id="chat-messages">
             <div class="msg-row">
-                <img class="msg-avatar" data-mood="welcome" alt="PUPPY"
+                <img class="msg-avatar" data-mood="welcome" alt="Corpus"
                      src="<?= BASE_URL ?>/assests/images/papel_red_welcome.gif">
-                <div class="message bot">Hi! I'm PUPPY the Ai dog assistant, your upload guide. Need help with requirements like Ethics Clearance or Consent Forms? Ask me!</div>
+                <div class="message bot">Hi! I'm Corpus, your upload guide. Need help with requirements like Ethics Clearance or Consent Forms? Ask me!</div>
             </div>
         </div>
         <div id="chat-input-area">
@@ -3676,9 +3799,9 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
             </form>
         </div>
     </div>
-    <button type="button" id="chat-button" title="Ask AI Assistant">
+    <button type="button" id="chat-button" title="Ask Corpus">
         <img id="puppyFab" class="puppy-avatar" width="48" height="48"
-             alt="Ask PUPPY" src="<?= BASE_URL ?>/assests/images/papel_red_welcome.gif">
+             alt="Ask Corpus" src="<?= BASE_URL ?>/assests/images/papel_red_welcome.gif">
     </button>
 </div>
 
@@ -7099,6 +7222,43 @@ function applyChatDock(docked, side) {
     try { localStorage.setItem('papel_chat_side', side); } catch (err) {}
 }
 
+/* Where the top band currently ends.
+ *
+ * The docked panel starts below the navbar and the breadcrumb strip together,
+ * which is right while the page is at the top. Only the navbar is sticky
+ * though: scroll down and the strip leaves, and a panel still starting where
+ * the strip used to be hangs 40px below the bar with a band of empty page
+ * above it. So the figure is taken from the elements themselves on each scroll
+ * rather than added up once, and the panel rides up to meet the bar.
+ *
+ * Written to a custom property rather than to the panel, so the CSS keeps the
+ * fallback for anyone this script never reaches. Reads are batched into a
+ * frame: a scroll handler that measures on every event is a scroll handler
+ * that stutters.
+ */
+function placeChatDockTop() {
+    const bar   = document.getElementById('siteHeader');
+    const crumb = document.querySelector('.crumb-bar');
+    if (!bar) return;
+    let edge = bar.getBoundingClientRect().bottom;
+    if (crumb) edge = Math.max(edge, crumb.getBoundingClientRect().bottom);
+    document.documentElement.style.setProperty(
+        '--chat-dock-top', Math.max(0, Math.round(edge)) + 'px');
+}
+
+(function watchChatDockTop() {
+    let queued = false;
+    function onMove() {
+        if (queued) return;
+        queued = true;
+        requestAnimationFrame(function () { queued = false; placeChatDockTop(); });
+    }
+    placeChatDockTop();
+    document.addEventListener('DOMContentLoaded', placeChatDockTop);
+    window.addEventListener('scroll', onMove, { passive: true });
+    window.addEventListener('resize', onMove);
+})();
+
 function currentChatSide() {
     const widget = document.getElementById('chat-widget');
     return widget && widget.classList.contains('dock-right') ? 'right' : 'left';
@@ -7329,7 +7489,7 @@ function addMessage(text, sender, mood) {
         row.className = 'msg-row';
         const face = document.createElement('img');
         face.className = 'msg-avatar';
-        face.alt = 'PUPPY';
+        face.alt = 'Corpus';
         face.dataset.mood = mood || 'welcome';
         face.src = PUPPY_BASE + 'papel_' + puppyColour() + '_' + face.dataset.mood + '.gif';
         row.appendChild(face);
