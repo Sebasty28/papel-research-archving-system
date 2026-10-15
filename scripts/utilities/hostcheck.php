@@ -23,7 +23,7 @@
  * leave them blank to skip.
  */
 
-const KEY = 'change-this-first';
+const KEY = 'papel-39f5838cdf8069ab89';
 
 // Optional. Fill in to test the database and the mail account on this host.
 const DB_HOST_T = '';

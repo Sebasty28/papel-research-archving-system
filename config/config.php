@@ -35,12 +35,34 @@ function load_env(?string $file = null): void {
             if ($key === '') continue;
 
             $value = trim($value);
-            // Allow "quoted values", which is how a value with spaces is written.
-            $len = strlen($value);
-            if ($len > 1 && (($value[0] === '"' && $value[$len - 1] === '"')
-                          || ($value[0] === "'" && $value[$len - 1] === "'"))) {
-                $value = substr($value, 1, -1);
+
+            /* A quoted value runs to its closing quote, and anything after it
+               is a comment. An unquoted value ends at the first " #", so a
+               line may explain itself:
+
+                   DB_PASS=s3cret            # the vPanel password
+                   APP_NAME="PAPEL (Staging)"
+
+               Without this the whole remainder of the line was the value. A
+               password with the comment still glued to it is invisible in a
+               file manager and comes back as "Access denied", which cost an
+               afternoon on the staging host. The hash must be preceded by
+               whitespace, so a password containing one, s3cr#t, survives;
+               quote the value if it has to end with something like " #1". */
+            if ($value !== '' && ($value[0] === '"' || $value[0] === "'")) {
+                $quote = $value[0];
+                $close = strpos($value, $quote, 1);
+                $value = $close !== false ? substr($value, 1, $close - 1) : substr($value, 1);
+            } else {
+                foreach ([' #', "\t#"] as $marker) {
+                    $at = strpos($value, $marker);
+                    if ($at !== false) {
+                        $value = rtrim(substr($value, 0, $at));
+                        break;
+                    }
+                }
             }
+
             $_ENV[$key] = $value;
         }
         return;   // first file found wins
@@ -53,7 +75,11 @@ ini_set('log_errors', '1');
 error_reporting(E_ALL);
 date_default_timezone_set('Asia/Manila');
 
-define('APP_NAME', 'PAPEL');
+/* Read from .env so a second copy of the site can name itself. Staging runs
+   the same code against its own database, and two identical tabs are easy to
+   mix up: APP_NAME="PAPEL (Staging)" puts the difference in the page title,
+   the navbar and the subject line of every email it sends. */
+define('APP_NAME', $_ENV['APP_NAME'] ?? 'PAPEL');
 define('BASE_URL', $_ENV['BASE_URL'] ?? 'http://localhost/capstone');
 
 /* The sign-in robot check. Blank until a site is registered at

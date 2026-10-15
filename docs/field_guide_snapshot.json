@@ -1,5 +1,5 @@
 {
- "built": "2026-10-14 23:32",
+ "built": "2026-10-15 10:57",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -89,7 +89,7 @@
    "lines": 144
   },
   "app/paper_file.php": {
-   "lines": 128
+   "lines": 136
   },
   "app/review_paper.php": {
    "lines": 831
@@ -143,7 +143,7 @@
    "lines": 980
   },
   "config/config.php": {
-   "lines": 131
+   "lines": 157
   },
   "config/core.php": {
    "lines": 2629
@@ -278,7 +278,7 @@
    "lines": 536
   },
   "includes/splash.php": {
-   "lines": 156
+   "lines": 161
   },
   "includes/theme.php": {
    "lines": 336
@@ -432,6 +432,9 @@
   },
   "scripts/utilities/apply_sri_and_nonces.py": {
    "lines": 83
+  },
+  "scripts/utilities/bootcheck.php": {
+   "lines": 117
   },
   "scripts/utilities/fix_nonces.py": {
    "lines": 30

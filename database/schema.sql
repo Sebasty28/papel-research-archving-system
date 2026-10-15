@@ -6,22 +6,25 @@
 -- system, and scripts/setup.php will then create the first Director account so
 -- you can sign in and build the rest from the app.
 --
--- To use it directly:
---     mysql -u root -p < database/schema.sql
+-- This file creates tables only. It deliberately does not create the database
+-- or switch to one, because shared hosting forbids both: the database is made
+-- for you in the control panel, and an account may not CREATE DATABASE or USE
+-- anything else. Those two lines used to be here and made the import fail on
+-- InfinityFree with "Access denied ... to database 'capstone_db'".
 --
--- Or let the installer do it, which also checks the rest of the environment:
---     php scripts/setup.php
+-- So: make or select the database first, then import into it.
 --
--- Generated from a working database on 2026-08-21.
--- Regenerate with scripts/dump_schema.php after any migration.
+--     Locally:        mysql -u root -p capstone_db < database/schema.sql
+--     Shared hosting: phpMyAdmin, pick the database on the left, Import
+--     Or:             php scripts/setup.php, which also checks the rest of
+--                     the environment and creates the first Director account
+--
+-- Generated from a working database on 2026-08-21. After a migration, export
+-- the structure again and keep this header.
 --
 
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
-
-CREATE DATABASE IF NOT EXISTS `capstone_db`
-    DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
-USE `capstone_db`;
 
 --
 -- ai_processing_log
@@ -51,22 +54,6 @@ CREATE TABLE IF NOT EXISTS `ai_rate_limits` (
   KEY `idx_user_action_time` (`user_id`,`action`,`created_at`),
   KEY `idx_action_time` (`action`,`created_at`)
 ) ENGINE=InnoDB AUTO_INCREMENT=35 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- analytics
---
-CREATE TABLE IF NOT EXISTS `analytics` (
-  `analytics_id` int(11) NOT NULL AUTO_INCREMENT,
-  `paper_id` int(11) NOT NULL,
-  `view_count` int(11) DEFAULT 0,
-  `download_count` int(11) DEFAULT 0,
-  `citation_count` int(11) DEFAULT 0,
-  `approval_date` timestamp NULL DEFAULT NULL,
-  `time_to_approval` int(11) DEFAULT NULL COMMENT 'Days from submission to approval',
-  PRIMARY KEY (`analytics_id`),
-  KEY `fk_analytics_paper` (`paper_id`),
-  CONSTRAINT `fk_analytics_paper` FOREIGN KEY (`paper_id`) REFERENCES `research_papers` (`paper_id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=404 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- approval_workflow
@@ -110,27 +97,6 @@ CREATE TABLE IF NOT EXISTS `guest_sessions` (
   `expires_at` datetime NOT NULL,
   PRIMARY KEY (`guest_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=38 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
---
--- imrad_checklist
---
-CREATE TABLE IF NOT EXISTS `imrad_checklist` (
-  `checklist_id` int(11) NOT NULL AUTO_INCREMENT,
-  `paper_id` int(11) NOT NULL,
-  `has_introduction` tinyint(1) DEFAULT 0,
-  `has_methods` tinyint(1) DEFAULT 0,
-  `has_results` tinyint(1) DEFAULT 0,
-  `has_discussion` tinyint(1) DEFAULT 0,
-  `has_abstract` tinyint(1) DEFAULT 0,
-  `has_references` tinyint(1) DEFAULT 0,
-  `checked_by` int(11) DEFAULT NULL,
-  `checked_at` timestamp NULL DEFAULT NULL,
-  PRIMARY KEY (`checklist_id`),
-  KEY `fk_imrad_paper` (`paper_id`),
-  KEY `fk_imrad_checked_by` (`checked_by`),
-  CONSTRAINT `fk_imrad_checked_by` FOREIGN KEY (`checked_by`) REFERENCES `users` (`user_id`),
-  CONSTRAINT `fk_imrad_paper` FOREIGN KEY (`paper_id`) REFERENCES `research_papers` (`paper_id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- login_attempts
@@ -405,5 +371,42 @@ CREATE TABLE IF NOT EXISTS `users` (
   KEY `fk_users_created_by` (`created_by`),
   KEY `idx_reset_token` (`reset_token`)
 ) ENGINE=InnoDB AUTO_INCREMENT=351 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- analytics
+--
+CREATE TABLE IF NOT EXISTS `analytics` (
+  `analytics_id` int(11) NOT NULL AUTO_INCREMENT,
+  `paper_id` int(11) NOT NULL,
+  `view_count` int(11) DEFAULT 0,
+  `download_count` int(11) DEFAULT 0,
+  `citation_count` int(11) DEFAULT 0,
+  `approval_date` timestamp NULL DEFAULT NULL,
+  `time_to_approval` int(11) DEFAULT NULL COMMENT 'Days from submission to approval',
+  PRIMARY KEY (`analytics_id`),
+  KEY `fk_analytics_paper` (`paper_id`),
+  CONSTRAINT `fk_analytics_paper` FOREIGN KEY (`paper_id`) REFERENCES `research_papers` (`paper_id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=404 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- imrad_checklist
+--
+CREATE TABLE IF NOT EXISTS `imrad_checklist` (
+  `checklist_id` int(11) NOT NULL AUTO_INCREMENT,
+  `paper_id` int(11) NOT NULL,
+  `has_introduction` tinyint(1) DEFAULT 0,
+  `has_methods` tinyint(1) DEFAULT 0,
+  `has_results` tinyint(1) DEFAULT 0,
+  `has_discussion` tinyint(1) DEFAULT 0,
+  `has_abstract` tinyint(1) DEFAULT 0,
+  `has_references` tinyint(1) DEFAULT 0,
+  `checked_by` int(11) DEFAULT NULL,
+  `checked_at` timestamp NULL DEFAULT NULL,
+  PRIMARY KEY (`checklist_id`),
+  KEY `fk_imrad_paper` (`paper_id`),
+  KEY `fk_imrad_checked_by` (`checked_by`),
+  CONSTRAINT `fk_imrad_checked_by` FOREIGN KEY (`checked_by`) REFERENCES `users` (`user_id`),
+  CONSTRAINT `fk_imrad_paper` FOREIGN KEY (`paper_id`) REFERENCES `research_papers` (`paper_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 SET FOREIGN_KEY_CHECKS = 1;

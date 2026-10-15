@@ -102,7 +102,15 @@ function paper_file_headers(?int $size): void {
     if ($size !== null) header('Content-Length: ' . $size);
 }
 
-set_time_limit(180);
+/* A long paper coming through Drive can outlast the default limit. Guarded
+   because shared hosts disable set_time_limit, and disable_functions makes
+   function_exists() answer false, so this simply does not run there: the
+   request keeps whatever max_execution_time the host allows (60s on
+   InfinityFree, which cannot be raised from PHP) instead of raising a warning
+   into the log on every file opened. */
+if (function_exists('set_time_limit')) {
+    @set_time_limit(180);
+}
 
 $driveId = trim((string)($file['gdrive_file_id'] ?? ''));
 if ($driveId !== '') {
