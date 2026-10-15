@@ -2682,23 +2682,110 @@ body > .crumb-bar {
 }
 .form-check { display: flex; align-items: flex-start; gap: .5rem; margin-bottom: .35rem; }
 
-/* AI Extraction Zone */
+/* ===== Step 2: the drop target, the file, and the choice =====
+   The dashed border used to wrap all of this: the drop target, the file row
+   and both buttons, 325px of box. Only the top strip was ever a drop target
+   (the file input is sized to .upload-zone, nothing else), so the dashed area
+   promised a drop anywhere inside it and then ignored drops on the buttons. It
+   now sits on .upload-zone alone, which is the true target, and the file row
+   moves up beside it instead of taking a row of its own. At the 125% zoom a lot
+   of laptops run, the step used to run off the bottom of the screen.
+
+   The file row stays outside .upload-zone on purpose: the invisible file input
+   covers that box completely, so anything inside it would open the file
+   browser on click, and the row's own click is "preview this PDF". */
 .ai-extraction-zone {
-    background: linear-gradient(135deg, var(--cream), var(--cream));
-    border: 2px dashed var(--maroon);
-    border-radius: var(--r-control, 4px);
-    padding: 1.5rem;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(12rem, 17rem);
+    gap: .75rem;
     text-align: center;
 }
 
 .upload-zone {
     position: relative;
+    display: flex;
+    align-items: center;
+    gap: .875rem;
+    padding: .875rem 1.25rem;
+    background: var(--cream);
+    border: 2px dashed var(--maroon);
+    border-radius: var(--r-control, 4px);
+    text-align: left;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: background .2s, border-color .2s;
 }
 
 .upload-zone:hover {
+    background: var(--white);
+    border-color: var(--dark-maroon);
 }
+/* The real control is the file input, at opacity 0 across the whole box, so
+   its focus ring is invisible with it: a keyboard user tabbed onto the drop
+   target and saw nothing happen. The ring goes on the box instead. */
+.upload-zone:has(.file-input:focus-visible) {
+    outline: 2px solid var(--focus-ring, var(--maroon));
+    outline-offset: 2px;
+}
+.upload-zone-icon {
+    flex-shrink: 0;
+    font-size: 2rem;
+    color: var(--maroon);
+}
+.upload-zone-text { min-width: 0; }
+.upload-zone h4 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--ink);
+}
+.upload-zone p {
+    margin: .125rem 0 0;
+    font-size: .8125rem;
+    line-height: 1.4;
+}
+
+/* Beside the drop target, the same height as it. A flex row that wraps, so
+   the tick and the file name share a line and "Click to preview" takes the
+   next; overflow-wrap lets a long file name break instead of pushing out of
+   the box. */
+#pdf-indicator {
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    align-content: center;
+    justify-content: center;
+    column-gap: .375rem;
+    padding: .5rem .875rem;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+#pdf-indicator .pdf-indicator-hint { flex-basis: 100%; }
+/* One line, cut with an ellipsis. It may shrink below its own width (the
+   min-width), which is what lets the ellipsis happen inside a flex row. */
+#pdf-indicator .pdf-indicator-name {
+    min-width: 0;
+    max-width: calc(100% - 1.5rem);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ai-extract-button-container {
+    grid-column: 1 / -1;
+    margin-top: .5rem;
+}
+.ai-extract-question {
+    margin: 0 0 .625rem;
+    font-weight: 600;
+}
+/* The hint under the buttons is a p, and Bootstrap gives every p a 1rem
+   bottom margin: 16px of nothing at the foot of the block. */
+.ai-extract-button-container > :last-child { margin-bottom: 0; }
+/* Step 2 only. Every step shares .section-header and its 2rem, and the other
+   steps have the room; this one is the step that has to fit a laptop screen. */
+#step2 .section-header { margin-bottom: 1.25rem; }
 
 .upload-icon {
     font-size: 2.25rem;
@@ -2730,9 +2817,6 @@ body > .crumb-bar {
 
 .btn-ai .ai-icon {
     display: inline-block;
-}
-
-.ai-extract-button-container {
 }
 
 /* Metadata fields */
@@ -2882,7 +2966,8 @@ body > .crumb-bar {
     .step-number { width: 38px; height: 38px; font-size: .875rem; }
     .step-connector { width: 46px; margin-top: 18px; }
     .upload-card { padding: 1.5rem; }
-    .ai-extraction-zone { padding: 1.75rem 1rem; }
+    /* Too narrow for the file row to sit beside the drop target: under it. */
+    .ai-extraction-zone { grid-template-columns: minmax(0, 1fr); }
     .supporting-docs-grid { grid-template-columns: 1fr; }
     /* Paired fields stack rather than squeezing into unusable columns. */
     .row > [class*="col-md-"] { flex: 0 0 100%; max-width: 100%; }
@@ -2927,9 +3012,10 @@ body > .crumb-bar {
     .supporting-docs-grid {
         grid-template-columns: 1fr;
     }
-    
+
+    /* Same switch as the container query above, for a browser without them. */
     .ai-extraction-zone {
-        padding: 2rem 1rem;
+        grid-template-columns: minmax(0, 1fr);
     }
 }
 
@@ -3418,17 +3504,20 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
 
                 <div class="ai-extraction-zone">
                   <div class="upload-zone">
-                                        <h4>Drop your PDF here or click to browse</h4>
-                    <p class="text-muted">Maximum file size: <?= e(max_upload_label()) ?></p>
+                    <span class="material-symbols-outlined upload-zone-icon" aria-hidden="true">upload_file</span>
+                    <div class="upload-zone-text">
+                      <h4>Drop your PDF here or click to browse</h4>
+                      <p class="text-muted">Maximum file size: <?= e(max_upload_label()) ?></p>
+                    </div>
                     <input type="file" class="form-control file-input" id="pdfFile" name="research_pdf" accept="application/pdf" required>
                   </div>
 
-                  <div class="file-indicator mt-3" id="pdf-indicator">
+                  <div class="file-indicator" id="pdf-indicator">
                     <span class="material-symbols-outlined mi-18 text-muted">cancel</span> No PDF selected
                   </div>
 
-                  <div class="ai-extract-button-container mt-4 text-center">
-                    <p class="fw-semibold mb-3" style="color:var(--maroon);">How would you like to enter your paper details?</p>
+                  <div class="ai-extract-button-container text-center">
+                    <p class="ai-extract-question">How would you like to enter your paper details?</p>
                   
                     <?php /* No engine picker: the two are the same model on two keys,
                              and which one is in play is decided by whichever still
@@ -3572,7 +3661,7 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
                   </div>
                 </div>
 
-                <div class="mt-4 d-flex justify-content-between">
+                <div class="mt-3 d-flex justify-content-between">
                   <button type="button" class="btn btn-outline-secondary" data-goto-step="1">
                     Back
                   </button>
@@ -6666,8 +6755,19 @@ function updatePdfIndicator(input) {
     papelPdfPreview.reset();
     if (input.files && input.files[0]) {
         const fileName = input.files[0].name;
-        indicator.innerHTML = `<span class="material-symbols-outlined mi-18 mi-fill">check_circle</span> ${fileName}`
-            + '<span class="pdf-indicator-hint">Click to preview</span>';
+        /* The name goes in by textContent, not into the HTML string: a file
+           name is whatever the student's disk allows, and on most systems that
+           includes < and >. It also gets a span of its own, so it can be cut to
+           one line. Wrapped, a typical manuscript file name ran to four lines
+           and stretched the drop target beside it to twice its height. The full
+           name is the title, and the preview panel's header shows it too. */
+        const name = document.createElement('span');
+        name.className = 'pdf-indicator-name';
+        name.textContent = fileName;
+        name.title = fileName;
+        indicator.innerHTML = '<span class="material-symbols-outlined mi-18 mi-fill">check_circle</span>';
+        indicator.appendChild(name);
+        indicator.insertAdjacentHTML('beforeend', '<span class="pdf-indicator-hint">Click to preview</span>');
         indicator.classList.add('selected');
     } else {
         indicator.innerHTML = '<span class="material-symbols-outlined mi-18 text-muted">cancel</span> No PDF selected';
