@@ -7193,7 +7193,11 @@ async function sendMessage() {
     setPuppyState('processing');             // overwrite the face mid-request
     const thinkingSince = Date.now();
     try {
-        const res = await fetch('student_chatbot.php', {
+        /* student_assistant.php, not student_chatbot.php: free hosting's
+           firewall answers 403 to any path containing "bot", so PUPPY could
+           not reach its own endpoint and every message came back as
+           "Connection error". Keep "bot" out of filenames and URLs. */
+        const res = await fetch('student_assistant.php', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({message: msg})
