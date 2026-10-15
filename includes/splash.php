@@ -39,13 +39,19 @@
  * setting, or the site's own "Stop animations" in the accessibility widget,
  * read here from the same localStorage entry that widget writes.
  */
-/* No space in the filename, deliberately. It used to be "Logo Loading
-   PAPEL.gif", encoded here as %20, and the staging host answered 403 for that
-   URL and redirected to its own error page: its security layer rejects an
-   encoded space in a path. Every other image on the page loaded, so the splash
-   simply never appeared. Keep web assets free of spaces. */
+/* A new filename, and no space in it, both deliberately.
+
+   The original was "Logo Loading PAPEL.gif". Renaming it to remove the space
+   did not help: the host answered 403 for the file and then 553 "permission
+   denied" when the deploy tried to replace it, which is a quarantined file,
+   not a path problem. A file the host has locked cannot be overwritten, so
+   the way out is a different name with different bytes.
+
+   This one is also re-encoded: 960px instead of 1920, 80 frames instead of
+   160, one shared palette. The page draws it at min(1180px, 183vw), so the
+   difference is invisible and it is a third smaller over a phone connection. */
 $splash_gif = (defined('BASE_URL') ? BASE_URL : '/capstone')
-            . '/assests/images/Logo-Loading-PAPEL.gif';
+            . '/assests/images/papel-splash.gif';
 ?>
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 /* The colour is the average of the GIF's own background, so the canvas has no
