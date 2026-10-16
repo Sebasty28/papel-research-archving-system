@@ -448,13 +448,13 @@ if (isset($_GET['draft'])) {
  * Continue saved it again as a brand new draft. The page now knows which ids
  * are real, so a local copy pointing at a draft that is gone can be recognised
  * as stale and dropped. */
-$liveDraftIds = [];
+$liveDrafts = [];
 $lq = db()->prepare(
-  "SELECT paper_id FROM research_papers WHERE uploaded_by=? AND current_status='draft'");
+  "SELECT paper_id, title FROM research_papers WHERE uploaded_by=? AND current_status='draft'");
 $lq->bind_param('i', $u['user_id']);
 $lq->execute();
 foreach ($lq->get_result()->fetch_all(MYSQLI_ASSOC) as $r) {
-  $liveDraftIds[] = (int)$r['paper_id'];
+  $liveDrafts[] = ['id' => (int)$r['paper_id'], 'title' => (string)$r['title']];
 }
 
 // Handed to the page as JSON so the same restore path serves both a local
@@ -6448,9 +6448,10 @@ const papelDraft = (function () {
        draft became markup and papelDraft was never defined, which quietly broke
        the whole wizard. */
     const SERVER_DRAFT = <?= $draftPayload ? json_encode($draftPayload, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) : 'null' ?>;
-    // The drafts this student actually still has, so a local copy left over
-    // from a deleted one can be told apart from unsaved work.
-    const LIVE_DRAFTS = <?= json_encode($liveDraftIds) ?>;
+    /* The drafts this student actually still has, so a local copy left over
+       from a deleted one can be told apart from unsaved work. Titles come
+       along and are escaped like SERVER_DRAFT above, for the same reason. */
+    const LIVE_DRAFTS = <?= json_encode($liveDrafts, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) ?>;
     let draftId = SERVER_DRAFT ? SERVER_DRAFT.id : 0;
     const SKIP = ['_token', 'action'];
     let saveTimer = null;
@@ -6463,6 +6464,24 @@ const papelDraft = (function () {
     let savedSignature = null;
 
     function form() { return document.getElementById('uploadForm'); }
+
+    function liveById(id) {
+        const want = Number(id);
+        return LIVE_DRAFTS.filter(function (d) { return d.id === want; })[0] || null;
+    }
+
+    /* The safety net for a device copy that has lost its draft id: without
+       some way back to the row it came from, saving it writes a second draft
+       holding the same work. Only an unambiguous match counts, so two drafts
+       sharing a title are left alone rather than guessed between. */
+    function liveByTitle(title) {
+        const want = String(title == null ? '' : title).trim().toLowerCase();
+        if (want === '' || want === 'untitled draft') return null;
+        const hits = LIVE_DRAFTS.filter(function (d) {
+            return String(d.title || '').trim().toLowerCase() === want;
+        });
+        return hits.length === 1 ? hits[0] : null;
+    }
 
     // Everything the student has typed, plus where they had got to.
     function collect() {
@@ -6651,6 +6670,19 @@ const papelDraft = (function () {
                 if (json && json.success) {
                     draftId = json.draft_id;
                     savedSignature = signature(collect());
+                    /* The copy on the device has to learn the id as well. Only
+                       this closure variable used to be updated, so a student
+                       who saved a draft and then left the page kept a copy
+                       tagged 0; coming back, it had no row to save into and
+                       made a second draft holding the same work. serverSaved
+                       marks it as matching the server, and the next keystroke
+                       drops the flag because collect() never sets it. */
+                    const kept = read();
+                    if (kept) {
+                        kept.draftId = draftId;
+                        kept.serverSaved = true;
+                        write(kept);
+                    }
                     // Signed in again: worth saying if it ever happens twice.
                     papelSignedOutSaid = false;
                     return draftId;
@@ -6695,7 +6727,23 @@ const papelDraft = (function () {
                straight back as a new draft. A copy with no draft id has never
                been on the server at all, so that one really is unsaved and is
                still offered. */
-            if (data.draftId && LIVE_DRAFTS.indexOf(Number(data.draftId)) === -1) {
+            if (data.draftId && !liveById(data.draftId)) {
+                papelDraft.clear();
+                return;
+            }
+
+            /* Copies written before the id was persisted are still on students'
+               devices, untagged. Adopting the draft they plainly came from is
+               what stops them being saved a second time. */
+            if (!data.draftId) {
+                const match = liveByTitle(data.fields && data.fields.title);
+                if (match) data.draftId = match.id;
+            }
+
+            /* Saved to the server and untouched since. The draft is on the
+               dashboard under Drafts, and Continue editing is the way back to
+               it; asking here is asking about work that is not unsaved. */
+            if (data.serverSaved && data.draftId) {
                 papelDraft.clear();
                 return;
             }
