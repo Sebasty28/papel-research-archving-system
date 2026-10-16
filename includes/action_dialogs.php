@@ -243,8 +243,10 @@
     matchInput.addEventListener('keydown', function (e) {
         if (e.key === 'Enter') { e.preventDefault(); if (!yes.disabled) yes.click(); }
     });
+    /* Prevented, so whatever else listens for Escape (the document panel in
+       includes/pdf_dock.php) can tell the key was spent closing this. */
     document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape' && dlg.classList.contains('open')) close();
+        if (e.key === 'Escape' && dlg.classList.contains('open')) { e.preventDefault(); close(); }
     });
 
     /* The same dialog with nothing to decide: a title, some lines, one way out.

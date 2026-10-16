@@ -866,7 +866,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Upload · <?= e(APP_NAME) ?></title>
 <?php require_once ROOT_PATH.'/includes/site_head.php'; ?>
-<link rel="stylesheet" href="<?= e(asset_url('assests/css/papel-pdf-view.css')) ?>">
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>"  src="../../assests/js/input-validation.js" defer></script>
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 /* Enhanced Smooth Animations */
@@ -1311,9 +1310,9 @@ body {
 
 /* ===== Expanded section =====
    Fills the page rather than opening one. z-index 800 puts it below every
-   piece of fixed furniture by construction (the site header is 900, the chat
-   1000, the PDF preview 1200 and the accessibility widget higher still) so it
-   can never cover any of them. The left and right edges follow the same dock
+   piece of fixed furniture by construction (the site header and the PDF
+   preview are 900, the chat 1000 and the accessibility widget higher still) so
+   it can never cover any of them. The left and right edges follow the same dock
    widths the panels use, so an expanded box stops where a docked panel starts. */
 .doc-editor.is-expanded {
   position: fixed;
@@ -2336,9 +2335,9 @@ body.chat-docked-right {
    stopping at the panel's edge would leave an empty strip where the logo used
    to be, and the campus photo behind the band would start partway across.
 
-   Only the chat's inset is given back. A docked PDF preview pads the right as
-   well and sits in front of everything, so the band is left stopping where that
-   panel starts, which is where it should stop. */
+   Only the chat's inset is given back here. The PDF preview pads the right as
+   well and starts below the navbar, so the navbar is let out over it by its own
+   rule, with the preview's further down (search "PDF preview"). */
 body > .site-header,
 body > .crumb-bar {
     margin-left:  calc(-1 * var(--chat-inset-left, 0px));
@@ -3111,169 +3110,39 @@ body > .crumb-bar {
     color: var(--ink);
     line-height: 1.6;
 }
-/* ===== PDF preview panel =====
-   The chrome the paper pages use (includes/pdf_dock.php): the same maroon
-   bar, the same 1.75rem controls on 18px icons, the same dark stage under
-   the pages. This panel had a look of its own, so a student met one viewer
-   while handing a paper in and a different-looking one everywhere they read
-   one afterwards.
+/* ===== PDF preview =====
+   The panel is includes/pdf_dock.php, the one the paper pages, the review
+   desk and the public repository open papers in; it is included at the foot of
+   this page. Only the way this page makes room for it lives here.
 
-   Only the chrome is shared. The file still never leaves the browser to be
-   previewed here: it is read from the chosen File, where the docked panel
-   fetches its bytes from the server. */
-#pdf-preview {
-    position: fixed;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: var(--pdf-dock-w, 460px);
-    z-index: 1200;
-    display: flex;
-    flex-direction: column;
-    background: var(--white);
-    border-left: 1px solid var(--border);
-    box-shadow: -6px 0 24px rgba(51, 0, 0, .10);
+   That file makes room by moving a <main class="wrap">, which this page does
+   not have: the form is a Bootstrap .container straight under <body>. So room
+   is made the way the chat panel makes its own, by padding the body. The panel
+   starts below the navbar rather than over it, so the navbar is let back out
+   across the full width above it, the same correction the chat's inset gets
+   above; without it the band stops short and leaves the campus photo showing
+   in the corner over the panel. The crumb strip is left as it is, as on the
+   paper pages: the panel lies over its far end. */
+body.pdf-docked { padding-right: var(--pdf-dock-w); }
+body.pdf-docked > .site-header {
+    margin-right: calc(-1 * var(--pdf-dock-w));
+    width: calc(100% + var(--chat-inset-left, 0px) + var(--pdf-dock-w));
 }
-#pdf-preview[hidden] { display: none; }
-/* In the flow of the column, not pinned at a measured height. The header was
-   absolute at 52px and the body offset by the same 52: two numbers that had
-   to agree, and the header is not that tall at every width. */
-#pdf-preview-head {
-    display: flex;
-    align-items: center;
-    gap: .5rem;
-    flex: 0 0 auto;
-    padding: .625rem .875rem;
-    /* --maroon-surface-hover rather than --maroon, which is the token the
-       docked panel's bar uses. */
-    background: var(--maroon-surface-hover);
-    color: #fff;
-    font-size: .8125rem;
-}
-#pdf-preview-head > .material-symbols-outlined { font-size: 18px; }
-#pdf-preview-name {
-    flex: 1 1 auto;
-    min-width: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.pdf-preview-tools { display: flex; align-items: center; gap: .125rem; flex: 0 0 auto; }
-.pdf-preview-tools button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.75rem;
-    height: 1.75rem;
-    flex: 0 0 auto;
-    border: none;
-    border-radius: var(--r-control, 4px);
-    background: none;
-    color: #fff;
-    font: inherit;
-    font-size: .75rem;
-    cursor: pointer;
-    transition: background .15s;
-}
-.pdf-preview-tools button:hover { background: rgba(255, 255, 255, .18); }
-.pdf-preview-tools button.active { background: rgba(255, 255, 255, .28); }
-/* The zoom controls read as one group, fenced off from the window controls
-   beside them exactly as the docked panel fences them. */
-.pdf-preview-zoom {
-    display: inline-flex;
-    align-items: center;
-    flex: 0 0 auto;
-    padding-right: .35rem;
-    margin-right: .1rem;
-    border-right: 1px solid rgba(255, 255, 255, .25);
-}
-/* Wider than the square icon buttons: "100%" must not make the button jump
-   as the reader zooms through it. */
-#pdfZoomLevel {
-    width: auto;
-    min-width: 3.1rem;
-    padding: 0 .25rem;
-    font-variant-numeric: tabular-nums;
-}
-/* Fills everything below the header. */
-#pdf-preview-body {
-    flex: 1 1 auto;
-    min-height: 0;
-    display: flex;
-}
-#pdf-preview-scroll {
-    flex: 1 1 auto;
-    min-width: 0;
-    /* auto, not hidden: zoomed past fit-width the page is wider than the
-       panel and has to be pannable. */
-    overflow: auto;
-    padding: 1rem;
-    text-align: center;
-    /* The gutter is held rather than letting the scrollbar come and go: its
-       arrival changes the pages' width, and each change redraws every page. */
-    scrollbar-gutter: stable;
-}
-#pdf-preview-scroll:focus-visible { outline: 2px solid var(--pdf-scroll-thumb, #fff); outline-offset: -2px; }
-/* Page, text layer, scrollbar and the dark stage itself all come from
-   assests/css/papel-pdf-view.css now, shared with the docked panel and the
-   full-window viewer. Anything set here on #pdf-preview-scroll would win on
-   specificity and quietly put the light stage back. */
-#pdf-preview-status {
-    position: absolute;
-    left: 50%;
-    top: 45%;
-    transform: translate(-50%, -50%);
-    max-width: 80%;
-    padding: .6rem 1rem;
-    border-radius: var(--r-card, 8px);
-    /* A card, not loose text: grey on the dark stage was barely readable. */
-    background: var(--white);
-    color: var(--ink);
-    box-shadow: 0 4px 14px rgba(51, 0, 0, .12);
-    font-size: .8125rem;
-    text-align: center;
-}
-#pdf-preview-status:empty { display: none; }
-body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
 
 /* With the chat docked left and the preview right, the form is squeezed from
-   both sides. Both widths are custom properties read by the panels themselves,
-   so narrowing them here narrows the panels and hands the space back. */
-@media (max-width: 1500px) {
-    body.pdf-docked.chat-docked-left { --pdf-dock-w: 400px; --chat-dock-w: 330px; }
+   both sides, so both panels narrow. The preview's width is set on the root,
+   where includes/pdf_dock.php keeps it: set on <body>, as it was, it would
+   outrank the width the reader drags the panel to, so the drag would do
+   nothing but save this figure over their own, which every paper page shares.
+   Below 901px the panel covers the page instead and keeps its full width. */
+@media (min-width: 901px) and (max-width: 1500px) {
+    :root:has(> body.pdf-docked.chat-docked-left) { --pdf-dock-w: 400px; }
+    body.pdf-docked.chat-docked-left { --chat-dock-w: 330px; }
 }
-@media (max-width: 1250px) {
-    body.pdf-docked.chat-docked-left { --pdf-dock-w: 340px; --chat-dock-w: 300px; }
+@media (min-width: 901px) and (max-width: 1250px) {
+    :root:has(> body.pdf-docked.chat-docked-left) { --pdf-dock-w: 340px; }
+    body.pdf-docked.chat-docked-left { --chat-dock-w: 300px; }
 }
-
-
-/* Restore tab: pinned to the right edge once the preview is put away. */
-#pdf-restore {
-    position: fixed;
-    top: 50%;
-    right: 0;
-    transform: translateY(-50%);
-    z-index: 1150;          /* under the preview itself, over the page */
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: .25rem;
-    padding: .75rem .5rem;
-    border: none;
-    border-radius: var(--r-control, 4px) 0 0 var(--r-control, 4px);
-    background: var(--maroon);
-    color: #fff;
-    font-family: var(--font-body);
-    font-size: .625rem;
-    letter-spacing: .04em;
-    cursor: pointer;
-    box-shadow: -2px 0 10px rgba(51, 0, 0, .22);
-    transition: background .15s, padding .15s;
-}
-#pdf-restore[hidden] { display: none; }
-#pdf-restore:hover { background: var(--dark-maroon); padding-right: .75rem; }
-#pdf-restore:focus-visible { outline: 2px solid var(--white); outline-offset: -4px; }
-.pdf-restore-label { writing-mode: vertical-rl; text-orientation: mixed; }
 
 /* The file row becomes a control once a PDF is chosen. */
 .file-indicator.selected#pdf-indicator { cursor: pointer; }
@@ -3288,9 +3157,13 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
     color: var(--grey);
 }
 
+/* Too narrow to share the screen: the panel covers the page instead. */
 @media (max-width: 900px) {
-    #pdf-preview { width: 100vw; }
     body.pdf-docked { padding-right: 0; }
+    body.pdf-docked > .site-header {
+        margin-right: 0;
+        width: calc(100% + var(--chat-inset-left, 0px));
+    }
 }
 
 /* The same dialog doubles as a prompt; the field sits under the message and
@@ -3948,12 +3821,6 @@ body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
 </div>
 
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
-// Paths the PDF preview needs. Declared here, ahead of the code that reads
-// them, rather than beside the markup further down: both are same-origin, so
-// script-src 'self' already covers the library and its worker and the CSP needs
-// no widening.
-const PAPEL_PDF_WORKER     = <?= json_encode(asset_url('assests/js/pdfjs/pdf.worker.min.js'), JSON_UNESCAPED_SLASHES) ?>;
-const PAPEL_PDF_VIEWER_URL = <?= json_encode(BASE_URL . '/app/student/pdf_viewer.php', JSON_UNESCAPED_SLASHES) ?>;
 
 /* ----- Supporting documents, by paper type -----
    Ethics clearance, consent and a data-collection tool are only demanded of the
@@ -6296,156 +6163,36 @@ const papelDoc = (function () {
 
 /* =========================================================================
    PDF preview
-   The chosen file is read straight out of the browser's memory through an
-   object URL. Nothing is uploaded to open this: the file only reaches the
-   server, and Google Drive, when the form is finally submitted.
+   The panel is includes/pdf_dock.php, the one the paper pages, the review
+   desk and the public repository open papers in, so a student checks their
+   file in the same viewer that will later show it to everyone else. The chosen
+   file is handed to it in memory: nothing is uploaded to open it, and it only
+   reaches the server, and Google Drive, when the form is finally submitted.
    ========================================================================= */
 const papelPdfPreview = (function () {
-    let view = null;        // shared renderer, created on first open
-    let objectUrl = null;   // only used to hand the file to the viewer tab
-
-    function panel()    { return document.getElementById('pdf-preview'); }
-    function scroller() { return document.getElementById('pdf-preview-scroll'); }
-
     function currentFile() {
         const input = document.getElementById('pdfFile');
         return (input && input.files && input.files[0]) ? input.files[0] : null;
     }
-
-    function release() {
-        if (objectUrl) { URL.revokeObjectURL(objectUrl); objectUrl = null; }
-        if (view) { view.destroy(); view = null; }
-    }
-
-    function showZoom(z) {
-        const label = document.getElementById('pdfZoomLevel');
-        if (label) label.textContent = Math.round(z * 100) + '%';
-    }
-
-    // The tab only makes sense while a file is actually chosen.
-    function showRestoreTab() {
-        const tab = document.getElementById('pdf-restore');
-        if (tab) tab.hidden = !currentFile();
-    }
-    function hideRestoreTab() {
-        const tab = document.getElementById('pdf-restore');
-        if (tab) tab.hidden = true;
-    }
-
-    function showMode(mode) {
-        const btn = document.getElementById('pdfPanMode');
-        if (!btn) return;
-        const panning = (mode === 'pan');
-        btn.classList.toggle('active', panning);
-        btn.setAttribute('aria-pressed', panning ? 'true' : 'false');
-        btn.title = panning
-            ? 'Drag mode: press T or Esc, or click, to select text instead'
-            : 'Select mode: press H, or click, to drag the page instead';
-        btn.querySelector('.material-symbols-outlined').textContent = panning ? 'pan_tool' : 'text_select_start';
-    }
-
-    /* The ring over the pages while they load, as the docked panel does it.
-       Without this the dark stage shows nothing at all until the first page
-       is drawn, which on a large file reads as the panel having failed. */
-    function setBusy(on) {
-        const stage = document.getElementById('pdf-preview-body');
-        if (stage) stage.classList.toggle('is-busy', !!on);
-    }
-
-    // One renderer per panel, built lazily so the elements exist first.
-    function ensureView() {
-        if (view) return view;
-        if (typeof papelPdfView === 'undefined') return null;
-        view = papelPdfView.create({
-            scroller:  scroller(),
-            status:    document.getElementById('pdf-preview-status'),
-            workerSrc: PAPEL_PDF_WORKER,
-            onZoom:    showZoom,
-            onMode:    showMode,
-            onBusy:    setBusy
-        });
-        showMode(view.getMode());
-        return view;
-    }
+    function dock() { return window.papelPdfDock || null; }
 
     return {
-        open: function () {
-            const file = currentFile();
-            if (!file) return;
-
-            document.getElementById('pdf-preview-name').textContent = file.name;
-            panel().hidden = false;
-            document.body.classList.add('pdf-docked');
-            hideRestoreTab();
-
-            // The preview now holds the right edge. A chat docked there moves to
-            // the left rather than being closed, so the conversation is kept.
-            const widget = document.getElementById('chat-widget');
-            if (widget && widget.classList.contains('dock-right') && typeof applyChatDock === 'function') {
-                applyChatDock(true, 'left');
-            } else if (typeof syncChatSideAvailability === 'function') {
-                syncChatSideAvailability();
-            }
-
-            const v = ensureView();
-            if (v) v.load(file);
-        },
-        close: function () {
-            if (view) view.clear();
-            panel().hidden = true;
-            document.body.classList.remove('pdf-docked');
-            // The right edge is free again.
-            if (typeof syncChatSideAvailability === 'function') syncChatSideAvailability();
-            showRestoreTab();
-        },
-        // Same as closing, but named for what the student meant: put it away
-        // for now. The restore tab is what makes it recoverable either way.
-        minimise: function () { this.close(); },
-        toggle: function () {
-            if (panel().hidden) this.open(); else this.close();
-        },
-        zoomIn:     function () { if (view) view.zoomIn(); },
-        zoomOut:    function () { if (view) view.zoomOut(); },
-        resetZoom:  function () { if (view) view.resetZoom(); },
-        toggleMode: function () { if (view) view.toggleMode(); },
-        getMode:    function () { return view ? view.getMode() : 'select'; },
-        setMode:    function (mode) { if (view) view.setMode(mode); },
-        hint:       function (msg) { if (view) view.hint(msg); },
-
-        /* Opens the full-window viewer. It is one of our own pages rather than
-           the browser's PDF viewer, so the document is drawn by exactly the same
-           renderer as the panel. The file never touches the server: the new tab
-           announces itself and the file is handed over in memory, same-origin. */
-        popOut: function () {
-            const file = currentFile();
-            if (!file) return;
-
-            const w = window.open(PAPEL_PDF_VIEWER_URL, '_blank');
-            if (!w) {
-                window.papelAlert('Your browser blocked the new tab. Allow pop-ups for this site to open the full view.');
-                return;
-            }
-
-            const origin = window.location.origin;
-            function handOver(e) {
-                if (e.origin !== origin || !e.data || e.data.type !== 'papel-pdf-ready') return;
-                if (e.source !== w) return;
-                window.removeEventListener('message', handOver);
-                w.postMessage({ type: 'papel-pdf-file', file: file, name: file.name }, origin);
-            }
-            window.addEventListener('message', handOver);
-            // Give up listening if the tab never reports in.
-            setTimeout(function () { window.removeEventListener('message', handOver); }, 30000);
-        },
-
-        // Called whenever the chosen file changes, so the previous document does
-        // not linger or keep pointing at the old file.
+        /* On every change of the chosen file. Picking a PDF shows it straight
+           away, so the student can check they grabbed the right one before
+           spending time on the rest of the form; clearing the choice takes the
+           panel, and the tab that brings it back, away with it. */
         reset: function () {
-            this.close();
-            release();
-            // Picking a PDF shows it straight away: the student can check they
-            // grabbed the right file before spending time on the rest of the form.
-            if (currentFile()) this.open();
+            const d = dock();
+            if (!d) return;
+            const file = currentFile();
+            if (file) d.openFile(file, file.name); else d.forget();
+        },
+        // The chosen-file row is a switch for the panel.
+        toggle: function () {
+            const d = dock();
+            const file = currentFile();
+            if (!d || !file) return;
+            if (d.isOpen()) d.minimise(); else d.openFile(file, file.name);
         }
     };
 })();
@@ -7369,9 +7116,18 @@ function toggleChat() {
 // The PDF preview owns the right edge while it is open; two panels stacked
 // there would sit on top of each other.
 function pdfPreviewOpen() {
-    const p = document.getElementById('pdf-preview');
-    return !!p && !p.hidden;
+    return !!(window.papelPdfDock && window.papelPdfDock.isOpen());
 }
+
+/* The panel says when it takes the right edge and when it gives it back. A chat
+   docked there moves to the left rather than being closed, so the conversation
+   is kept; the side switch is greyed out until the edge is free again. */
+document.addEventListener('papel:pdf-dock-open', function () {
+    const widget = document.getElementById('chat-widget');
+    if (widget && widget.classList.contains('dock-right')) applyChatDock(true, 'left');
+    else syncChatSideAvailability();
+});
+document.addEventListener('papel:pdf-dock-close', function () { syncChatSideAvailability(); });
 
 // Greys out the chat's "move to the other side" control while the right edge
 // is taken, so the restriction is visible rather than a click that does nothing.
@@ -7381,10 +7137,14 @@ function syncChatSideAvailability() {
     const blocked = pdfPreviewOpen();
     sideBtn.disabled = blocked;
     sideBtn.classList.toggle('is-blocked', blocked);
-    if (blocked) {
-        sideBtn.title = 'The right side is in use by the PDF preview';
-        sideBtn.setAttribute('aria-label', 'The right side is in use by the PDF preview');
-    }
+    /* Labelled for what it will do once free again, as applyChatDock labels it:
+       otherwise "in use by the PDF preview" stayed on it after the preview
+       closed, until the chat itself next moved. */
+    const l = blocked
+        ? 'The right side is in use by the PDF preview'
+        : (currentChatSide() === 'left' ? 'Move to right side' : 'Move to left side');
+    sideBtn.title = l;
+    sideBtn.setAttribute('aria-label', l);
 }
 
 function applyChatDock(docked, side) {
@@ -8031,14 +7791,6 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!this.classList.contains('selected')) return;
         papelPdfPreview.toggle();
     });
-    document.getElementById('pdfPreviewClose').addEventListener('click', function () { papelPdfPreview.close(); });
-    document.getElementById('pdfPreviewMin').addEventListener('click', function () { papelPdfPreview.minimise(); });
-    document.getElementById('pdf-restore').addEventListener('click', function () { papelPdfPreview.open(); });
-    document.getElementById('pdfPreviewFull').addEventListener('click', function () { papelPdfPreview.popOut(); });
-    document.getElementById('pdfZoomIn').addEventListener('click', function () { papelPdfPreview.zoomIn(); });
-    document.getElementById('pdfZoomOut').addEventListener('click', function () { papelPdfPreview.zoomOut(); });
-    document.getElementById('pdfZoomLevel').addEventListener('click', function () { papelPdfPreview.resetZoom(); });
-    document.getElementById('pdfPanMode').addEventListener('click', function () { papelPdfPreview.toggleMode(); });
     document.getElementById('ethics_clearance').addEventListener('change', function() { updateFileIndicator(this, 'ethics-indicator'); });
     document.getElementById('consent_form').addEventListener('change', function() { updateFileIndicator(this, 'consent-indicator'); });
     document.getElementById('data_collection').addEventListener('change', function() { updateFileIndicator(this, 'data-indicator'); });
@@ -8054,28 +7806,19 @@ document.addEventListener('DOMContentLoaded', function() {
         if (e.key !== 'Escape') return;
 
         /* A dialog sits above every one of these, so it takes Escape before any
-           of them. This used to be checked below, after the PDF panel had
-           already acted and returned, so dismissing a message also closed the
-           preview behind it and shifted the page as the layout reflowed. */
+           of them. Its own handler runs before this one and has already closed
+           it, taking the "open" class with it, so the class alone was never
+           going to be seen here and one Escape closed the dialog and the
+           preview behind it. The handler prevents the default when it acts;
+           that is what is checked. The class stays for a dialog opened later. */
+        if (e.defaultPrevented) return;
         const openDialog = document.getElementById('papelDialog');
         if (openDialog && openDialog.classList.contains('open')) return;
 
-        // The PDF preview is the most recently opened surface, so Escape
-        // belongs to it first. It steps back rather than closing outright:
-        // drag mode returns to selecting text, and only then does a second
-        // Escape close the panel, so the key never strands the reader in a
-        // mode they cannot get out of without reaching for the toolbar.
-        const pdfPanel = document.getElementById('pdf-preview');
-        if (pdfPanel && !pdfPanel.hidden) {
-            e.preventDefault();
-            if (papelPdfPreview.getMode() === 'pan') {
-                papelPdfPreview.setMode('select');
-                papelPdfPreview.hint('Select mode: drag across the text to copy it');
-            } else {
-                papelPdfPreview.close();
-            }
-            return;
-        }
+        /* The PDF preview is the most recently opened surface, so Escape belongs
+           to it: includes/pdf_dock.php closes it. Nothing else moves on the same
+           key, the chat included. */
+        if (pdfPreviewOpen()) return;
         const widget = document.getElementById('chat-widget');
         if (widget && widget.classList.contains('is-docked')) {
             e.preventDefault();
@@ -8110,57 +7853,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 <!-- Preview of the PDF the student has chosen, rendered from the file in the
      browser's memory. Nothing here has been sent to the server yet. -->
-<div id="pdf-preview" aria-label="PDF preview" hidden>
-  <div id="pdf-preview-head">
-    <span class="material-symbols-outlined mi-18">picture_as_pdf</span>
-    <span id="pdf-preview-name">Selected PDF</span>
-    <div class="pdf-preview-tools">
-      <button type="button" id="pdfPanMode" title="Drag to move the page" aria-label="Drag to move the page" aria-pressed="false">
-        <span class="material-symbols-outlined mi-18">pan_tool</span>
-      </button>
-      <?php /* Grouped and fenced, as in includes/pdf_dock.php. */ ?>
-      <span class="pdf-preview-zoom">
-        <button type="button" id="pdfZoomOut" title="Zoom out (Ctrl + mouse wheel)" aria-label="Zoom out">
-          <span class="material-symbols-outlined mi-18">zoom_out</span>
-        </button>
-        <button type="button" id="pdfZoomLevel" title="Reset to fit width" aria-label="Reset zoom to fit width">100%</button>
-        <button type="button" id="pdfZoomIn" title="Zoom in (Ctrl + mouse wheel)" aria-label="Zoom in">
-          <span class="material-symbols-outlined mi-18">zoom_in</span>
-        </button>
-      </span>
-      <?php /* open_in_new, not open_in_full: this has always opened a tab, and
-               the docked panel draws the same action with that icon. */ ?>
-      <button type="button" id="pdfPreviewFull" title="Open in a new tab" aria-label="Open in a new tab">
-        <span class="material-symbols-outlined mi-18">open_in_new</span>
-      </button>
-      <button type="button" id="pdfPreviewMin" title="Minimise (reopen from the tab on the right)" aria-label="Minimise preview">
-        <span class="material-symbols-outlined mi-18">remove</span>
-      </button>
-      <button type="button" id="pdfPreviewClose" title="Close preview" aria-label="Close preview">
-        <span class="material-symbols-outlined mi-18">close</span>
-      </button>
-    </div>
-  </div>
-  <?php /* is-dark: the pages on dark grey with a white scrollbar, the way the
-           docked panel and the full-window viewer already show them. */ ?>
-  <div id="pdf-preview-body" class="papel-pdf-stage is-dark">
-    <div id="pdf-preview-scroll" class="papel-pdf-scroll" tabindex="0"></div>
-    <?php /* Loading is the ring; the status card only ever carries a problem. */ ?>
-    <div class="papel-pdf-spinner" role="status" aria-label="Loading"></div>
-    <div id="pdf-preview-status" role="alert"></div>
-  </div>
-</div>
-
-<!-- Brings the preview back after it has been minimised or closed. Pinned to
-     the right edge on every step, so the paper is never more than one click
-     away, including from Steps 3 and 4, long after the file was chosen. -->
-<button type="button" id="pdf-restore" hidden title="Show the PDF preview" aria-label="Show the PDF preview">
-  <span class="material-symbols-outlined mi-20">picture_as_pdf</span>
-  <span class="pdf-restore-label">PDF</span>
-</button>
-
-<script src="<?= e(asset_url('assests/js/pdfjs/pdf.min.js')) ?>"></script>
-<script src="<?= e(asset_url('assests/js/papel-pdf-view.js')) ?>"></script>
 
 <!-- Site dialog, used in place of the browser's alert box -->
 <div class="papel-dialog-backdrop" id="papelDialog" role="dialog" aria-modal="true" aria-labelledby="papelDialogTitle">
@@ -8336,6 +8028,15 @@ document.addEventListener('DOMContentLoaded', () => {
 })();
 </script>
 
+<?php
+/* The PDF panel every paper page uses (see "PDF preview" in the script above).
+   After the page's own dialog, so the dialog's Escape is handled first. It
+   docks on the right only: this page has no section to give it a home, and a
+   home would leave it in Step 2 while the student is on Step 3 or 4. The tab on
+   the right edge brings it back from any step instead. */
+$PDF_DOCK_MINIMISE = true;
+require ROOT_PATH.'/includes/pdf_dock.php';
+?>
 <?php require ROOT_PATH.'/includes/site_footer.php'; ?>
 </body>
 </html>
