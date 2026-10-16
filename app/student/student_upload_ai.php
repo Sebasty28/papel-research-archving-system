@@ -1336,6 +1336,11 @@ body {
   max-height: none;
 }
 body.pdf-docked .doc-editor.is-expanded { right: var(--pdf-dock-w, 460px); }
+/* And while the box is up the panel takes the box's edges. The box runs from
+   below the navbar to the bottom of the window; the panel otherwise stops at
+   the breadcrumb strip and the footer, which left a sliver of the strip above
+   it and the footer's links below it, in its column, with nothing over them. */
+body.doc-expanded .pdf-dock { top: 60px; bottom: 0; }
 
 /* While a section is expanded the chat and the accessibility button step out
    of the way: nothing is closed or reset, they are only hidden, so both come

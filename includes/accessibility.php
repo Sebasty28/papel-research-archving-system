@@ -798,7 +798,14 @@ try {
                     (edge === 'left' || edge === 'right') ? saved.top : saved.left, true);
                 return;
             }
-            updateAnchors();     // never moved: the stylesheet's centred right edge
+            /* Never moved: the stylesheet's centred right edge. Whatever a
+               placement wrote is taken off first (a long press that wobbled
+               into a drag, or the phone position once the window widens), or
+               it would hold the tab wherever that left it. */
+            widget.classList.remove('edge-left', 'edge-right', 'edge-top', 'edge-bottom');
+            widget.style.left = widget.style.right = widget.style.top = widget.style.bottom = '';
+            widget.style.transform = '';
+            updateAnchors();
         }
 
         /* Flip the panel toward whichever side of the screen has space. */
