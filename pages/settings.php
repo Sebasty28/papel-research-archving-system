@@ -704,6 +704,9 @@ document.addEventListener('DOMContentLoaded', function () {
         window.addEventListener('storage', function (e) {
             if (e.key === 'papel_a11y_tab_hidden') paintA11yTabBtn();
         });
+        /* Or on this page, from the tab's own right-click menu: the storage
+           event above only ever fires in the other tabs. */
+        document.addEventListener('papel:a11y-tab', paintA11yTabBtn);
     }
 
     // Client-side confirm-match check before the round trip

@@ -43,6 +43,7 @@
         var pdfDoc = null;
         var zoom = 1;              // 1 = fit the scroller's width
         var renderToken = 0;       // bumped to abandon a superseded render
+        var loadToken = 0;         // the same, for a document still being opened
         var lastWidth = 0;         // the width the pages were last drawn at
         var workerReady = false;
         var resizeTimer = null;
@@ -737,11 +738,20 @@
                 say(loadingText);
                 busy(true);
 
+                /* Two loads can be in flight at once (a student picking a second
+                   file before the first has opened), and whichever document
+                   finished opening last used to win, so the older file could be
+                   the one drawn. Only the latest load may take the view now; an
+                   overtaken one lets its document go and says nothing. */
+                var mine = ++loadToken;
+                function overtaken() { return mine !== loadToken; }
+
                 var asBuffer = (source instanceof ArrayBuffer)
                     ? Promise.resolve(source)
                     : source.arrayBuffer();
 
                 return asBuffer.then(function (data) {
+                    if (overtaken()) return null;
                     if (pdfDoc) { try { pdfDoc.destroy(); } catch (err) {} pdfDoc = null; }
                     /* isEvalSupported off: this PDF.js (3.11) can be made to run
                        a script hidden in a crafted font when it compiles glyphs
@@ -750,11 +760,14 @@
                        students, so the files are not ours to trust. */
                     return pdfjsLib.getDocument({ data: data, isEvalSupported: false }).promise;
                 }).then(function (doc) {
+                    if (!doc) return false;
+                    if (overtaken()) { try { doc.destroy(); } catch (err) {} return false; }
                     pdfDoc = doc;
                     zoom = 1;
                     onZoom(zoom);
-                    return render();
-                }).then(function () {
+                    return render().then(function () { return true; });
+                }).then(function (drawn) {
+                    if (!drawn) return;
                     // Announced once per page load, not on every document, so it
                     // informs the first time and never nags afterwards.
                     var intro = options.intro !== undefined ? options.intro
@@ -767,6 +780,7 @@
                         hint(intro, options.introMs || 10000);
                     }
                 }).catch(function () {
+                    if (overtaken()) return;      // the newer load owns the status now
                     busy(false);
                     say(options.failMessage || 'This PDF could not be previewed. You can still upload it.');
                 });
@@ -785,12 +799,14 @@
             redraw:    render,
             clear: function () {
                 renderToken++;
+                loadToken++;
                 scroller.textContent = '';
                 say('');
                 busy(false);
             },
             destroy: function () {
                 renderToken++;
+                loadToken++;
                 if (pdfDoc) { try { pdfDoc.destroy(); } catch (err) {} pdfDoc = null; }
                 scroller.textContent = '';
                 say('');

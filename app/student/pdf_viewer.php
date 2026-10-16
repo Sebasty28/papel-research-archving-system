@@ -86,13 +86,14 @@ body {
     gap: .5rem;
     height: 52px;
     padding: 0 1rem;
-    /* White text on it, so the non-lifting token. */
-    background: var(--maroon-surface);
+    /* The bar of the panel this tab is opened from (.pdf-dock-head in
+       includes/pdf_dock.php), so the two read as one viewer. A student's own
+       file used to get --maroon-surface here, a brighter red, because it came
+       from the upload page's separate panel; that page opens the same panel
+       as everywhere else now. Non-lifting either way, for the white text. */
+    background: var(--maroon-surface-hover);
     color: #fff;
 }
-/* A paper's tab wears the same bar as the panel it was opened from
-   (.pdf-dock-head in includes/pdf_dock.php), so the two read as one viewer. */
-body.is-paper .viewer-bar { background: var(--maroon-surface-hover); }
 .viewer-name {
     flex: 1 1 auto;
     min-width: 0;
@@ -153,17 +154,9 @@ body.is-paper .viewer-bar { background: var(--maroon-surface-hover); }
     color: var(--grey);
 }
 #viewer-status:empty { display: none; }
-/* A paper opened from a paper page sits on the shared dark stage, as in the
-   panel it came from (papel-pdf-view.css); these are the upload preview's. */
+/* Every document sits on the shared dark stage (papel-pdf-view.css), as in
+   the panel it was opened from, a student's own file included. */
 #viewer-body.is-dark #viewer-status { color: var(--pdf-stage-text); }
-#viewer-body:not(.is-dark) #viewer-scroll::-webkit-scrollbar { width: 12px; height: 12px; }
-#viewer-body:not(.is-dark) #viewer-scroll::-webkit-scrollbar-track { background: var(--cream); }
-#viewer-body:not(.is-dark) #viewer-scroll::-webkit-scrollbar-thumb {
-    background: var(--soft-maroon);
-    border-radius: var(--r-card, 8px);
-    border: 3px solid var(--cream);
-}
-#viewer-body:not(.is-dark) #viewer-scroll::-webkit-scrollbar-thumb:hover { background: var(--maroon); }
 </style>
 </head>
 <body<?= $src ? ' class="is-paper"' : '' ?>>
@@ -191,8 +184,9 @@ body.is-paper .viewer-bar { background: var(--maroon-surface-hover); }
     </div>
 </div>
 
-<?php /* A paper starts busy: the ring turns while it is fetched. */ ?>
-<div id="viewer-body" class="papel-pdf-stage<?= $src ? ' is-dark is-busy' : '' ?>">
+<?php /* A paper starts busy: the ring turns while it is fetched. A local file
+         waits for the upload page to hand it over, and says so instead. */ ?>
+<div id="viewer-body" class="papel-pdf-stage is-dark<?= $src ? ' is-busy' : '' ?>">
     <div id="viewer-scroll" class="papel-pdf-scroll" tabindex="0"></div>
     <div class="papel-pdf-spinner" role="status" aria-label="Loading"></div>
     <div id="viewer-status"><?= e($src ? '' : ($srcError ?? 'Waiting for the document…')) ?></div>

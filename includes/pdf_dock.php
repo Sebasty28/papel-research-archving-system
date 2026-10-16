@@ -26,9 +26,24 @@
  * its header, or by dragging the header to a side. Every paper page gives it a
  * home: the public view, the review desk's paper and the student's own paper.
  * Without one the panel simply opens docked on the right.
+ *
+ * A file the reader has on their own machine, not uploaded yet, opens in the
+ * same panel from script, drawn straight from memory: nothing is fetched to
+ * show it, and nothing reaches the server or Google Drive.
+ *     window.papelPdfDock.openFile(file, 'name for the header');
+ *     window.papelPdfDock.close() / .minimise() / .restore() / .forget() / .isOpen()
+ * Calls made before the page has finished loading are held until it has.
+ *
+ * Optional, before the include:
+ *   $PDF_DOCK_MINIMISE = true;
+ * adds a Minimise button and, while the panel is put away, a tab on the right
+ * edge of the window that brings it back. Only without a home: a panel with
+ * one already has its section to go back to. The upload page uses it, so the
+ * paper being handed in stays one click away from every step of the form.
  */
 $PDF_DOCK_HOME      = $PDF_DOCK_HOME ?? null;
 $PDF_DOCK_HOME_NAME = $PDF_DOCK_HOME_NAME ?? 'the page';
+$PDF_DOCK_MINIMISE  = !empty($PDF_DOCK_MINIMISE) && !$PDF_DOCK_HOME;
 ?>
 <?php /* Versioned, so a change to the viewer reaches browsers holding the old copy. */ ?>
 <link rel="stylesheet" href="<?= e(asset_url('assests/css/papel-pdf-view.css')) ?>">
@@ -304,6 +319,42 @@ body.pdf-dragging, body.pdf-dragging * {
        stays in it. */
     .pdf-dock-to { display: none !important; }
 }
+
+/* ----- Put away ($PDF_DOCK_MINIMISE) -------------------------------------
+   The tab that brings a minimised panel back. Dressed exactly as the
+   Accessibility tab on the same edge (includes/accessibility.php), in the
+   panel's own bar colour: it used to be --maroon, a brighter red than both,
+   and read as a third, unrelated thing rather than this panel folded away. */
+.pdf-dock-restore {
+    position: fixed;
+    top: 50%;
+    right: 0;
+    transform: translateY(-50%);
+    z-index: 1150;          /* over the page and a docked chat, under dialogs */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .25rem;
+    padding: .75rem .5rem;
+    border: none;
+    border-radius: var(--r-control, 4px) 0 0 var(--r-control, 4px);
+    background: var(--maroon-surface-hover);
+    color: #fff;
+    font-family: var(--font-body);
+    font-size: .625rem;
+    letter-spacing: .04em;
+    cursor: pointer;
+    box-shadow: -2px 0 10px rgba(51, 0, 0, .22);
+    transition: background .15s, padding .15s;
+}
+.pdf-dock-restore[hidden] { display: none; }
+.pdf-dock-restore:hover { background: var(--maroon-surface); padding-right: .75rem; }
+.pdf-dock-restore:focus-visible { outline: 2px solid #fff; outline-offset: -4px; }
+.pdf-dock-restore .material-symbols-outlined { font-size: 20px; }
+.pdf-dock-restore-label { writing-mode: vertical-rl; text-orientation: mixed; }
+/* Full screen has nothing to minimise to. */
+.pdf-dock:fullscreen #pdfDockMin { display: none !important; }
+@media print { .pdf-dock-restore { display: none !important; } }
 </style>
 
 <div class="pdf-dock<?= $PDF_DOCK_HOME ? ' has-home' : '' ?>" id="pdfDock" role="region" aria-label="Document preview"
@@ -341,6 +392,10 @@ body.pdf-dragging, body.pdf-dragging * {
         <?php /* No download or print, and the Drive link is deliberately not on
                  the page. "Open in a new tab" is PAPEL's own full-window viewer
                  (app/student/pdf_viewer.php), under the same rules. */ ?>
+        <?php if ($PDF_DOCK_MINIMISE): ?>
+        <button type="button" class="pdf-dock-btn" id="pdfDockMin"
+                title="Minimise (bring it back from the tab on the right)" aria-label="Minimise preview"><span class="material-symbols-outlined">remove</span></button>
+        <?php endif; ?>
         <button type="button" class="pdf-dock-btn" id="pdfDockClose"
                 title="Close preview" aria-label="Close preview"><span class="material-symbols-outlined">close</span></button>
     </div>
@@ -361,8 +416,37 @@ body.pdf-dragging, body.pdf-dragging * {
 <?php if ($PDF_DOCK_HOME): ?>
 <div class="pdf-dock-drop" id="pdfDockDrop" aria-hidden="true"><span id="pdfDockDropLabel"></span></div>
 <?php endif; ?>
+<?php if ($PDF_DOCK_MINIMISE): ?>
+<?php /* Brings the panel back after it has been minimised or closed. Shown only
+         while there is something to bring back. */ ?>
+<button type="button" class="pdf-dock-restore" id="pdfDockRestore" hidden
+        title="Show the PDF preview" aria-label="Show the PDF preview">
+    <span class="material-symbols-outlined" aria-hidden="true">picture_as_pdf</span>
+    <span class="pdf-dock-restore-label">PDF</span>
+</button>
+<?php endif; ?>
 
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
+(function () {
+/* The API is in place the moment this is parsed; the panel behind it is only
+   built once the page has loaded. Anything asked of it before then is held
+   and done then, in the order it was asked. */
+var impl = null, queue = [];
+function later(name) {
+    return function () {
+        if (impl) return impl[name].apply(impl, arguments);
+        queue.push([name, arguments]);
+    };
+}
+window.papelPdfDock = {
+    openFile: later('openFile'),
+    close:    later('close'),
+    minimise: later('minimise'),
+    restore:  later('restore'),
+    forget:   later('forget'),
+    isOpen:   function () { return !!impl && impl.isOpen(); }
+};
+
 document.addEventListener('DOMContentLoaded', function () {
     var dock   = document.getElementById('pdfDock');
     var name   = document.getElementById('pdfDockName');
@@ -371,6 +455,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var pageEl = document.getElementById('pdfDockPage');
     var zoomEl = document.getElementById('pdfDockZoomLevel');
     var stage  = scroll.parentNode;
+    var restoreTab = document.getElementById('pdfDockRestore');   // $PDF_DOCK_MINIMISE only
 
     // The loading ring (papel-pdf-view.css), on from the click until page one is up.
     function setBusy(on) { stage.classList.toggle('is-busy', on); }
@@ -382,6 +467,20 @@ document.addEventListener('DOMContentLoaded', function () {
         'view'   => asset_url('assests/js/papel-pdf-view.js'),
     ], JSON_UNESCAPED_SLASHES) ?>;
     var view = null, viewReady = null, fetching = null, showingSrc = null;
+    var showingFile = null;   // a local File being shown, when it is not a server file
+    var last = null;          // {file, src, name}: what the restore tab brings back
+
+    /* Said when a document cannot be drawn. The renderer reads it when that
+       happens, so it is switched to suit where each file came from: a file
+       not yet handed in can still be handed in, and the student should know. */
+    var FAIL_SERVER = 'This file could not be shown. Please try again.';
+    var FAIL_LOCAL  = 'This PDF could not be previewed here. You can still upload it.';
+    var viewOptions = null;
+
+    /* Loaded only if the page does not have it already. Running PDF.js a second
+       time builds a second copy of it and swaps the global out from under any
+       view still holding the first. */
+    function need(src, present) { return present ? Promise.resolve() : loadScript(src); }
 
     function loadScript(src) {
         return new Promise(function (resolve, reject) {
@@ -395,14 +494,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function viewer() {
         if (!viewReady) {
-            viewReady = loadScript(ASSETS.pdfjs).then(function () {
-                return loadScript(ASSETS.view);
+            viewReady = need(ASSETS.pdfjs, typeof pdfjsLib !== 'undefined').then(function () {
+                return need(ASSETS.view, typeof papelPdfView !== 'undefined');
             }).then(function () {
-                view = papelPdfView.create({
+                view = papelPdfView.create(viewOptions = {
                     scroller: scroll,
                     status: status,
                     workerSrc: ASSETS.worker,
-                    failMessage: 'This file could not be shown. Please try again.',
+                    failMessage: FAIL_SERVER,
                     intro: 'Press H to drag the page, T to select text. Ctrl + scroll zooms.',
                     loadingText: '',                  // the ring says it
                     onBusy: setBusy,
@@ -434,6 +533,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (fetching) fetching.abort();
         var mine = fetching = new AbortController();
         showingSrc = src;
+        showingFile = null;
         pageEl.textContent = '';
         status.textContent = '';
         // On before the renderer is even fetched: the first open waits for it too.
@@ -441,6 +541,7 @@ document.addEventListener('DOMContentLoaded', function () {
         return viewer().then(function (v) {
             v.clear();                                // which turns the ring off…
             setBusy(true);                            // …so on again for the fetch
+            viewOptions.failMessage = FAIL_SERVER;
             return fetch(src, { headers: { 'X-PAPEL-Viewer': '1' }, credentials: 'same-origin',
                                 cache: 'no-store', signal: mine.signal });
         }).then(function (res) {
@@ -461,11 +562,41 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    /* A file from the reader's own machine: the same drawing, with no fetch.
+       Its bytes are read here rather than handed to the renderer as a File, so
+       the check that a newer open has not overtaken this one still stands in
+       front of the drawing, as it does for a fetch. The controller is never
+       given to a request; it is the token show() already uses. */
+    function showFile(file) {
+        if (fetching) fetching.abort();
+        var mine = fetching = new AbortController();
+        showingSrc = null;
+        showingFile = file;
+        pageEl.textContent = '';
+        status.textContent = '';
+        setBusy(true);
+        return viewer().then(function (v) {
+            if (mine !== fetching) return null;
+            v.clear();
+            setBusy(true);
+            viewOptions.failMessage = FAIL_LOCAL;
+            return file.arrayBuffer();
+        }).then(function (bytes) {
+            if (!bytes || mine !== fetching) return;
+            return view.load(bytes).then(paintPage);
+        }).catch(function () {
+            if (mine !== fetching) return;
+            setBusy(false);
+            status.textContent = FAIL_LOCAL;
+        });
+    }
+
     function stopShowing() {
         if (fetching) { fetching.abort(); fetching = null; }
         if (view) view.destroy();
         setBusy(false);
         showingSrc = null;
+        showingFile = null;
         pageEl.textContent = '';
         status.textContent = '';
     }
@@ -475,9 +606,33 @@ document.addEventListener('DOMContentLoaded', function () {
        it; the Drive link never enters into it. */
     var VIEWER = <?= json_encode(BASE_URL . '/app/student/pdf_viewer.php', JSON_UNESCAPED_SLASHES) ?>;
     document.getElementById('pdfDockNewTab').addEventListener('click', function () {
+        if (showingFile) { popOutFile(showingFile, name.textContent); return; }
         if (!showingSrc) return;
         window.open(VIEWER + showingSrc.slice(showingSrc.indexOf('?')), '_blank', 'noopener');
     });
+
+    /* A local file has no address to open. The new tab says when it is ready
+       and the file is passed across in memory, same origin only, so it never
+       reaches the server. Not 'noopener' here: the tab needs window.opener to
+       ask for the file. */
+    function popOutFile(file, label) {
+        var w = window.open(VIEWER, '_blank');
+        if (!w) {
+            var msg = 'Your browser blocked the new tab. Allow pop-ups for this site to open the full view.';
+            if (typeof window.papelAlert === 'function') window.papelAlert(msg);
+            else if (typeof window.papelNote === 'function') window.papelNote(msg, false);
+            return;
+        }
+        var origin = window.location.origin;
+        function handOver(e) {
+            if (e.origin !== origin || e.source !== w || !e.data || e.data.type !== 'papel-pdf-ready') return;
+            window.removeEventListener('message', handOver);
+            w.postMessage({ type: 'papel-pdf-file', file: file, name: label || file.name }, origin);
+        }
+        window.addEventListener('message', handOver);
+        // Given up on if the tab never reports in.
+        setTimeout(function () { window.removeEventListener('message', handOver); }, 30000);
+    }
 
     // Full screen: the panel itself, wherever it sits. Esc or the button again comes back.
     var fsBtn = document.getElementById('pdfDockFullscreen');
@@ -536,6 +691,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function showInline() {
         dock.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+
+    /* Without a home the panel only ever sits on the right. Announced only when
+       it actually appears: a second "open" with no "close" between them leaves
+       a page that put something away on the first unable to bring it back. */
+    function openBeside() {
+        if (dock.classList.contains('is-open')) return;
+        dock.classList.add('is-open');
+        document.body.classList.add('pdf-docked');
+        announce('open');
     }
 
     /* ----- In its section, one page tall -----
@@ -622,6 +787,12 @@ document.addEventListener('DOMContentLoaded', function () {
            stopped taking room beside the page. A page that opens the preview
            with its section (archive/view_paper.php) folds that section again. */
         announce('shut');
+        syncRestoreTab();
+    }
+
+    // The tab is up only while the panel is not, and only with something to bring back.
+    function syncRestoreTab() {
+        if (restoreTab) restoreTab.hidden = dock.classList.contains('is-open') || !last;
     }
 
     document.addEventListener('click', function (e) {
@@ -640,6 +811,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         var label = link.querySelector('.pd-file-name');
         name.textContent = label ? label.textContent.trim() : 'Document';
+        last = { file: null, src: src, name: name.textContent };
         /* Into its home on the first open, not on load: card_collapse.php
            wraps a card's contents at load, and arriving after it puts the
            panel beside that wrapper rather than inside it. Moved before it is
@@ -654,9 +826,7 @@ document.addEventListener('DOMContentLoaded', function () {
             setMode(wasOpen ? mode : 'inline');
             if (mode === 'inline') showInline();
         } else {
-            dock.classList.add('is-open');
-            document.body.classList.add('pdf-docked');
-            announce('open');
+            openBeside();
         }
         // Drawn once the panel is laid out, so the first pass has a width.
         if (switching) show(src);
@@ -664,9 +834,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.getElementById('pdfDockClose').addEventListener('click', close);
     document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape' || !dock.classList.contains('is-open')) return;
         // In full screen, Esc belongs to the browser: it leaves full screen and
         // the panel stays open behind it.
-        if (e.key === 'Escape' && dock.classList.contains('is-open') && !document.fullscreenElement) close();
+        if (document.fullscreenElement) return;
+        /* A dialog in front of the panel takes the key, not the panel behind it.
+           Both ways are checked: a dialog whose handler ran first has already
+           taken its "open" class off and says so by preventing the default; one
+           whose handler runs after this one is still open. */
+        if (e.defaultPrevented) return;
+        if (document.querySelector('.ad-backdrop.open, .papel-dialog-backdrop.open, .modal.show')) return;
+        close();
     });
 
     /* ----- Resizing, width only -----
@@ -755,6 +933,81 @@ document.addEventListener('DOMContentLoaded', function () {
         else if (e.key === narrower)     { setWidth(now - step, true); e.preventDefault(); }
         else if (e.key === 'Home')       { setWidth(MIN, true);        e.preventDefault(); }
     });
+
+    /* ----- From script: a local file, and putting the panel away ----- */
+    function openFile(file, label) {
+        if (!file) return;
+        markShowing(null);                       // no tile asked for this one
+        name.textContent = label || file.name || 'Document';
+        last = { file: file, src: null, name: name.textContent };
+        if (home && dock.parentNode !== home) home.appendChild(dock);
+        placeTop();
+        var switching = file !== showingFile;
+        if (home) {
+            var wasOpen = dock.classList.contains('is-open');
+            dock.classList.add('is-open');
+            setMode(wasOpen ? mode : 'inline');
+            if (mode === 'inline') showInline();
+        } else {
+            openBeside();
+        }
+        // The same file, only minimised, is still drawn: it comes back as it was.
+        if (switching) showFile(file);
+        syncRestoreTab();
+    }
+
+    /* Put away, not closed: the pages stay drawn behind the tab, so bringing it
+       back is instant and keeps the reader's place. They are redrawn at the
+       right width when it reappears, since the renderer watches its own size.
+       A panel with a home has its section to go back to instead. */
+    function minimise() {
+        if (home || !dock.classList.contains('is-open')) return;
+        if (fullscreen()) document.exitFullscreen();
+        dock.classList.remove('is-open');
+        document.body.classList.remove('pdf-docked', 'pdf-docked-left');
+        announce('close');
+        syncRestoreTab();
+    }
+
+    function restore() {
+        if (home || dock.classList.contains('is-open') || !last) return;
+        if (showingFile || showingSrc) {         // minimised: still drawn
+            openBeside();
+            syncRestoreTab();
+            return;
+        }
+        // Closed: drawn again from what it was last showing.
+        if (last.file) { openFile(last.file, last.name); return; }
+        name.textContent = last.name;
+        openBeside();
+        show(last.src);
+        syncRestoreTab();
+    }
+
+    // Nothing to bring back any more: the file was taken away.
+    function forget() {
+        last = null;
+        if (dock.classList.contains('is-open')) close();
+        else stopShowing();
+        syncRestoreTab();
+    }
+
+    var minBtn = document.getElementById('pdfDockMin');
+    if (minBtn) minBtn.addEventListener('click', minimise);
+    if (restoreTab) restoreTab.addEventListener('click', restore);
+
+    impl = {
+        openFile: openFile,
+        close: function () {
+            if (dock.classList.contains('is-open')) close();
+            else { stopShowing(); syncRestoreTab(); }   // minimised: only the pages behind it to drop
+        },
+        minimise: minimise,
+        restore:  restore,
+        forget:   forget,
+        isOpen:   function () { return dock.classList.contains('is-open'); }
+    };
+    queue.splice(0).forEach(function (call) { impl[call[0]].apply(impl, call[1]); });
 
     if (!home) return;
 
@@ -851,4 +1104,5 @@ document.addEventListener('DOMContentLoaded', function () {
     head.addEventListener('pointerup', letGo);
     head.addEventListener('pointercancel', letGo);
 });
+})();
 </script>

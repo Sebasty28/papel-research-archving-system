@@ -1,4 +1,11 @@
 <!-- Accessibility Widget -->
+<?php
+/* Whether whoever is reading can get a hidden tab back. Settings is the way,
+   and only someone signed in can reach it; for anyone else a right-click hide
+   lasts only for the page they are on, rather than for good with no way back. */
+$a11ySettingsUrl = defined('BASE_URL') ? BASE_URL . '/pages/settings.php#appearance' : '';
+$a11yCanRestore  = $a11ySettingsUrl !== '' && function_exists('current_user') && current_user();
+?>
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 /* Prevent text selection / inspection */
 body {
@@ -135,6 +142,50 @@ html.a11y-tab-hidden #a11y-toggle { display: none; }
    become its containing block and drag it back to the edge. */
 #a11y-widget.is-anchored { transform: none !important; }
 #a11y-widget.is-anchored #a11y-menu { position: fixed; max-width: calc(100vw - 24px); }
+
+/* The tab's right-click menu. Dressed as the site's other right-click menus
+   (.notif-menu in includes/notif_actions.php, .qs-context on the consoles), so
+   a third one does not look like a third idea. Every colour has a fallback,
+   as the tab's own do: the sign-in pages include this without theme.php, so
+   the tokens are not defined there. On <html> beside the widget, and just
+   over it, under only the start-up splash and the loading bar. */
+.a11y-ctx {
+    position: fixed;
+    z-index: 2147482001;
+    min-width: 200px;
+    padding: .25rem;
+    background: var(--white, #FFFFFF);
+    border: 1px solid var(--border, #EADFDC);
+    border-radius: var(--r-card, 8px);
+    box-shadow: 0 8px 24px rgba(51, 0, 0, .18);
+    font-family: var(--font-body, Inter), sans-serif;
+}
+.a11y-ctx[hidden] { display: none; }
+.a11y-ctx-item {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    width: 100%;
+    padding: .5rem .625rem;
+    border: none;
+    border-radius: var(--r-control, 4px);
+    background: none;
+    color: var(--ink, #2B1B0E);
+    font: inherit;
+    font-size: .8125rem;
+    text-align: left;
+    cursor: pointer;
+}
+.a11y-ctx-item:hover,
+.a11y-ctx-item:focus-visible { background: var(--cream, #FBF6F4); outline: none; }
+.a11y-ctx-item svg { flex: 0 0 auto; }
+/* How to get it back, said before it goes rather than only after. */
+.a11y-ctx-note {
+    padding: 0 .625rem .4rem 2.25rem;
+    font-size: .6875rem;
+    line-height: 1.35;
+    color: var(--grey, #545054);
+}
 
 /* ===== Panel ===== */
 #a11y-menu {
@@ -607,6 +658,9 @@ try {
                 /* Placed while hidden, it was measured at no size at all; now
                    that it has one again, keep it inside the window. */
                 if (!hide) restorePosition();
+                /* Said aloud, so a page showing the switch (Settings) can keep
+                   its label right when the tab is hidden from the tab itself. */
+                document.dispatchEvent(new CustomEvent('papel:a11y-tab', { detail: { hidden: !!hide } }));
             }
         };
 
@@ -781,14 +835,172 @@ try {
             toggle.addEventListener('pointerup', endDrag);
             toggle.addEventListener('pointercancel', endDrag);
 
-            /* Swallow the click that follows a drag so the panel stays shut. */
+            /* Swallow the click that follows a drag, or a right-click that
+               became one (Ctrl+click on a Mac is a left press), so the panel
+               stays shut. */
+            var swallowUntil = 0;
             toggle.addEventListener('click', function (e) {
-                if (didDrag) {
+                if (didDrag || Date.now() < swallowUntil) {
                     didDrag = false;
+                    swallowUntil = 0;
                     e.stopImmediatePropagation();
                     e.preventDefault();
                 }
             }, true);
+
+            /* ---- Right-click: hide the tab ----
+               Someone who never uses it can put it away from the tab itself,
+               rather than having to find the switch in Settings. Signed in, it
+               stays hidden and Settings > Appearance brings it back; a visitor
+               who is not signed in has no way back, so for them it is hidden
+               on this page only and returns on the next. The Menu key and
+               Shift+F10 send the same event to the focused tab, so this is
+               reached from the keyboard as well. */
+            var CAN_RESTORE  = <?= $a11yCanRestore ? 'true' : 'false' ?>;
+            var SETTINGS_URL = <?= json_encode($a11ySettingsUrl, JSON_UNESCAPED_SLASHES) ?>;
+            var ctx = null, ctxItem = null;
+
+            function buildCtx() {
+                ctx = document.createElement('div');
+                ctx.className = 'a11y-ctx';
+                ctx.setAttribute('role', 'menu');
+                ctx.setAttribute('aria-label', 'Accessibility tab');
+                ctx.hidden = true;
+
+                ctxItem = document.createElement('button');
+                ctxItem.type = 'button';
+                ctxItem.className = 'a11y-ctx-item';
+                ctxItem.setAttribute('role', 'menuitem');
+                ctxItem.setAttribute('aria-describedby', 'a11yCtxNote');
+                // An eye struck through. Drawn, since the sign-in pages carry no icon font.
+                ctxItem.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+                    + 'stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+                    + '<path d="M2 12s3.6-7 10-7c2 0 3.7.6 5.1 1.5M22 12s-3.6 7-10 7c-2 0-3.7-.6-5.1-1.5"/>'
+                    + '<path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="M3 3l18 18"/></svg>';
+                var label = document.createElement('span');
+                label.textContent = CAN_RESTORE ? 'Hide this tab' : 'Hide on this page';
+                ctxItem.appendChild(label);
+
+                var note = document.createElement('div');
+                note.className = 'a11y-ctx-note';
+                note.id = 'a11yCtxNote';
+                note.setAttribute('aria-hidden', 'true');   // read out as the item's description
+                note.textContent = CAN_RESTORE
+                    ? 'Bring it back any time in Settings > Appearance.'
+                    : 'It comes back on the next page you open.';
+
+                ctx.appendChild(ctxItem);
+                ctx.appendChild(note);
+                // Beside the widget on <html>, out of reach of the filters on <body>.
+                document.documentElement.appendChild(ctx);
+
+                ctxItem.addEventListener('click', hideFromCtx);
+                ctx.addEventListener('keydown', function (e) {
+                    if (e.key === 'Escape') {
+                        /* Kept here: the site's key handling takes focus off
+                           whatever has it on Escape, which would leave it on
+                           nothing rather than back on the tab. */
+                        e.stopPropagation();
+                        e.preventDefault();
+                        closeCtx(true);
+                    } else if (e.key === 'Tab') {
+                        closeCtx(false);
+                    }
+                });
+            }
+
+            /* Against the tab rather than the pointer, which a key press does
+               not have: beside it on a side edge, facing into the page, and
+               below or above it on the top or bottom edge. Placed from script,
+               which the CSP allows; a style attribute it would drop. */
+            function placeCtx() {
+                var r = toggle.getBoundingClientRect();
+                var w = ctx.offsetWidth, h = ctx.offsetHeight;
+                var vw = document.documentElement.clientWidth, vh = window.innerHeight;
+                var gap = 8, margin = 8, left, top;
+                if (widget.classList.contains('edge-top')) {
+                    left = r.left + r.width / 2 - w / 2; top = r.bottom + gap;
+                } else if (widget.classList.contains('edge-bottom')) {
+                    left = r.left + r.width / 2 - w / 2; top = r.top - h - gap;
+                } else {
+                    left = (r.left + r.width / 2 > vw / 2) ? r.left - w - gap : r.right + gap;
+                    top  = r.top + r.height / 2 - h / 2;
+                }
+                ctx.style.left = Math.round(Math.min(Math.max(margin, left), vw - w - margin)) + 'px';
+                ctx.style.top  = Math.round(Math.min(Math.max(margin, top),  vh - h - margin)) + 'px';
+            }
+
+            function openCtx() {
+                if (!ctx) buildCtx();
+                ctx.hidden = false;                  // shown first: placing it measures it
+                placeCtx();
+                ctxItem.focus();
+            }
+            function closeCtx(refocus) {
+                if (!ctx || ctx.hidden) return;
+                ctx.hidden = true;
+                if (refocus && !tabHidden()) toggle.focus();
+            }
+
+            function tellHidden() {
+                /* Signed in, a snackbar that keeps the link (includes/
+                   flash_dismiss.php). Not for a visitor: the pages they see
+                   it on, the sign-in pages, carry no icon font for the
+                   snackbar's tick. The menu itself already said how it
+                   comes back, so a page with neither helper says nothing. */
+                if (CAN_RESTORE && window.papelFlashReady) {
+                    var snack = document.createElement('div');
+                    snack.className = 'js-flash-snack';
+                    snack.appendChild(document.createTextNode('Accessibility tab hidden. Bring it back any time in '));
+                    var a = document.createElement('a');
+                    a.href = SETTINGS_URL;
+                    a.textContent = 'Settings > Appearance';
+                    snack.appendChild(a);
+                    snack.appendChild(document.createTextNode('.'));
+                    document.body.appendChild(snack);
+                } else if (typeof window.papelNote === 'function') {
+                    window.papelNote(CAN_RESTORE
+                        ? 'Accessibility tab hidden. Bring it back any time in Settings > Appearance.'
+                        : 'Accessibility tab hidden on this page. It comes back on the next page you open.', true);
+                }
+            }
+
+            function hideFromCtx() {
+                closeCtx(false);
+                closePanel();
+                if (CAN_RESTORE && window.papelAccessibility) {
+                    window.papelAccessibility.setTabHidden(true);
+                } else {
+                    // This page only: nothing stored, so the next page brings it back.
+                    document.documentElement.classList.add('a11y-tab-hidden');
+                }
+                // Focus was on the menu, which has gone; not left on a hidden tab either.
+                if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+                tellHidden();
+            }
+
+            toggle.addEventListener('contextmenu', function (e) {
+                e.preventDefault();
+                /* A long press on a touch screen, or Ctrl+click on a Mac, began
+                   as a drag. Put that down, so letting go neither slides the
+                   tab nor opens the panel under the menu. */
+                if (dragging) {
+                    dragging = false;
+                    widget.classList.remove('is-dragging');
+                    try { toggle.releasePointerCapture(e.pointerId); } catch (err) {}
+                }
+                swallowUntil = Date.now() + 600;
+                closePanel();
+                openCtx();
+            });
+
+            // Anything pressed elsewhere, a scroll or a resize puts it away.
+            document.addEventListener('pointerdown', function (e) {
+                if (ctx && !ctx.hidden && !ctx.contains(e.target)) closeCtx(false);
+            }, true);
+            window.addEventListener('scroll', function () { closeCtx(false); }, { capture: true, passive: true });
+            window.addEventListener('resize', function () { closeCtx(false); });
+            window.addEventListener('blur', function () { closeCtx(false); });
 
             /* Put it back on its edge at the size it actually is. Passed
                save:false, so a position squeezed to fit a small window is not
@@ -828,7 +1040,7 @@ try {
                 document.fonts.ready.then(reclamp).catch(function () {});
             }
 
-            toggle.title = 'Accessibility options (drag it to any edge)';
+            toggle.title = 'Accessibility options (drag it to any edge, right-click to hide it)';
             restorePosition();
         }
 
