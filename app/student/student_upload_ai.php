@@ -3112,8 +3112,15 @@ body > .crumb-bar {
     line-height: 1.6;
 }
 /* ===== PDF preview panel =====
-   Docks to the right the way the chat panel does: fixed full-height column,
-   page content padded aside to give way rather than being covered. */
+   The chrome the paper pages use (includes/pdf_dock.php): the same maroon
+   bar, the same 1.75rem controls on 18px icons, the same dark stage under
+   the pages. This panel had a look of its own, so a student met one viewer
+   while handing a paper in and a different-looking one everywhere they read
+   one afterwards.
+
+   Only the chrome is shared. The file still never leaves the browser to be
+   previewed here: it is read from the chosen File, where the docked panel
+   fetches its bytes from the server. */
 #pdf-preview {
     position: fixed;
     top: 0;
@@ -3121,31 +3128,32 @@ body > .crumb-bar {
     bottom: 0;
     width: var(--pdf-dock-w, 460px);
     z-index: 1200;
-    display: block;
+    display: flex;
+    flex-direction: column;
     background: var(--white);
     border-left: 1px solid var(--border);
     box-shadow: -6px 0 24px rgba(51, 0, 0, .10);
 }
 #pdf-preview[hidden] { display: none; }
+/* In the flow of the column, not pinned at a measured height. The header was
+   absolute at 52px and the body offset by the same 52: two numbers that had
+   to agree, and the header is not that tall at every width. */
 #pdf-preview-head {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 52px;
     display: flex;
     align-items: center;
     gap: .5rem;
-    padding: 0 1rem;
-    background: var(--maroon);
+    flex: 0 0 auto;
+    padding: .625rem .875rem;
+    /* --maroon-surface-hover rather than --maroon, which is the token the
+       docked panel's bar uses. */
+    background: var(--maroon-surface-hover);
     color: #fff;
+    font-size: .8125rem;
 }
+#pdf-preview-head > .material-symbols-outlined { font-size: 18px; }
 #pdf-preview-name {
     flex: 1 1 auto;
     min-width: 0;
-    font-family: var(--font-head);
-    font-size: .8125rem;
-    font-weight: 500;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -3155,65 +3163,77 @@ body > .crumb-bar {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 28px;      /* min-, not fixed: the zoom label needs room for "100%" */
-    height: 28px;
-    padding: 0 .25rem;
+    width: 1.75rem;
+    height: 1.75rem;
+    flex: 0 0 auto;
     border: none;
     border-radius: var(--r-control, 4px);
     background: none;
     color: #fff;
-    font-family: inherit;
-    font-size: .6875rem;
+    font: inherit;
+    font-size: .75rem;
     cursor: pointer;
     transition: background .15s;
 }
 .pdf-preview-tools button:hover { background: rgba(255, 255, 255, .18); }
 .pdf-preview-tools button.active { background: rgba(255, 255, 255, .28); }
+/* The zoom controls read as one group, fenced off from the window controls
+   beside them exactly as the docked panel fences them. */
+.pdf-preview-zoom {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    padding-right: .35rem;
+    margin-right: .1rem;
+    border-right: 1px solid rgba(255, 255, 255, .25);
+}
+/* Wider than the square icon buttons: "100%" must not make the button jump
+   as the reader zooms through it. */
+#pdfZoomLevel {
+    width: auto;
+    min-width: 3.1rem;
+    padding: 0 .25rem;
+    font-variant-numeric: tabular-nums;
+}
 /* Fills everything below the header. */
 #pdf-preview-body {
-    position: absolute;
-    top: 52px;          /* clears the header */
-    left: 0;
-    right: 0;
-    bottom: 0;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
 }
-/* The pages are drawn onto canvases we own, inside a scroller we size. The
-   browser's built-in viewer was measured filling the full height and still
-   painting into a strip of it, so the document is rendered here instead. */
 #pdf-preview-scroll {
-    position: absolute;
-    inset: 0;
-    overflow-y: auto;
-    /* auto, not hidden: zoomed past fit-width the page is wider than the panel
-       and has to be pannable. */
-    overflow-x: auto;
-    padding: .75rem;
-    background: var(--cream);
-    text-align: center;
-}
-#pdf-preview-scroll:focus-visible { outline: 2px solid var(--maroon); outline-offset: -2px; }
-/* Page, text-layer and cursor styling comes from assests/css/papel-pdf-view.css,
-   shared with the full-window viewer. */
-#pdf-preview-status {
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 50%;
-    transform: translateY(-50%);
+    flex: 1 1 auto;
+    min-width: 0;
+    /* auto, not hidden: zoomed past fit-width the page is wider than the
+       panel and has to be pannable. */
+    overflow: auto;
     padding: 1rem;
     text-align: center;
+    /* The gutter is held rather than letting the scrollbar come and go: its
+       arrival changes the pages' width, and each change redraws every page. */
+    scrollbar-gutter: stable;
+}
+#pdf-preview-scroll:focus-visible { outline: 2px solid var(--pdf-scroll-thumb, #fff); outline-offset: -2px; }
+/* Page, text layer, scrollbar and the dark stage itself all come from
+   assests/css/papel-pdf-view.css now, shared with the docked panel and the
+   full-window viewer. Anything set here on #pdf-preview-scroll would win on
+   specificity and quietly put the light stage back. */
+#pdf-preview-status {
+    position: absolute;
+    left: 50%;
+    top: 45%;
+    transform: translate(-50%, -50%);
+    max-width: 80%;
+    padding: .6rem 1rem;
+    border-radius: var(--r-card, 8px);
+    /* A card, not loose text: grey on the dark stage was barely readable. */
+    background: var(--white);
+    color: var(--ink);
+    box-shadow: 0 4px 14px rgba(51, 0, 0, .12);
     font-size: .8125rem;
-    color: var(--grey);
+    text-align: center;
 }
 #pdf-preview-status:empty { display: none; }
-#pdf-preview-scroll::-webkit-scrollbar { width: 10px; }
-#pdf-preview-scroll::-webkit-scrollbar-track { background: var(--cream); }
-#pdf-preview-scroll::-webkit-scrollbar-thumb {
-    background: var(--soft-maroon);
-    border-radius: var(--r-card, 8px);
-    border: 2px solid var(--cream);
-}
-#pdf-preview-scroll::-webkit-scrollbar-thumb:hover { background: var(--maroon); }
 body.pdf-docked { padding-right: var(--pdf-dock-w, 460px); }
 
 /* With the chat docked left and the preview right, the form is squeezed from
@@ -6324,6 +6344,14 @@ const papelPdfPreview = (function () {
         btn.querySelector('.material-symbols-outlined').textContent = panning ? 'pan_tool' : 'text_select_start';
     }
 
+    /* The ring over the pages while they load, as the docked panel does it.
+       Without this the dark stage shows nothing at all until the first page
+       is drawn, which on a large file reads as the panel having failed. */
+    function setBusy(on) {
+        const stage = document.getElementById('pdf-preview-body');
+        if (stage) stage.classList.toggle('is-busy', !!on);
+    }
+
     // One renderer per panel, built lazily so the elements exist first.
     function ensureView() {
         if (view) return view;
@@ -6333,7 +6361,8 @@ const papelPdfPreview = (function () {
             status:    document.getElementById('pdf-preview-status'),
             workerSrc: PAPEL_PDF_WORKER,
             onZoom:    showZoom,
-            onMode:    showMode
+            onMode:    showMode,
+            onBusy:    setBusy
         });
         showMode(view.getMode());
         return view;
@@ -8083,33 +8112,42 @@ document.addEventListener('DOMContentLoaded', () => {
      browser's memory. Nothing here has been sent to the server yet. -->
 <div id="pdf-preview" aria-label="PDF preview" hidden>
   <div id="pdf-preview-head">
-    <span class="material-symbols-outlined mi-20">picture_as_pdf</span>
+    <span class="material-symbols-outlined mi-18">picture_as_pdf</span>
     <span id="pdf-preview-name">Selected PDF</span>
     <div class="pdf-preview-tools">
       <button type="button" id="pdfPanMode" title="Drag to move the page" aria-label="Drag to move the page" aria-pressed="false">
-        <span class="material-symbols-outlined mi-20">pan_tool</span>
+        <span class="material-symbols-outlined mi-18">pan_tool</span>
       </button>
-      <button type="button" id="pdfZoomOut" title="Zoom out (Ctrl + mouse wheel)" aria-label="Zoom out">
-        <span class="material-symbols-outlined mi-20">zoom_out</span>
-      </button>
-      <button type="button" id="pdfZoomLevel" title="Reset to fit width" aria-label="Reset zoom to fit width">100%</button>
-      <button type="button" id="pdfZoomIn" title="Zoom in (Ctrl + mouse wheel)" aria-label="Zoom in">
-        <span class="material-symbols-outlined mi-20">zoom_in</span>
-      </button>
+      <?php /* Grouped and fenced, as in includes/pdf_dock.php. */ ?>
+      <span class="pdf-preview-zoom">
+        <button type="button" id="pdfZoomOut" title="Zoom out (Ctrl + mouse wheel)" aria-label="Zoom out">
+          <span class="material-symbols-outlined mi-18">zoom_out</span>
+        </button>
+        <button type="button" id="pdfZoomLevel" title="Reset to fit width" aria-label="Reset zoom to fit width">100%</button>
+        <button type="button" id="pdfZoomIn" title="Zoom in (Ctrl + mouse wheel)" aria-label="Zoom in">
+          <span class="material-symbols-outlined mi-18">zoom_in</span>
+        </button>
+      </span>
+      <?php /* open_in_new, not open_in_full: this has always opened a tab, and
+               the docked panel draws the same action with that icon. */ ?>
       <button type="button" id="pdfPreviewFull" title="Open in a new tab" aria-label="Open in a new tab">
-        <span class="material-symbols-outlined mi-20">open_in_full</span>
+        <span class="material-symbols-outlined mi-18">open_in_new</span>
       </button>
       <button type="button" id="pdfPreviewMin" title="Minimise (reopen from the tab on the right)" aria-label="Minimise preview">
-        <span class="material-symbols-outlined mi-20">remove</span>
+        <span class="material-symbols-outlined mi-18">remove</span>
       </button>
       <button type="button" id="pdfPreviewClose" title="Close preview" aria-label="Close preview">
-        <span class="material-symbols-outlined mi-20">close</span>
+        <span class="material-symbols-outlined mi-18">close</span>
       </button>
     </div>
   </div>
-  <div id="pdf-preview-body" class="papel-pdf-stage">
+  <?php /* is-dark: the pages on dark grey with a white scrollbar, the way the
+           docked panel and the full-window viewer already show them. */ ?>
+  <div id="pdf-preview-body" class="papel-pdf-stage is-dark">
     <div id="pdf-preview-scroll" class="papel-pdf-scroll" tabindex="0"></div>
-    <div id="pdf-preview-status"></div>
+    <?php /* Loading is the ring; the status card only ever carries a problem. */ ?>
+    <div class="papel-pdf-spinner" role="status" aria-label="Loading"></div>
+    <div id="pdf-preview-status" role="alert"></div>
   </div>
 </div>
 
