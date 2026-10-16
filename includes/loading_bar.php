@@ -26,6 +26,14 @@
  * Page code can also drive it directly for work that is neither:
  *     window.papelLoading.start();  ...  window.papelLoading.done();
  *
+ * A request that already reports its own waiting somewhere the reader is
+ * looking opts out, so one wait is not announced twice in two places:
+ *     fetch(url, { papelQuiet: true, ... })
+ * Corpus's chat window on the upload page is the one caller that does this:
+ * it draws a typing bubble in the spot the answer is about to land, and the
+ * bar at the top of the page answering the same question several hundred
+ * pixels away read as the form saving rather than as the dog thinking.
+ *
  * ---- The logo pill ----------------------------------------------------------
  * A small pill playing the PAPEL logo animation: a cropped, 300px copy of the
  * full-screen splash's GIF (includes/splash.php), which is a 1920x1080 canvas
@@ -420,7 +428,10 @@ body.a11y-stop-animations .papel-loader-veil { display: none; }
     // ---- report the requests the site already makes -----------------------
     if (window.fetch) {
         var nativeFetch = window.fetch;
-        window.fetch = function () {
+        window.fetch = function (input, init) {
+            /* Opted out by the caller. fetch ignores an init key it does not
+               know, so the flag costs the request nothing on its way out. */
+            if (init && init.papelQuiet) { return nativeFetch.apply(this, arguments); }
             start();
             /* then/catch rather than finally: this has to behave the same on
                anything that reaches the site, and finally is the newer of the
