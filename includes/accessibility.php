@@ -159,6 +159,7 @@ html.a11y-tab-hidden #a11y-toggle { display: none; }
     border-radius: var(--r-card, 8px);
     box-shadow: 0 8px 24px rgba(51, 0, 0, .18);
     font-family: var(--font-body, Inter), sans-serif;
+    max-width: calc(100vw - 16px);
 }
 .a11y-ctx[hidden] { display: none; }
 .a11y-ctx-item {
@@ -331,7 +332,12 @@ body.a11y-big-cursor * { cursor: url("data:image/svg+xml;utf8,<svg xmlns='http:/
 </style>
 
 <?php /* Read before the tab below is parsed, so a hidden tab is never
-         drawn for a frame first and then pulled away. */ ?>
+         drawn for a frame first and then pulled away. Only for someone signed
+         in, who can reach Settings to bring it back: the choice is kept per
+         browser, not per account, so signing out (or a guest pass running out)
+         would otherwise leave the next visitor on that browser with no tab and
+         no way to get it back. It is still stored, and returns at sign-in. */ ?>
+<?php if ($a11yCanRestore): ?>
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 try {
     if (localStorage.getItem('papel_a11y_tab_hidden') === '1') {
@@ -339,6 +345,7 @@ try {
     }
 } catch (e) {}
 </script>
+<?php endif; ?>
 
 <div id="a11y-widget">
     <div id="a11y-menu" role="dialog" aria-label="Accessibility options">
@@ -448,13 +455,20 @@ try {
 (function () {
     var STORAGE_KEY = 'papel_a11y';
     var TAB_KEY     = 'papel_a11y_tab_hidden';
+    /* Whether the reader can get a hidden tab back from Settings; see the
+       PHP at the top of this file. */
+    var CAN_RESTORE  = <?= $a11yCanRestore ? 'true' : 'false' ?>;
+    var SETTINGS_URL = <?= json_encode($a11ySettingsUrl, JSON_UNESCAPED_SLASHES) ?>;
 
-    // Hidden or shown in another tab: follow it here too.
-    window.addEventListener('storage', function (e) {
-        if (e.key === TAB_KEY) {
-            document.documentElement.classList.toggle('a11y-tab-hidden', e.newValue === '1');
-        }
-    });
+    // Hidden or shown in another tab: follow it here too, on the same terms
+    // as the read before the tab is drawn.
+    if (CAN_RESTORE) {
+        window.addEventListener('storage', function (e) {
+            if (e.key === TAB_KEY) {
+                document.documentElement.classList.toggle('a11y-tab-hidden', e.newValue === '1');
+            }
+        });
+    }
 
     /* ---- Move widget + guide to <html> so body { filter:... } never
             breaks position:fixed (CSS spec: a filtered element becomes
@@ -856,8 +870,6 @@ try {
                on this page only and returns on the next. The Menu key and
                Shift+F10 send the same event to the focused tab, so this is
                reached from the keyboard as well. */
-            var CAN_RESTORE  = <?= $a11yCanRestore ? 'true' : 'false' ?>;
-            var SETTINGS_URL = <?= json_encode($a11ySettingsUrl, JSON_UNESCAPED_SLASHES) ?>;
             var ctx = null, ctxItem = null;
 
             function buildCtx() {
@@ -904,7 +916,11 @@ try {
                         e.preventDefault();
                         closeCtx(true);
                     } else if (e.key === 'Tab') {
-                        closeCtx(false);
+                        /* The menu is the last thing on the page, so the
+                           browser's own Tab would leave the page for its
+                           toolbar. Back to the tab, as Escape does. */
+                        e.preventDefault();
+                        closeCtx(true);
                     }
                 });
             }
@@ -914,6 +930,11 @@ try {
                below or above it on the top or bottom edge. Placed from script,
                which the CSP allows; a style attribute it would drop. */
             function placeCtx() {
+                /* Measured from the corner, where it has the whole window:
+                   left where it was last placed, it shrinks to fit the room
+                   to its right and comes out narrower than it really is. */
+                ctx.style.left = '0px';
+                ctx.style.top  = '0px';
                 var r = toggle.getBoundingClientRect();
                 var w = ctx.offsetWidth, h = ctx.offsetHeight;
                 var vw = document.documentElement.clientWidth, vh = window.innerHeight;
@@ -926,8 +947,10 @@ try {
                     left = (r.left + r.width / 2 > vw / 2) ? r.left - w - gap : r.right + gap;
                     top  = r.top + r.height / 2 - h / 2;
                 }
-                ctx.style.left = Math.round(Math.min(Math.max(margin, left), vw - w - margin)) + 'px';
-                ctx.style.top  = Math.round(Math.min(Math.max(margin, top),  vh - h - margin)) + 'px';
+                // The window's margin wins over the far edge, so a menu as wide
+                // as a phone starts at its left edge rather than off it.
+                ctx.style.left = Math.round(Math.max(margin, Math.min(left, vw - w - margin))) + 'px';
+                ctx.style.top  = Math.round(Math.max(margin, Math.min(top,  vh - h - margin))) + 'px';
             }
 
             function openCtx() {
@@ -988,8 +1011,15 @@ try {
                     dragging = false;
                     widget.classList.remove('is-dragging');
                     try { toggle.releasePointerCapture(e.pointerId); } catch (err) {}
+                    /* A finger that wavered moved the tab a little before the
+                       long press landed; put it back where it was kept. */
+                    if (didDrag) { didDrag = false; restorePosition(); }
+                    /* Only a press that began as a left one can still be
+                       followed by a click. The right button and the Menu key
+                       never are, and arming this for them ate the next real
+                       click or Enter on the tab. */
+                    swallowUntil = Date.now() + 600;
                 }
-                swallowUntil = Date.now() + 600;
                 closePanel();
                 openCtx();
             });

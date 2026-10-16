@@ -3163,8 +3163,12 @@ body.pdf-docked > .site-footer {
     color: var(--grey);
 }
 
-/* Too narrow to share the screen: the panel covers the page instead. */
+/* Too narrow to share the screen: the panel covers the page instead. The
+   floating chat sits higher (1000) than the panel (900), so it would land on
+   the pages; it steps aside while the panel is up and is back, as it was, the
+   moment the panel closes. The page's own panel used to cover it. */
 @media (max-width: 900px) {
+    body.pdf-docked #chat-widget:not(.is-docked) { display: none; }
     body.pdf-docked { padding-right: 0; }
     body.pdf-docked > .site-header,
     body.pdf-docked > .crumb-bar {

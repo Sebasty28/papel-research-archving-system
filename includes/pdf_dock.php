@@ -281,6 +281,15 @@ body.pdf-docked-left > main.wrap {
 /* The panel starts below the breadcrumb strip now, so the crumbs no longer
    need to make room for it on this side. */
 
+/* The navbar's menus (the bell, the avatar, the phone nav sheet) hang below
+   the bar, into the space a docked panel starts in. The bar is its own
+   stacking context at 900, the panel's own level, and the panel comes later in
+   the page, so the menus opened underneath it and could not be seen. One step
+   up while a panel is docked puts them back on top. The bar itself never
+   overlaps the panel, which starts where the bar ends. */
+body.pdf-docked .site-header,
+body.pdf-docked-left .site-header { z-index: 901; }
+
 /* The header is the handle for docking by drag. */
 .pdf-dock-grab { display: none; }
 .pdf-dock-drop {
@@ -555,7 +564,8 @@ document.addEventListener('DOMContentLoaded', function () {
             return res.arrayBuffer();
         }).then(function (bytes) {
             if (mine !== fetching) return;
-            return view.load(bytes).then(paintPage);
+            // Overtaken while drawing: the newer file's count, not this one's.
+            return view.load(bytes).then(function () { if (mine === fetching) paintPage(); });
         }).catch(function (err) {
             if ((err && err.name === 'AbortError') || mine !== fetching) return;
             setBusy(false);
@@ -585,7 +595,7 @@ document.addEventListener('DOMContentLoaded', function () {
             return file.arrayBuffer();
         }).then(function (bytes) {
             if (!bytes || mine !== fetching) return;
-            return view.load(bytes).then(paintPage);
+            return view.load(bytes).then(function () { if (mine === fetching) paintPage(); });
         }).catch(function () {
             if (mine !== fetching) return;
             setBusy(false);
