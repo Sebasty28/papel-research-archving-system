@@ -55,13 +55,15 @@ $PDF_DOCK_MINIMISE  = !empty($PDF_DOCK_MINIMISE) && !$PDF_DOCK_HOME;
 
 .pdf-dock {
     position: fixed;
-    /* Measured from the header itself when the panel opens, rather than the
-       60px this used to assume: the header is not that tall on every page or
-       at every width, and the difference showed as a band of blank page above
-       the panel. The fallback only matters if the header is missing. */
+    /* Between the site's maroon bands, never over them: below the navbar and
+       the breadcrumb strip, and above the footer once that is in view. Both
+       edges are measured from the page as it scrolls (placeTop below); the
+       fallbacks only matter if that never runs. It used to run from the
+       bottom of the navbar to the bottom of the window, so the strip and the
+       footer each stopped short at the panel's edge. */
     top: var(--pdf-dock-top, 57px);
     right: 0;
-    bottom: 0;
+    bottom: var(--pdf-dock-bottom, 0px);
     width: var(--pdf-dock-w);
     z-index: 900;
     display: none;
@@ -74,9 +76,9 @@ $PDF_DOCK_MINIMISE  = !empty($PDF_DOCK_MINIMISE) && !$PDF_DOCK_HOME;
 .pdf-dock-head {
     display: flex; align-items: center; gap: .5rem;
     padding: .625rem .875rem;
-    /* The same token .crumb-bar uses. The two sit edge to edge across the top
-       of the page, and on --maroon-surface this bar was the lighter of the
-       two, which read as a seam rather than one strip. */
+    /* The token the breadcrumb strip and the footer use, so the panel's bar is
+       one of the site's maroon bands rather than a lighter red of its own (on
+       --maroon-surface it was the lighter, and read as a seam against them). */
     background: var(--maroon-surface-hover); color: #fff;
     font-size: .8125rem;
 }
@@ -276,8 +278,8 @@ body.pdf-docked-left > main.wrap {
     min-width: 0;
     transition: margin-left .18s ease;
 }
-/* On this side the panel does reach the crumbs, so they make room too. */
-body.pdf-docked-left .crumb-bar { padding-left: calc(var(--pdf-dock-w) + .25rem); }
+/* The panel starts below the breadcrumb strip now, so the crumbs no longer
+   need to make room for it on this side. */
 
 /* The header is the handle for docking by drag. */
 .pdf-dock-grab { display: none; }
@@ -665,20 +667,48 @@ document.addEventListener('DOMContentLoaded', function () {
     // 'right' is the only place a panel without a home ever goes.
     var mode = home ? 'inline' : 'right';
 
-    /* The panel starts where the header ends. The header is sticky at the top
-       of the window, so its bottom edge is its height and scrolling does not
-       move it; a resize can change it, and that is what is watched. */
+    /* The panel sits between the maroon bands. It starts below the navbar and
+       the breadcrumb strip together, as the upload page's docked chat does:
+       the navbar is sticky, but the strip scrolls away, so the top follows
+       the strip up until only the navbar is left. It ends above the footer
+       once the footer scrolls into view, rather than lying over it. Both
+       edges move with the page, so they are worked out again on every scroll
+       and resize, and whenever the page itself changes height. */
     var header = document.querySelector('.site-header');
+    var crumbs = document.querySelector('.crumb-bar');
+    var footer = document.querySelector('.site-footer');
+    var band   = { top: 57, bottom: 0 };
     function placeTop() {
-        if (!header) { return; }
-        var bottom = Math.max(0, Math.round(header.getBoundingClientRect().bottom));
-        document.documentElement.style.setProperty('--pdf-dock-top', bottom + 'px');
+        var root = document.documentElement.style;
+        if (header || crumbs) {
+            var top = header ? header.getBoundingClientRect().bottom : 0;
+            if (crumbs) top = Math.max(top, crumbs.getBoundingClientRect().bottom);
+            band.top = Math.max(0, Math.round(top));
+            root.setProperty('--pdf-dock-top', band.top + 'px');
+        }
+        band.bottom = footer
+            ? Math.max(0, Math.round(window.innerHeight - footer.getBoundingClientRect().top))
+            : 0;
+        root.setProperty('--pdf-dock-bottom', band.bottom + 'px');
+    }
+    // Once a frame at most: a scroll fires far more often than the screen draws.
+    var placeQueued = false;
+    function queuePlace() {
+        if (placeQueued) return;
+        placeQueued = true;
+        requestAnimationFrame(function () { placeQueued = false; placeTop(); });
     }
     placeTop();
     window.addEventListener('resize', placeTop);
+    window.addEventListener('scroll', queuePlace, { passive: true });
     /* Web fonts land after this runs and the header grows as they do, which
-       would leave the seam open on the one page load that matters. */
-    if (window.ResizeObserver && header) { new ResizeObserver(placeTop).observe(header); }
+       would leave the seam open on the one page load that matters. The body is
+       watched as well: a step of a form, or a section folding, moves the footer
+       without any scroll at all. */
+    if (window.ResizeObserver) {
+        if (header) { new ResizeObserver(placeTop).observe(header); }
+        new ResizeObserver(queuePlace).observe(document.body);
+    }
 
     /* Announced so a page can get its own furniture out of the way: the
        public paper view shuts its contents rail, which shares this side. With
@@ -700,6 +730,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (dock.classList.contains('is-open')) return;
         dock.classList.add('is-open');
         document.body.classList.add('pdf-docked');
+        placeTop();                     // the page has just made room, which can move the footer
         announce('open');
     }
 
@@ -1050,11 +1081,12 @@ document.addEventListener('DOMContentLoaded', function () {
     // which the CSP allows, rather than with style attributes, which it drops.
     function showDrop(zone) {
         placeTop();
-        var top = header ? Math.max(0, header.getBoundingClientRect().bottom) : 57;
-        var W = viewW(), H = window.innerHeight, w = dockWidth();
-        var box = zone === 'left'  ? [0, top, w, H - top]
-                : zone === 'right' ? [W - w, top, w, H - top]
-                :                    [W * 0.25 + 16, top + 16, W * 0.5 - 32, H - top - 32];
+        // Where the panel would actually sit: between the same bands.
+        var top = band.top, tall = window.innerHeight - band.top - band.bottom;
+        var W = viewW(), w = dockWidth();
+        var box = zone === 'left'  ? [0, top, w, tall]
+                : zone === 'right' ? [W - w, top, w, tall]
+                :                    [W * 0.25 + 16, top + 16, W * 0.5 - 32, tall - 32];
         drop.style.left   = box[0] + 'px';
         drop.style.top    = box[1] + 'px';
         drop.style.width  = box[2] + 'px';

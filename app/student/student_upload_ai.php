@@ -2336,8 +2336,9 @@ body.chat-docked-right {
    to be, and the campus photo behind the band would start partway across.
 
    Only the chat's inset is given back here. The PDF preview pads the right as
-   well and starts below the navbar, so the navbar is let out over it by its own
-   rule, with the preview's further down (search "PDF preview"). */
+   well and sits between the navbar's bands and the footer, so all three are
+   let out over it by its own rules, with the preview's further down (search
+   "PDF preview"). */
 body > .site-header,
 body > .crumb-bar {
     margin-left:  calc(-1 * var(--chat-inset-left, 0px));
@@ -3118,15 +3119,20 @@ body > .crumb-bar {
    That file makes room by moving a <main class="wrap">, which this page does
    not have: the form is a Bootstrap .container straight under <body>. So room
    is made the way the chat panel makes its own, by padding the body. The panel
-   starts below the navbar rather than over it, so the navbar is let back out
-   across the full width above it, the same correction the chat's inset gets
-   above; without it the band stops short and leaves the campus photo showing
-   in the corner over the panel. The crumb strip is left as it is, as on the
-   paper pages: the panel lies over its far end. */
+   sits between the maroon bands, below the navbar and the breadcrumb strip and
+   above the footer, so all three are let back out across the full width over
+   and under it: the same correction the chat's inset gets above. Without it
+   each band stops short at the panel's edge, and the campus photo shows bare
+   in the corner over the panel where the strip should be. */
 body.pdf-docked { padding-right: var(--pdf-dock-w); }
-body.pdf-docked > .site-header {
+body.pdf-docked > .site-header,
+body.pdf-docked > .crumb-bar {
     margin-right: calc(-1 * var(--pdf-dock-w));
     width: calc(100% + var(--chat-inset-left, 0px) + var(--pdf-dock-w));
+}
+body.pdf-docked > .site-footer {
+    margin-right: calc(-1 * var(--pdf-dock-w));
+    width: calc(100% + var(--pdf-dock-w));
 }
 
 /* With the chat docked left and the preview right, the form is squeezed from
@@ -3160,10 +3166,12 @@ body.pdf-docked > .site-header {
 /* Too narrow to share the screen: the panel covers the page instead. */
 @media (max-width: 900px) {
     body.pdf-docked { padding-right: 0; }
-    body.pdf-docked > .site-header {
+    body.pdf-docked > .site-header,
+    body.pdf-docked > .crumb-bar {
         margin-right: 0;
         width: calc(100% + var(--chat-inset-left, 0px));
     }
+    body.pdf-docked > .site-footer { margin-right: 0; width: auto; }
 }
 
 /* The same dialog doubles as a prompt; the field sits under the message and
