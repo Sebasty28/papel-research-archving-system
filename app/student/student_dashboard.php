@@ -688,6 +688,14 @@ var loadingTimer = null;
 function setLoading(on) {
     if (!mainCol) return;
     clearTimeout(loadingTimer);
+    /* The bar along the top of the window reports this fetch, the same as
+       every other one on the site; the class only dims the part being
+       replaced. Its own timing is in includes/loading_bar.php, so a swap that
+       comes back at once never paints anything. */
+    if (window.papelLoading) {
+        if (on) window.papelLoading.start();
+        else    window.papelLoading.done();
+    }
     if (on) loadingTimer = setTimeout(function () { mainCol.classList.add('is-loading'); }, 200);
     else mainCol.classList.remove('is-loading');
 }

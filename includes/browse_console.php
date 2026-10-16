@@ -537,18 +537,15 @@ html[data-view="rows"] .paper-list .paper-item .paper-program { display: inline;
 .paper-list.is-scrollable::-webkit-scrollbar-track { background: var(--cream); border-radius: var(--r-card, 8px); }
 .paper-list.is-scrollable::-webkit-scrollbar-thumb { background: var(--dark-maroon); border-radius: var(--r-card, 8px); }
 
-/* Loading state while search/filter/pagination fetch results via AJAX */
+/* Loading state while search/filter/pagination fetch results via AJAX.
+   The column dims; the progress bar is the one along the top of the window
+   (includes/loading_bar.php), which is where every other fetch on the site
+   reports itself. The column used to draw a second bar of its own across its
+   own top edge, and on the student dashboard that edge is above the search
+   box, so the bar surfaced as a rule floating in the gap over the search
+   field with nothing to attach it to, and read as a stray border rather than
+   as progress. */
 .main-col { position: relative; }
-.main-col.is-loading::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 2px;
-    z-index: 20;
-    background: linear-gradient(90deg, transparent, var(--soft-maroon), transparent);
-    background-size: 50% 100%;
-    animation: papel-loading-bar 1.1s ease-in-out infinite;
-}
 .main-col.is-loading .browse-toolbar,
 .main-col.is-loading .paper-list {
     opacity: .5;
@@ -556,10 +553,6 @@ html[data-view="rows"] .paper-list .paper-item .paper-program { display: inline;
 }
 .main-col .browse-toolbar,
 .main-col .paper-list { transition: opacity .15s ease; }
-@keyframes papel-loading-bar {
-    0%   { background-position: -50% 0; }
-    100% { background-position: 150% 0; }
-}
 
 .empty-state {
     text-align: center;

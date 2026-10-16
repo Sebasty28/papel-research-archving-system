@@ -1,5 +1,5 @@
 {
- "built": "2026-10-16 12:42",
+ "built": "2026-10-16 13:02",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -107,7 +107,7 @@
    "lines": 104
   },
   "app/student/student_dashboard.php": {
-   "lines": 816
+   "lines": 824
   },
   "app/student/student_draft_delete.php": {
    "lines": 119
@@ -182,7 +182,7 @@
    "lines": 176
   },
   "includes/browse_console.php": {
-   "lines": 895
+   "lines": 888
   },
   "includes/browse_console_js.php": {
    "lines": 974
