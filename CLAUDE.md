@@ -94,6 +94,19 @@ centre instead of the approval tick. Repaired by
 
 Check the column's ENUM before inventing a value for it.
 
+### A draft lives in two places, and both need the id
+
+`student_upload_ai.php` keeps the student's work twice: a row in
+`research_papers` with `current_status='draft'`, and an autosaved copy in the
+browser's `localStorage`. The device copy carries the row's `paper_id` in its
+`draftId` field, and that field is the only thing that makes the next save an
+UPDATE rather than an INSERT.
+
+So anything that writes a draft to the server has to write the id back into the
+device copy too. Updating only the page's own `draftId` variable left a copy
+tagged 0 behind: the student saved, left the page, came back, answered
+"Continue", and the same paper was written a second time as a new draft.
+
 ### `bind_param` type-string length
 
 `'sssisssi'` must have exactly one character per parameter. A mismatch fails at
@@ -154,6 +167,14 @@ its own palette is a bug, not a style choice.
 
 **Never use `alert()` or `confirm()`.** Put `data-confirm="..."` on the button
 and `action_dialogs.php` handles it.
+
+**One loading indicator.** The bar along the top of the window
+(`loading_bar.php`, pulled in by `site_footer.php`) reports every fetch on the
+site. Drive it with `window.papelLoading.start()` and `.done()`;
+`papelLoading.work.*` adds the logo pill for a long workflow. A page that
+paints a progress bar of its own ends up with two of them, in two places: the
+student dashboard drew one across the top of its results column, which on that
+page is above the search box, so it read as a stray rule floating in the gap.
 
 ### Styling
 
@@ -304,6 +325,37 @@ closed early by a stray `</div>`, a dialog painted under its own backdrop, a
 `\b` regex that never matched at end-of-string.
 
 Seed realistic data, assert, then clean up. Never leave test rows behind.
+
+### When there is no running app (cloud and web sessions)
+
+Claude Code on the web, scheduled cloud agents and `/code-review ultra` all run
+against a plain checkout of this repository on Linux. There is no XAMPP, no
+MariaDB, no `.env`, no `uploads/` and no browser, so **none of the three steps
+above can be carried out there**. A session that tries to sign in over HTTP or
+launch headless Chrome is burning its turn on something that cannot work.
+
+Still worth doing without the app:
+
+- Read and change code, and say exactly what changed.
+- Sweep the whole tree for a pattern: the dead `style="..."` attributes, a role
+  check that covers `head_academic` but misses `admin` at level 2, a
+  `bind_param` type string whose length does not match its arguments.
+- Rewrite documentation, including the stale files under **Known gaps**.
+- Review a diff.
+
+Not possible there, and not to be claimed:
+
+- **Confirming a fix works.** Say "changed, not verified in the browser" and
+  leave the check to a session on the dev box. Several bugs here looked correct
+  in source and failed in the browser, and that history does not stop applying
+  just because the browser is missing.
+- **Anything that reads the database**: a column's ENUM, a row count, whether a
+  migration has run. The schema is not in the repository. Ask instead of
+  guessing, and recall that an invalid ENUM value is accepted silently.
+- **Running a migration** from `scripts/migrations/`.
+
+The Windows paths in this file (`C:/xampp/htdocs/capstone`, `C:/xampp/tmp`)
+describe the dev box, not the cloud checkout.
 
 ---
 
