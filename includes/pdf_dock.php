@@ -684,40 +684,64 @@ document.addEventListener('DOMContentLoaded', function () {
        once the footer scrolls into view, rather than lying over it. Both
        edges move with the page, so they are worked out again on every scroll
        and resize, and whenever the page itself changes height. */
-    var header = document.querySelector('.site-header');
-    var crumbs = document.querySelector('.crumb-bar');
-    var footer = document.querySelector('.site-footer');
-    var band   = { top: 57, bottom: 0 };
+    var header  = document.querySelector('.site-header');
+    var crumbs  = document.querySelector('.crumb-bar');
+    var footer  = document.querySelector('.site-footer');
+    var band    = { top: 57, bottom: 0 };
+    var written = { top: null, bottom: null };
     function placeTop() {
         var root = document.documentElement.style;
         if (header || crumbs) {
             var top = header ? header.getBoundingClientRect().bottom : 0;
             if (crumbs) top = Math.max(top, crumbs.getBoundingClientRect().bottom);
             band.top = Math.max(0, Math.round(top));
-            root.setProperty('--pdf-dock-top', band.top + 'px');
         }
         band.bottom = footer
             ? Math.max(0, Math.round(window.innerHeight - footer.getBoundingClientRect().top))
             : 0;
-        root.setProperty('--pdf-dock-bottom', band.bottom + 'px');
-    }
-    // Once a frame at most: a scroll fires far more often than the screen draws.
-    var placeQueued = false;
-    function queuePlace() {
-        if (placeQueued) return;
-        placeQueued = true;
-        requestAnimationFrame(function () { placeQueued = false; placeTop(); });
+        // Written only when it has changed: this runs on every scroll.
+        if ((header || crumbs) && band.top !== written.top) {
+            written.top = band.top;
+            root.setProperty('--pdf-dock-top', band.top + 'px');
+        }
+        if (band.bottom !== written.bottom) {
+            written.bottom = band.bottom;
+            root.setProperty('--pdf-dock-bottom', band.bottom + 'px');
+        }
     }
     placeTop();
     window.addEventListener('resize', placeTop);
-    window.addEventListener('scroll', queuePlace, { passive: true });
+    /* Every scroll, of whatever is doing the scrolling, heard on the way down
+       (capture), since a scroll inside an element does not bubble. This was the
+       window's own scroll event only, and a page that scrolls inside <body>
+       instead never sends one: the panel kept the edges it opened with, with a
+       gap under the navbar and the footer beneath it. That is how it was
+       reported, and it is reproduced by making <body> the scroller. A scroll
+       inside the panel (its pages) moves neither band and is left out.
+       Measured at once rather than on a queued frame: a browser sends scroll at
+       most once a frame already. */
+    document.addEventListener('scroll', function (e) {
+        if (e.target !== document && dock.contains(e.target)) return;
+        placeTop();
+    }, { capture: true, passive: true });
     /* Web fonts land after this runs and the header grows as they do, which
        would leave the seam open on the one page load that matters. The body is
        watched as well: a step of a form, or a section folding, moves the footer
        without any scroll at all. */
     if (window.ResizeObserver) {
-        if (header) { new ResizeObserver(placeTop).observe(header); }
-        new ResizeObserver(queuePlace).observe(document.body);
+        if (header) { new ResizeObserver(function () { placeTop(); }).observe(header); }
+        new ResizeObserver(function () { placeTop(); }).observe(document.body);
+    }
+    /* And looked at again twice a second for as long as the panel is beside
+       the page. The report above came from a machine whose cause could not be
+       pinned down here, so an edge moved some way not covered above is put
+       right within half a second instead of staying wrong until the next
+       scroll. It costs three measurements, and writes nothing unless an edge
+       has moved. Started and stopped with the panel's own open and close. */
+    var bandWatch = null;
+    function watchBands(on) {
+        if (on && !bandWatch) bandWatch = setInterval(placeTop, 500);
+        if (!on && bandWatch) { clearInterval(bandWatch); bandWatch = null; }
     }
 
     /* Announced so a page can get its own furniture out of the way: the
@@ -725,6 +749,9 @@ document.addEventListener('DOMContentLoaded', function () {
        a home, "open" means docked beside the page, and a panel sitting in its
        section announces nothing: it is not in anything's way. */
     function announce(name) {
+        // 'open' and 'close' are exactly when the panel starts and stops being beside the page.
+        if (name === 'open') watchBands(true);
+        if (name === 'close') watchBands(false);
         document.dispatchEvent(new CustomEvent('papel:pdf-dock-' + name));
     }
     function beside() { return dock.classList.contains('is-open') && mode !== 'inline'; }
