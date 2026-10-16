@@ -1340,7 +1340,10 @@ body.pdf-docked .doc-editor.is-expanded { right: var(--pdf-dock-w, 460px); }
    below the navbar to the bottom of the window; the panel otherwise stops at
    the breadcrumb strip and the footer, which left a sliver of the strip above
    it and the footer's links below it, in its column, with nothing over them. */
-body.doc-expanded .pdf-dock { top: 60px; bottom: 0; }
+/* Only while a box really is expanded. Nothing collapses a box when the step
+   changes, so the body class can outlive it, and keyed on the class alone this
+   would pin the panel to a box's edges with no box there to line up with. */
+body.doc-expanded:has(.doc-editor.is-expanded) .pdf-dock { top: 60px; bottom: 0; }
 
 /* While a section is expanded the chat and the accessibility button step out
    of the way: nothing is closed or reset, they are only hidden, so both come
@@ -7242,7 +7245,10 @@ function placeChatDockTop() {
     }
     placeChatDockTop();
     document.addEventListener('DOMContentLoaded', placeChatDockTop);
-    window.addEventListener('scroll', onMove, { passive: true });
+    /* Any scroll, heard on the way down: the window's own event never comes
+       when the page scrolls inside <body>, and the panel then kept the top it
+       started with (the PDF panel had the same fault; see includes/pdf_dock.php). */
+    document.addEventListener('scroll', onMove, { capture: true, passive: true });
     window.addEventListener('resize', onMove);
 })();
 
