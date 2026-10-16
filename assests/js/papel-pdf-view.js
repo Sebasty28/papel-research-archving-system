@@ -145,7 +145,12 @@
             if (!pdfDoc) return Promise.resolve();
 
             var base = availableWidth();
-            if (base <= 0) return Promise.resolve();
+            /* Nothing to draw into: the panel is hidden (minimised while this
+               document was still opening, or a folded section). The width is
+               forgotten, so that when the panel is shown again the resize
+               watcher sees a change and draws; keeping the last width it was
+               drawn at left a blank stage and a ring that never stopped. */
+            if (base <= 0) { lastWidth = 0; return Promise.resolve(); }
             lastWidth = base;
 
             var ratio = global.devicePixelRatio || 1;

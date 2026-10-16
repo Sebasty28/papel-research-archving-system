@@ -1636,7 +1636,8 @@ cfgOk.addEventListener('click', function () {
 cfgNo.addEventListener('click', closeConfirm);
 cfg.addEventListener('click', function (e) { if (e.target === cfg) closeConfirm(); });
 document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && cfg.classList.contains('open')) closeConfirm();
+    // Prevented, so the document panel behind it (includes/pdf_dock.php) stays open.
+    if (e.key === 'Escape' && cfg.classList.contains('open')) { e.preventDefault(); closeConfirm(); }
 });
 
 <?php if ($RC['review']): ?>
@@ -1707,7 +1708,7 @@ document.addEventListener('click', function (e) {
 document.getElementById('rcCancel').addEventListener('click', closeDialog);
 dlg.addEventListener('click', function (e) { if (e.target === dlg) closeDialog(); });
 document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && dlg.classList.contains('open')) closeDialog();
+    if (e.key === 'Escape' && dlg.classList.contains('open')) { e.preventDefault(); closeDialog(); }
 });
 
 // "Tick all" for a checklist group: the common case is that everything is

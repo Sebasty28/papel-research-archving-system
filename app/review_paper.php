@@ -681,7 +681,8 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('confirmNo').addEventListener('click', close);
     dlg.addEventListener('click', function (e) { if (e.target === dlg) close(); });
     document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape' && dlg.classList.contains('open')) close();
+        // Prevented, so the document panel behind it (includes/pdf_dock.php) stays open.
+        if (e.key === 'Escape' && dlg.classList.contains('open')) { e.preventDefault(); close(); }
     });
 });
 </script>
