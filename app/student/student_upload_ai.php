@@ -2431,6 +2431,39 @@ body > .crumb-bar {
     border: 1px solid var(--border);
 }
 
+/* ----- "Text loading" -----
+   An empty bubble, in the dog's own voice, holding the place the answer is
+   about to take. The wait used to be reported only by the bar across the top
+   of the window (loading_bar.php), which is far enough from the chat panel
+   that it read as the upload form saving; the request that fetches a reply now
+   opts out of that bar with papelQuiet and says so here instead. */
+.message.bot.is-typing {
+    display: flex;
+    align-items: center;
+    gap: .3rem;
+    /* Matches the height of a one-line reply, so the bubble does not resize
+       under the answer when the dots are swapped for it. */
+    padding: .75rem .875rem;
+}
+.typing-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--maroon);
+    animation: chatTyping 1.2s infinite ease-in-out;
+}
+.typing-dot:nth-child(2) { animation-delay: .18s; }
+.typing-dot:nth-child(3) { animation-delay: .36s; }
+@keyframes chatTyping {
+    0%, 60%, 100% { opacity: .3; transform: translateY(0); }
+    30%           { opacity: 1; transform: translateY(-3px); }
+}
+/* Stopped dots still have to show that something is coming, so they hold at a
+   readable strength rather than at the faint end of the cycle. */
+@media (prefers-reduced-motion: reduce) {
+    .typing-dot { animation: none; opacity: .55; }
+}
+
 /* Icon animations */
 @keyframes iconBounce {
     0%, 100% { transform: translateY(0); }
@@ -7489,6 +7522,75 @@ function flashPuppyState(state, ms) {
     puppyRevertTimer = setTimeout(function () { setPuppyState('welcome'); }, ms || 2600);
 }
 
+/* ----- "Text loading" -----
+   The dots that stand in for an answer while it is being fetched. They are put
+   where the reply will appear, which is the only place the student is looking
+   once they have pressed send; the request itself opts out of the bar at the
+   top of the page (papelQuiet, loading_bar.php) so the same wait is not
+   reported twice in two different corners of the window.
+
+   Counted rather than flagged, for the same reason loading_bar.php counts its
+   own: pressing Enter twice sends two messages, and the first reply back must
+   not take the dots down while the second is still coming. */
+const CHAT_TYPING_ID = 'chat-typing';
+let chatTypingJobs = 0;
+
+/* Held even when the reply is already in hand. An answer that lands in the same
+   instant as the question reads as a canned string rather than as something
+   written, and the bubble is worth nothing if it is never seen. */
+const CHAT_TYPING_MIN = 5;
+
+function showChatTyping() {
+    chatTypingJobs++;
+    const container = document.getElementById('chat-messages');
+    const since = Date.now();
+    if (!container || document.getElementById(CHAT_TYPING_ID)) return since;
+
+    const row = document.createElement('div');
+    row.className = 'msg-row';
+    row.id = CHAT_TYPING_ID;
+
+    /* The thinking face, and a mood the repaint understands: an engine that
+       changes mid-wait swaps the colour of this avatar too, rather than
+       leaving the dots signed by the other dog. */
+    const face = document.createElement('img');
+    face.className = 'msg-avatar';
+    face.alt = '';
+    face.dataset.mood = 'processing';
+    face.src = PUPPY_BASE + 'papel_' + puppyColour() + '_processing.gif';
+
+    const bubble = document.createElement('div');
+    bubble.className = 'message bot is-typing';
+    // Three bare spans say nothing to a screen reader on their own.
+    bubble.setAttribute('role', 'status');
+    bubble.setAttribute('aria-label', 'Corpus is typing');
+    for (let i = 0; i < 3; i++) {
+        const dot = document.createElement('span');
+        dot.className = 'typing-dot';
+        bubble.appendChild(dot);
+    }
+
+    row.appendChild(face);
+    row.appendChild(bubble);
+    container.appendChild(row);
+    container.scrollTop = container.scrollHeight;
+    return since;
+}
+
+function hideChatTyping() {
+    chatTypingJobs = chatTypingJobs > 0 ? chatTypingJobs - 1 : 0;
+    if (chatTypingJobs > 0) return;
+    const row = document.getElementById(CHAT_TYPING_ID);
+    if (row) row.remove();
+}
+
+/* Whatever is left of CHAT_TYPING_MIN since the dots went up; a reply that was
+   already slower than that waits no longer. */
+function chatTypingFloor(since) {
+    const left = CHAT_TYPING_MIN - (Date.now() - since);
+    return left > 0 ? new Promise(function (r) { setTimeout(r, left); }) : Promise.resolve();
+}
+
 async function sendMessage() {
     const input = document.getElementById('chat-input');
     const msg = input.value.trim();
@@ -7500,6 +7602,14 @@ async function sendMessage() {
     clearTimeout(puppyRevertTimer);          // a reaction still counting down must not
     setPuppyState('processing');             // overwrite the face mid-request
     const thinkingSince = Date.now();
+    const typingSince = showChatTyping();
+
+    /* What came back is settled first and written afterwards, so there is one
+       place the dots come down and it is always the line before the answer
+       goes up. Removing them from two branches left the reply sitting above
+       its own "typing" bubble for a frame. */
+    let reply = null;
+    let mood = null;
     try {
         /* student_assistant.php, not student_chatbot.php: free hosting's
            firewall answers 403 to any path containing "bot", so PUPPY could
@@ -7508,10 +7618,14 @@ async function sendMessage() {
         const res = await fetch('student_assistant.php', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({message: msg})
+            body: JSON.stringify({message: msg}),
+            /* The dots in the panel are this request's progress report; the
+               bar at the top of the page stays out of it. loading_bar.php */
+            papelQuiet: true
         });
         const data = await res.json();
         await puppyFinishThinking(thinkingSince);
+        await chatTypingFloor(typingSince);
         /* The engine can change under us, when the one that was answering runs
            out and the other takes over. The dog changes colour with it. */
         if (data && data.engine && String(data.engine) !== puppyEngine) {
@@ -7521,18 +7635,22 @@ async function sendMessage() {
         // A 200 carrying no reply is still a failure to the student, so the dog
         // reacts to what actually came back rather than to the status code.
         if (data && data.reply) {
-            addMessage(data.reply, 'bot');
-            flashPuppyState('successful', 3200);
+            reply = data.reply;
         } else {
-            addMessage('Error processing request', 'bot', 'alert');
-            flashPuppyState('alert', 4000);
+            reply = 'Error processing request';
+            mood = 'alert';
         }
     } catch (e) {
         console.error('Chatbot Error:', e);
         await puppyFinishThinking(thinkingSince);
-        addMessage('Connection error', 'bot', 'alert');
-        flashPuppyState('alert', 4000);
+        await chatTypingFloor(typingSince);
+        reply = 'Connection error';
+        mood = 'alert';
     }
+
+    hideChatTyping();
+    addMessage(reply, 'bot', mood);
+    flashPuppyState(mood ? 'alert' : 'successful', mood ? 4000 : 3200);
 }
 
 /* Switching model mid-conversation would otherwise leave the transcript in the
