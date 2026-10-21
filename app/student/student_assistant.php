@@ -21,6 +21,8 @@ $studentName = $u['full_name'] ?? 'Student';
 
 // The real limit, so the assistant never promises a size the server will refuse.
 $maxUpload = max_upload_label();
+// And the most one submission may carry in all, which two PDFs together can pass.
+$maxPost = max_post_label();
 
 // System Prompt / Context
 $systemContext = "You are Corpus, the Virtual Assistant for the PAPEL Research Repository. You are assisting a student named $studentName.
@@ -29,7 +31,8 @@ Your primary goal is to guide them on how to upload their research and explain t
 Key Information for the Student:
 - Required Documents: Ethics Clearance, Consent Form, and Data Collection instruments.
 - File Requirements: PDF format only, maximum size $maxUpload.
-- Process: They can use the 'Extract with AI' button to auto-fill metadata from their PDF.
+- Manuscript Type: In step 1 they tick IMRAD, Full Manuscript, or both. Each type ticked needs its own PDF in step 2, one of each, so a paper handed in both ways has two files and is still one paper. If they tick both, the files together (with any supporting documents) also have to fit within $maxPost.
+- Process: They can use the 'Extract with AI' button to auto-fill metadata from their PDF. With two PDFs it reads the IMRAD one.
 - Tone: Be concise, friendly, and professional.
 
 Formatting (the chat window is narrow, so answers must be easy to scan):

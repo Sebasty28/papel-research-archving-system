@@ -175,6 +175,25 @@ CREATE TABLE IF NOT EXISTS `paper_favorites` (
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
+-- paper_manuscripts
+--
+-- One row per manuscript file of a paper (IMRAD, Full Manuscript, or both).
+-- research_papers.file_path / gdrive_file_id / file_size mirror the primary
+-- one. No foreign key, so rows survive archiving; format is not an ENUM.
+--
+CREATE TABLE IF NOT EXISTS `paper_manuscripts` (
+  `manuscript_id` int(11) NOT NULL AUTO_INCREMENT,
+  `paper_id` int(11) NOT NULL,
+  `format` varchar(20) NOT NULL,
+  `file_path` varchar(500) NOT NULL DEFAULT '',
+  `gdrive_file_id` varchar(255) DEFAULT NULL,
+  `file_size` bigint(20) DEFAULT NULL,
+  `uploaded_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`manuscript_id`),
+  UNIQUE KEY `uq_paper_format` (`paper_id`,`format`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
 -- papers_archive
 --
 CREATE TABLE IF NOT EXISTS `papers_archive` (
@@ -317,7 +336,8 @@ CREATE TABLE IF NOT EXISTS `support_requests` (
 CREATE TABLE IF NOT EXISTS `supporting_documents` (
   `doc_id` int(11) NOT NULL AUTO_INCREMENT,
   `paper_id` int(11) NOT NULL,
-  `document_type` enum('ethics_clearance','consent_form','data_collection','other') NOT NULL,
+  `document_type` varchar(50) NOT NULL DEFAULT 'other',
+  `document_name` varchar(255) DEFAULT NULL,
   `file_path` varchar(500) NOT NULL,
   `gdrive_file_id` varchar(255) DEFAULT NULL,
   `uploaded_at` timestamp NOT NULL DEFAULT current_timestamp(),

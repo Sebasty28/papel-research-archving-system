@@ -64,6 +64,11 @@ $PDF_DOCK_MINIMISE  = !empty($PDF_DOCK_MINIMISE) && !$PDF_DOCK_HOME;
     top: var(--pdf-dock-top, 57px);
     right: 0;
     bottom: var(--pdf-dock-bottom, 0px);
+    /* Those two are only the resting values. placeTop() writes the live edges as
+       plain top and bottom on the panel itself, not as variables on <html>: a
+       variable on the root is inherited by every element, so each write made the
+       browser re-check the style of the whole page, text layer and all, and with
+       a thesis open that was 50 to 100ms a time, on every step of a scroll. */
     width: var(--pdf-dock-w);
     z-index: 900;
     display: none;
@@ -243,7 +248,10 @@ body.pdf-docked > main.wrap {
    what it has while that page is on its way. */
 .pdf-dock.is-inline {
     position: relative;
-    top: auto; right: auto; bottom: auto; left: auto;
+    /* !important because a panel pinned to a side has its top and bottom written
+       straight onto it by placeTop() (inline, which would otherwise win), and one
+       that has come back to its section must ignore whatever was left there. */
+    top: auto !important; bottom: auto !important; right: auto; left: auto;
     width: auto;
     height: min(80vh, 56rem);
     z-index: auto;
@@ -281,14 +289,27 @@ body.pdf-docked-left > main.wrap {
 /* The panel starts below the breadcrumb strip now, so the crumbs no longer
    need to make room for it on this side. */
 
-/* The navbar's menus (the bell, the avatar, the phone nav sheet) hang below
+/* The bars are in front of the panel, and the panel is behind them: from the
+   front, the navbar, then the breadcrumb strip and the footer, then the panel.
+
+   Its top and bottom are set from script as the page scrolls, and the browser
+   scrolls a page on its own thread while that script runs a frame or two
+   behind. On a quick scroll the panel's edge is therefore briefly where a bar
+   has already arrived. With the panel in front, that showed as the panel lying
+   over the strip and over the footer, flickering back into place; with the
+   bars in front, the edge just goes under them and the seam stays shut.
+
+   The navbar's menus (the bell, the avatar, the phone nav sheet) hang below
    the bar, into the space a docked panel starts in. The bar is its own
-   stacking context at 900, the panel's own level, and the panel comes later in
-   the page, so the menus opened underneath it and could not be seen. One step
-   up while a panel is docked puts them back on top. The bar itself never
-   overlaps the panel, which starts where the bar ends. */
+   stacking context, and at the panel's own level (900) it lost to the panel,
+   which comes later in the page, so the menus opened underneath it and could
+   not be seen. It stays above the strip too, which scrolls up under it. */
 body.pdf-docked .site-header,
-body.pdf-docked-left .site-header { z-index: 901; }
+body.pdf-docked-left .site-header { z-index: 903; }
+body.pdf-docked .crumb-bar,
+body.pdf-docked-left .crumb-bar,
+body.pdf-docked .site-footer,
+body.pdf-docked-left .site-footer { position: relative; z-index: 902; }
 
 /* The header is the handle for docking by drag. */
 .pdf-dock-grab { display: none; }
@@ -688,9 +709,9 @@ document.addEventListener('DOMContentLoaded', function () {
     var crumbs  = document.querySelector('.crumb-bar');
     var footer  = document.querySelector('.site-footer');
     var band    = { top: 57, bottom: 0 };
-    var written = { top: null, bottom: null };
+    var written = { top: null, bottom: null, header: null };
     function placeTop() {
-        var root = document.documentElement.style;
+        var headerEdge = header ? Math.max(0, Math.round(header.getBoundingClientRect().bottom)) : 0;
         if (header || crumbs) {
             var top = header ? header.getBoundingClientRect().bottom : 0;
             if (crumbs) top = Math.max(top, crumbs.getBoundingClientRect().bottom);
@@ -699,14 +720,30 @@ document.addEventListener('DOMContentLoaded', function () {
         band.bottom = footer
             ? Math.max(0, Math.round(window.innerHeight - footer.getBoundingClientRect().top))
             : 0;
-        // Written only when it has changed: this runs on every scroll.
-        if ((header || crumbs) && band.top !== written.top) {
-            written.top = band.top;
-            root.setProperty('--pdf-dock-top', band.top + 'px');
+        /* The two edges go onto the panel itself as plain top and bottom, and only
+           while it is pinned to the window: in its section it is an ordinary block,
+           and the stylesheet keeps it that way (see .is-inline). They used to be
+           custom properties on <html>, which every element inherits, so each
+           change re-checked the style of the whole page and its drawn text; with a
+           thesis open that took 50 to 100ms, on every step of a scroll, and the
+           panel trailed the bars by several hundred milliseconds. Written only
+           when changed: this runs on every scroll. */
+        if (mode !== 'inline') {
+            if ((header || crumbs) && band.top !== written.top) {
+                written.top = band.top;
+                dock.style.top = band.top + 'px';
+            }
+            if (band.bottom !== written.bottom) {
+                written.bottom = band.bottom;
+                dock.style.bottom = band.bottom + 'px';
+            }
         }
-        if (band.bottom !== written.bottom) {
-            written.bottom = band.bottom;
-            root.setProperty('--pdf-dock-bottom', band.bottom + 'px');
+        /* What is left on <html> is the navbar's own edge, which a panel in its
+           section scrolls clear of (scroll-margin-top). It moves only when the
+           bar's height does, so it is written almost never. */
+        if (header && headerEdge !== written.header) {
+            written.header = headerEdge;
+            document.documentElement.style.setProperty('--pdf-dock-top', headerEdge + 'px');
         }
     }
     placeTop();
@@ -819,7 +856,11 @@ document.addEventListener('DOMContentLoaded', function () {
         dock.querySelectorAll('[data-dock-to]').forEach(function (b) {
             b.hidden = b.getAttribute('data-dock-to') === next;
         });
+        /* Pinned to a side it is given its edges (the cache is cleared so they are
+           written now); back in its section it gives them up. */
+        written.top = written.bottom = null;
         if (next !== 'inline') { placeTop(); applyStored(); }
+        else { dock.style.top = ''; dock.style.bottom = ''; }
         fitInline();
         var now = beside();
         if (now && !was) announce('open');

@@ -534,10 +534,53 @@ function delete_from_gdrive(string $fileId): bool
 }
 
 /**
- * Removes a paper's main PDF and all of its supporting documents from Google Drive,
- * then clears their gdrive_file_id references in the database. Used when a submission
- * is declined so rejected files stop consuming Drive storage. Returns the number of
- * Drive files successfully deleted.
+ * Every Google Drive file id a paper still holds: its manuscript file or files,
+ * the copy of the primary one that sits on the paper itself, and its supporting
+ * documents. Each id once.
+ *
+ * Read before a resubmission replaces them. A paper that was withdrawn (not
+ * returned, which purges them) goes back to draft with its Drive files intact,
+ * and submitting it again files new ones; without this the old ones stayed on
+ * Drive, reachable by nobody, for good.
+ */
+function paper_drive_file_ids(int $paperId): array
+{
+    $ids = [];
+    if ($paperId <= 0) return $ids;
+
+    try {
+        $conn = db();
+        $queries = [
+            "SELECT gdrive_file_id FROM research_papers WHERE paper_id=?",
+            "SELECT gdrive_file_id FROM supporting_documents WHERE paper_id=?",
+        ];
+        if (function_exists('paper_manuscripts_ready') && paper_manuscripts_ready()) {
+            $queries[] = "SELECT gdrive_file_id FROM paper_manuscripts WHERE paper_id=?";
+        }
+        foreach ($queries as $sql) {
+            $q = $conn->prepare($sql);
+            if (!$q) continue;
+            $q->bind_param('i', $paperId);
+            $q->execute();
+            foreach ($q->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
+                $id = trim((string)($row['gdrive_file_id'] ?? ''));
+                if ($id !== '') $ids[$id] = $id;
+            }
+            $q->close();
+        }
+    } catch (Exception $e) {
+        error_log('paper_drive_file_ids error for paper ' . $paperId . ': ' . $e->getMessage());
+    }
+
+    return array_values($ids);
+}
+
+/**
+ * Removes a paper's manuscript file or files (IMRAD, Full Manuscript, or both)
+ * and all of its supporting documents from Google Drive, then clears their
+ * gdrive_file_id references in the database. Used when a submission is declined
+ * so rejected files stop consuming Drive storage. Returns the number of Drive
+ * files successfully deleted.
  */
 function purge_paper_drive_files(int $paperId): int
 {
@@ -547,14 +590,37 @@ function purge_paper_drive_files(int $paperId): int
     try {
         $conn = db();
 
-        // Main paper file
+        /* Every manuscript file first. research_papers.gdrive_file_id mirrors the
+           primary one of them, so the same Drive file is met a second time below;
+           the ones already deleted are remembered so it is neither asked for again
+           nor counted twice. */
+        $gone = [];
+        if (function_exists('paper_manuscripts_ready') && paper_manuscripts_ready()) {
+            $ms = $conn->prepare("SELECT manuscript_id, gdrive_file_id FROM paper_manuscripts
+                                   WHERE paper_id=? AND gdrive_file_id IS NOT NULL AND gdrive_file_id != ''");
+            $ms->bind_param('i', $paperId);
+            $ms->execute();
+            $msRes = $ms->get_result();
+            while ($m = $msRes->fetch_assoc()) {
+                if (delete_from_gdrive($m['gdrive_file_id'])) {
+                    $deleted++;
+                    $gone[$m['gdrive_file_id']] = true;
+                    $mu = $conn->prepare("UPDATE paper_manuscripts SET gdrive_file_id=NULL WHERE manuscript_id=?");
+                    $mu->bind_param('i', $m['manuscript_id']);
+                    $mu->execute();
+                }
+            }
+        }
+
+        // The paper's own copy of its primary file's id
         $stmt = $conn->prepare("SELECT gdrive_file_id FROM research_papers WHERE paper_id=? LIMIT 1");
         $stmt->bind_param('i', $paperId);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         if ($row && !empty($row['gdrive_file_id'])) {
-            if (delete_from_gdrive($row['gdrive_file_id'])) {
-                $deleted++;
+            $already = isset($gone[$row['gdrive_file_id']]);
+            if ($already || delete_from_gdrive($row['gdrive_file_id'])) {
+                if (!$already) $deleted++;
                 $upd = $conn->prepare("UPDATE research_papers SET gdrive_file_id=NULL WHERE paper_id=?");
                 $upd->bind_param('i', $paperId);
                 $upd->execute();

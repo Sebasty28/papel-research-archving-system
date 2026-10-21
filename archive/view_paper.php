@@ -145,6 +145,14 @@ if (!$can_view_file && $u && $u['user_role'] === 'student') {
     $can_view_file = student_manuscript_access((int)$u['user_id'], $id);
 }
 
+/* The paper's manuscript files that are actually there: one, or two when it was
+   handed in as both IMRAD and Full Manuscript. A librarian's grant is for the
+   paper, not for a file, so it covers every one of them. */
+$msFiles = array_values(array_filter(
+    paper_manuscript_entries($id, $paper),
+    function ($m) { return !empty($m['src']); }
+));
+
 /* Handle Manual AI Regeneration.
 
    Nothing in the codebase posts regenerate_ai any more: the button that drove
@@ -233,11 +241,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_manuscript'])
             $existing['status'] === 'pending'
             || ($existing['status'] === 'granted' && strtotime($existing['expires_at']) > time())
         );
-        $fileHref = paper_file_url($paper['gdrive_file_id'] ?? null, $paper['file_path'] ?? null);
 
         if ($blocked) {
             flash('error', 'You already have a request in progress for this manuscript.');
-        } elseif (!$fileHref) {
+        } elseif (!$msFiles) {
             flash('error', 'This paper has no manuscript file on record.');
         } else {
             $stmt = $conn->prepare(
@@ -462,9 +469,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_manuscript'])
         /* The file this reader may open here, if there is one. When there is,
            the card itself is how it is opened: it starts folded, and unfolding
            it shows the manuscript (the script at the foot of the page). */
-        $ms_src = ($can_view && $can_view_file
-                   && paper_file_url($paper['gdrive_file_id'] ?? null, $paper['file_path'] ?? null))
-                ? paper_file_src('paper', $id) : null;
+        /* One file keeps the card as it has always been: it starts folded, and
+           unfolding it opens the file. Two files cannot both open at once, so
+           the card stays open and offers a tile for each. */
+        $ms_src   = ($can_view && $can_view_file && count($msFiles) === 1) ? $msFiles[0]['src'] : null;
+        $ms_tiles = ($can_view && $can_view_file && count($msFiles) > 1)   ? $msFiles : [];
         ?>
         <div class="pd-card" id="pd-sec-manuscript"<?= $ms_src ? ' data-collapse-default="closed" data-viewer="1"' : '' ?>>
             <h2><span class="material-symbols-outlined">folder_open</span> Manuscript</h2>
@@ -485,7 +494,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_manuscript'])
                    never-asked to show, each with its own line, followed by the
                    "ask" button (skipped only while a request is already
                    pending). */
-                $mrFileHref = paper_file_url($paper['gdrive_file_id'] ?? null, $paper['file_path'] ?? null);
+                $mrFileHref = $msFiles ? true : false;
                 $mr         = student_manuscript_request((int)$u['user_id'], $id);
                 ?>
                 <?php if (!$mrFileHref): ?>
@@ -512,7 +521,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_manuscript'])
                     <?php else: ?>
                         <div class="pd-note">
                             <span class="material-symbols-outlined">info</span>
-                            <span>The full manuscript can be unlocked for a limited time by a librarian.
+                            <span><?= count($msFiles) > 1 ? 'Both manuscript files can' : 'The full manuscript can' ?> be unlocked for a limited time by a librarian.
                                   Everything the authors wrote is on this page either way.</span>
                         </div>
                     <?php endif; ?>
@@ -533,7 +542,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_manuscript'])
                          they belong to the submission, not to the published paper. */ ?>
                 <div class="pd-note">
                     <span class="material-symbols-outlined">info</span>
-                    <span>The full manuscript is available to staff. Everything the authors
+                    <span><?= count($msFiles) > 1 ? 'The manuscript files are' : 'The full manuscript is' ?> available to staff. Everything the authors
                           wrote is on this page.</span>
                 </div>
             <?php else: ?>
@@ -546,6 +555,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_manuscript'])
                     <a class="pd-file" href="#pd-sec-manuscript" data-pdf-src="<?= e($ms_src) ?>" hidden>
                         <span class="pd-file-name">Manuscript</span>
                     </a>
+                <?php elseif ($ms_tiles): ?>
+                    <?php /* Two files: a tile for each, in the card's own panel
+                             (includes/pdf_dock.php). The tile showing closes it
+                             again and the other one switches to its file. */ ?>
+                    <div class="pd-files">
+                        <?php foreach ($ms_tiles as $m): ?>
+                            <a class="pd-file" href="#pd-sec-manuscript" data-pdf-src="<?= e($m['src']) ?>"
+                               title="Open <?= e($m['label']) ?> here">
+                                <span class="pd-file-name"><?= e($m['label']) ?></span>
+                                <span class="pd-file-ico"><span class="material-symbols-outlined">picture_as_pdf</span></span>
+                            </a>
+                        <?php endforeach; ?>
+                    </div>
                 <?php else: ?>
                     <div class="pd-note">
                         <span class="material-symbols-outlined">info</span>

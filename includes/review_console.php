@@ -395,6 +395,7 @@ $stmt->close();
 $reviewers = [];   // paper_id => review_level => name
 $feedback  = [];   // paper_id => latest decline feedback
 $docs      = [];   // paper_id => list of supporting documents
+$manuscripts = []; // paper_id => format => the paper's manuscript file rows
 if ($papers) {
     $ids = array_column($papers, 'paper_id');
     $in  = implode(',', array_fill(0, count($ids), '?'));
@@ -422,13 +423,16 @@ if ($papers) {
     $fb->close();
 
     $dq = $conn->prepare(
-        "SELECT paper_id, document_type, file_path, gdrive_file_id
+        "SELECT doc_id, paper_id, document_type, document_name, file_path, gdrive_file_id
          FROM supporting_documents WHERE paper_id IN ($in) ORDER BY doc_id ASC");
     $dq->bind_param($bt, ...$ids); $dq->execute();
     foreach ($dq->get_result()->fetch_all(MYSQLI_ASSOC) as $r) {
         $docs[$r['paper_id']][] = $r;
     }
     $dq->close();
+
+    // The manuscript files of every card on this page, in one query.
+    $manuscripts = paper_manuscript_rows($ids);   // paper_id => format => row
 }
 
 /* ---- Sidebar filter vocabularies --------------------------------------- */
@@ -469,9 +473,17 @@ function rc_qs(array $over = []): string {
     return http_build_query(array_filter(array_merge($base, $over), fn($v) => $v !== null && $v !== ''));
 }
 
-/** Where a reviewer opens the paper itself, or one of its attachments. */
-function rc_open_link(array $r): ?string {
-    return paper_file_url($r['gdrive_file_id'] ?? null, $r['file_path'] ?? null);
+/**
+ * Where a reviewer opens a paper's file or one of its attachments: PAPEL's own
+ * viewer, in a tab of its own. This used to be the Google Drive link, which sat
+ * outside everything else on the site: no rule about who may read the file
+ * applied to it, and it was the one place the Drive address was handed out. The
+ * viewer asks app/paper_file.php, which applies the same rules as every paper
+ * page, and the desk's own scopes (an adviser's students, the published and
+ * archived papers the Head and the Director read) are inside them.
+ */
+function rc_open_link(string $fileSrc): string {
+    return paper_viewer_url($fileSrc);
 }
 
 $ajax_results = isset($_GET['ajax']) && $_GET['ajax'] === '1';
@@ -1066,7 +1078,20 @@ html[data-view="rows"] .paper-list .card-status .paper-action { display: none; }
                     $fill      = count($steps) > 1 ? ($done - 1) / (count($steps) - 1) * 100 : 0;
                     $fill      = max(0, min(100, $fill));
                     $rv        = $reviewers[$pid] ?? [];
-                    $open      = rc_open_link($r);
+                    /* One link per file that is there: "Open paper" for a paper
+                       with one, "Open IMRAD" and "Open Full Manuscript" for a
+                       paper handed in both ways. */
+                    $mEntries  = paper_manuscript_entries($pid, $r, $manuscripts[$pid] ?? []);
+                    $openLinks = [];
+                    foreach ($mEntries as $m) {
+                        if (!$m['src']) continue;
+                        $openLinks[] = [
+                            'href'  => rc_open_link($m['src']),
+                            'label' => count($mEntries) > 1
+                                ? 'Open ' . manuscript_format_label((string)$m['format'])
+                                : 'Open paper',
+                        ];
+                    }
                     $actionable = !empty($rc_tabs[$tab]['act']) && $RC['review'];
                     ?>
                     <article class="paper-card">
@@ -1111,9 +1136,9 @@ html[data-view="rows"] .paper-list .card-status .paper-action { display: none; }
                             </div>
                             <div class="card-status">
                                 <span>Status: <span class="status-value"><?= e(workflow_status_badge_text($status, (bool)$fb)) ?></span></span>
-                                <?php if ($open): ?>
-                                    <a class="paper-action" href="<?= e($open) ?>" target="_blank" rel="noopener">Open paper</a>
-                                <?php endif; ?>
+                                <?php foreach ($openLinks as $ol): ?>
+                                    <a class="paper-action" href="<?= e($ol['href']) ?>" target="_blank" rel="noopener"><?= e($ol['label']) ?></a>
+                                <?php endforeach; ?>
                                 <?php /* Not offered on an archived paper: it is out of the public
                                          repository, which is what archiving it meant. */ ?>
                                 <?php if ($status === 'approved' && $rc_src !== 'archive'): ?>
@@ -1158,10 +1183,10 @@ html[data-view="rows"] .paper-list .card-status .paper-action { display: none; }
                         <?php if (!empty($docs[$pid])): ?>
                             <div class="rc-docs">
                                 <?php foreach ($docs[$pid] as $d): ?>
-                                    <?php $dhref = rc_open_link($d); if (!$dhref) continue; ?>
-                                    <a class="rc-doc-chip" href="<?= e($dhref) ?>" target="_blank" rel="noopener">
+                                    <?php if (!paper_file_url($d['gdrive_file_id'] ?? null, $d['file_path'] ?? null)) continue; ?>
+                                    <a class="rc-doc-chip" href="<?= e(rc_open_link(paper_file_src('doc', (int)$d['doc_id']))) ?>" target="_blank" rel="noopener">
                                         <span class="material-symbols-outlined">attach_file</span>
-                                        <?= e(supporting_doc_label($d['document_type'] ?? '')) ?>
+                                        <?= e(supporting_doc_label($d['document_type'] ?? '', $d['document_name'] ?? null)) ?>
                                     </a>
                                 <?php endforeach; ?>
                             </div>

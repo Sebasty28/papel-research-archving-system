@@ -11,7 +11,9 @@
  * upload form itself is submitted.
  *
  * Also opened from the file viewer on the paper pages (includes/pdf_dock.php),
- * with ?paper=<id> or ?doc=<id>: the same query app/paper_file.php takes. The
+ * with ?paper=<id>, ?manuscript=<id> or ?doc=<id>: the same query
+ * app/paper_file.php takes. The review desk and the analytics page open their
+ * files here too, in a tab of their own. The
  * document is then fetched from there rather than handed across, and the same
  * rules apply: no download or print, and no Drive link. Access is checked here
  * only to name the tab; paper_file.php checks it again before a byte leaves.
@@ -23,16 +25,28 @@ $u = current_user();
 $src = $srcName = $srcError = null;
 $qPaper = (int)($_GET['paper'] ?? 0);
 $qDoc   = (int)($_GET['doc'] ?? 0);
-if ($qPaper > 0 || $qDoc > 0) {
+$qMs    = (int)($_GET['manuscript'] ?? 0);
+if ($qPaper > 0 || $qDoc > 0 || $qMs > 0) {
     $conn = db();
     $doc  = null;
+    $ms   = null;
     if ($qDoc > 0) {
-        $st = $conn->prepare("SELECT paper_id, document_type FROM supporting_documents WHERE doc_id = ?");
+        $st = $conn->prepare("SELECT paper_id, document_type, document_name FROM supporting_documents WHERE doc_id = ?");
         $st->bind_param('i', $qDoc);
         $st->execute();
         $doc = $st->get_result()->fetch_assoc();
         $st->close();
         $qPaper = $doc ? (int)$doc['paper_id'] : 0;
+    } elseif ($qMs > 0) {
+        // One of a paper's manuscript files: the paper it belongs to decides who may read it.
+        if (paper_manuscripts_ready()) {
+            $st = $conn->prepare("SELECT paper_id, format FROM paper_manuscripts WHERE manuscript_id = ?");
+            $st->bind_param('i', $qMs);
+            $st->execute();
+            $ms = $st->get_result()->fetch_assoc();
+            $st->close();
+        }
+        $qPaper = $ms ? (int)$ms['paper_id'] : 0;
     }
     $paper = null;
     if ($qPaper > 0) {
@@ -52,8 +66,19 @@ if ($qPaper > 0 || $qDoc > 0) {
         }
     }
     if ($paper && paper_file_viewable($u, $paper, (bool)$doc)) {
-        $src     = $doc ? paper_file_src('doc', $qDoc) : paper_file_src('paper', $qPaper);
-        $srcName = $doc ? supporting_doc_label($doc['document_type'] ?? '') . ' · ' . $paper['title'] : $paper['title'];
+        if ($doc) {
+            $src     = paper_file_src('doc', $qDoc);
+            $srcName = supporting_doc_label($doc['document_type'] ?? '', $doc['document_name'] ?? null) . ' · ' . $paper['title'];
+        } elseif ($ms) {
+            $src     = paper_file_src('manuscript', $qMs);
+            /* Told apart by name only when there is a second file to tell it
+               from; the one file of a single-format paper is just the paper. */
+            $both    = count(paper_manuscript_rows([$qPaper])[$qPaper] ?? []) > 1;
+            $srcName = ($both ? manuscript_format_label((string)$ms['format']) . ' · ' : '') . $paper['title'];
+        } else {
+            $src     = paper_file_src('paper', $qPaper);
+            $srcName = $paper['title'];
+        }
     } else {
         $srcError = 'You do not have access to this file.';
     }

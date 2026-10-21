@@ -56,11 +56,31 @@ foreach ($docs->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
     if (!empty($row['file_path'])) $docPaths[] = $row['file_path'];
 }
 
+/* A paper sent back for revision is a draft again and still has the rows of the
+   manuscript it was submitted with. Like supporting_documents, paper_manuscripts
+   has no foreign key (its rows are meant to outlive the paper row when it is
+   archived), so nothing else would ever remove them. */
+$hasManuscripts = paper_manuscripts_ready();
+if ($hasManuscripts) {
+    $ms = $conn->prepare("SELECT file_path FROM paper_manuscripts WHERE paper_id = ?");
+    $ms->bind_param('i', $paper_id);
+    $ms->execute();
+    foreach ($ms->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
+        if (!empty($row['file_path'])) $docPaths[] = $row['file_path'];
+    }
+}
+
 $conn->begin_transaction();
 try {
     $delDocs = $conn->prepare("DELETE FROM supporting_documents WHERE paper_id = ?");
     $delDocs->bind_param('i', $paper_id);
     $delDocs->execute();
+
+    if ($hasManuscripts) {
+        $delMs = $conn->prepare("DELETE FROM paper_manuscripts WHERE paper_id = ?");
+        $delMs->bind_param('i', $paper_id);
+        $delMs->execute();
+    }
 
     $delFlow = $conn->prepare("DELETE FROM approval_workflow WHERE paper_id = ?");
     $delFlow->bind_param('i', $paper_id);

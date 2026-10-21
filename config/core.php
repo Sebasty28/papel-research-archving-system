@@ -1206,6 +1206,32 @@ function max_upload_label(): string {
 }
 
 /**
+ * The most one request may carry, in bytes: PHP's post_max_size. 0 when it is
+ * unlimited.
+ *
+ * max_upload_bytes() is the ceiling for a single file. A paper handed in as
+ * IMRAD and as Full Manuscript sends two of them in one request, together with
+ * any supporting documents, and PHP refuses the whole request when they pass
+ * this between them, however far each file is under its own limit. The upload
+ * page adds the sizes up against this before it sends anything.
+ */
+function max_post_bytes(): int {
+    $raw = trim((string)ini_get('post_max_size'));
+    if ($raw === '' || $raw === '-1') return 0;
+    $unit = strtolower($raw[strlen($raw) - 1]);
+    $n = (int)$raw;
+    if ($unit === 'g')      $n *= 1024 * 1024 * 1024;
+    elseif ($unit === 'm')  $n *= 1024 * 1024;
+    elseif ($unit === 'k')  $n *= 1024;
+    return max(0, $n);
+}
+
+/** The same limit as a label for a reader: "40MB". */
+function max_post_label(): string {
+    return floor(max_post_bytes() / 1048576) . 'MB';
+}
+
+/**
  * The URL of one of the site's own static files, stamped with when it last
  * changed.
  *
@@ -1224,9 +1250,24 @@ function asset_url(string $path): string {
     return rtrim(BASE_URL, '/') . '/' . $path . ($stamp ? '?v=' . $stamp : '');
 }
 
-/** Where PAPEL's viewer asks for a file: 'paper' for the manuscript, 'doc' for a supporting document. */
+/**
+ * Where PAPEL's viewer asks for a file: 'paper' for the paper's primary
+ * manuscript, 'manuscript' for one of its files by paper_manuscripts.manuscript_id,
+ * 'doc' for a supporting document.
+ */
 function paper_file_src(string $kind, int $id): string {
-    return rtrim(BASE_URL, '/') . '/app/paper_file.php?' . ($kind === 'doc' ? 'doc' : 'paper') . '=' . $id;
+    $param = $kind === 'doc' ? 'doc' : ($kind === 'manuscript' ? 'manuscript' : 'paper');
+    return rtrim(BASE_URL, '/') . '/app/paper_file.php?' . $param . '=' . $id;
+}
+
+/**
+ * The full-window viewer's address for a file, given the file's own address
+ * from paper_file_src(): the viewer takes the same query. For a link that opens
+ * the file in a tab of its own, where the page has no panel to show it in.
+ */
+function paper_viewer_url(string $fileSrc): string {
+    $q = strpos($fileSrc, '?');
+    return rtrim(BASE_URL, '/') . '/app/student/pdf_viewer.php' . ($q === false ? '' : substr($fileSrc, $q));
 }
 
 /** How many manuscripts a student currently holds open access to, across every paper. */
@@ -2291,6 +2332,174 @@ function manuscript_types_posted($posted): string
     return implode(', ', $picked);
 }
 
+/**
+ * The key a manuscript format is filed under in paper_manuscripts.format.
+ *
+ * The names in manuscript_types() are what a student reads and may be reworded;
+ * the key is what rows are matched on. Kept beside it so the two cannot drift.
+ */
+function manuscript_format_key(?string $name): ?string
+{
+    $name = trim((string)$name);
+    if ($name === 'IMRAD')           return 'imrad';
+    if ($name === 'Full Manuscript') return 'full';
+    return null;
+}
+
+/** The name a student reads for a format key. */
+function manuscript_format_label(string $key): string
+{
+    return $key === 'full' ? 'Full Manuscript' : 'IMRAD';
+}
+
+/**
+ * The formats a paper says it was handed in as, as keys, in the order its files
+ * are listed. Empty for an older paper that recorded none.
+ */
+function paper_declared_formats(?string $manuscriptType): array
+{
+    $found = [];
+    foreach (explode(',', (string)$manuscriptType) as $one) {
+        $key = manuscript_format_key($one);
+        if ($key !== null) $found[$key] = true;
+    }
+    $out = [];
+    foreach (['imrad', 'full'] as $key) {
+        if (isset($found[$key])) $out[] = $key;
+    }
+    return $out;
+}
+
+/**
+ * Which of a paper's formats is its primary file: the one research_papers'
+ * own file_path / gdrive_file_id / file_size mirror.
+ *
+ * The full manuscript is the complete record, so it wins when there is one.
+ * Everything that only needs "the paper's file" (the AI summary, archiving and
+ * restoring, a ?paper= link already out in the world) reads those columns, so
+ * every place that writes a paper's files has to keep them on this one.
+ */
+function paper_primary_format(array $formats): ?string
+{
+    if (in_array('full', $formats, true))  return 'full';
+    if (in_array('imrad', $formats, true)) return 'imrad';
+    return null;
+}
+
+/**
+ * Whether paper_manuscripts exists yet.
+ *
+ * The code can reach a server before its migration does, and a page that cannot
+ * read the table should go on showing the paper's own file, not stop. Asked
+ * once per request.
+ */
+function paper_manuscripts_ready(): bool
+{
+    static $ready = null;
+    if ($ready === null) {
+        $r = db()->query("SHOW TABLES LIKE 'paper_manuscripts'");
+        $ready = $r && $r->num_rows > 0;
+    }
+    return $ready;
+}
+
+/**
+ * The manuscript files of any number of papers, in one query.
+ *
+ * @return array<int, array<string, array>>  paper_id => format key => row
+ */
+function paper_manuscript_rows(array $paperIds): array
+{
+    $ids = [];
+    foreach ($paperIds as $id) {
+        if ((int)$id > 0) $ids[(int)$id] = (int)$id;
+    }
+    $ids = array_values($ids);
+    if (!$ids || !paper_manuscripts_ready()) return [];
+
+    $st = db()->prepare(
+        "SELECT manuscript_id, paper_id, format, file_path, gdrive_file_id, file_size
+           FROM paper_manuscripts
+          WHERE paper_id IN (" . implode(',', array_fill(0, count($ids), '?')) . ")
+          ORDER BY paper_id, FIELD(format, 'imrad', 'full')");
+    if (!$st) return [];
+    $st->bind_param(str_repeat('i', count($ids)), ...$ids);
+    $st->execute();
+    $out = [];
+    foreach ($st->get_result()->fetch_all(MYSQLI_ASSOC) as $r) {
+        $out[(int)$r['paper_id']][$r['format']] = $r;
+    }
+    $st->close();
+    return $out;
+}
+
+/**
+ * The manuscript files of one paper, as the pages list them.
+ *
+ * One entry per file: key, format ('imrad', 'full' or null), label, src (the
+ * viewer address, null when the file is not there), required and size in bytes.
+ *
+ * Two files are told apart by name, "Manuscript (IMRAD)" and "Manuscript (Full
+ * Manuscript)". One file, or none, is simply "Manuscript" as it always was, so a
+ * paper filed before there could be two reads exactly as it did. That holds even
+ * for an older paper ticked as both with one file: which of the two that file
+ * is was never recorded, and a label that guessed would be wrong half the time.
+ *
+ * A paper with no row of its own to read (filed before paper_manuscripts, or
+ * before the migration reached this server) falls back to its own file columns.
+ * $rows may be passed when a page has already fetched them for a whole list.
+ */
+function paper_manuscript_entries(int $paperId, array $paper, ?array $rows = null): array
+{
+    if ($rows === null) {
+        $rows = paper_manuscript_rows([$paperId])[$paperId] ?? [];
+    }
+
+    $present = [];
+    foreach (['imrad', 'full'] as $key) {
+        $r = $rows[$key] ?? null;
+        if ($r && paper_file_url($r['gdrive_file_id'] ?? null, $r['file_path'] ?? null)) {
+            $present[$key] = $r;
+        }
+    }
+
+    if (count($present) > 1) {
+        $out = [];
+        foreach ($present as $key => $r) {
+            $out[] = [
+                'key'      => 'manuscript_' . $key,
+                'format'   => $key,
+                'label'    => 'Manuscript (' . manuscript_format_label($key) . ')',
+                'src'      => paper_file_src('manuscript', (int)$r['manuscript_id']),
+                'required' => true,
+                'size'     => (int)($r['file_size'] ?? 0),
+            ];
+        }
+        return $out;
+    }
+    if (count($present) === 1) {
+        $key = array_keys($present)[0];
+        return [[
+            'key'      => 'manuscript',
+            'format'   => $key,
+            'label'    => 'Manuscript',
+            'src'      => paper_file_src('manuscript', (int)$present[$key]['manuscript_id']),
+            'required' => true,
+            'size'     => (int)($present[$key]['file_size'] ?? 0),
+        ]];
+    }
+
+    $has = paper_file_url($paper['gdrive_file_id'] ?? null, $paper['file_path'] ?? null);
+    return [[
+        'key'      => 'manuscript',
+        'format'   => null,
+        'label'    => 'Manuscript',
+        'src'      => $has ? paper_file_src('paper', $paperId) : null,
+        'required' => true,
+        'size'     => (int)($paper['file_size'] ?? 0),
+    ]];
+}
+
 function paper_types_retired(): array {
     return [
         'research' => 'Research Paper',
@@ -2609,20 +2818,29 @@ function paper_file_disk_path(?string $stored): ?string {
 /**
  * What a supporting document is called on screen.
  *
- * The copyright document is stored with an empty document_type: the column is
- * an enum that has no 'copyright_doc' member, so the value the uploader writes
- * is coerced to ''. Until that column is widened, an empty type means the
- * copyright document, which is how the rest of the site already reads it.
+ * 'other' is the optional document a student names themselves, and the name
+ * they typed is kept in document_name, so that is what it is called. Without a
+ * name (a row repaired by run_supporting_doc_type_repair.php could not recover
+ * one) it is simply "Other Document".
+ *
+ * An empty type is only ever met on a server the repair migration has not
+ * reached. Before document_type could hold more than four values, the
+ * copyright document was stored as an empty string (an ENUM turns a value it
+ * does not list into one), so an empty type is read as the copyright document
+ * for as long as such a row can still be there.
  */
-function supporting_doc_label(?string $type): string {
+function supporting_doc_label(?string $type, ?string $name = null): string {
+    $key = strtolower(trim((string)$type));
+    if ($key === 'other') {
+        $name = trim((string)$name);
+        return $name !== '' ? $name : 'Other Document';
+    }
     $labels = [
         'ethics_clearance' => 'Ethical Clearance',
         'consent_form'     => 'Consent Form',
         'data_collection'  => 'Data Collection Tool',
         'copyright_doc'    => 'Copyright / IP Document',
-        'other'            => 'Copyright / IP Document',
         ''                 => 'Copyright / IP Document',
     ];
-    $key = strtolower(trim((string)$type));
     return $labels[$key] ?? ucwords(str_replace('_', ' ', (string)$type));
 }

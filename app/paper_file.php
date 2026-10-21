@@ -19,8 +19,14 @@
  * to read them, as they did with Drive's viewer) but it keeps the ordinary
  * ways of downloading shut.
  *
- *   ?paper=<paper_id>   the manuscript
- *   ?doc=<doc_id>       a supporting document
+ *   ?paper=<paper_id>            the paper's primary manuscript
+ *   ?manuscript=<manuscript_id>  one of a paper's manuscript files (IMRAD or
+ *                                Full Manuscript, see paper_manuscripts)
+ *   ?doc=<doc_id>                a supporting document
+ *
+ * A manuscript file is read under exactly the rules of the paper it belongs
+ * to: it is a manuscript, never a supporting document, so the public page's
+ * readers and a librarian's grant cover it as they cover ?paper=.
  */
 require_once __DIR__ . '/../config/core.php';
 require_once __DIR__ . '/../config/gdrive_config.php';
@@ -47,12 +53,25 @@ session_write_close();
 
 $conn    = db();
 $docId   = (int)($_GET['doc'] ?? 0);
+$msId    = (int)($_GET['manuscript'] ?? 0);
 $paperId = (int)($_GET['paper'] ?? 0);
 $file    = null;
 
 if ($docId > 0) {
     $st = $conn->prepare("SELECT paper_id, file_path, gdrive_file_id FROM supporting_documents WHERE doc_id = ?");
     $st->bind_param('i', $docId);
+    $st->execute();
+    $file = $st->get_result()->fetch_assoc();
+    $st->close();
+    if (!$file) paper_file_refuse(404, 'This file could not be found.');
+    $paperId = (int)$file['paper_id'];
+} elseif ($msId > 0) {
+    /* The file is this row's; who may read it is the paper's say. The table is
+       only asked once it exists: a server the migration has not reached has no
+       such file to find. */
+    if (!paper_manuscripts_ready()) paper_file_refuse(404, 'This file could not be found.');
+    $st = $conn->prepare("SELECT paper_id, file_path, gdrive_file_id FROM paper_manuscripts WHERE manuscript_id = ?");
+    $st->bind_param('i', $msId);
     $st->execute();
     $file = $st->get_result()->fetch_assoc();
     $st->close();

@@ -64,6 +64,45 @@ same class Bootstrap generates. Every Bootstrap modal inherited its
 `z-index: 1100` and rendered *underneath* its own veil. It is now
 `.login-backdrop`. Do not reintroduce a class that Bootstrap also generates.
 
+### Fixed panels sit behind the bars, not over them
+
+The PDF panel (`includes/pdf_dock.php`) and Corpus (`#chat-widget`, upload page
+only) are `position: fixed`, and the panel's top and bottom are set from script
+on every scroll. The browser scrolls on its own thread and that script runs a
+frame or two behind it, so on a quick scroll a fixed edge is briefly where a bar
+has already arrived. With the panel in front of the bars, that showed as it
+lying over the breadcrumb strip and the footer. The order, front to back, is:
+
+| z-index | What |
+|---|---|
+| 903 | navbar while a panel is docked (900 otherwise) |
+| 902 | breadcrumb strip and footer (the strip only while a panel is docked; the footer also always on the upload page) |
+| 901 | Corpus |
+| 900 | the PDF panel |
+| 880 | scroll-to-top button, the docked chat |
+
+**A CSS variable written on `<html>` is a page-wide restyle.** Custom properties
+inherit, so changing one on the root makes the browser re-check every element on
+the page, including the PDF panel's text layer (thousands of spans for a
+thesis). The panels' edges were written that way on every step of a scroll: 50
+to 100ms a time with a thesis open, 2 seconds of style recalculation over one
+scripted scroll, and the panels trailed the bars by several hundred
+milliseconds (headers sliding under the strip, gaps above the footer). The
+PDF panel's edges are now plain `top`/`bottom` written on the panel itself
+(`placeTop()` in `pdf_dock.php`), and the chat's `--chat-lift` and
+`--chat-dock-top` live on the chat and are declared non-inheriting
+(`@property`). Anything that changes on every scroll step goes the same way,
+never on `:root`. Test it with a long PDF open: a one-line test PDF has no text
+layer to restyle and hides the problem entirely.
+
+Put a new fixed element on that ladder instead of reaching for a bigger number.
+Corpus follows the footer's visible height (`--chat-lift`, set by
+`watchChatLift()`): floating, he is lifted by it, so he rests above the footer
+rather than being buried by it on a page short enough to show it all the time;
+docked, the panel's bottom edge is that figure, so it ends at the footer's top.
+The footer runs the full width in front of a docked chat, as the navbar and the
+strip do, and as it already did for the PDF panel.
+
 ### `style="..."` attributes are dropped
 
 `style-src` in the CSP has no `'unsafe-inline'`, and that blocks style
@@ -94,6 +133,15 @@ centre instead of the approval tick. Repaired by
 
 Check the column's ENUM before inventing a value for it.
 
+`supporting_documents.document_type` went wrong the other way round: the ENUM
+did not list `copyright_doc`, and a named optional document was written under
+its own name, so both were stored as `''` and `supporting_doc_label()` quietly
+read `''` as the copyright document. It is now a `VARCHAR(50)` beside a
+`document_name` column (`run_supporting_doc_type_repair.php`). The `''` fallback
+in `supporting_doc_label()` stays for a server that has not run it yet. A new
+"kind" column should be a `VARCHAR` checked in PHP, as `paper_manuscripts.format`
+is, so a wrong value fails loudly instead of vanishing.
+
 ### A draft lives in two places, and both need the id
 
 `student_upload_ai.php` keeps the student's work twice: a row in
@@ -106,6 +154,12 @@ So anything that writes a draft to the server has to write the id back into the
 device copy too. Updating only the page's own `draftId` variable left a copy
 tagged 0 behind: the student saved, left the page, came back, answered
 "Continue", and the same paper was written a second time as a new draft.
+
+A draft holds **no PDF**, on the server or on Drive. The files stay in the
+browser: coming back to a draft, the student attaches them again, and the
+"Continue your draft?" prompt only lists the names they had used. That is
+deliberate (nothing is stored for work nobody has handed in), so do not add a
+"keep the saved file" path without asking. `save_draft` takes no `$_FILES`.
 
 ### `bind_param` type-string length
 
@@ -278,6 +332,46 @@ current_status <> 'draft' OR EXISTS (SELECT 1 FROM approval_workflow ...)
 The second half matters: a returned paper is back in `draft` but *was*
 submitted. Drafts nobody has been asked to look at are reported separately.
 
+### One paper, one or two manuscript files
+
+A student ticks IMRAD, Full Manuscript or both in Step 1, and
+`research_papers.manuscript_type` records it (`IMRAD`, `Full Manuscript`,
+`IMRAD, Full Manuscript`). A paper handed in both ways is **one paper with two
+files**, never two papers.
+
+The files live in `paper_manuscripts`, one row each (`paper_id`, `format` =
+`imrad` or `full`, `file_path`, `gdrive_file_id`, `file_size`). There is no
+foreign key, so the rows stay put when a paper is archived or restored.
+
+**The mirror rule.** `research_papers.file_path / gdrive_file_id / file_size`
+always describe the *primary* file: the Full Manuscript when there are two,
+otherwise the only one. Older readers depend on it (`archive/home.php`, the
+repositories, archive and restore, the AI summary, `?paper=` links already in
+circulation), so anything that writes a paper's file writes the mirror in the
+same request.
+
+Ask `config/core.php`, do not parse `manuscript_type` by hand:
+`paper_declared_formats()`, `paper_primary_format()`,
+`manuscript_format_label()`, `paper_manuscript_entries()` (what a page lists:
+label, viewer address, whether it is required) and `paper_manuscript_rows()`
+(one query for a whole page of papers). One file is labelled "Manuscript"; two
+are "Manuscript (IMRAD)" and "Manuscript (Full Manuscript)". A paper with no
+row (filed before the table existed) falls back to its own columns through
+`?paper=`.
+
+Each file is served by `app/paper_file.php?manuscript=<id>` and opened in
+PAPEL's viewer, which now includes the review desk (it used to link to Drive).
+Whoever may open one may open both, and a student's librarian grant covers both.
+
+Submitting is all-or-nothing: every file goes to Drive first, then one database
+transaction writes the paper, the draft merge, the manuscript rows and the
+supporting documents. If anything fails the transaction rolls back and the Drive
+files and staging copies that request made are deleted. Returning a paper
+deletes **both** Drive files (`purge_paper_drive_files()`), so the student
+attaches both again; withdrawing keeps them, and resubmitting deletes the ones
+it replaced. Extract with AI reads the IMRAD file when both are attached, since
+the form's editors are IMRAD-shaped.
+
 ### Programmes
 
 `programs_map()` and `program_code()` in `config/core.php`. Full name in the
@@ -300,10 +394,19 @@ php scripts/migrations/run_student_cohort_migration.php
 Recent ones: `run_student_cohort_migration.php` (academic_year, section),
 `run_account_expiry_migration.php` (expires_on),
 `run_notification_type_repair.php` (notices that lost their kind),
-`run_drop_otp_column.php` (removed `users.is_otp_exempt`; already applied).
+`run_drop_otp_column.php` (removed `users.is_otp_exempt`; already applied),
+`run_supporting_doc_type_repair.php` (`supporting_documents.document_type` from
+ENUM to `VARCHAR`, plus `document_name`),
+`run_paper_manuscripts_migration.php` (creates `paper_manuscripts` and backfills
+one row for every paper that already has a file).
+
+Run the last two on any other server before it takes this code. Until
+`paper_manuscripts` exists the pages fall back to the paper's own columns and
+the upload page refuses a paper ticked both ways (and says so), so nothing
+breaks, but nothing can be handed in twice either.
 
 Papers deleted from `research_papers` leave rows behind in `approval_workflow`,
-`paper_checklist` and `supporting_documents`. `papers_archive` is *meant* to
+`paper_checklist`, `supporting_documents` and `paper_manuscripts`. `papers_archive` is *meant* to
 outlive its papers — never treat its rows as orphans.
 
 ---

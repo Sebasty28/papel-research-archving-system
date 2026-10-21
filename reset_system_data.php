@@ -40,6 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['confirm_reset']) && $
         'paper_checklist',
         'imrad_checklist',
         'supporting_documents',
+        'paper_manuscripts',
         'paper_favorites',
         'analytics',
         'ai_processing_log',

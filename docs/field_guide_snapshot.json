@@ -1,5 +1,5 @@
 {
- "built": "2026-10-21 09:46",
+ "built": "2026-10-21 16:31",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -23,7 +23,7 @@
    "lines": 19
   },
   "analytics/paper_analysis.php": {
-   "lines": 239
+   "lines": 240
   },
   "app/admin/admin_manage_faculty.php": {
    "lines": 526
@@ -89,19 +89,19 @@
    "lines": 144
   },
   "app/paper_file.php": {
-   "lines": 136
+   "lines": 155
   },
   "app/review_paper.php": {
-   "lines": 832
+   "lines": 841
   },
   "app/student/paper_details.php": {
-   "lines": 717
+   "lines": 729
   },
   "app/student/pdf_viewer.php": {
-   "lines": 306
+   "lines": 331
   },
   "app/student/student_assistant.php": {
-   "lines": 165
+   "lines": 168
   },
   "app/student/student_cancel_submission.php": {
    "lines": 104
@@ -110,7 +110,7 @@
    "lines": 824
   },
   "app/student/student_draft_delete.php": {
-   "lines": 119
+   "lines": 139
   },
   "app/student/student_submit.php": {
    "lines": 26
@@ -119,7 +119,7 @@
    "lines": 433
   },
   "app/student/student_upload_ai.php": {
-   "lines": 8315
+   "lines": 8804
   },
   "app/support_requests.php": {
    "lines": 289
@@ -140,19 +140,19 @@
    "lines": 1081
   },
   "archive/view_paper.php": {
-   "lines": 980
+   "lines": 1002
   },
   "config/config.php": {
    "lines": 166
   },
   "config/core.php": {
-   "lines": 2629
+   "lines": 2847
   },
   "config/error_handler.php": {
    "lines": 169
   },
   "config/gdrive_config.php": {
-   "lines": 589
+   "lines": 655
   },
   "config/groq_config.php": {
    "lines": 582
@@ -248,7 +248,7 @@
    "lines": 124
   },
   "includes/pdf_dock.php": {
-   "lines": 1178
+   "lines": 1219
   },
   "includes/pdf_writer.php": {
    "lines": 416
@@ -260,7 +260,7 @@
    "lines": 217
   },
   "includes/review_console.php": {
-   "lines": 1734
+   "lines": 1759
   },
   "includes/scroll_jump.php": {
    "lines": 93
@@ -335,13 +335,13 @@
    "lines": 172
   },
   "reset_system_data.php": {
-   "lines": 160
+   "lines": 161
   },
   "scripts/build_field_guide.py": {
    "lines": 909
   },
   "scripts/field_guide_content.py": {
-   "lines": 858
+   "lines": 872
   },
   "scripts/gdrive_keepalive.php": {
    "lines": 82
@@ -397,6 +397,9 @@
   "scripts/migrations/run_notification_type_repair.php": {
    "lines": 62
   },
+  "scripts/migrations/run_paper_manuscripts_migration.php": {
+   "lines": 97
+  },
   "scripts/migrations/run_password_audit_migration.php": {
    "lines": 73
   },
@@ -423,6 +426,9 @@
   },
   "scripts/migrations/run_support_requests_migration.php": {
    "lines": 86
+  },
+  "scripts/migrations/run_supporting_doc_type_repair.php": {
+   "lines": 114
   },
   "scripts/migrations/run_upload_update_migration.php": {
    "lines": 32

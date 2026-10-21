@@ -338,74 +338,52 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
     $pubLocation = trim($_POST['publication_location'] ?? '');
     $program     = trim($_POST['program_category'] ?? '') ?: $myProgram;
 
-    // A draft may carry a PDF or not. When one is sent it is stored locally so
-    // the student does not have to re-attach it next time; Drive is untouched.
-    $filePath = null;
-    if (!empty($_FILES['research_pdf']) && $_FILES['research_pdf']['error'] === UPLOAD_ERR_OK) {
-      $finfo = new finfo(FILEINFO_MIME_TYPE);
-      if ($finfo->file($_FILES['research_pdf']['tmp_name']) === 'application/pdf') {
-        $draftDir = __DIR__ . '/uploads/drafts/' . (int)$u['user_id'];
-        ensure_dir($draftDir);
-        $safe = safe_name(pathinfo($_FILES['research_pdf']['name'], PATHINFO_FILENAME));
-        $dest = $draftDir . '/' . time() . '_' . $safe . '.pdf';
-        if (move_uploaded_file($_FILES['research_pdf']['tmp_name'], $dest)) {
-          $filePath = 'uploads/drafts/' . (int)$u['user_id'] . '/' . basename($dest);
-        }
-      }
-    }
+    /* A draft is what was typed, and no file. A page cannot be handed a chosen
+       file back (the restore prompt says so plainly), so the PDF this used to
+       keep on the server was written on every save and never read again. With a
+       paper that has an IMRAD and a Full Manuscript it would have been two
+       uploads of up to the file limit each, on every save. The PDFs stay in the
+       browser until the paper is submitted, and nothing here touches Google
+       Drive: a file reaches Drive only when the form is submitted. */
 
     /* Only ever update this student's own unsubmitted draft. A draft that has
        since been submitted or deleted is no longer somewhere to save into:
        the id is dropped and the work is kept as a new draft instead, because
        refusing the save outright would lose it. */
-    $draftRowFile = null;
     if ($draftId > 0) {
-      $own = $conn->prepare("SELECT file_path FROM research_papers WHERE paper_id=? AND uploaded_by=? AND current_status='draft' LIMIT 1");
+      $own = $conn->prepare("SELECT paper_id FROM research_papers WHERE paper_id=? AND uploaded_by=? AND current_status='draft' LIMIT 1");
       $own->bind_param('ii', $draftId, $u['user_id']);
       $own->execute();
       $row = $own->get_result()->fetch_assoc();
       $own->close();
-      if ($row) $draftRowFile = $row['file_path'];
-      else      $draftId = 0;
+      if (!$row) $draftId = 0;
     }
 
     if ($draftId > 0) {
-      if ($filePath === null) {
-        $filePath = $draftRowFile;
-      } elseif ($draftRowFile) {
-        /* A replacement PDF arrived, so the one it replaces is now unreferenced.
-           Each save used to leave its predecessor behind: one draft saved four
-           times left four PDFs on disk, and only the last was ever read again.
-           Only files under this student's own draft folder are removed: a path
-           anywhere else belongs to a submitted paper and is not ours to touch. */
-        $mine = 'uploads/drafts/' . (int)$u['user_id'] . '/';
-        if (strpos($draftRowFile, $mine) === 0) {
-          $stale = __DIR__ . '/' . $draftRowFile;
-          if (is_file($stale)) { @unlink($stale); }
-        }
-      }
-
+      /* file_path is left out on purpose: a draft that was a submitted paper
+         once (sent back, or withdrawn) keeps the record of the file it was
+         submitted with until it is submitted again. */
       $sql = "UPDATE research_papers SET title=?, author_names=?, year=?, research_date=?, abstract=?,
-              imrad_content=?, keywords=?, file_path=?, paper_type=?, research_type=?, manuscript_type=?,
+              imrad_content=?, keywords=?, paper_type=?, research_type=?, manuscript_type=?,
               publication_status=?, publication_location=?, program_category=?
               WHERE paper_id=? AND uploaded_by=? AND current_status='draft'";
       $st = $conn->prepare($sql);
-      $st->bind_param('ssisssssssssssii',
+      $st->bind_param('ssissssssssssii',
         $title, $authors, $year, $researchDateParam, $abstract, $imradContent, $keywords,
-        $filePath, $paperType, $researchTy, $manuscript, $pubStatus, $pubLocation, $program,
+        $paperType, $researchTy, $manuscript, $pubStatus, $pubLocation, $program,
         $draftId, $u['user_id']);
       $st->execute();
     } else {
-      if ($filePath === null) { $filePath = ''; }
+      // file_path is NOT NULL with no default, and a draft has no file.
       $sql = "INSERT INTO research_papers
               (title, author_names, year, research_date, abstract, imrad_content, keywords,
                file_path, uploaded_by, current_status, paper_type, research_type, manuscript_type,
                publication_status, publication_location, program_category)
-              VALUES (?,?,?,?,?,?,?,?,?,'draft',?,?,?,?,?,?)";
+              VALUES (?,?,?,?,?,?,?,'',?,'draft',?,?,?,?,?,?)";
       $st = $conn->prepare($sql);
-      $st->bind_param('ssisssssissssss',
+      $st->bind_param('ssissssissssss',
         $title, $authors, $year, $researchDateParam, $abstract, $imradContent, $keywords,
-        $filePath, $u['user_id'], $paperType, $researchTy, $manuscript,
+        $u['user_id'], $paperType, $researchTy, $manuscript,
         $pubStatus, $pubLocation, $program);
       $st->execute();
       $draftId = $conn->insert_id;
@@ -481,12 +459,23 @@ if ($draftRow) {
       'program_category'     => $draftRow['program_category'],
     ], $sections),
     'status' => $draftRow['publication_status'],
-    'file'   => $draftRow['file_path'],
   ];
 }
 
 // Final submission step
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'upload_paper') {
+  /* A submission is all or nothing. Everything this request makes is kept where
+     the catch below can reach it, so that if anything fails once the first file
+     has reached Google Drive, the Drive files are deleted again, the staging
+     copies removed and the database rolled back. A student who tries again is
+     then not met by a half-made paper, or by files on Drive that nothing points
+     to. A paper handed in both ways has two files to take back, which is the
+     reason this is here. */
+  $driveMade   = [];     // Drive file ids made by this request
+  $stagedFiles = [];     // staging copies that may still be on disk
+  $stagingDirs = [];     // staging folders, removed if they are left empty
+  $inTx        = false;
+
   try {
     csrf_verify();
     
@@ -515,9 +504,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
       }
     }
 
-    // Validate PDF
-    validate_pdf_upload($_FILES['research_pdf']);
-    $pdf = $_FILES['research_pdf']; 
+    /* The format or formats the paper is handed in as come first, because there
+       is one PDF to find for each of them and none for a format that was not
+       ticked. The browser will not leave step 1 without one, but the browser is
+       not the thing being trusted. */
+    $manuscriptType = manuscript_types_posted($_POST['manuscript_type'] ?? []);
+    if ($manuscriptType === '') {
+        throw new UserFacingException('Please choose at least one manuscript type.');
+    }
+    $formats = paper_declared_formats($manuscriptType);
+    $dual    = count($formats) > 1;
+    if ($dual && !paper_manuscripts_ready()) {
+        throw new UserFacingException(
+            'Handing a paper in both ways needs a system update that has not been installed on this server yet. '
+          . 'Tick one manuscript type for now, or ask your administrator to run the update.');
+    }
+
+    // One PDF for each format that was ticked.
+    $pdfs = [];
+    foreach ($formats as $fmt) {
+        $label = manuscript_format_label($fmt);
+        $f = $_FILES['pdf_' . $fmt] ?? null;
+        // A page opened before this update still posts its one file as research_pdf.
+        if ((!$f || ($f['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE)
+                && !$dual && !empty($_FILES['research_pdf'])) {
+            $f = $_FILES['research_pdf'];
+        }
+        if (!$f || ($f['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+            throw new UserFacingException('Please attach your ' . $label . ' PDF.');
+        }
+        try {
+            validate_pdf_upload($f);
+        } catch (Exception $bad) {
+            throw new UserFacingException('Your ' . $label . ' PDF cannot be used: ' . $bad->getMessage());
+        }
+        $pdfs[$fmt] = $f;
+    }
+    // A file for a format that was not ticked is refused, not quietly stored.
+    foreach (['imrad', 'full'] as $fmt) {
+        $f = $_FILES['pdf_' . $fmt] ?? null;
+        if (!in_array($fmt, $formats, true) && $f && ($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+            throw new UserFacingException(
+                'A ' . manuscript_format_label($fmt) . ' PDF was attached, but that manuscript type is not ticked. '
+              . 'Tick it in step 1, or remove the file.');
+        }
+    }
     
     /* The program decides which folder the paper is filed under and how it is
        counted in every report, so it has to be a real answer. If the form did
@@ -592,13 +623,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     
     // New Fields
     $researchType = trim($_POST['research_type'] ?? '');
-    $manuscriptType = manuscript_types_posted($_POST['manuscript_type'] ?? []);
-    
-    /* The browser refuses to leave step 1 without one of these, but the browser
-       is not the thing being trusted. */
-    if ($manuscriptType === '') {
-        throw new Exception('Please choose at least one manuscript type.');
-    }
 
     // Handle paper status
     $paperStatusArr = $_POST['paper_status'] ?? [];
@@ -625,48 +649,76 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     // }
 
 
-    // 3. Special Requirements: BSIT Code Upload
-    // Create submission folder structure
+    // 3. Each file is staged, then put on Google Drive in an organised structure.
     $y = date('Y'); $m = date('m');
     $unique = uniqid('paper_', true);
     $safeTitle = safe_name($title);
     if(strlen($safeTitle)> 30) $safeTitle = substr($safeTitle, 0, 30);
     $submissionFolder = "{$unique}_{$safeTitle}";
-    
-    $destDir = __DIR__ . "/uploads/research/$programFolder/$paperType/$y/$m/$submissionFolder"; 
+
+    $destDir = __DIR__ . "/uploads/research/$programFolder/$paperType/$y/$m/$submissionFolder";
     ensure_dir($destDir);
-    
-    $safeBase = safe_name(pathinfo($pdf['name'], PATHINFO_FILENAME)); 
-    $destPath = $destDir . "/{$safeBase}.pdf";
-    
-    if (!move_uploaded_file($pdf['tmp_name'], $destPath)) { 
-      throw new Exception('Failed to store'); 
-    }
-    
+    $stagingDirs[] = $destDir;
+
     $sourceCodePath = null;
 
-    // Upload to Google Drive with organized structure
-    $gdriveId = null;
-    // Note: The gdrive function receives the local path, not the URL path. This is correct.
-    if (function_exists('upload_paper_to_gdrive')) {
-      $gdriveId = upload_paper_to_gdrive($destPath, $title . '.pdf', $programFolder, (string)$year, $paperType, $title, 'PAPEL - DOCUMENTS', $u['user_id']);
-    }
-    if (!$gdriveId) {
+    $primaryFormat = paper_primary_format($formats);
+    $stored = [];    // format => where its file ended up: relative path, size, Drive id
+    foreach ($formats as $fmt) {
+      $pdf = $pdfs[$fmt];
+
+      /* Two files can arrive with the same name, one chosen in each box, so with
+         two the format goes in front of it. */
+      $safeBase = safe_name(pathinfo($pdf['name'], PATHINFO_FILENAME));
+      $destPath = $destDir . '/' . ($dual ? $fmt . '_' : '') . "{$safeBase}.pdf";
+
+      if (!move_uploaded_file($pdf['tmp_name'], $destPath)) {
+        throw new Exception('Failed to store');
+      }
+      $stagedFiles[] = $destPath;
+
+      /* Named for the format when there are two, or both would be "<title>.pdf"
+         in the same Drive folder. A paper with one keeps the name it always had. */
+      $driveName = $dual ? $title . ' (' . manuscript_format_label($fmt) . ').pdf' : $title . '.pdf';
+      $gdriveId = null;
+      // Note: The gdrive function receives the local path, not the URL path. This is correct.
+      if (function_exists('upload_paper_to_gdrive')) {
+        $gdriveId = upload_paper_to_gdrive($destPath, $driveName, $programFolder, (string)$year, $paperType, $title, 'PAPEL - DOCUMENTS', $u['user_id']);
+      }
+      if (!$gdriveId) {
         throw new Exception('Google Drive upload failed. Please check system configuration.');
+      }
+      $driveMade[] = $gdriveId;
+
+      $stored[$fmt] = [
+        'rel'   => "uploads/research/$programFolder/$paperType/$y/$m/$submissionFolder/" . basename($destPath),
+        'size'  => filesize($destPath) ?: 0,
+        'drive' => $gdriveId,
+      ];
+
+      /* Drive is where a submitted paper lives. The local file was only ever the
+         staging copy the Drive upload reads from: keeping it meant every paper
+         was stored twice, for good. It goes now that Drive has it (the upload
+         throws above if it did not). A paper is read through the viewer, which
+         opens it on Drive, so nothing needs the local file once it is up there. */
+      @unlink($destPath);
     }
-    
-    // Insert paper
+
     /* Stored relative to app/student/, not as a full URL. The old absolute form
        baked this machine's BASE_URL into the row, so after the project moved to
        another computer (or was simply served on a different address) the file
        could not be found again, and nothing that needed the file rather than a
        link could resolve it at all. paper_file_url() still renders a correct
-       link from a relative path, and paper_file_disk_path() reads either form. */
-    $relPath = "uploads/research/$programFolder/$paperType/$y/$m/$submissionFolder/" . basename($destPath);
-    $fullUrlPath = $relPath;
-    $sz = filesize($destPath) ?: 0;
-    $null = null;
-    
+       link from a relative path, and paper_file_disk_path() reads either form.
+
+       The paper's own file columns hold its primary manuscript, the full one
+       when there are two, so everything that only needs "the paper's file" goes
+       on working; paper_manuscripts below holds every file. */
+    $primary     = $stored[$primaryFormat];
+    $fullUrlPath = $primary['rel'];
+    $sz          = $primary['size'];
+    $gdriveId    = $primary['drive'];
+
     /* A submitted paper goes to the Research Adviser. It used to be filed as
        'draft' (the same state as work never sent) so pressing Submit put the
        paper in the student's Drafts tab and no reviewer ever saw it. Nothing
@@ -676,15 +728,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     /* Submitting from a draft updates that draft rather than adding a second
        copy of the paper. It matters most for a returned paper: keeping the same
        paper_id keeps the reviewer's feedback and the approval history attached
-       to it, and leaves nothing behind in Drafts. */
+       to it, and leaves nothing behind in Drafts.
+
+       What that draft still holds is noted before it is replaced. A paper that
+       was withdrawn rather than returned comes back with its Drive files, which
+       the new ones now stand in for; and a draft saved before drafts stopped
+       keeping a PDF on this server may have one there. */
     $submitDraftId = (int)($_POST['draft_id'] ?? 0);
+    $oldDriveIds   = [];
+    $oldDraftPdf   = '';
     if ($submitDraftId > 0) {
-        $dchk = $conn->prepare("SELECT paper_id FROM research_papers WHERE paper_id=? AND uploaded_by=? AND current_status='draft'");
+        $dchk = $conn->prepare("SELECT paper_id, file_path FROM research_papers WHERE paper_id=? AND uploaded_by=? AND current_status='draft'");
         $dchk->bind_param('ii', $submitDraftId, $u['user_id']);
         $dchk->execute();
-        if (!$dchk->get_result()->fetch_row()) $submitDraftId = 0;
+        $drow = $dchk->get_result()->fetch_assoc();
         $dchk->close();
+        if ($drow) {
+            $oldDraftPdf = (string)$drow['file_path'];
+            $oldDriveIds = paper_drive_file_ids($submitDraftId);
+        } else {
+            $submitDraftId = 0;
+        }
     }
+
+    /* From the first row written to the last, one transaction: a failure part of
+       the way through takes the paper back out instead of leaving it filed with
+       some of its files. */
+    $conn->begin_transaction();
+    $inTx = true;
 
     // Try inserting with all columns (including new ones)
     $fullQuery = "INSERT INTO research_papers (title,author_names,year,research_date,abstract,imrad_content,keywords,file_path,file_size,uploaded_by,current_status,paper_type,gdrive_file_id,ai_summary,ai_methodology,ai_sample_size,ai_statistical_methods,ai_variables,ai_research_field, research_type, manuscript_type, publication_status, publication_location, program_category, source_code_path) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
@@ -694,34 +765,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
         if (!$stmt) throw new Exception('Database query preparation failed.');
 
         $stmt->bind_param('ssisssssiisssssssssssssss', $title,$authors,$year,$researchDateParam,$abstract,$imradContent,$keywords,$fullUrlPath,$sz,$u['user_id'],$initialStatus,$paperType,$gdriveId,$ai_summary,$ai_methodology,$ai_sample_size,$ai_statistical_methods,$ai_variables,$ai_research_field, $researchType, $manuscriptType, $pubStatus, $pubLocation, $programCategory, $sourceCodePath);
-        
+
         if (!$stmt->execute()) throw new Exception('Database insert failed.');
-        
+
     } catch (Exception $e) {
         // If error is "Unknown column", fallback to basic insert
         if (strpos($e->getMessage(), "Unknown column") !== false) {
             $basicQuery = "INSERT INTO research_papers (title,author_names,year,abstract,keywords,file_path,file_size,uploaded_by,current_status,paper_type,gdrive_file_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)";
             $stmt = $conn->prepare($basicQuery);
-            if (!$stmt) { @unlink($destPath); throw new Exception('Database query preparation failed.'); }
-            
+            if (!$stmt) throw new Exception('Database query preparation failed.');
+
             $stmt->bind_param('ssisssiisss', $title,$authors,$year,$abstract,$keywords,$fullUrlPath,$sz,$u['user_id'],$initialStatus,$paperType,$gdriveId);
-            if (!$stmt->execute()) { @unlink($destPath); throw new Exception('Database insert failed.'); }
+            if (!$stmt->execute()) throw new Exception('Database insert failed.');
         } else {
-            @unlink($destPath);
             throw $e;
         }
     }
-    
+
     $paper_id = $stmt->insert_id;
-
-    /* Drive is where a submitted paper lives. The local file was only ever the
-       staging copy the Drive upload reads from: keeping it meant every paper
-       was stored twice, for good. It goes now that Drive has it (the upload
-       throws above if it did not) and the row recording it exists.
-
-       A paper is read through the viewer, which opens it on Drive, so nothing
-       needs the local file once it is up there. */
-    if (is_file($destPath)) { @unlink($destPath); }
 
     /* The draft this submission grew out of becomes the submission itself, so
        the new row replaces it: the values are copied across, the draft's own
@@ -758,12 +819,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
         }
     }
 
+    /* The paper's manuscript files, under whichever id the paper ended up with.
+       A paper sent back or withdrawn still has the rows of what it was submitted
+       with, so they are replaced, never added to. A server the migration has not
+       reached has no such table, and the paper's own columns, which carry the one
+       file such a server can hold, stand alone. */
+    if (paper_manuscripts_ready()) {
+        $dm = $conn->prepare("DELETE FROM paper_manuscripts WHERE paper_id = ?");
+        $dm->bind_param('i', $paper_id);
+        $dm->execute();
+        $dm->close();
+
+        $im = $conn->prepare("INSERT INTO paper_manuscripts (paper_id, format, file_path, gdrive_file_id, file_size) VALUES (?,?,?,?,?)");
+        foreach ($stored as $fmt => $info) {
+            $im->bind_param('isssi', $paper_id, $fmt, $info['rel'], $info['drive'], $info['size']);
+            if (!$im->execute()) throw new Exception('Database insert failed.');
+        }
+        $im->close();
+    }
+
     // Supporting docs
-    $supDir = $destDir . "/supporting_documents"; 
+    $supDir = $destDir . "/supporting_documents";
     ensure_dir($supDir);
-    
+    $stagingDirs[] = $supDir;
+
     $finfo = new finfo(FILEINFO_MIME_TYPE);
-    
+
     // Store whatever was attached. This loop is unaffected by the gating
     // above: an optional document that *was* provided is filed exactly like
     // a required one, so nothing a student attaches is ever discarded.
@@ -774,9 +855,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
           $safe = safe_name(pathinfo($_FILES[$docType]['name'], PATHINFO_FILENAME));
           $dest = $supDir . "/{$paper_id}_{$docType}_{$safe}.pdf";
           if (move_uploaded_file($_FILES[$docType]['tmp_name'], $dest)) {
+            $stagedFiles[] = $dest;
             $rel = "uploads/research/$programFolder/$paperType/$y/$m/$submissionFolder/supporting_documents/" . basename($dest);
             $fullUrlRel = $rel;   // relative, for the reasons above
-            
+
             // Upload to Google Drive
             $docGdriveId = null;
             if (function_exists('upload_supporting_doc_to_gdrive')) {
@@ -785,29 +867,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
             if (!$docGdriveId) {
                 throw new Exception("Failed to upload supporting document ($docType) to Google Drive.");
             }
-            
+            $driveMade[] = $docGdriveId;
+
+            // document_type is a VARCHAR now, so 'copyright_doc' is kept as it is written.
             $st = $conn->prepare("INSERT INTO supporting_documents (paper_id,document_type,file_path,gdrive_file_id) VALUES (?,?,?,?)");
             $st->bind_param('isss', $paper_id, $docType, $fullUrlRel, $docGdriveId);
-            $st->execute();
-            
+            if (!$st->execute()) throw new Exception('Database insert failed.');
+
             // Drive has it and the row is written, so the staging copy can go.
             if (is_file($dest)) { @unlink($dest); }
           }
         }
       }
     }
-    
+
     // Handle optional other document
     if (!empty($_FILES['other_doc']) && $_FILES['other_doc']['error'] === UPLOAD_ERR_OK) {
       if ($finfo->file($_FILES['other_doc']['tmp_name']) === 'application/pdf') {
-        $otherName = trim($_POST['other_doc_name'] ?? '') ?: 'Other Document';
+        $otherName = mb_substr(trim($_POST['other_doc_name'] ?? '') ?: 'Other Document', 0, 255);
         $otherType = safe_name($otherName);
         $safe = safe_name(pathinfo($_FILES['other_doc']['name'], PATHINFO_FILENAME));
         $dest = $supDir . "/{$paper_id}_{$otherType}_{$safe}.pdf";
         if (move_uploaded_file($_FILES['other_doc']['tmp_name'], $dest)) {
+          $stagedFiles[] = $dest;
           $rel = "uploads/research/$programFolder/$paperType/$y/$m/$submissionFolder/supporting_documents/" . basename($dest);
           $fullUrlRel = $rel;   // relative, for the reasons above
-          
+
           // Upload to Google Drive
           $otherGdriveId = null;
           if (function_exists('upload_supporting_doc_to_gdrive')) {
@@ -816,20 +901,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
           if (!$otherGdriveId) {
               throw new Exception("Failed to upload optional document ($otherType) to Google Drive.");
           }
-          $st = $conn->prepare("INSERT INTO supporting_documents (paper_id,document_type,file_path,gdrive_file_id) VALUES (?,?,?,?)"); // Note: 'otherType' might be too long for the column
-          $st->bind_param('isss', $paper_id, $otherType, $fullUrlRel, $otherGdriveId);
-          $st->execute();
-          
+          $driveMade[] = $otherGdriveId;
+
+          /* Kept as 'other', with the name the student typed beside it. The name
+             used to be written into document_type, an ENUM with no such value,
+             which stored an empty string and lost the name. */
+          $st = $conn->prepare("INSERT INTO supporting_documents (paper_id,document_type,document_name,file_path,gdrive_file_id) VALUES (?,'other',?,?,?)");
+          $st->bind_param('isss', $paper_id, $otherName, $fullUrlRel, $otherGdriveId);
+          if (!$st->execute()) throw new Exception('Database insert failed.');
+
           // Drive has it and the row is written, so the staging copy can go.
           if (is_file($dest)) { @unlink($dest); }
         }
       }
     }
-    
+
+    $conn->commit();
+    $inTx = false;
+
+    /* The paper is filed, so what is on Drive and on disk is the paper's now and
+       no longer this request's to take back. */
+    $driveMade   = [];
+    $stagedFiles = [];
+
+    /* What the new files replaced can go. A paper that was withdrawn, not
+       returned, comes back to draft with its Drive files intact and has just been
+       filed again with new ones; without this the old ones stayed on Drive for
+       good, reachable by nobody. A returned paper has nothing to find here, its
+       files were purged when it was returned. Best effort: delete_from_gdrive()
+       never throws. */
+    foreach ($oldDriveIds as $oldId) {
+        delete_from_gdrive($oldId);
+    }
+    // And the copy an older draft kept on this server, but only from this student's own draft folder.
+    if ($oldDraftPdf !== '') {
+        $draftBase = realpath(__DIR__ . '/uploads/drafts/' . (int)$u['user_id']);
+        $oldReal   = realpath(__DIR__ . '/' . $oldDraftPdf);
+        if ($draftBase !== false && $oldReal !== false
+                && strpos($oldReal, $draftBase . DIRECTORY_SEPARATOR) === 0 && is_file($oldReal)) {
+            @unlink($oldReal);
+        }
+    }
+
     /* The folders held nothing but those staging files. rmdir only removes an
        empty directory, so anything still in there is left exactly as it is. */
-    if (is_dir($supDir))  { @rmdir($supDir); }
-    if (is_dir($destDir)) { @rmdir($destDir); }
+    foreach (array_reverse($stagingDirs) as $dir) {
+        if (is_dir($dir)) { @rmdir($dir); }
+    }
 
     /* Tell the Research Adviser there is something waiting. The adviser is the
        faculty member who created this student's account, which is the same link
@@ -851,9 +969,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     echo json_encode(['success'=>true,'message'=>'Upload complete','paper_id'=>$paper_id, 'redirect'=>$redirectUrl]);
     exit;
     
-  } catch (Exception $e) {
-    http_response_code(500);
-    $safe = safe_error_message($e, 'Upload failed. Please try again.');
+  } catch (Throwable $e) {
+    if ($inTx) { $conn->rollback(); }
+    /* Taken back, as the note at the top says: nothing this request put on Drive
+       or on disk is left behind, and the paper's own row went with the rollback.
+       Both are best effort, and neither throws. */
+    foreach ($driveMade as $made)     { delete_from_gdrive($made); }
+    foreach ($stagedFiles as $staged) { if (is_file($staged)) { @unlink($staged); } }
+    foreach (array_reverse($stagingDirs) as $dir) { if (is_dir($dir)) { @rmdir($dir); } }
+
+    /* The refusals written for the student to read ("Please attach your IMRAD
+       PDF", "Your Full Manuscript PDF cannot be used: ...") go through as they
+       are, as the extraction and draft handlers above already do. This handler
+       used to put the generic line over them as well, so a corrupt or missing
+       file was reported as a fault on our side. Anything else stays generic. */
+    $userFacing = ($e instanceof UserFacingException);
+    http_response_code($userFacing ? 422 : 500);
+    $safe = safe_error_message($e, $userFacing ? $e->getMessage() : 'Upload failed. Please try again.');
     echo json_encode(['success'=>false,'message'=>$safe['message'],'reference'=>$safe['reference']]);
     exit;
   }
@@ -1343,7 +1475,8 @@ body.pdf-docked .doc-editor.is-expanded { right: var(--pdf-dock-w, 460px); }
 /* Only while a box really is expanded. Nothing collapses a box when the step
    changes, so the body class can outlive it, and keyed on the class alone this
    would pin the panel to a box's edges with no box there to line up with. */
-body.doc-expanded:has(.doc-editor.is-expanded) .pdf-dock { top: 60px; bottom: 0; }
+/* !important: pdf_dock.php writes the panel's live top and bottom onto it inline. */
+body.doc-expanded:has(.doc-editor.is-expanded) .pdf-dock { top: 60px !important; bottom: 0 !important; }
 
 /* While a section is expanded the chat and the accessibility button step out
    of the way: nothing is closed or reset, they are only hidden, so both come
@@ -1962,11 +2095,28 @@ hr {
 }
 
 /* Chatbot Styles - Enhanced - LEFT SIDE */
+
+/* The two values the script keeps live on the chat as the page scrolls. Declared
+   so that they are not inherited: a changed custom property is otherwise
+   re-resolved on every descendant, which is the whole conversation here. No
+   initial value, so the fallbacks written where they are read still apply. */
+@property --chat-lift     { syntax: '*'; inherits: false; }
+@property --chat-dock-top { syntax: '*'; inherits: false; }
+
+/* Corpus floats over the page, never over the footer. He used to sit at 1000, in
+   front of everything, so on a page short enough to show the footer (or scrolled
+   to its end) he lay across its text. The footer is in front of him now (902,
+   against his 901), and watchChatLift() raises him by as much of the footer as is
+   showing, so he rests above it rather than being buried: until that catches up
+   with a quick scroll, the footer simply passes over him. 901 keeps him above the
+   PDF panel and the scroll-to-top button (900, 880) as before; the ladder of
+   levels is in CLAUDE.md. */
+.site-footer { position: relative; z-index: 902; }
 #chat-widget {
     position: fixed;
-    bottom: 1.5rem;
+    bottom: calc(1.5rem + var(--chat-lift, 0px));
     left: 1.5rem;
-    z-index: 1000;
+    z-index: 901;
     font-family: var(--font-body);
     display: flex;
     flex-direction: column;
@@ -2084,7 +2234,7 @@ hr {
     transform: rotate(45deg);
 }
 
-/* Silences the greeting for the rest of the visit.
+/* Ends the greeting for this page view.
 
    It is a way out, not part of the message, so it stays out of sight until the
    pointer is on the card. A button showing the whole time made a few words of
@@ -2410,7 +2560,11 @@ hr {
     /* placeChatDockTop() keeps --chat-dock-top on the band's live bottom edge;
        the sum is the resting value, and what is used if that never runs. */
     top: var(--chat-dock-top, calc(var(--nav-h, 56px) + var(--crumb-h, 36px)));
-    bottom: 0;
+    /* The same measurement that lifts the floating chat (watchChatLift): once the
+       footer is in view the panel stops at its top edge, with the footer running
+       the full width in front of it, instead of running on beside the footer and
+       leaving its message box down in the footer's row. 0 until then. */
+    bottom: var(--chat-lift, 0px);
     left: auto;
     right: auto;
     width: var(--chat-dock-w, 380px);
@@ -2462,12 +2616,19 @@ body.chat-docked-right {
    stopping at the panel's edge would leave an empty strip where the logo used
    to be, and the campus photo behind the band would start partway across.
 
+   The footer is the third band and does the same: the panel is behind it, and
+   ends at its top edge (see --chat-lift on the docked panel). Left to the
+   body's padding, the footer started where the panel ended and the panel ran on
+   down beside it, so the footer looked cut short with the chat's message box
+   sitting in its row.
+
    Only the chat's inset is given back here. The PDF preview pads the right as
    well and sits between the navbar's bands and the footer, so all three are
    let out over it by its own rules, with the preview's further down (search
    "PDF preview"). */
 body > .site-header,
-body > .crumb-bar {
+body > .crumb-bar,
+body > .site-footer {
     margin-left:  calc(-1 * var(--chat-inset-left, 0px));
     margin-right: calc(-1 * var(--chat-inset-right, 0px));
     width: calc(100% + var(--chat-inset-left, 0px) + var(--chat-inset-right, 0px));
@@ -2842,33 +3003,68 @@ body > .crumb-bar {
 }
 .form-check { display: flex; align-items: flex-start; gap: .5rem; margin-bottom: .35rem; }
 
-/* ===== Step 2: the drop target, the file, and the choice =====
-   The dashed border used to wrap all of this: the drop target, the file row
-   and both buttons, 325px of box. Only the top strip was ever a drop target
-   (the file input is sized to .upload-zone, nothing else), so the dashed area
-   promised a drop anywhere inside it and then ignored drops on the buttons. It
-   now sits on .upload-zone alone, which is the true target, and the file row
-   moves up beside it instead of taking a row of its own. At the 125% zoom a lot
-   of laptops run, the step used to run off the bottom of the screen.
+/* ===== Step 2: the drop target and the file, in one box =====
+   The dashed border used to wrap the whole step, the drop target, the file row
+   and both buttons, 325px of box, and promised a drop anywhere inside it that
+   only the top strip honoured. It then moved onto the drop target alone, with
+   the file row in a second box beside it. One choice does not need two
+   borders, and this is the step that has to fit a laptop screen, so they are
+   one box now: the drop target on the left, and on its right "No PDF
+   selected". The line is thin and solid; the dashes said "drop here", and the
+   icon and the words already do.
 
-   The file row stays outside .upload-zone on purpose: the invisible file input
-   covers that box completely, so anything inside it would open the file
-   browser on click, and the row's own click is "preview this PDF". */
-.ai-extraction-zone {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(12rem, 17rem);
-    gap: .75rem;
-    text-align: center;
+   Once a PDF is chosen the prompt has done its job and goes. The box shows the
+   file, its name over its size, with a tick where the upload icon was, and
+   nothing else.
+
+   The invisible file input still covers the whole box, so a click anywhere in
+   it opens the file browser (to replace the file) and a file can be dropped
+   anywhere on it. The one exception is the file's own name and size, once a
+   PDF is chosen: they sit above the input and are the switch for the preview
+   panel, as the separate row was. With no file that row lets the click
+   through, so it never stands between a student and the browser. */
+.ai-extraction-zone { text-align: center; }
+
+/* One box per manuscript format ticked in step 1: IMRAD, Full Manuscript, or
+   both. The column is spelled out (minmax(0, 1fr)) because an implicit one
+   sizes itself to its content, and a long file name then stretched the box
+   past the edge of the card instead of being cut short. */
+.pdf-slots { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+.pdf-slot { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; }
+/* The display above would otherwise win over the hidden attribute. */
+.pdf-slot[hidden] { display: none; }
+/* A name, and the limit they share, only when there are two boxes to tell
+   apart. One box needs neither. */
+.pdf-slot-label {
+    display: none;
+    grid-column: 1 / -1;
+    text-align: left;
+    font-family: var(--font-head);
+    font-size: .875rem;
+    font-weight: 600;
+    color: var(--maroon);
 }
+.pdf-slots-note {
+    display: none;
+    margin: 0;
+    text-align: left;
+    font-size: .8125rem;
+    color: var(--grey);
+}
+.pdf-slots.is-multi .pdf-slot-label,
+.pdf-slots.is-multi .pdf-slots-note { display: block; }
 
 .upload-zone {
+    /* Named because the narrow layout lines the file row up under the text. */
+    --zone-icon: 2rem;
+    --zone-gap: .875rem;
     position: relative;
     display: flex;
     align-items: center;
-    gap: .875rem;
+    gap: var(--zone-gap);
     padding: .875rem 1.25rem;
     background: var(--cream);
-    border: 2px dashed var(--maroon);
+    border: 1px solid var(--maroon);
     border-radius: var(--r-control, 4px);
     text-align: left;
     cursor: pointer;
@@ -2888,10 +3084,10 @@ body > .crumb-bar {
 }
 .upload-zone-icon {
     flex-shrink: 0;
-    font-size: 2rem;
+    font-size: var(--zone-icon);
     color: var(--maroon);
 }
-.upload-zone-text { min-width: 0; }
+.upload-zone-text { flex: 1 1 0; min-width: 0; }
 .upload-zone h4 {
     margin: 0;
     font-size: 1rem;
@@ -2905,36 +3101,75 @@ body > .crumb-bar {
     line-height: 1.4;
 }
 
-/* Beside the drop target, the same height as it. A flex row that wraps, so
-   the tick and the file name share a line and "Click to preview" takes the
-   next; overflow-wrap lets a long file name break instead of pushing out of
-   the box. */
-#pdf-indicator {
-    margin: 0;
+/* No file yet: "No PDF selected", at the right-hand end of the same box. Not a
+   .file-indicator: that is the bordered row the supporting documents use, and
+   this one has no box of its own to restyle. */
+.pdf-indicator {
+    flex: 0 1 auto;
+    margin: 0 0 0 auto;
+    max-width: 45%;
+    min-width: 0;
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    align-content: center;
-    justify-content: center;
+    justify-content: flex-end;
     column-gap: .375rem;
-    padding: .5rem .875rem;
-    min-width: 0;
-    overflow-wrap: anywhere;
+    padding: .25rem .5rem;
+    border-radius: var(--r-control, 4px);
+    font-size: .875rem;
+    font-weight: 500;
+    line-height: 1.35;
+    color: var(--grey);
+    white-space: nowrap;
+    /* Nothing to press until a file is chosen, so until then a click here is
+       the file browser's, from the input underneath. */
+    pointer-events: none;
 }
-#pdf-indicator .pdf-indicator-hint { flex-basis: 100%; }
-/* One line, cut with an ellipsis. It may shrink below its own width (the
-   min-width), which is what lets the ellipsis happen inside a flex row. */
-#pdf-indicator .pdf-indicator-name {
-    min-width: 0;
-    max-width: calc(100% - 1.5rem);
+
+/* A file is chosen: the row is the file itself, its name over its size, in the
+   place the prompt was (the prompt is hidden, and the tick has taken the icon's
+   place: see updatePdfIndicator). It hugs its text, so the rest of the box stays
+   the file browser's, and it sits above the invisible input as the switch for the
+   preview panel. Nowrap, so a long name is cut short beside the tick instead of
+   dropping onto a row of its own. */
+.upload-zone.has-file { flex-wrap: nowrap; }
+.upload-zone.has-file .upload-zone-text { display: none; }
+.pdf-indicator.selected {
+    position: relative;
+    z-index: 1;
+    pointer-events: auto;
+    cursor: pointer;
+    display: block;
+    margin: 0;
+    max-width: 100%;
+    padding: 0;
+    font-size: 1rem;
+    font-weight: 400;
+    text-align: left;
+    color: var(--ink);
+}
+/* One line, cut with an ellipsis: the row may shrink below its own width (its
+   min-width), and the name is a block that clips. The whole name is the row's
+   tooltip. */
+.pdf-indicator .pdf-indicator-name {
+    display: block;
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.35;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
+.pdf-indicator.selected:hover .pdf-indicator-name { text-decoration: underline; }
+.pdf-indicator .pdf-indicator-size {
+    display: block;
+    margin-top: .125rem;
+    font-size: .8125rem;
+    font-weight: 400;
+    line-height: 1.4;
+}
 
 .ai-extract-button-container {
-    grid-column: 1 / -1;
-    margin-top: .5rem;
+    margin-top: 1.25rem;
 }
 .ai-extract-question {
     margin: 0 0 .625rem;
@@ -3126,8 +3361,17 @@ body > .crumb-bar {
     .step-number { width: 38px; height: 38px; font-size: .875rem; }
     .step-connector { width: 46px; margin-top: 18px; }
     .upload-card { padding: 1.5rem; }
-    /* Too narrow for the file row to sit beside the drop target: under it. */
-    .ai-extraction-zone { grid-template-columns: minmax(0, 1fr); }
+    /* Too narrow for "No PDF selected" to sit beside the prompt: under the
+       text, in the same box, lined up with it. A chosen file keeps its one row,
+       beside the tick (.has-file stays nowrap). */
+    .upload-zone { flex-wrap: wrap; row-gap: .375rem; }
+    .pdf-indicator:not(.selected) {
+        flex: 1 1 calc(100% - var(--zone-icon) - var(--zone-gap));
+        margin: 0 0 0 calc(var(--zone-icon) + var(--zone-gap));
+        max-width: none;
+        justify-content: flex-start;
+        padding: .125rem 0;
+    }
     .supporting-docs-grid { grid-template-columns: 1fr; }
     /* Paired fields stack rather than squeezing into unusable columns. */
     .row > [class*="col-md-"] { flex: 0 0 100%; max-width: 100%; }
@@ -3174,8 +3418,13 @@ body > .crumb-bar {
     }
 
     /* Same switch as the container query above, for a browser without them. */
-    .ai-extraction-zone {
-        grid-template-columns: minmax(0, 1fr);
+    .upload-zone { flex-wrap: wrap; row-gap: .375rem; }
+    .pdf-indicator:not(.selected) {
+        flex: 1 1 calc(100% - var(--zone-icon) - var(--zone-gap));
+        margin: 0 0 0 calc(var(--zone-icon) + var(--zone-gap));
+        max-width: none;
+        justify-content: flex-start;
+        padding: .125rem 0;
     }
 }
 
@@ -3259,7 +3508,10 @@ body.pdf-docked > .crumb-bar {
 }
 body.pdf-docked > .site-footer {
     margin-right: calc(-1 * var(--pdf-dock-w));
-    width: calc(100% + var(--pdf-dock-w));
+    /* The chat's inset too, as the bars above: with the chat docked left as well
+       the footer's left edge is let out by the rule above, and without this its
+       right edge fell that far short of the window's. */
+    width: calc(100% + var(--chat-inset-left, 0px) + var(--pdf-dock-w));
 }
 
 /* With the chat docked left and the preview right, the form is squeezed from
@@ -3275,19 +3527,6 @@ body.pdf-docked > .site-footer {
 @media (min-width: 901px) and (max-width: 1250px) {
     :root:has(> body.pdf-docked.chat-docked-left) { --pdf-dock-w: 340px; }
     body.pdf-docked.chat-docked-left { --chat-dock-w: 300px; }
-}
-
-/* The file row becomes a control once a PDF is chosen. */
-.file-indicator.selected#pdf-indicator { cursor: pointer; }
-.file-indicator.selected#pdf-indicator:hover {
-    background: var(--white);
-    border-color: var(--dark-maroon);
-}
-.pdf-indicator-hint {
-    display: block;
-    margin-top: .125rem;
-    font-size: .6875rem;
-    color: var(--grey);
 }
 
 /* Too narrow to share the screen: the panel covers the page instead. The
@@ -3563,22 +3802,45 @@ body.pdf-docked > .site-footer {
                 <div class="section-header">
                   <h3 class="section-title">
                     <span class="step-badge">Step 2</span>
-                    Upload PDF &amp; Enter Details
+                    <span id="step2Title">Upload PDF &amp; Enter Details</span>
                   </h3>
                 </div>
 
                 <div class="ai-extraction-zone">
-                  <div class="upload-zone">
-                    <span class="material-symbols-outlined upload-zone-icon" aria-hidden="true">upload_file</span>
-                    <div class="upload-zone-text">
-                      <h4>Drop your PDF here or click to browse</h4>
-                      <p class="text-muted">Maximum file size: <?= e(max_upload_label()) ?></p>
+                  <?php /* One box for each manuscript type ticked in step 1: a paper
+                           handed in as IMRAD and as Full Manuscript is one paper with
+                           two files, one of each. They are all here and hidden; the
+                           script shows the ones that apply (syncPdfSlots), so a paper
+                           handed in one way sees the single box it always has. They
+                           are not "required" for the browser to enforce: the form is
+                           novalidate, and a hidden required input could never be
+                           satisfied. The step's own check and the server ask instead. */ ?>
+                  <div class="pdf-slots" id="pdfSlots">
+                    <?php foreach (['imrad' => 'IMRAD', 'full' => 'Full Manuscript'] as $slotKey => $slotLabel): ?>
+                    <div class="pdf-slot" data-format="<?= e($slotKey) ?>" hidden>
+                      <div class="pdf-slot-label"><?= e($slotLabel) ?> PDF</div>
+                      <div class="upload-zone">
+                        <span class="material-symbols-outlined upload-zone-icon" aria-hidden="true">upload_file</span>
+                        <div class="upload-zone-text">
+                          <h4>Drop your PDF here or click to browse</h4>
+                          <p class="text-muted">Maximum file size: <?= e(max_upload_label()) ?></p>
+                        </div>
+                        <?php /* The state of the file shares the box with the drop target. It
+                                 stays clear of the input's way until a file is chosen (see the
+                                 Step 2 note in the stylesheet). */ ?>
+                        <div class="pdf-indicator" id="pdf-indicator-<?= e($slotKey) ?>">
+                          <span class="material-symbols-outlined mi-18 text-muted">cancel</span> No PDF selected
+                        </div>
+                        <input type="file" class="form-control file-input js-pdf" id="pdfFile_<?= e($slotKey) ?>"
+                               name="pdf_<?= e($slotKey) ?>" data-format="<?= e($slotKey) ?>"
+                               accept="application/pdf" aria-label="<?= e($slotLabel) ?> PDF">
+                      </div>
                     </div>
-                    <input type="file" class="form-control file-input" id="pdfFile" name="research_pdf" accept="application/pdf" required>
-                  </div>
-
-                  <div class="file-indicator" id="pdf-indicator">
-                    <span class="material-symbols-outlined mi-18 text-muted">cancel</span> No PDF selected
+                    <?php endforeach; ?>
+                    <?php /* Both files travel in one request, which PHP refuses outright
+                             when they pass post_max_size between them, however far each
+                             is under its own limit. */ ?>
+                    <p class="pdf-slots-note">Both files, with any supporting documents, have to fit within <?= e(max_post_label()) ?> in all.</p>
                   </div>
 
                   <div class="ai-extract-button-container text-center">
@@ -3843,7 +4105,7 @@ body.pdf-docked > .site-footer {
                     <div class="review-value" id="reviewPaperType">-</div>
                   </div>
                   <div class="review-item">
-                    <div class="review-label">Research PDF:</div>
+                    <div class="review-label" id="reviewPDFLabel">Research PDF:</div>
                     <div class="review-value" id="reviewPDF">-</div>
                   </div>
                   <div class="review-item">
@@ -6313,6 +6575,109 @@ const papelDoc = (function () {
 })();
 
 /* =========================================================================
+   One PDF box for each manuscript format
+
+   Step 1 asks how the paper is written up: IMRAD, Full Manuscript, or both. A
+   paper handed in both ways is one paper with two files, so step 2 has a box
+   for each format that is ticked and for no other. All the boxes are in the
+   markup, hidden, and syncPdfSlots() shows the ones that apply.
+   ========================================================================= */
+const PDF_FORMATS = [
+    { key: 'imrad', label: 'IMRAD',           tick: 'mt_imrad' },
+    { key: 'full',  label: 'Full Manuscript', tick: 'mt_full'  }
+];
+// The most one request may carry, for adding the files up before they are sent. 0 means no limit.
+const POST_MAX       = <?= (int)max_post_bytes() ?>;
+const POST_MAX_LABEL = <?= json_encode(max_post_label()) ?>;
+
+function pdfInput(key)     { return document.getElementById('pdfFile_' + key); }
+function pdfIndicator(key) { return document.getElementById('pdf-indicator-' + key); }
+function pdfLabelOf(key)   { return PDF_FORMATS.filter(function (f) { return f.key === key; })[0].label; }
+function pdfTicked(key) {
+    const f = PDF_FORMATS.filter(function (x) { return x.key === key; })[0];
+    const box = f ? document.getElementById(f.tick) : null;
+    return !!(box && box.checked);
+}
+// The formats being handed in, in the order their files are listed.
+function pdfActive() { return PDF_FORMATS.filter(function (f) { return pdfTicked(f.key); }); }
+function pdfFileOf(key) {
+    const input = pdfInput(key);
+    return (input && input.files && input.files[0]) ? input.files[0] : null;
+}
+
+function clearPdf(key) {
+    const input = pdfInput(key);
+    if (!input) return;
+    input.value = '';
+    updatePdfIndicator(input);
+}
+
+/* Shows the boxes for the formats ticked in step 1 and hides the rest. Run on
+   every tick, on arriving at step 2, and when a saved draft puts the ticks back. */
+function syncPdfSlots() {
+    const active = pdfActive();
+    PDF_FORMATS.forEach(function (f) {
+        const input = pdfInput(f.key);
+        const slot = input ? input.closest('.pdf-slot') : null;
+        const on = pdfTicked(f.key);
+        if (slot) slot.hidden = !on;
+        if (!on && pdfFileOf(f.key)) {
+            /* Unticked after its file was chosen. The file goes with the box, and
+               the student is told, rather than finding the box empty or, worse,
+               a file for a format they did not mean to hand in being sent. */
+            clearPdf(f.key);
+            if (window.papelNote) {
+                window.papelNote('The ' + f.label + ' PDF was removed, because that manuscript type is no longer ticked.', false);
+            }
+        }
+    });
+    const wrap = document.getElementById('pdfSlots');
+    if (wrap) wrap.classList.toggle('is-multi', active.length > 1);
+    const title = document.getElementById('step2Title');
+    // The whole heading is one piece of text: it sits in a flex row, which would otherwise gap its halves.
+    if (title) title.textContent = (active.length > 1 ? 'Upload PDFs' : 'Upload PDF') + ' & Enter Details';
+}
+
+/* The file Extract with AI reads. The form's sections are IMRAD-shaped
+   (introduction, methodology, results and discussion, conclusion, references),
+   so the IMRAD PDF is the one to read when there is one; otherwise it is
+   whichever file is attached. */
+function extractionSource() {
+    const order = ['imrad', 'full'];
+    for (let i = 0; i < order.length; i++) {
+        const file = pdfTicked(order[i]) ? pdfFileOf(order[i]) : null;
+        if (file) return { key: order[i], label: pdfLabelOf(order[i]), file: file };
+    }
+    return null;
+}
+
+/* Every file on the form added up against what one request may carry. Two PDFs
+   that are each inside the limit can still be refused together, and PHP then
+   throws the whole request away, token and all, so the student is told here,
+   before anything is sent. Returns the sentence to show, or '' when it fits. */
+function filesTooBig() {
+    if (!POST_MAX) return '';
+    let total = 0;
+    document.querySelectorAll('#uploadForm input[type="file"]').forEach(function (input) {
+        if (input.files && input.files[0]) total += input.files[0].size;
+    });
+    // Room for the form's own text: small beside a PDF, but the sections can carry tables.
+    if (total + 262144 <= POST_MAX) return '';
+    return 'Your files add up to ' + (total / 1048576).toFixed(1) + 'MB, and the server takes at most '
+         + POST_MAX_LABEL + ' in one go, with everything else on this form. Please use smaller files.';
+}
+
+// What step 4 says the PDF is, or the PDFs are.
+function reviewPdfText() {
+    const active = pdfActive();
+    if (!active.length) return '-';
+    return active.map(function (f) {
+        const file = pdfFileOf(f.key);
+        return (active.length > 1 ? f.label + ': ' : '') + (file ? file.name : 'Not attached');
+    }).join('; ');
+}
+
+/* =========================================================================
    PDF preview
    The panel is includes/pdf_dock.php, the one the paper pages, the review
    desk and the public repository open papers in, so a student checks their
@@ -6321,9 +6686,14 @@ const papelDoc = (function () {
    reaches the server, and Google Drive, when the form is finally submitted.
    ========================================================================= */
 const papelPdfPreview = (function () {
-    function currentFile() {
-        const input = document.getElementById('pdfFile');
-        return (input && input.files && input.files[0]) ? input.files[0] : null;
+    /* Which box's file the panel is showing, so that clearing a box takes the
+       panel away only when it was the one on view. */
+    let shown = null;
+
+    function currentFile(key) { return pdfFileOf(key); }
+    // Named for its format only when there are two to tell apart.
+    function title(key) {
+        return (pdfActive().length > 1 ? pdfLabelOf(key) + ': ' : '') + pdfFileOf(key).name;
     }
     function dock() { return window.papelPdfDock || null; }
 
@@ -6332,18 +6702,28 @@ const papelPdfPreview = (function () {
            away, so the student can check they grabbed the right one before
            spending time on the rest of the form; clearing the choice takes the
            panel, and the tab that brings it back, away with it. */
-        reset: function () {
+        reset: function (key) {
             const d = dock();
             if (!d) return;
-            const file = currentFile();
-            if (file) d.openFile(file, file.name); else d.forget();
+            if (currentFile(key)) {
+                d.openFile(currentFile(key), title(key));
+                shown = key;
+            } else if (shown === key) {
+                d.forget();
+                shown = null;
+            }
         },
         // The chosen-file row is a switch for the panel.
-        toggle: function () {
+        toggle: function (key) {
             const d = dock();
-            const file = currentFile();
+            const file = currentFile(key);
             if (!d || !file) return;
-            if (d.isOpen()) d.minimise(); else d.openFile(file, file.name);
+            if (d.isOpen() && shown === key) {
+                d.minimise();
+            } else {
+                d.openFile(file, title(key));
+                shown = key;
+            }
         }
     };
 })();
@@ -6561,6 +6941,8 @@ const papelDraft = (function () {
         }
 
         if (typeof syncSupportingDocs === 'function') syncSupportingDocs();
+        // The ticks are back, so are the boxes that go with them.
+        if (typeof syncPdfSlots === 'function') syncPdfSlots();
         if (typeof updateReview === 'function') updateReview();
 
         // Step 2 onwards needs a PDF, which cannot be restored, so the student
@@ -6602,8 +6984,8 @@ const papelDraft = (function () {
 
         /* Saves to the server, where the dashboard can see it. Returns the
            draft's id so later saves update the same row instead of piling up
-           duplicates. The PDF goes along when one is attached, so resuming from
-           another visit does not always mean re-picking the file. */
+           duplicates. What goes is the typed text: a draft never carries a PDF,
+           so resuming one always means picking the file or files again. */
         saveToServer: async function () {
             const f = form();
             if (!f) return 0;
@@ -6612,8 +6994,12 @@ const papelDraft = (function () {
             const body = new FormData(f);
             body.set('action', 'save_draft');
             if (draftId) body.set('draft_id', String(draftId));
-            // Supporting documents belong to submission, not to a draft.
-            ['ethics_clearance', 'consent_form', 'data_collection', 'copyright_doc', 'other_doc']
+            /* Files belong to submission, not to a draft: the PDFs and the supporting
+               documents stay in this browser until the form is submitted. The server
+               ignores them anyway, and sending them would be two uploads of up to
+               the file limit each, on every save, to be thrown away. */
+            ['pdf_imrad', 'pdf_full', 'research_pdf',
+             'ethics_clearance', 'consent_form', 'data_collection', 'copyright_doc', 'other_doc']
                 .forEach(function (n) { body.delete(n); });
 
             // Only ever run because the student asked to save, so it earns the
@@ -6724,7 +7110,8 @@ const papelDraft = (function () {
             }
 
             const when = new Date(data.savedAt || Date.now());
-            const files = Object.keys(data.files || {});
+            // The names of the files, not of the inputs they were in ("pdf_imrad").
+            const files = Object.keys(data.files || {}).map(function (k) { return data.files[k]; });
             const note = files.length
                 ? ' You will need to attach ' + files.join(', ') + ' again. A browser cannot keep a file between visits.'
                 : '';
@@ -6758,28 +7145,54 @@ const papelDraft = (function () {
 })();
 
 // File indicator functions
+
+/* What a chosen file weighs, written as the rest of this page writes sizes
+   ("40MB"). Whole kilobytes below a megabyte; the threshold stops 1023.6KB
+   rounding up to a "1024KB" that is really 1.0MB. */
+function fileSizeLabel(bytes) {
+    if (bytes < 1024) return bytes + 'B';
+    if (bytes < 1048576 - 512) return Math.round(bytes / 1024) + 'KB';
+    return (bytes / 1048576).toFixed(1) + 'MB';
+}
+
+/* The box for one manuscript format has two faces. With no file it is the drop
+   target: the upload icon, the prompt, and "No PDF selected" beside it. Once a
+   PDF is chosen the prompt has nothing left to say, so the box shows the file
+   instead: a tick where the icon was, then its name over its size (the CSS hides
+   the prompt on .has-file). Choosing nothing, or clearing the choice, puts it
+   all back. */
 function updatePdfIndicator(input) {
-    const indicator = document.getElementById('pdf-indicator');
-    papelPdfPreview.reset();
+    const indicator = pdfIndicator(input.dataset.format);
+    const zone = indicator.closest('.upload-zone');
+    const icon = zone ? zone.querySelector('.upload-zone-icon') : null;
+    papelPdfPreview.reset(input.dataset.format);
     if (input.files && input.files[0]) {
-        const fileName = input.files[0].name;
+        const file = input.files[0];
         /* The name goes in by textContent, not into the HTML string: a file
            name is whatever the student's disk allows, and on most systems that
-           includes < and >. It also gets a span of its own, so it can be cut to
-           one line. Wrapped, a typical manuscript file name ran to four lines
-           and stretched the drop target beside it to twice its height. The full
-           name is the title, and the preview panel's header shows it too. */
+           includes < and >. It also gets an element of its own, so it can be cut
+           to one line. Wrapped, a typical manuscript file name ran to four lines
+           and stretched the box to twice its height. The full name is the row's
+           tooltip, and the preview panel's header shows it too. */
         const name = document.createElement('span');
         name.className = 'pdf-indicator-name';
-        name.textContent = fileName;
-        name.title = fileName;
-        indicator.innerHTML = '<span class="material-symbols-outlined mi-18 mi-fill">check_circle</span>';
+        name.textContent = file.name;
+        const size = document.createElement('span');
+        size.className = 'pdf-indicator-size text-muted';
+        size.textContent = fileSizeLabel(file.size);
+        indicator.textContent = '';
         indicator.appendChild(name);
-        indicator.insertAdjacentHTML('beforeend', '<span class="pdf-indicator-hint">Click to preview</span>');
+        indicator.appendChild(size);
+        indicator.title = file.name + '\nClick to preview';
         indicator.classList.add('selected');
+        if (zone) zone.classList.add('has-file');
+        if (icon) { icon.textContent = 'check_circle'; icon.classList.add('mi-fill'); }
     } else {
         indicator.innerHTML = '<span class="material-symbols-outlined mi-18 text-muted">cancel</span> No PDF selected';
+        indicator.removeAttribute('title');
         indicator.classList.remove('selected');
+        if (zone) zone.classList.remove('has-file');
+        if (icon) { icon.textContent = 'upload_file'; icon.classList.remove('mi-fill'); }
     }
 }
 
@@ -6833,10 +7246,19 @@ function goToStep(step) {
             }
         }
         if (currentStep === 2) {
-            const pdfFile = document.getElementById('pdfFile').files[0];
             const titleField = document.getElementById('titleField').value;
-            if (!pdfFile) {
-                papelAlert('Please upload a PDF file');
+            // One PDF for every manuscript type ticked in step 1.
+            const active = pdfActive();
+            const lacking = active.filter(function (f) { return !pdfFileOf(f.key); });
+            if (lacking.length) {
+                papelAlert(active.length > 1
+                    ? 'Please upload your ' + lacking[0].label + ' PDF.'
+                    : 'Please upload a PDF file');
+                return;
+            }
+            const tooBig = filesTooBig();
+            if (tooBig) {
+                papelAlert(tooBig);
                 return;
             }
             if (!titleField) {
@@ -6862,6 +7284,14 @@ function goToStep(step) {
             if (missing) {
                 papelAlert('Please write the ' + papelDoc.label(missing) + ' section before continuing.');
                 papelDoc.flag(missing);
+                return;
+            }
+        }
+        if (currentStep === 3) {
+            // The supporting documents travel in the same request as the PDFs.
+            const tooBig = filesTooBig();
+            if (tooBig) {
+                papelAlert(tooBig);
                 return;
             }
         }
@@ -6899,6 +7329,9 @@ function goToStep(step) {
         }
     }
     
+    // Step 2's boxes follow whatever step 1 has ticked by now.
+    if (step === 2) syncPdfSlots();
+
     // Update review if going to step 4
     if (step === 4) {
         updateReview();
@@ -6963,7 +7396,8 @@ function explainSections(force) {
 
 function updateReview() {
     const paperType = document.querySelector('select[name="paper_type"]');
-    const pdfFile = document.getElementById('pdfFile');
+    document.getElementById('reviewPDFLabel').textContent =
+        pdfActive().length > 1 ? 'Research PDFs:' : 'Research PDF:';
     const title = document.getElementById('titleField');
     const authors = document.getElementById('authorsField');
     const year = document.getElementById('yearField');
@@ -6971,7 +7405,7 @@ function updateReview() {
     document.getElementById('reviewPaperType').textContent = 
         paperType.options[paperType.selectedIndex].text;
     document.getElementById('reviewPDF').textContent = 
-        pdfFile.files[0] ? pdfFile.files[0].name : '-';
+        reviewPdfText();
     document.getElementById('reviewTitle').textContent = title.value || '-';
     document.getElementById('reviewAuthors').textContent = authors.value || '-';
     document.getElementById('reviewYear').textContent = year.value || '-';
@@ -7021,11 +7455,17 @@ function papelPillRecentre() {
 
 // Extract AI button handler
 document.getElementById('btnExtract').addEventListener('click', function(){
-  const pdfFile = document.getElementById('pdfFile').files[0];
-  if(!pdfFile){
+  /* The IMRAD PDF when there is one, since the form's sections are IMRAD-shaped;
+     otherwise the one that is attached. Said aloud when there are two, so nobody
+     is left wondering which of their files the AI read. */
+  const source = extractionSource();
+  if(!source){
     papelAlert('Please select a PDF first');
     return;
   }
+  const pdfFile = source.file;
+  const sourceNote = pdfActive().length > 1 ? 'your ' + source.label + ' PDF' : 'your PDF';
+  const readNote = pdfActive().length > 1 ? ', read from your ' + source.label + ' PDF' : '';
 
   const btn = this;
   btn.disabled = true;
@@ -7040,10 +7480,10 @@ document.getElementById('btnExtract').addEventListener('click', function(){
   papelPillAboveOverlay();
   fillEl.style.width  = '10%';
   labelEl.textContent = '10%';
-  statusEl.textContent = 'Sending PDF to AI...';
+  statusEl.textContent = 'Sending ' + sourceNote + ' to AI...';
 
   const aiMessages = [
-    'Reading your PDF...',
+    'Reading ' + sourceNote + '...',
     'Extracting title & authors...',
     'Analyzing abstract...',
     'Almost done...'
@@ -7107,9 +7547,9 @@ document.getElementById('btnExtract').addEventListener('click', function(){
       successMsg.id = 'extractMsg';
       successMsg.className = 'alert alert-success mt-3 alert-dismissable';
       successMsg.innerHTML = (papelDoc.text('abstract')
-        ? '<strong>Extraction complete.</strong> Review the Abstract and edit if needed, '
+        ? '<strong>Extraction complete' + readNote + '.</strong> Review the Abstract and edit if needed, '
           + 'then write your Introduction, Methodology, and Results and Discussion.'
-        : '<strong>Extraction complete.</strong> No abstract could be found in your PDF, so '
+        : '<strong>Extraction complete' + readNote + '.</strong> No abstract could be found in ' + sourceNote + ', so '
           + 'please write all four sections yourself.')
         + '<button type="button" class="alert-close" aria-label="Dismiss">'
         + '<span class="material-symbols-outlined mi-18">close</span></button>';
@@ -7147,6 +7587,18 @@ document.getElementById('uploadForm').addEventListener('submit', function(e){
     if (missingSection) {
         papelAlert('Please write the ' + papelDoc.label(missingSection) + ' section before submitting.');
         papelDoc.flag(missingSection);
+        return;
+    }
+
+    // One PDF for every manuscript type ticked, and all of it small enough to send at once.
+    const noPdf = pdfActive().filter(function (f) { return !pdfFileOf(f.key); })[0];
+    if (noPdf) {
+        papelAlert('Please upload your ' + noPdf.label + ' PDF.');
+        return;
+    }
+    const tooBig = filesTooBig();
+    if (tooBig) {
+        papelAlert(tooBig);
         return;
     }
 
@@ -7248,19 +7700,19 @@ document.getElementById('uploadForm').addEventListener('submit', function(e){
 /* ----- Corpus's greeting lines -----
    A few lines that rise out of the button one at a time (the look is
    .chat-nudge, in the stylesheet). It is a nudge rather than a notice, so it is
-   built to give up easily: it plays a few rounds and stops, opening the chat
-   ends it for the page, the cross silences it for the rest of the visit, and
-   Escape, pressed while a line is up, ends it for the page.
+   built to give up easily: it plays a few rounds and stops, and opening the
+   chat, the cross, or Escape pressed while a line is up each end it for the
+   page.
 
-   The cross is remembered in sessionStorage rather than localStorage, so a
-   student who waves it away is left alone for the rest of that visit, and the
-   lines return the next time they open the site in a fresh tab. Storage can
-   throw (private windows, blocked site data), and then the choice simply lasts
-   until the page is reloaded. */
+   Ending it is not remembered across a reload. This page is one long form that
+   a student rarely reloads, so remembering bought almost nothing, and a
+   remembered "no" reads as a greeting that has stopped working: nothing on the
+   page says it was switched off, and in a tab that had once had a stray click
+   on the cross it never came back. */
 const CHAT_NUDGE = {
     lines: [
         'Hello!',
-        "I'm Corpus, your upload guide.", // the one place the name is said now
+        "I'm your upload guide.",         // no name on purpose: it speaks from Corpus's own button
         'Do you need help?',
         'Not sure what to attach? Ask me!',
         'I can explain Ethics Clearance and Consent Forms.'
@@ -7271,8 +7723,7 @@ const CHAT_NUDGE = {
     rest:       45000,   // the quiet spell between rounds
     rounds:     3,
     recheck:    600,     // how often a held-back line looks to see if the way is clear
-    hoverGrace: 1500,    // a line the pointer is resting on stays until it has left
-    muteKey:    'papel_chat_nudge_off'
+    hoverGrace: 1500     // a line the pointer is resting on stays until it has left
 };
 
 const chatNudge = (function () {
@@ -7284,10 +7735,6 @@ const chatNudge = (function () {
     function bubble() { return document.getElementById('chat-nudge'); }
     function showing() { const n = bubble(); return !!n && n.classList.contains('is-on'); }
     function later(fn, ms) { clearTimeout(timer); timer = setTimeout(fn, ms); }
-
-    function muted() {
-        try { return sessionStorage.getItem(CHAT_NUDGE.muteKey) === '1'; } catch (err) { return false; }
-    }
 
     /* Whether the student can see the button, which is where the line comes
        from. Asked of the screen rather than of a list of things that might be in
@@ -7332,20 +7779,15 @@ const chatNudge = (function () {
         if (n) n.classList.remove('is-on');
     }
 
-    function mute() {
-        try { sessionStorage.setItem(CHAT_NUDGE.muteKey, '1'); } catch (err) {}
-        stop();
-    }
-
     function start() {
         const n = bubble();
-        if (!n || muted()) return;
+        if (!n) return;
 
         /* The bubble opens the chat, as the button under it does. The cross sits
            inside it, so it is told apart here rather than given a listener that
            would also have to stop the click reaching the bubble. */
         n.addEventListener('click', function (e) {
-            if (e.target.closest('#chat-nudge-x')) mute();
+            if (e.target.closest('#chat-nudge-x')) stop();
             else toggleChat();
         });
         // Someone reading the line, or reaching for it, should not have it taken away.
@@ -7476,13 +7918,20 @@ function applyChatDock(docked, side) {
  * that stutters.
  */
 function placeChatDockTop() {
-    const bar   = document.getElementById('siteHeader');
-    const crumb = document.querySelector('.crumb-bar');
-    if (!bar) return;
+    const bar    = document.getElementById('siteHeader');
+    const crumb  = document.querySelector('.crumb-bar');
+    const widget = document.getElementById('chat-widget');
+    if (!bar || !widget) return;
     let edge = bar.getBoundingClientRect().bottom;
     if (crumb) edge = Math.max(edge, crumb.getBoundingClientRect().bottom);
-    document.documentElement.style.setProperty(
-        '--chat-dock-top', Math.max(0, Math.round(edge)) + 'px');
+    /* On the panel itself, not on <html>: a custom property on the root is
+       inherited by every element, so each change made the browser re-check the
+       style of the whole page, and with a thesis open in the PDF panel that was
+       50 to 100ms a step, on every step of a scroll. Only the chat reads it. */
+    const px = Math.max(0, Math.round(edge)) + 'px';
+    if (widget.style.getPropertyValue('--chat-dock-top') !== px) {
+        widget.style.setProperty('--chat-dock-top', px);
+    }
 }
 
 (function watchChatDockTop() {
@@ -7499,6 +7948,40 @@ function placeChatDockTop() {
        started with (the PDF panel had the same fault; see includes/pdf_dock.php). */
     document.addEventListener('scroll', onMove, { capture: true, passive: true });
     window.addEventListener('resize', onMove);
+})();
+
+/* Corpus rests above the footer, not on it.
+ *
+ * He floats in the corner of the window, so once the footer is in view (a short
+ * page shows it all the time, a long one at its end) he would sit on it, across
+ * its text. He is lifted by as much of the footer as is showing, which leaves
+ * him the same gap above it as he keeps from the bottom of the window. The
+ * footer is also in front of him in the stacking order (see the .site-footer
+ * rule above #chat-widget), so while this catches up with a quick scroll he goes
+ * behind the footer, never over it.
+ *
+ * Written to a custom property on the widget. The floating chat adds it to its
+ * bottom margin; the docked panel uses it as its bottom edge, so it ends at the
+ * footer's top (the footer runs the full width in front of it) rather than
+ * running on down beside the footer. */
+(function watchChatLift() {
+    function place() {
+        const widget = document.getElementById('chat-widget');
+        const footer = document.querySelector('.site-footer');
+        if (!widget || !footer) return;
+        const lift = Math.max(0, Math.round(window.innerHeight - footer.getBoundingClientRect().top)) + 'px';
+        // This runs on every scroll; nothing is written unless the figure has moved.
+        if (widget.style.getPropertyValue('--chat-lift') === lift) return;
+        widget.style.setProperty('--chat-lift', lift);
+    }
+    place();
+    document.addEventListener('DOMContentLoaded', place);
+    /* Any scroll, heard on the way down: the window's own event never comes when
+       the page scrolls inside <body> (see watchChatDockTop above). */
+    document.addEventListener('scroll', place, { capture: true, passive: true });
+    window.addEventListener('resize', place);
+    // A step of the form, or a section folding, moves the footer without a scroll.
+    if (window.ResizeObserver) new ResizeObserver(place).observe(document.body);
 })();
 
 function currentChatSide() {
@@ -7849,8 +8332,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Manual entry button
     document.getElementById('btnManual').addEventListener('click', function() {
-        var pdfFile = document.getElementById('pdfFile').files[0];
-        if (!pdfFile) {
+        if (!extractionSource()) {
             papelAlert('Please select a PDF file first before entering details manually.');
             return;
         }
@@ -8056,13 +8538,20 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // File indicators
-    document.getElementById('pdfFile').addEventListener('change', function() { updatePdfIndicator(this); });
-
-    // Clicking the chosen file opens it in the side panel.
-    document.getElementById('pdf-indicator').addEventListener('click', function () {
-        if (!this.classList.contains('selected')) return;
-        papelPdfPreview.toggle();
+    document.querySelectorAll('.js-pdf').forEach(function (input) {
+        input.addEventListener('change', function () { updatePdfIndicator(this); });
+        // Clicking the chosen file opens it in the side panel.
+        pdfIndicator(input.dataset.format).addEventListener('click', function () {
+            if (!this.classList.contains('selected')) return;
+            papelPdfPreview.toggle(input.dataset.format);
+        });
     });
+    // The boxes follow the manuscript types ticked in step 1.
+    document.querySelectorAll('.js-manuscript').forEach(function (box) {
+        box.addEventListener('change', syncPdfSlots);
+    });
+    syncPdfSlots();
+
     document.getElementById('ethics_clearance').addEventListener('change', function() { updateFileIndicator(this, 'ethics-indicator'); });
     document.getElementById('consent_form').addEventListener('change', function() { updateFileIndicator(this, 'consent-indicator'); });
     document.getElementById('data_collection').addEventListener('change', function() { updateFileIndicator(this, 'data-indicator'); });

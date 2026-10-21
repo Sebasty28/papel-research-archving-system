@@ -225,7 +225,8 @@ MODULES = [
            'work in.',
   'features': [
     {'title': 'The four-step wizard',
-     'blurb': 'Details, then the PDF and the writing, then supporting '
+     'blurb': 'Details, then a PDF for each way the paper is handed in (IMRAD, '
+              'Full Manuscript, or both) and the writing, then supporting '
               'documents, then review and submit. All four steps live in one '
               'file; only one is visible at a time.',
      'files': [
@@ -260,8 +261,9 @@ MODULES = [
         'Hands a finished draft to the adviser.'),
      ]},
   ],
-  'wires': 'needs Google Drive (the PDF goes there first) · hands to the '
-           'review desks',
+  'wires': 'needs Google Drive (the PDFs go there first, and a submission with '
+           'two of them is filed whole or not at all) · hands to the review '
+           'desks',
  },
  {
   'id': 'm6', 'num': 6, 'title': 'Review and approval',
@@ -329,6 +331,11 @@ MODULES = [
         'The PDF panel that slides in beside the text, so the reader keeps '
         'their place.'),
        ('app/student/pdf_viewer.php', 'The viewer itself.'),
+       ('app/paper_file.php',
+        'Hands the viewer a paper’s file: the manuscript (or each of the two, '
+        'when a paper was handed in both ways) or a supporting document. It '
+        'checks who is asking every time, and refuses an address typed into '
+        'the browser.'),
        ('archive/archive_handler.php',
         'Fifteen lines. A small shared piece the archive pages lean on.'),
        ('app/models/ArchiveRepository.php',
@@ -434,10 +441,10 @@ MODULES = [
     {'title': 'The chatbot',
      'blurb': '',
      'files': [
-       ('ai/help_chatbot.php',
+       ('ai/help_assistant.php',
         'Answers questions about using PAPEL. Each question is answered on its '
         'own; nothing is remembered between them.'),
-       ('app/student/student_chatbot.php', 'The chat window.'),
+       ('app/student/student_assistant.php', 'The chat window.'),
      ]},
     {'title': 'Keeping it in bounds',
      'blurb': '',
@@ -455,7 +462,8 @@ MODULES = [
  {
   'id': 'm11', 'num': 11, 'title': 'Storage — Google Drive',
   'blurb': 'The PDFs do not live on the server. They go to a Google account, '
-           'and the database keeps only the file’s id.',
+           'and the database keeps only each file’s id. A paper handed in '
+           'both ways has two files.',
   'features': [
     {'title': 'Uploading and filing',
      'blurb': '',
@@ -700,7 +708,7 @@ CODE = [
   'id': 'c5',
   'title': 'A message that survives exactly one page',
   'file': 'config/core.php',
-  'anchor': 'function flash(string $key, string $msg = null): ?string',
+  'anchor': 'function flash(string $key, ?string $msg = null): ?string',
   'before': 0, 'lines': 8,
   'intro': 'The green and red banners. One small function, and a trap worth '
            'knowing about.',
@@ -818,6 +826,12 @@ DB_NOTES = [
                     'paper — rows here with no matching paper are correct, '
                     'not orphans.'),
  ('paper_checklist', 'What the adviser ticked when approving.'),
+ ('paper_manuscripts', 'The PDF files of a paper, one row each: an IMRAD file, '
+                      'a Full Manuscript file, or both. research_papers keeps '
+                      'a copy of the main file’s details (the Full Manuscript '
+                      'when there are two) so older pages still work. No '
+                      'foreign key, so the rows stay put when a paper is '
+                      'archived or restored.'),
  ('supporting_documents', 'Ethics clearance, consent form and the rest.'),
  ('guest_sessions', 'Temporary visitor passes. Note it also keeps the password '
                     'in plain text so the Librarian can re-show it.'),

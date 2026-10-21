@@ -77,23 +77,21 @@ if (!$sections && trim((string)$paper['abstract']) !== '') {
 /* ---- Files, present and missing ------------------------------------------ */
 $docsRequired = paper_type_needs_documents($paper['paper_type'] ?? '');
 $expected = [
-    'manuscript'       => ['label' => 'Manuscript',              'required' => true],
     'ethics_clearance' => ['label' => 'Ethical Clearance',       'required' => $docsRequired],
     'consent_form'     => ['label' => 'Consent Form',            'required' => $docsRequired],
     'data_collection'  => ['label' => 'Data Collection Tool',    'required' => $docsRequired],
     'copyright_doc'    => ['label' => 'Copyright / IP Document', 'required' => $docsRequired],
 ];
 /* Each file that exists is opened through app/paper_file.php, in PAPEL's own
-   viewer; paper_file_url() is asked only whether there is a file at all. */
+   viewer; paper_file_url() is asked only whether there is a file at all. The
+   manuscript is one file or two (IMRAD and Full Manuscript), so it comes from
+   paper_manuscript_entries() and is listed ahead of the documents. */
 $found = [];
-if (paper_file_url($paper['gdrive_file_id'] ?? null, $paper['file_path'] ?? null)) {
-    $found['manuscript'] = paper_file_src('paper', $paper_id);
-}
-$ds = $conn->prepare("SELECT doc_id, document_type, file_path, gdrive_file_id FROM supporting_documents WHERE paper_id = ? ORDER BY doc_id ASC");
+$ds = $conn->prepare("SELECT doc_id, document_type, document_name, file_path, gdrive_file_id FROM supporting_documents WHERE paper_id = ? ORDER BY doc_id ASC");
 $ds->bind_param('i', $paper_id);
 $ds->execute();
 foreach ($ds->get_result()->fetch_all(MYSQLI_ASSOC) as $d) {
-    $label = supporting_doc_label($d['document_type'] ?? '');
+    $label = supporting_doc_label($d['document_type'] ?? '', $d['document_name'] ?? null);
     $key   = array_search($label, array_column($expected, 'label'), true);
     $key   = $key === false ? $label : array_keys($expected)[$key];
     if (paper_file_url($d['gdrive_file_id'] ?? null, $d['file_path'] ?? null)) {
@@ -103,9 +101,20 @@ foreach ($ds->get_result()->fetch_all(MYSQLI_ASSOC) as $d) {
 $ds->close();
 
 $files = [];
+foreach (paper_manuscript_entries($paper_id, $paper) as $m) {
+    $files[] = ['key' => $m['key'], 'label' => $m['label'],
+                'href' => $m['src'], 'required' => $m['required']];
+}
 foreach ($expected as $key => $info) {
     $files[] = ['key' => $key, 'label' => $info['label'],
                 'href' => $found[$key] ?? null, 'required' => $info['required']];
+}
+/* An optional document the student named is none of the four above, and was
+   never listed here though it was attached. It is never required. */
+foreach ($found as $key => $href) {
+    if (!isset($expected[$key])) {
+        $files[] = ['key' => $key, 'label' => (string)$key, 'href' => $href, 'required' => false];
+    }
 }
 $missingRequired = 0;
 foreach ($files as $f) if (!$f['href'] && $f['required']) $missingRequired++;

@@ -101,17 +101,18 @@ $approvals = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
       </div>
       <?php endif; ?>
 
+      <?php /* One button per manuscript file, in PAPEL's own viewer. This used to link
+               straight to the Google Drive file, which no rule about who may read
+               a paper applied to. */ ?>
       <div class="mt-3">
-        <?php if (!empty($paper['gdrive_file_id'])): ?>
-            <a href="https://drive.google.com/file/d/<?= e($paper['gdrive_file_id']) ?>/view" target="_blank" class="btn btn-primary">
-              Open Research PDF (GDrive)
+        <?php $mEntries = paper_manuscript_entries($paper_id, $paper); ?>
+        <?php foreach ($mEntries as $m): ?>
+            <?php if (!$m['src']) continue; ?>
+            <a href="<?= e(paper_viewer_url($m['src'])) ?>" target="_blank" rel="noopener" class="btn btn-primary me-2">
+              Open <?= count($mEntries) > 1 ? e(manuscript_format_label((string)$m['format'])) . ' PDF' : 'Research PDF' ?>
             </a>
-        <?php else: ?>
-            <a href="<?= e(paper_file_url(null, $paper['file_path'] ?? null)) ?>" target="_blank" class="btn btn-primary">
-              Open Research PDF
-            </a>
-        <?php endif; ?>
-        <small class="text-muted ms-2">Size: <?= number_format($paper['file_size']/1024/1024, 2) ?> MB</small>
+            <small class="text-muted me-3">Size: <?= number_format($m['size'] / 1024 / 1024, 2) ?> MB</small>
+        <?php endforeach; ?>
       </div>
     </div>
   </div>
