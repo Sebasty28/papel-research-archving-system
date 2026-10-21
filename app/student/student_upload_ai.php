@@ -2010,6 +2010,125 @@ hr {
 }
 /* Smaller than the 56px button so the maroon shows as a ring around the dog. */
 #puppyFab { width: 48px; height: 48px; }
+
+/* ----- Corpus's greeting card -----
+   One short line at a time rises out of the button (chatNudge, in the script),
+   so the assistant is noticed without a student having to go looking for it.
+
+   It is made of the pieces the site's other floating cards are made of, not of
+   a speech bubble of its own: the white surface, hairline and --r-card corners
+   of .tw-card and .help-card, and the padding and type of the chat's own
+   .message bubble, so a greeting looks like the first line of the conversation
+   it is inviting. A round bubble with a trail of dots was tried first and read
+   as a sticker laid on a document. The corner scale is restrained on purpose
+   (see --r-card in theme.php): a repository is read, not played with.
+
+   Positioned against #chat-widget, which is fixed, so it follows the button
+   wherever the widget sits and takes no room in the layout. Hidden is
+   visibility as well as opacity, so a card that has gone cannot be clicked, and
+   the departure holds visibility back until the fade has finished. */
+.chat-nudge {
+    position: absolute;
+    left: 0;
+    bottom: calc(100% + 12px);
+    width: max-content;
+    /* Never wider than the room there is on a phone. */
+    max-width: min(17rem, calc(100vw - 3rem));
+    /* The chat's own .message padding, even on both sides. The cross overlaps
+       the corner instead of taking room inside it, so none is kept back for it,
+       which would only show as a wider right margin whenever it is out of sight. */
+    padding: .625rem .875rem;
+    background: var(--white);
+    color: var(--ink);
+    border: 1px solid var(--border);
+    border-radius: var(--r-card, 8px);
+    box-shadow: var(--shadow-md);
+    cursor: pointer;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(6px);
+    transition: opacity .16s ease, transform .16s ease, visibility 0s linear .16s;
+}
+.chat-nudge.is-on {
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    transition: opacity .2s ease, transform .2s ease, visibility 0s;
+}
+/* It is a way in to the chat, so it says so the way the site's other
+   clickable cards do, with the soft maroon hairline. */
+.chat-nudge:hover,
+.chat-nudge:hover::after { border-color: var(--soft-maroon); }
+
+.chat-nudge-text {
+    display: block;
+    font-family: var(--font-body);
+    font-size: .875rem;
+    line-height: 1.5;
+    color: var(--ink);
+}
+
+/* The notch that ties the card to the dog: a square turned on its corner. Its
+   top half sits inside the card, on the same white, and covers that stretch of
+   the card's own hairline, so only the two lower edges show. */
+.chat-nudge::after {
+    content: '';
+    position: absolute;
+    left: 21px;
+    bottom: -6px;
+    width: 10px;
+    height: 10px;
+    background: var(--white);
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    transform: rotate(45deg);
+}
+
+/* Silences the greeting for the rest of the visit.
+
+   It is a way out, not part of the message, so it stays out of sight until the
+   pointer is on the card. A button showing the whole time made a few words of
+   greeting look like a dialog. It overlaps the top right corner instead of
+   sitting inside it, so the line never has to wrap around it. Where nothing can
+   hover (a phone) it stays shown, because a control that can never appear is no
+   control.
+
+   It straddles the card's edge, so it carries its own surface and hairline, or
+   the card's border would run through the mark. A control, so --r-control and
+   not a circle: round is for an avatar or a toggle knob (see theme.php). */
+.chat-nudge-x {
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: var(--r-control, 4px);
+    box-shadow: var(--shadow-sm);
+    color: var(--grey);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity .15s ease, color .15s, border-color .15s;
+}
+.chat-nudge:hover .chat-nudge-x { opacity: 1; }
+@media (hover: none) {
+    .chat-nudge-x { opacity: 1; }
+}
+.chat-nudge-x:hover { color: var(--maroon); border-color: var(--soft-maroon); }
+.chat-nudge-x .material-symbols-outlined { font-size: 14px; }
+
+/* No slide: the card fades in and out and stays where it is. */
+@media (prefers-reduced-motion: reduce) {
+    .chat-nudge,
+    .chat-nudge.is-on { transform: none; }
+    .chat-nudge { transition: opacity .2s ease, visibility 0s linear .2s; }
+    .chat-nudge.is-on { transition: opacity .2s ease, visibility 0s; }
+}
 #chat-window {
     display: none;
     width: 360px;
@@ -3838,6 +3957,18 @@ body.pdf-docked > .site-footer {
         <img id="puppyFab" class="puppy-avatar" width="48" height="48"
              alt="Ask Corpus" src="<?= BASE_URL ?>/assests/images/papel_red_welcome.gif">
     </button>
+    <?php /* A visual duplicate of the button beside it, which already says "Ask
+             Corpus", so it stays out of the accessibility tree and the tab order:
+             announced every few seconds, it would only interrupt someone who
+             cannot see it. The cross is therefore for the mouse; Escape stops
+             the lines from the keyboard. */ ?>
+    <div class="chat-nudge" id="chat-nudge" aria-hidden="true">
+        <span class="chat-nudge-text" id="chat-nudge-text"></span>
+        <button type="button" class="chat-nudge-x" id="chat-nudge-x" tabindex="-1"
+                title="Hide these messages">
+            <span class="material-symbols-outlined">close</span>
+        </button>
+    </div>
 </div>
 
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
@@ -7114,6 +7245,122 @@ document.getElementById('uploadForm').addEventListener('submit', function(e){
     xhr.send(fd);
 });
 
+/* ----- Corpus's greeting lines -----
+   A few lines that rise out of the button one at a time (the look is
+   .chat-nudge, in the stylesheet). It is a nudge rather than a notice, so it is
+   built to give up easily: it plays a few rounds and stops, opening the chat
+   ends it for the page, the cross silences it for the rest of the visit, and
+   Escape, pressed while a line is up, ends it for the page.
+
+   The cross is remembered in sessionStorage rather than localStorage, so a
+   student who waves it away is left alone for the rest of that visit, and the
+   lines return the next time they open the site in a fresh tab. Storage can
+   throw (private windows, blocked site data), and then the choice simply lasts
+   until the page is reloaded. */
+const CHAT_NUDGE = {
+    lines: [
+        'Hello!',
+        "I'm Corpus, your upload guide.", // the one place the name is said now
+        'Do you need help?',
+        'Not sure what to attach? Ask me!',
+        'I can explain Ethics Clearance and Consent Forms.'
+    ],
+    firstDelay: 2500,    // after the page is up, so it never competes with the load
+    showFor:    4200,
+    between:    900,     // long enough for one bubble to leave before the next arrives
+    rest:       45000,   // the quiet spell between rounds
+    rounds:     3,
+    recheck:    600,     // how often a held-back line looks to see if the way is clear
+    hoverGrace: 1500,    // a line the pointer is resting on stays until it has left
+    muteKey:    'papel_chat_nudge_off'
+};
+
+const chatNudge = (function () {
+    let timer = null;
+    let index = 0;       // the next line within the round
+    let round = 0;       // rounds played to the end
+    let stopped = false;
+
+    function bubble() { return document.getElementById('chat-nudge'); }
+    function showing() { const n = bubble(); return !!n && n.classList.contains('is-on'); }
+    function later(fn, ms) { clearTimeout(timer); timer = setTimeout(fn, ms); }
+
+    function muted() {
+        try { return sessionStorage.getItem(CHAT_NUDGE.muteKey) === '1'; } catch (err) { return false; }
+    }
+
+    /* Whether the student can see the button, which is where the line comes
+       from. Asked of the screen rather than of a list of things that might be in
+       the way, because the list never stops growing: the splash that covers the
+       first load of a visit, a dialog, the upload overlay, the PDF expanded to
+       fill the page (which hides the widget outright), the chat itself once it
+       is open. Whatever it is, the button is no longer the topmost thing at its
+       own centre. A line that would have played into that is held back, not
+       spent, so "Hello!" is not used up under the splash. */
+    function canShow() {
+        if (document.hidden) return false;
+        const btn = document.getElementById('chat-button');
+        const r = btn ? btn.getBoundingClientRect() : null;
+        if (!r || !r.width) return false;
+        const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return !!top && btn.contains(top);
+    }
+
+    function leave() {
+        const n = bubble();
+        if (n) n.classList.remove('is-on');
+        index++;
+        if (index < CHAT_NUDGE.lines.length) { later(step, CHAT_NUDGE.between); return; }
+        index = 0;
+        round++;
+        if (round < CHAT_NUDGE.rounds) later(step, CHAT_NUDGE.rest);
+        else stopped = true;
+    }
+
+    function step() {
+        if (stopped) return;
+        if (!canShow()) { later(step, CHAT_NUDGE.recheck); return; }
+        document.getElementById('chat-nudge-text').textContent = CHAT_NUDGE.lines[index];
+        bubble().classList.add('is-on');
+        later(leave, CHAT_NUDGE.showFor);
+    }
+
+    function stop() {
+        stopped = true;
+        clearTimeout(timer);
+        const n = bubble();
+        if (n) n.classList.remove('is-on');
+    }
+
+    function mute() {
+        try { sessionStorage.setItem(CHAT_NUDGE.muteKey, '1'); } catch (err) {}
+        stop();
+    }
+
+    function start() {
+        const n = bubble();
+        if (!n || muted()) return;
+
+        /* The bubble opens the chat, as the button under it does. The cross sits
+           inside it, so it is told apart here rather than given a listener that
+           would also have to stop the click reaching the bubble. */
+        n.addEventListener('click', function (e) {
+            if (e.target.closest('#chat-nudge-x')) mute();
+            else toggleChat();
+        });
+        // Someone reading the line, or reaching for it, should not have it taken away.
+        n.addEventListener('mouseenter', function () { if (showing()) clearTimeout(timer); });
+        n.addEventListener('mouseleave', function () { if (showing() && !stopped) later(leave, CHAT_NUDGE.hoverGrace); });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && showing()) stop();
+        });
+
+        later(step, CHAT_NUDGE.firstDelay);
+    }
+
+    return { start: start, stop: stop };
+})();
+
 // Chatbot Logic
 function toggleChat() {
     const win = document.getElementById('chat-window');
@@ -7124,6 +7371,7 @@ function toggleChat() {
         btn.style.display = 'flex';
         applyChatDock(false, currentChatSide());   // release the page padding
     } else {
+        chatNudge.stop();      // they have found Corpus; no more lines
         win.style.display = 'flex';
         btn.style.display = 'none';
         setPuppyState('welcome');
@@ -7193,6 +7441,7 @@ function applyChatDock(docked, side) {
         const btn = document.getElementById('chat-button');
         if (win) win.style.display = 'flex';
         if (btn) btn.style.display = 'none';
+        chatNudge.stop();
     }
 
     if (dockIcon) dockIcon.textContent = docked ? 'picture_in_picture' : 'dock_to_left';
@@ -7849,6 +8098,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     document.getElementById('chat-button').addEventListener('click', toggleChat);
+    chatNudge.start();
 
     // Chat form submit
     document.getElementById('chatForm').addEventListener('submit', function(e) {
