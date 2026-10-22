@@ -302,6 +302,48 @@ function search_gdrive_file_by_name($fileName) {
  * @param string $filePath - Path to the PDF file on the server
  * @return string - The extracted text content
  */
+/**
+ * The form's fields, from whatever the model returned.
+ *
+ * Both extraction paths end here: the one where this server calls the model,
+ * and the one where the browser calls a proxy because the host cannot (see
+ * AI_PROXY_URL). Keeping the assembly in one place is what stops the two
+ * drifting apart, since the page fills the same inputs either way.
+ *
+ * @param array  $aiMeta   title/authors/year/keywords as the model gave them
+ * @param string $abstract Lifted from the paper verbatim, never generated
+ * @param string $fallbackAuthor Used when the model found no author at all
+ */
+function build_metadata_result(array $aiMeta, string $abstract, string $fallbackAuthor): array {
+    $authors = $fallbackAuthor;
+    if (isset($aiMeta['authors'])) {
+        $authors = is_array($aiMeta['authors'])
+            ? implode(', ', $aiMeta['authors'])
+            : (string)$aiMeta['authors'];
+    }
+
+    $keywords = '';
+    if (isset($aiMeta['keywords'])) {
+        $keywords = is_array($aiMeta['keywords'])
+            ? implode(', ', $aiMeta['keywords'])
+            : (string)$aiMeta['keywords'];
+    }
+
+    return [
+        'title'                  => $aiMeta['title'] ?? 'Untitled',
+        'authors'                => $authors,
+        'year'                   => $aiMeta['year'] ?? (int)date('Y'),
+        'keywords'               => $keywords,
+        'abstract'               => trim($abstract),
+        'ai_summary'             => '',
+        'ai_methodology'         => '',
+        'ai_statistical_methods' => '',
+        'ai_variables'           => '',
+        'ai_sample_size'         => '',
+        'ai_research_field'      => '',
+    ];
+}
+
 function extract_pdf_text($filePath) {
     try {
         // Try to use the professional PDF parser library if available

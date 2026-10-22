@@ -129,6 +129,16 @@ define('COOKIE_SECURE', filter_var($_ENV['COOKIE_SECURE'] ?? 'false', FILTER_VAL
  * student is promised is the figure the server will actually accept. */
 define('UPLOAD_MAX_MB', (int)($_ENV['UPLOAD_MAX_MB'] ?? 50));
 
+/* Where the browser sends a paper's text to have its metadata read.
+ *
+ * Empty means "this server calls the model itself", which is what a machine
+ * with outbound access does. Set it on hosting that forbids outbound calls
+ * (InfinityFree does): the page then reads the PDF with the copy of PDF.js it
+ * already loads, sends the text to that address, and the key stays there
+ * rather than in a page anyone can view the source of. See workers/groq-proxy.
+ */
+define('AI_PROXY_URL', trim((string)($_ENV['AI_PROXY_URL'] ?? '')));
+
 // Email Settings
 // Set to 'gmail' or 'outlook' to switch modes
 define('MAIL_PROVIDER', 'gmail');

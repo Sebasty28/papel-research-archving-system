@@ -35,12 +35,24 @@ function csp_nonce(): string {
         $rcScript = $rc ? ' https://www.google.com https://www.gstatic.com' : '';
         $rcFrame  = $rc ? ' https://www.google.com' : '';
 
+        /* The metadata proxy, and only when one is set: an unused allowance is
+           still an allowance, the same reasoning as reCAPTCHA above. Only the
+           origin is taken from the setting, never the path. */
+        $proxyOrigin = '';
+        if (defined('AI_PROXY_URL') && AI_PROXY_URL !== '') {
+            $parts = parse_url(AI_PROXY_URL);
+            if (!empty($parts['scheme']) && !empty($parts['host'])) {
+                $proxyOrigin = ' ' . $parts['scheme'] . '://' . $parts['host']
+                             . (empty($parts['port']) ? '' : ':' . (int)$parts['port']);
+            }
+        }
+
         $csp = "default-src 'self'; " .
                "script-src 'self' 'nonce-{$nonce}' https://cdn.jsdelivr.net https://unpkg.com{$rcScript}; " .
                "style-src 'self' 'nonce-{$nonce}' https://cdn.jsdelivr.net https://fonts.googleapis.com; " .
                "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; " .
                "img-src 'self' data: blob: https://lh3.googleusercontent.com; " .
-               "connect-src 'self' https://api.groq.com https://www.googleapis.com; " .
+               "connect-src 'self' https://api.groq.com https://www.googleapis.com{$proxyOrigin}; " .
                "frame-src 'self' https://drive.google.com{$rcFrame}; " .
                "frame-ancestors 'self'; " .
                "form-action 'self'; " .

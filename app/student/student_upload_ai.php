@@ -133,33 +133,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'extra
         throw new UserFacingException('The AI could not identify the details in this document. You can choose "Fill Manually" to enter them yourself.');
     }
     
-    // Safe handling of array/string fields
-    $authors = $u['full_name'];
-    if (isset($aiMeta['authors'])) {
-        $authors = is_array($aiMeta['authors']) ? implode(', ', $aiMeta['authors']) : (string)$aiMeta['authors'];
-    }
-
-    $keywords = '';
-    if (isset($aiMeta['keywords'])) {
-        $keywords = is_array($aiMeta['keywords']) ? implode(', ', $aiMeta['keywords']) : (string)$aiMeta['keywords'];
-    }
-
-    // The abstract is the only section taken from the paper, and it is copied
-    // verbatim rather than generated. The student writes the Introduction,
-    // Methodology and Results and Discussion themselves.
-    $result = [
-      'title' => $aiMeta['title'] ?? 'Untitled',
-      'authors' => $authors,
-      'year' => $aiMeta['year'] ?? (int)date('Y'),
-      'keywords' => $keywords,
-      'abstract' => trim($aiMeta['abstract'] ?? ''),
-      'ai_summary' => '',
-      'ai_methodology' => '',
-      'ai_statistical_methods' => '',
-      'ai_variables' => '',
-      'ai_sample_size' => '',
-      'ai_research_field' => ''
-    ];
+    /* The abstract is the only section taken from the paper, and it is copied
+       verbatim rather than generated. The student writes the Introduction,
+       Methodology and Results and Discussion themselves. */
+    $result = build_metadata_result($aiMeta, (string)($aiMeta['abstract'] ?? ''), (string)$u['full_name']);
     
     /* Similarity detection used to run here, comparing this abstract against
        the last fifty approved ones through the AI, one request per batch of
@@ -407,6 +384,55 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
       : 'The draft could not be saved.';
     $safe = safe_error_message($e, $shown);
     echo json_encode(['success' => false, 'message' => $safe['message'], 'reference' => $safe['reference']]);
+    exit;
+  }
+}
+
+
+/* AJAX: metadata, where this server cannot reach the model itself.
+ *
+ * On hosting that forbids outbound calls the browser does that part: it reads
+ * the PDF with the copy of PDF.js the page already loads, sends the text to
+ * the proxy in AI_PROXY_URL, and posts the fields back here. This endpoint
+ * makes no outbound call of its own. It exists so the abstract is still lifted
+ * by the same tested pattern matching as the ordinary path, and so the answer
+ * the page receives has exactly one shape whichever route it came by.
+ *
+ * The text is accepted on trust as text, which is all it is: it is read for an
+ * abstract and never stored, executed or echoed.
+ */
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'extract_from_text') {
+  while (ob_get_level() > 0) { ob_end_clean(); }
+  header('Content-Type: application/json');
+  try {
+    csrf_verify();
+    if (AI_PROXY_URL === '') {
+      throw new UserFacingException('This server reads papers itself; it has no metadata proxy configured.');
+    }
+
+    $text = (string)($_POST['text'] ?? '');
+    if (strlen($text) < 50) {
+      throw new UserFacingException('No readable text could be found in this PDF. It may be a scan of a printed page, password-protected, or empty. Choose "Fill Manually" to enter the details yourself.');
+    }
+
+    /* What the proxy returned, re-checked here rather than trusted: it arrives
+       by way of the browser, so it is treated as input like any other. */
+    $aiMeta = json_decode((string)($_POST['ai'] ?? '[]'), true);
+    if (!is_array($aiMeta)) { $aiMeta = []; }
+
+    $abstract = extract_abstract_from_text($text);
+    $result = build_metadata_result($aiMeta, (string)$abstract, (string)$u['full_name']);
+
+    echo json_encode(['success' => true, 'data' => $result]);
+    exit;
+
+  } catch (Throwable $e) {
+    http_response_code(500);
+    $shown = ($e instanceof UserFacingException)
+        ? $e->getMessage()
+        : 'The details could not be read. Please try again, or choose "Fill Manually".';
+    $safe = safe_error_message($e, $shown);
+    echo json_encode(['success'=>false,'message'=>$safe['message'],'reference'=>$safe['reference']]);
     exit;
   }
 }
@@ -7376,6 +7402,115 @@ function updateReview() {
    of the other. The overlay already dims and blurs the page and takes the
    clicks, which is the rest of what the pill's veil is for. */
 
+/* ---------------------------------------------------------------------------
+   Reading the paper in the browser.
+
+   Hosting that forbids outbound calls cannot reach the model from PHP, but the
+   student's own browser can. When AI_PROXY is set the page reads the PDF with
+   PDF.js (the same copy includes/pdf_dock.php already loads for the viewer),
+   sends the text to the proxy, and hands the fields to PHP, which lifts the
+   abstract and assembles the answer. With AI_PROXY empty nothing changes: this
+   server calls the model itself, as it does on a machine with outbound access.
+   --------------------------------------------------------------------------- */
+const AI_PROXY     = <?= json_encode(AI_PROXY_URL, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) ?>;
+const PDFJS_SRC    = <?= json_encode(asset_url('assests/js/pdfjs/pdf.min.js'), JSON_UNESCAPED_SLASHES) ?>;
+const PDFJS_WORKER = <?= json_encode(asset_url('assests/js/pdfjs/pdf.worker.min.js'), JSON_UNESCAPED_SLASHES) ?>;
+const PAPEL_JSON_HEADERS = { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
+
+/* Finds the JSON in an answer rather than trusting the whole body to be JSON.
+   PHP prints some warnings before a line of this app runs, and a host that cuts
+   a request short replies with a page of its own; r.json() on either rejects,
+   and the student used to hear that the server could not be reached. */
+function papelReadJson(r) {
+    return r.text().then(function (body) {
+        try { return JSON.parse(body); }
+        catch (err) {
+            const open = body.indexOf('{'), close = body.lastIndexOf('}');
+            if (open !== -1 && close > open) {
+                try { return JSON.parse(body.slice(open, close + 1)); } catch (e) {}
+            }
+            const failure = new Error('The server answered HTTP ' + r.status + ' with no JSON in it.');
+            failure.papelStatus = r.status;
+            failure.papelBody = body;
+            throw failure;
+        }
+    });
+}
+
+// Loaded only if the page does not have it: a second copy of PDF.js replaces
+// the global the open viewer is still holding (see includes/pdf_dock.php).
+function papelLoadPdfJs() {
+    if (typeof pdfjsLib !== 'undefined') return Promise.resolve();
+    return new Promise(function (resolve, reject) {
+        const s = document.createElement('script');
+        s.src = PDFJS_SRC;
+        s.onload = resolve;
+        s.onerror = function () { reject(new Error('The PDF reader could not be loaded.')); };
+        document.head.appendChild(s);
+    });
+}
+
+/* Stops at the character budget rather than reading the whole document: the
+   model is asked only for the title, authors, year and keywords, and the
+   abstract pattern looks at the front too, so a hundred pages of chapters are
+   read for nothing. */
+async function papelPdfText(file, maxChars) {
+    await papelLoadPdfJs();
+    if (pdfjsLib.GlobalWorkerOptions) { pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER; }
+    const doc = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+    let text = '';
+    for (let n = 1; n <= doc.numPages && text.length < maxChars; n++) {
+        const content = await (await doc.getPage(n)).getTextContent();
+        text += content.items.map(function (i) { return i.str; }).join(' ') + '\n';
+    }
+    return text.replace(/\s+/g, ' ').trim().slice(0, maxChars);
+}
+
+// Either route, one answer shape, so the caller below does not know which ran.
+async function papelExtractMetadata(pdfFile, fd) {
+    if (!AI_PROXY) {
+        return papelReadJson(await fetch('student_upload_ai.php', {
+            method: 'POST', body: fd, headers: PAPEL_JSON_HEADERS
+        }));
+    }
+
+    const text = await papelPdfText(pdfFile, 20000);
+    if (text.length < 50) {
+        return { success: false, message: 'No readable text could be found in this PDF. It may be a '
+            + 'scan of a printed page, password-protected, or empty. Choose "Fill Manually" to enter '
+            + 'the details yourself.' };
+    }
+
+    let proxied;
+    try {
+        proxied = await papelReadJson(await fetch(AI_PROXY, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: text })
+        }));
+    } catch (err) {
+        /* The proxy is a second address, so it fails in its own ways: offline,
+           withdrawn, or an origin it does not recognise. Said as its own thing
+           rather than as a fault in the paper. */
+        return { success: false, message: 'The reading service could not be reached. Please try again '
+            + 'shortly, or choose "Fill Manually" to type the details in yourself.' };
+    }
+    if (!proxied || !proxied.success) {
+        return { success: false, message: (proxied && proxied.error) || 'The AI could not identify the '
+            + 'details in this document. You can choose "Fill Manually" to enter them yourself.' };
+    }
+
+    const body = new FormData();
+    body.set('action', 'extract_from_text');
+    body.set('text', text);
+    body.set('ai', JSON.stringify(proxied.data || {}));
+    const token = document.querySelector('input[name="_token"]');
+    if (token) { body.set(token.name, token.value); }
+    return papelReadJson(await fetch('student_upload_ai.php', {
+        method: 'POST', body: body, headers: PAPEL_JSON_HEADERS
+    }));
+}
+
 // Extract AI button handler
 document.getElementById('btnExtract').addEventListener('click', function(){
   /* The IMRAD PDF when there is one, since the form's sections are IMRAD-shaped;
@@ -7445,36 +7580,7 @@ document.getElementById('btnExtract').addEventListener('click', function(){
   const tokenInput = document.querySelector('input[name="csrf_token"]') || document.querySelector('input[name="_token"]');
   if(tokenInput) fd.append(tokenInput.name, tokenInput.value);
 
-  fetch('student_upload_ai.php', {
-    method: 'POST',
-    body: fd,
-    /* Declares what this call wants back. Without it the handler in
-       config/error_handler.php cannot tell a background call from a page view,
-       and answers an uncaught error with the styled HTML error page, 10 kB of
-       it: r.json() then rejects and the student is told the server could not
-       be reached, about a server that answered perfectly well. */
-    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
-  })
-  /* Read as text and find the JSON in it, rather than trusting the whole body
-     to be JSON. PHP prints some warnings before a single line of this app
-     runs (an over-sized upload is the one that bit us: the warning comes from
-     "Unknown on line 0", so no ini_set of ours can stop it), and r.json() on a
-     body with anything in front of it rejects outright. The student then heard
-     that the server could not be reached, about a server that had answered
-     and said exactly what was wrong. */
-  .then(r => r.text().then(function (body) {
-      try { return JSON.parse(body); }
-      catch (err) {
-          const open = body.indexOf('{'), close = body.lastIndexOf('}');
-          if (open !== -1 && close > open) {
-              try { return JSON.parse(body.slice(open, close + 1)); } catch (e) {}
-          }
-          const failure = new Error('The server answered HTTP ' + r.status + ' with no JSON in it.');
-          failure.papelStatus = r.status;
-          failure.papelBody = body;
-          throw failure;
-      }
-  }))
+  papelExtractMetadata(pdfFile, fd)
   .then(data => {
     if(data.success){
       document.getElementById('titleField').value = data.data.title || '';

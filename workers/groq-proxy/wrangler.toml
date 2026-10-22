@@ -1,0 +1,9 @@
+name = "papel-groq-proxy"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+# Set the secret with:  wrangler secret put GROQ_API_KEY
+# These two are plain configuration and may live here.
+[vars]
+ALLOWED_ORIGINS = "http://localhost"
+GROQ_MODEL = "openai/gpt-oss-120b"
