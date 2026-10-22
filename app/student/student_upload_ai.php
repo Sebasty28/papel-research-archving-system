@@ -7417,6 +7417,14 @@ const PDFJS_SRC    = <?= json_encode(asset_url('assests/js/pdfjs/pdf.min.js'), J
 const PDFJS_WORKER = <?= json_encode(asset_url('assests/js/pdfjs/pdf.worker.min.js'), JSON_UNESCAPED_SLASHES) ?>;
 const PAPEL_JSON_HEADERS = { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
 
+/* On a copy of the site, the answer itself is shown. A body with no JSON in it
+   comes from the host rather than from PAPEL, and its first line usually names
+   the reason (a firewall refusal, a resource limit, a gateway timeout).
+   Without it the only route to that line is the browser console, which is not
+   somewhere a student goes, and the fault reads as unexplained. Never on
+   production, where it would be noise in front of somebody handing work in. */
+const SHOW_TECH_DETAIL = <?= json_encode(defined('APP_ENV') && APP_ENV !== 'production') ?>;
+
 /* Finds the JSON in an answer rather than trusting the whole body to be JSON.
    PHP prints some warnings before a line of this app runs, and a host that cuts
    a request short replies with a page of its own; r.json() on either rejects,
@@ -7646,8 +7654,15 @@ document.getElementById('btnExtract').addEventListener('click', function(){
        where to look: 504 or 508 is the host cutting a long request short, 403
        its firewall, 200 a page where JSON was expected. */
     const status = (e && e.papelStatus) ? ' (HTTP ' + e.papelStatus + ')' : '';
-    papelAlert('❌ The server did not answer properly' + status + '. Please try again, or choose '
-      + '"Fill Manually" to type the details in yourself.');
+    let detail = '';
+    if (SHOW_TECH_DETAIL && e && typeof e.papelBody === 'string') {
+        // Tags stripped and collapsed: the answer is usually a whole page, and
+        // the sentence worth reading is a few words inside it.
+        const plain = e.papelBody.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+        if (plain) { detail = ' Server said: "' + plain.slice(0, 160) + '".'; }
+    }
+    papelAlert('❌ The server did not answer properly' + status + '.' + detail
+      + ' Please try again, or choose "Fill Manually" to type the details in yourself.');
   })
   .finally(() => {
     clearInterval(aiTimer);
