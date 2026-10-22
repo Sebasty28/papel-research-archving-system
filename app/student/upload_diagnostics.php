@@ -124,11 +124,13 @@ REFUSED with a 403 and an nginx page is the host, before PHP ever sees it.</p>
     return p;
   }
 
-  // Round two: which transport does this host actually let through? The first
-  // round showed every multipart POST refused and the one url-encoded POST
-  // allowed, so these ask how far that goes and what else is permitted.
-  /* Built in slices: String.fromCharCode.apply with a few hundred thousand
-     arguments exceeds the call argument limit and throws. */
+  /* Round three. Round one refused every multipart POST; round two allowed
+     one of the same size and shape. So the refusal is not the content type
+     after all: it comes and goes. These probes therefore repeat, and they
+     post to student_upload_ai.php itself rather than to this page, because a
+     rule could as easily key on the address as on the request. An unmatched
+     action there matches no handler, so the page simply renders: HTTP 200
+     with HTML means the request was accepted, and that is all this asks. */
   function toBase64(u8) {
     let s = '';
     for (let i = 0; i < u8.length; i += 8192) {
@@ -136,48 +138,55 @@ REFUSED with a 403 and an nginx page is the host, before PHP ever sees it.</p>
     }
     return btoa(s);
   }
-  const b64 = toBase64(bytes);
+  const twoMb = new Uint8Array(2 * 1024 * 1024);
+  twoMb.set([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34]);
+  for (let i = 8; i < twoMb.length; i++) { twoMb[i] = 32 + (i % 90); }
+  const pdf2mb = new File([twoMb], 'probe.pdf', { type: 'application/pdf' });
+
+  const UPLOAD = 'student_upload_ai.php';
+  const HERE = location.pathname.split('/').pop();
+
+  function mp(file) {
+    const fd = new FormData();
+    fd.set('_token', token);
+    fd.set('action', 'papel_probe_no_such_action');
+    if (file) { fd.set('research_pdf', file, 'probe.pdf'); }
+    return fd;
+  }
 
   const cases = [
-    ['1 url-encoded, tiny',          function () { return { body: urlenc({ shape: 'tiny' }) }; }],
-    ['2 url-encoded, 20k',           function () { return { body: urlenc({ shape: 'ue20k', text: plain20k }) }; }],
-    ['3 url-encoded, 20k of HTML',   function () { return { body: urlenc({ shape: 'uehtml', text: html20k }) }; }],
-    ['4 url-encoded, 400k base64',   function () { return { body: urlenc({ shape: 'ueb64', file: b64 }) }; }],
-    ['5 json body, tiny',            function () { return { body: JSON.stringify({ shape: 'jsontiny' }),
-                                                            type: 'application/json' }; }],
-    ['6 json body, 400k base64',     function () { return { body: JSON.stringify({ shape: 'jsonb64', file: b64 }),
-                                                            type: 'application/json' }; }],
-    ['7 raw octet-stream PDF',       function () { return { body: bigPdf, type: 'application/octet-stream',
-                                                            query: '?shape=octet' }; }],
-    ['8 text/plain base64',          function () { return { body: b64, type: 'text/plain',
-                                                            query: '?shape=textb64' }; }],
-    ['9 multipart (control)',        function () { return { body: form({ shape: 'mpcontrol' }) }; }]
+    ['1 multipart tiny -> upload',   UPLOAD, function () { return { body: mp() }; }],
+    ['2 multipart tiny -> upload',   UPLOAD, function () { return { body: mp() }; }],
+    ['3 multipart tiny -> upload',   UPLOAD, function () { return { body: mp() }; }],
+    ['4 multipart 300KB -> upload',  UPLOAD, function () { return { body: mp(bigPdf) }; }],
+    ['5 multipart 300KB -> upload',  UPLOAD, function () { return { body: mp(bigPdf) }; }],
+    ['6 multipart 2MB -> upload',    UPLOAD, function () { return { body: mp(pdf2mb) }; }],
+    ['7 url-encoded -> upload',      UPLOAD, function () { return { body: urlenc({ action: 'papel_probe_no_such_action' }) }; }],
+    ['8 multipart tiny -> this page', HERE,  function () { return { body: form({ shape: 'mp' }) }; }],
+    ['9 multipart 300KB -> this page', HERE, function () { return { body: form({ shape: 'mpbig' }, bigPdf) }; }]
   ];
 
   for (const row of cases) {
-    const label = row[0];
-    const spec = row[1]();
+    const label = row[0], target = row[1];
     let verdict;
+    const started = performance.now();
     try {
-      const headers = { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
-      if (spec.type) { headers['Content-Type'] = spec.type; }
-      const r = await fetch(location.pathname + (spec.query || ''), {
-        method: 'POST', body: spec.body, headers: headers
+      const r = await fetch(target, {
+        method: 'POST', body: row[2]().body,
+        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
       });
       const text = await r.text();
-      let parsed = null;
-      try { parsed = JSON.parse(text); } catch (e) {}
-      if (parsed && parsed.ok) {
-        verdict = 'HTTP ' + r.status + '  OK  (' + parsed.fields + ' fields, ' + parsed.files
-                + ' file, raw ' + parsed.raw_bytes + ', sent ' + parsed.bytes_in + ')';
+      const ms = Math.round(performance.now() - started);
+      const refused = /openresty|403 Forbidden/i.test(text) && text.length < 2000;
+      if (refused) {
+        verdict = 'HTTP ' + r.status + '  REFUSED by the host   ' + ms + 'ms';
       } else {
-        const snippet = text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
-        verdict = 'HTTP ' + r.status + '  REFUSED  ' + (snippet || '(empty body)');
+        verdict = 'HTTP ' + r.status + '  reached PHP (' + text.length + ' bytes back)  ' + ms + 'ms';
       }
     } catch (err) {
       verdict = 'request never completed: ' + err.message;
     }
-    lines.push((label + '                                ').slice(0, 32) + verdict);
+    lines.push((label + '                                  ').slice(0, 34) + verdict);
     show();
   }
   show();
