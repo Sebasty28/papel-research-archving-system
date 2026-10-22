@@ -109,7 +109,15 @@ function start_session_once(): void {
        nobody signed in again. */
     $wasSignedIn = !empty($_SESSION['user']) || !empty($_SESSION['guest_login']);
     if (!empty($_SESSION['seen']) && (time() - (int)$_SESSION['seen']) > SESSION_IDLE_SECONDS) {
-      $_SESSION = [];
+      /* Nobody was signed in, so there is no session to end: what the wipe
+         actually destroyed was the CSRF token of the sign-in form already on
+         screen. The next submit then failed the check, the visitor was
+         returned to the sign-in panel with no reason given, and only a second
+         attempt worked, because by then the page carried a current token.
+         Carrying the token across costs nothing: it proves a form came from
+         this browser, and it guards no account while nobody is signed in. */
+      $carry = $wasSignedIn ? [] : array_filter(['csrf' => $_SESSION['csrf'] ?? null]);
+      $_SESSION = $carry;
       session_regenerate_id(true);
       if ($wasSignedIn) {
         /* Said on the sign-in panel, the same way require_role() explains the
@@ -260,15 +268,20 @@ function csrf_valid(): bool {
  *        endpoints, where a redirect would only confuse the caller) the request
  *        is refused outright, as before.
  */
-function csrf_verify(?string $redirect = null): void {
+function csrf_verify(?string $redirect = null, string $flashKey = 'error'): void {
   start_session_once();
   if (csrf_valid()) {
     return;
   }
 
   if ($redirect !== null) {
-    // A fresh token is issued with the next page, so the retry will work.
-    flash('error', 'Your session expired before that was submitted. Please try again.');
+    /* Flashed under the key the destination actually reads. 'error' is the
+       general one that dashboards and management pages show; the sign-in panel
+       shows 'login_error' and nothing else, so a sign-in refused here said
+       nothing at all on arrival and then surfaced the message on whichever
+       page next read 'error' - the dashboard, right after a sign-in that had
+       just succeeded, reporting an expiry that was two requests old. */
+    flash($flashKey, 'Your session expired before that was submitted. Please try again.');
     header('Location: ' . $redirect);
     exit;
   }
@@ -284,8 +297,14 @@ function csrf_verify(?string $redirect = null): void {
      was shown "Error connecting to server" about a server that had answered
      precisely and correctly. The wording says what actually happened, since a
      stale token means the sign-in behind the page is no longer the live one. */
+  /* Sec-Fetch-Dest is the browser's own word for what asked, and it arrives
+     even where a proxy has dropped the other two. Without it a refusal could
+     still come back as the bare line below, which no fetch can read: that is
+     how a 403 reached the upload page as "the server did not answer properly"
+     with the reason nowhere to be seen. */
   $wantsJson = (strpos($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json') !== false)
-      || (strtolower($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'xmlhttprequest');
+      || (strtolower($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'xmlhttprequest')
+      || (($_SERVER['HTTP_SEC_FETCH_DEST'] ?? '') === 'empty');
   if ($wantsJson) {
     if (!headers_sent()) { header('Content-Type: application/json'); }
     exit(json_encode([
@@ -544,7 +563,20 @@ function require_role(array $roles): void {
   }
   if (!$u) { login_redirect($tab); }
 
-  if (!$opening_page) { http_response_code(403); exit('Forbidden'); }
+  /* Not a page view, so the answer has to be something a script can read.
+     This used to be the bare word Forbidden, which no fetch on the site can
+     parse: the upload page reported "the server did not answer properly" and
+     the reason never reached anyone. The 401 branch above has answered in
+     JSON for a while; this is the same courtesy for the other refusal. */
+  if (!$opening_page) {
+    http_response_code(403);
+    header('Content-Type: application/json');
+    exit(json_encode([
+      'success' => false,
+      'error'   => 'wrong_role',
+      'message' => 'This account is not allowed to do that. Sign in with the account that owns this work.',
+    ]));
+  }
 
   // A new id with nothing in it, so the flash below has somewhere to live and
   // the old session's file is deleted rather than left behind.

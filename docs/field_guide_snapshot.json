@@ -1,5 +1,5 @@
 {
- "built": "2026-10-22 15:55",
+ "built": "2026-10-22 16:11",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -41,7 +41,7 @@
    "lines": 135
   },
   "app/auth/login.php": {
-   "lines": 1108
+   "lines": 1109
   },
   "app/auth/logout.php": {
    "lines": 36
@@ -149,7 +149,7 @@
    "lines": 176
   },
   "config/core.php": {
-   "lines": 2944
+   "lines": 2976
   },
   "config/error_handler.php": {
    "lines": 173

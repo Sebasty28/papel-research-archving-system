@@ -11,7 +11,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
      needs to sign in again on a page that has a current token. */
   $role_for_redirect = in_array($_POST['selected_role'] ?? '', ['student', 'faculty', 'guest'], true)
       ? $_POST['selected_role'] : 'student';
-  csrf_verify(BASE_URL . '/archive/index.php?login_modal=1&role=' . $role_for_redirect);
+  /* login_error, because that is the only key the sign-in panel draws. */
+  csrf_verify(BASE_URL . '/archive/index.php?login_modal=1&role=' . $role_for_redirect, 'login_error');
 
   $action = $_POST['action'] ?? 'login';
 
