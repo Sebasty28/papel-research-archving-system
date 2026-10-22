@@ -325,7 +325,7 @@ function upload_to_gdrive(string $filePath, string $fileName, ?string $folderId 
         return $file->id;
     } catch (Exception $e) {
         error_log('GDrive upload error: ' . $e->getMessage());
-        throw new Exception("Failed to upload file to Google Drive. Please try again.");
+        throw new Exception("Failed to upload file to Google Drive. Please try again.", 0, $e);
     }
 }
 
@@ -364,7 +364,7 @@ function upload_paper_to_gdrive(string $filePath, string $fileName, string $prog
         return $file->id;
     } catch (Exception $e) {
         error_log('GDrive paper upload error: ' . $e->getMessage());
-        throw new Exception("Failed to upload paper to Google Drive. Please try again.");
+        throw new Exception("Failed to upload paper to Google Drive. Please try again.", 0, $e);
     }
 }
 
@@ -404,7 +404,7 @@ function upload_supporting_doc_to_gdrive(string $filePath, string $fileName, str
         return $file->id;
     } catch (Exception $e) {
         error_log('GDrive supporting doc error: ' . $e->getMessage());
-        throw new Exception("Failed to upload supporting document to Google Drive. Please try again.");
+        throw new Exception("Failed to upload supporting document to Google Drive. Please try again.", 0, $e);
     }
 }
 

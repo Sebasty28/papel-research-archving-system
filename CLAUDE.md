@@ -120,6 +120,12 @@ docked, the panel's bottom edge is that figure, so it ends at the footer's top.
 The footer runs the full width in front of a docked chat, as the navbar and the
 strip do, and as it already did for the PDF panel.
 
+Anything that must sit flush under the navbar reads `--pdf-dock-top`, the bar's
+measured bottom edge that `pdf_dock.php` keeps on `<html>`, and never a number.
+The expanded section used `60px` against a bar of 37px, so 23px of the
+breadcrumb strip showed above it as a gap; on a phone the bar is 61px, and a
+`top: 0` override left the box's own toolbar underneath it.
+
 ### `style="..."` attributes are dropped
 
 `style-src` in the CSP has no `'unsafe-inline'`, and that blocks style
@@ -177,6 +183,32 @@ browser: coming back to a draft, the student attaches them again, and the
 "Continue your draft?" prompt only lists the names they had used. That is
 deliberate (nothing is stored for work nobody has handed in), so do not add a
 "keep the saved file" path without asking. `save_draft` takes no `$_FILES`.
+
+### "Upload failed. Please try again." hid its own cause
+
+That line is the submit handler's catch-all: **every** exception that is not a
+`UserFacingException` becomes it, and the real cause goes only to the server log,
+against a reference. On staging (InfinityFree) that log is not somewhere anyone
+testing can look, so a failure read as unexplained, and the page also prefixed its
+own "Upload failed:" and dropped the reference.
+
+- A message a person can act on is a `UserFacingException` (keywords, dates, the
+  sections, Drive not connected). A plain `Exception` is a fault, and says nothing.
+- `safe_error_message()` adds `detail` (the class, the message, where, and the
+  wrapped error inside it) on **any copy of the site that is not production**, never
+  on production and never for a `UserFacingException`. Handlers send the whole array
+  (`['success' => false] + $safe`), and `papelFailureText()` puts message, reference
+  and cause in the dialog. Do not go back to picking out two keys by hand.
+- **Nothing after the commit may report a failed upload.** The paper is filed by
+  then; the tail (old Drive files, the adviser's notification) sits in its own
+  `try`. It used to fall into the handler's catch and answer "Upload failed" for a
+  paper that was in fact filed, which invites filing it twice.
+- Drive is asked about first (`is_gdrive_connected()`), before anything is stored. A
+  copy of the site has its own database and its own Drive token, written once by
+  hand, and nothing sets it up when the code is deployed.
+- PHP 8.1+ makes mysqli **throw** on a failed query; 8.0 (here) stays silent and
+  returns false. Staging runs 8.4, so a statement that fails quietly here can end a
+  request there.
 
 ### `bind_param` type-string length
 
@@ -503,6 +535,11 @@ is standalone: it creates the AUTOTEST accounts through the app's own forms usin
 minted Coordinator session, submits for real (three Drive uploads), and removes the
 Drive files and any empty AUTOTEST folder before it removes the accounts. It takes
 step names to run a part (`python m10_section_scope.py legacy`).
+`tests/m11_submit_failures.py` is its companion for what a failed submission says: it
+sets Google Drive aside (token, in the database and in the file) and renames the
+notifications table for one request, to produce real failures, and puts both back in a
+`finally`. If a run is killed, check `system_settings` for a `gdrive_system_token__aside`
+key and `config/` for `gdrive_token.json.aside`, and that a `notifications` table exists.
 
 ### When there is no running app (cloud and web sessions)
 

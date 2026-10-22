@@ -152,8 +152,17 @@ register_shutdown_function('custom_shutdown_handler');
  * Logs the real error and returns a sanitized user-facing message.
  * 
  * Usage in catch blocks:
- *   $safeMsg = safe_error_message($e, 'Upload failed');
- *   echo json_encode(['success' => false, 'message' => $safeMsg['message'], 'reference' => $safeMsg['reference']]);
+ *   $safe = safe_error_message($e, 'Upload failed');
+ *   echo json_encode(['success' => false] + $safe);
+ *
+ * The array carries `detail` as well on any copy of the site that is not
+ * production, and the callers send the whole array on. A catch-all message hides
+ * the cause by design, which is right for a live site and a trap on staging:
+ * the one place the cause is written down is a server log that a student, and
+ * often the person testing, cannot open. On a copy of the site the cause goes
+ * with the reference, so a failure can be read where it happens. It is never
+ * added on production, and never for a message that was written for the reader
+ * (UserFacingException), which already says everything there is to say.
  */
 function safe_error_message(\Throwable $e, string $userMessage = 'An unexpected error occurred. Please try again.'): array {
     $ref = generate_error_ref();
@@ -165,8 +174,20 @@ function safe_error_message(\Throwable $e, string $userMessage = 'An unexpected 
         $e->getLine(),
         $e->getTraceAsString()
     );
-    return [
+    $out = [
         'message' => $userMessage,
         'reference' => $ref
     ];
+    if (defined('APP_ENV') && APP_ENV !== 'production' && !($e instanceof UserFacingException)) {
+        $detail = get_class($e) . ': ' . $e->getMessage()
+            . ' [' . basename($e->getFile()) . ':' . $e->getLine() . ']';
+        /* The error that was wrapped, when there is one. A Drive upload fails with
+           a sentence written for the reader, and the real reason (a refused token,
+           a missing folder) is the exception inside it. */
+        for ($inner = $e->getPrevious(); $inner && strlen($detail) < 380; $inner = $inner->getPrevious()) {
+            $detail .= ' <- ' . get_class($inner) . ': ' . $inner->getMessage();
+        }
+        $out['detail'] = substr($detail, 0, 500);
+    }
+    return $out;
 }

@@ -157,7 +157,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'extra
         ? $e->getMessage()
         : 'AI extraction failed. Please try again, or choose "Fill Manually".';
     $safe = safe_error_message($e, $shown);
-    echo json_encode(['success'=>false,'message'=>$safe['message'],'reference'=>$safe['reference']]);
+    echo json_encode(['success' => false] + $safe);   // message, reference, and detail on a copy of the site
     exit;
   }
 }
@@ -390,7 +390,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
       ? $e->getMessage()
       : 'The draft could not be saved.';
     $safe = safe_error_message($e, $shown);
-    echo json_encode(['success' => false, 'message' => $safe['message'], 'reference' => $safe['reference']]);
+    echo json_encode(['success' => false] + $safe);   // message, reference, and detail on a copy of the site
     exit;
   }
 }
@@ -439,7 +439,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'extra
         ? $e->getMessage()
         : 'The details could not be read. Please try again, or choose "Fill Manually".';
     $safe = safe_error_message($e, $shown);
-    echo json_encode(['success'=>false,'message'=>$safe['message'],'reference'=>$safe['reference']]);
+    echo json_encode(['success' => false] + $safe);   // message, reference, and detail on a copy of the site
     exit;
   }
 }
@@ -629,11 +629,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     $researchDate = trim($_POST['research_date'] ?? '');
     $rd = $researchDate !== '' ? DateTime::createFromFormat('Y-m-d', $researchDate) : false;
     if (!$rd || $rd->format('Y-m-d') !== $researchDate) {
-        throw new Exception('Please enter a valid date of completion.');
+        throw new UserFacingException('Please enter a valid date of completion.');
     }
     $ry = (int)$rd->format('Y');
     if ($ry < 1900 || $ry > 2100) {
-        throw new Exception('The date of completion must fall between 1900 and 2100.');
+        throw new UserFacingException('The date of completion must fall between 1900 and 2100.');
     }
     $year = $ry;
     $researchDateParam = $researchDate;
@@ -701,7 +701,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     // 1. Keyword Validation (At least 5)
     $kwArray = array_filter(array_map('trim', explode(',', $keywords)));
     if (count($kwArray) < 5) {
-        throw new Exception("At least 5 keywords are required.");
+        throw new UserFacingException('Please give at least 5 keywords, separated by commas.');
+    }
+
+    /* Papers live on Google Drive, so a server with no working connection to it
+       cannot take one. That is a real possibility on a copy of the site: staging
+       has its own database and its own token, written once by hand, and nothing
+       sets it up when the code is deployed. It used to be found out only after
+       the PDF had been moved and the folders made, and then reported with the
+       same generic line as any other fault, so the cause was a server log nobody
+       could open. It is asked first now, before anything is stored. */
+    if (function_exists('upload_paper_to_gdrive') && function_exists('is_gdrive_connected') && !is_gdrive_connected()) {
+        error_log('Submission refused: Google Drive is not connected on this server.');
+        throw new UserFacingException('Papers cannot be stored on this server yet, because Google Drive has not been '
+            . 'connected to it. Nothing was submitted. Please ask your Research Coordinator to connect it, then try again.');
     }
 
     // 2. Duplicate Title Check
@@ -737,7 +750,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
       $destPath = $destDir . '/' . ($dual ? $fmt . '_' : '') . "{$safeBase}.pdf";
 
       if (!move_uploaded_file($pdf['tmp_name'], $destPath)) {
-        throw new Exception('Failed to store');
+        throw new Exception('Could not move the uploaded PDF into ' . dirname($destPath)
+            . ' (does the folder exist and can the web server write to it?)');
       }
       $stagedFiles[] = $destPath;
 
@@ -988,51 +1002,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     $driveMade   = [];
     $stagedFiles = [];
 
-    /* What the new files replaced can go. A paper that was withdrawn, not
-       returned, comes back to draft with its Drive files intact and has just been
-       filed again with new ones; without this the old ones stayed on Drive for
-       good, reachable by nobody. A returned paper has nothing to find here, its
-       files were purged when it was returned. Best effort: delete_from_gdrive()
-       never throws. */
-    foreach ($oldDriveIds as $oldId) {
-        delete_from_gdrive($oldId);
-    }
-    // And the copy an older draft kept on this server, but only from this student's own draft folder.
-    if ($oldDraftPdf !== '') {
-        $draftBase = realpath(__DIR__ . '/uploads/drafts/' . (int)$u['user_id']);
-        $oldReal   = realpath(__DIR__ . '/' . $oldDraftPdf);
-        if ($draftBase !== false && $oldReal !== false
-                && strpos($oldReal, $draftBase . DIRECTORY_SEPARATOR) === 0 && is_file($oldReal)) {
-            @unlink($oldReal);
+    /* From here on the paper is filed and the transaction is closed, so nothing
+       below can undo it, and nothing below may report it as a failed upload.
+       It used to: a step after the commit that threw (the notification row,
+       for one) fell into the catch at the foot of this handler, which answered
+       "Upload failed" for a paper that was in fact filed. The student then tried
+       again and filed it twice. These steps tidy up and tell people; a failure in
+       one is logged against a reference, and the student is told what happened,
+       which is that their paper was submitted. */
+    try {
+        /* What the new files replaced can go. A paper that was withdrawn, not
+           returned, comes back to draft with its Drive files intact and has just been
+           filed again with new ones; without this the old ones stayed on Drive for
+           good, reachable by nobody. A returned paper has nothing to find here, its
+           files were purged when it was returned. Best effort: delete_from_gdrive()
+           never throws. */
+        foreach ($oldDriveIds as $oldId) {
+            delete_from_gdrive($oldId);
         }
-    }
-
-    /* The folders held nothing but those staging files. rmdir only removes an
-       empty directory, so anything still in there is left exactly as it is. */
-    foreach (array_reverse($stagingDirs) as $dir) {
-        if (is_dir($dir)) { @rmdir($dir); }
-    }
-
-    /* Tell the Research Adviser there is something waiting. The adviser is the
-       faculty member who created this student's account, which is the same link
-       their review queue is built on, so if there is no creator, nobody would
-       ever see the paper, and that is worth recording rather than passing over
-       in silence. */
-    if ($u['user_role'] === 'student') {
-        $adviserId = creator_of($u['user_id']);
-        if ($adviserId) {
-            /* Said in the notice itself, because the adviser opens this to decide
-               what to do with the paper, and a paper filed with sections left out
-               on purpose should not be read as one that is missing them. Nothing
-               is added for a complete paper. */
-            $scopeNote = paper_scope_notice(paper_scope_info($imradContent), 'brief');
-            create_notification($adviserId, $paper_id, 'submission',
-                $u['full_name'] . ' submitted "' . $title . '" for your review.'
-                . ($scopeNote !== '' ? ' ' . $scopeNote : ''));
-        } else {
-            error_log('Paper ' . $paper_id . ' submitted by user ' . $u['user_id']
-                    . ' who has no Research Adviser (users.created_by is empty), so it will not appear in any review queue.');
+        // And the copy an older draft kept on this server, but only from this student's own draft folder.
+        if ($oldDraftPdf !== '') {
+            $draftBase = realpath(__DIR__ . '/uploads/drafts/' . (int)$u['user_id']);
+            $oldReal   = realpath(__DIR__ . '/' . $oldDraftPdf);
+            if ($draftBase !== false && $oldReal !== false
+                    && strpos($oldReal, $draftBase . DIRECTORY_SEPARATOR) === 0 && is_file($oldReal)) {
+                @unlink($oldReal);
+            }
         }
+
+        /* The folders held nothing but those staging files. rmdir only removes an
+           empty directory, so anything still in there is left exactly as it is. */
+        foreach (array_reverse($stagingDirs) as $dir) {
+            if (is_dir($dir)) { @rmdir($dir); }
+        }
+
+        /* Tell the Research Adviser there is something waiting. The adviser is the
+           faculty member who created this student's account, which is the same link
+           their review queue is built on, so if there is no creator, nobody would
+           ever see the paper, and that is worth recording rather than passing over
+           in silence. */
+        if ($u['user_role'] === 'student') {
+            $adviserId = creator_of($u['user_id']);
+            if ($adviserId) {
+                /* Said in the notice itself, because the adviser opens this to decide
+                   what to do with the paper, and a paper filed with sections left out
+                   on purpose should not be read as one that is missing them. Nothing
+                   is added for a complete paper. */
+                $scopeNote = paper_scope_notice(paper_scope_info($imradContent), 'brief');
+                create_notification($adviserId, $paper_id, 'submission',
+                    $u['full_name'] . ' submitted "' . $title . '" for your review.'
+                    . ($scopeNote !== '' ? ' ' . $scopeNote : ''));
+            } else {
+                error_log('Paper ' . $paper_id . ' submitted by user ' . $u['user_id']
+                        . ' who has no Research Adviser (users.created_by is empty), so it will not appear in any review queue.');
+            }
+        }
+    } catch (Throwable $late) {
+        safe_error_message($late, 'after the paper was filed');   // logs it, with a reference
     }
 
     $redirectUrl = role_home($u['user_role']);
@@ -1056,7 +1082,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     $userFacing = ($e instanceof UserFacingException);
     http_response_code($userFacing ? 422 : 500);
     $safe = safe_error_message($e, $userFacing ? $e->getMessage() : 'Upload failed. Please try again.');
-    echo json_encode(['success'=>false,'message'=>$safe['message'],'reference'=>$safe['reference']]);
+    echo json_encode(['success' => false] + $safe);   // message, reference, and detail on a copy of the site
     exit;
   }
 }
@@ -1453,18 +1479,22 @@ body {
    widths the panels use, so an expanded box stops where a docked panel starts. */
 .doc-editor.is-expanded {
   position: fixed;
-  top: 60px;                 /* clears the site header */
+  /* The navbar's own bottom edge, which pdf_dock.php keeps on <html> as the bar's
+     height changes. This was a fixed 60px against a bar of 37px, and the 23px
+     between them showed the breadcrumb strip above the box as a gap. Flush with
+     the bar there is nothing for a rounded corner or a shadow to fall on, so
+     the box has neither. */
+  top: var(--pdf-dock-top, 37px);
   left: 0;
   right: 0;
   bottom: 0;
   z-index: 800;
   margin: 0;
-  border-radius: var(--r-card, 8px);
+  border-radius: 0;
   border-width: 1px 0 0 0;
   display: flex;
   flex-direction: column;
   background: var(--white);
-  box-shadow: 0 -4px 24px rgba(51, 0, 0, .10);
 }
 .doc-editor.is-expanded .doc-editor-head { flex: 0 0 auto; }
 .doc-editor.is-expanded .doc-surface {
@@ -1481,7 +1511,7 @@ body.pdf-docked .doc-editor.is-expanded { right: var(--pdf-dock-w, 460px); }
    changes, so the body class can outlive it, and keyed on the class alone this
    would pin the panel to a box's edges with no box there to line up with. */
 /* !important: pdf_dock.php writes the panel's live top and bottom onto it inline. */
-body.doc-expanded:has(.doc-editor.is-expanded) .pdf-dock { top: 60px !important; bottom: 0 !important; }
+body.doc-expanded:has(.doc-editor.is-expanded) .pdf-dock { top: var(--pdf-dock-top, 37px) !important; bottom: 0 !important; }
 
 /* While a section is expanded the chat and the accessibility button step out
    of the way: nothing is closed or reset, they are only hidden, so both come
@@ -1553,7 +1583,6 @@ body.doc-expanded.chat-docked-right { padding-right: 0; --chat-inset-right: 0px;
 .doc-tab.is-active .doc-tab-dot { opacity: .7; }
 
 @media (max-width: 700px) {
-  .doc-editor.is-expanded { top: 0; }
   .doc-tab { padding: .4rem .6rem; }
 }
 
@@ -7739,6 +7768,29 @@ const PAPEL_JSON_HEADERS = { 'Accept': 'application/json', 'X-Requested-With': '
    production, where it would be noise in front of somebody handing work in. */
 const SHOW_TECH_DETAIL = <?= json_encode(defined('APP_ENV') && APP_ENV !== 'production') ?>;
 
+/* What to tell a person when the server answered with a failure: the sentence
+   written for them, then the reference, so that it can be quoted and looked up in
+   the server's log, and, only where the server sent it (a copy of the site, never
+   production), the cause itself. It is all set as text. The page used to prefix
+   its own "Upload failed:" to a message that already said so, and dropped the
+   reference, which is the one thing that leads from the dialog to the cause. */
+function papelFailureText(res, fallback) {
+    let text = (res && res.message) ? String(res.message) : (fallback || 'Something went wrong.');
+    if (res && res.reference) text += ' (reference ' + res.reference + ')';
+    if (res && res.detail) text += ' Cause: ' + res.detail;
+    return text;
+}
+
+// The same tolerance as papelReadJson, for a body already in hand: null when there is no JSON in it.
+function papelParseJsonText(body) {
+    try { return JSON.parse(body); } catch (err) {}
+    const open = body.indexOf('{'), close = body.lastIndexOf('}');
+    if (open !== -1 && close > open) {
+        try { return JSON.parse(body.slice(open, close + 1)); } catch (err) {}
+    }
+    return null;
+}
+
 /* Finds the JSON in an answer rather than trusting the whole body to be JSON.
    PHP prints some warnings before a line of this app runs, and a host that cuts
    a request short replies with a page of its own; r.json() on either rejects,
@@ -7951,8 +8003,7 @@ document.getElementById('btnExtract').addEventListener('click', function(){
       });
       btn.parentElement.parentElement.appendChild(successMsg);
     } else {
-      papelAlert('❌ ' + (data.message || 'Extraction failed')
-        + (data.reference ? ' (reference ' + data.reference + ')' : ''));
+      papelAlert('❌ ' + papelFailureText(data, 'Extraction failed'));
     }
   })
   .catch(e => {
@@ -8066,27 +8117,34 @@ document.getElementById('uploadForm').addEventListener('submit', function(e){
         fillEl.style.width  = '100%';
         labelEl.textContent = '100%';
         statusEl.textContent = 'Upload complete!';
-        try {
-            const res = JSON.parse(xhr.responseText);
-            if(xhr.status === 200 && res.success){
-                // The paper is filed; the local draft has done its job.
-                papelDraft.beginSubmit();
-                papelDraft.clear();
-                setTimeout(function() {
-                    window.location.href = res.redirect || 'student_dashboard.php';
-                }, 600);
-            } else {
-                papelAlert('❌ Upload failed: ' + (res.message || 'Unknown error'));
-                overlay.classList.remove('active');
-                btn.disabled = false;
-                fillEl.style.width = '0%';
-            }
-        } catch(err) {
-            papelAlert('❌ Server error: ' + xhr.responseText.substring(0, 100));
-            overlay.classList.remove('active');
-            btn.disabled = false;
-            fillEl.style.width = '0%';
+        /* Read first, acted on second. This used to be one try block around both,
+           so anything that threw while acting on a good answer was reported as the
+           server having sent rubbish, with the good answer pasted into the dialog. */
+        const res = papelParseJsonText(xhr.responseText || '');
+        if (res && xhr.status === 200 && res.success) {
+            // The paper is filed; the local draft has done its job.
+            papelDraft.beginSubmit();
+            papelDraft.clear();
+            setTimeout(function() {
+                window.location.href = res.redirect || 'student_dashboard.php';
+            }, 600);
+            return;
         }
+
+        if (res) {
+            papelAlert('❌ ' + papelFailureText(res, 'The paper could not be submitted.'));
+        } else {
+            /* No JSON in the answer at all, so it came from the host rather than
+               from this application. The status says what kind of refusal it was,
+               and on a copy of the site so do the words in it. */
+            const plain = String(xhr.responseText || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+            papelAlert('❌ The server did not answer properly (HTTP ' + xhr.status + ').'
+                + (SHOW_TECH_DETAIL && plain ? ' Server said: "' + plain.slice(0, 160) + '".' : '')
+                + ' Nothing was submitted. Please try again.');
+        }
+        overlay.classList.remove('active');
+        btn.disabled = false;
+        fillEl.style.width = '0%';
     });
 
     xhr.addEventListener('error', function(){

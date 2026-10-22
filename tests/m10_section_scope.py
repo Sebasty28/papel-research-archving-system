@@ -245,7 +245,9 @@ def validation():
     def reached_keywords(title, **extra):
         """True when the sections check was passed and the keyword check was hit."""
         s, j = submit(c, title, keywords=short, **extra)
-        return s, j, (s == 500 and 'Please write' not in (j.get('message') or '') and not paper_id(title))
+        # The keyword check comes straight after the sections check and says so in words
+        # now (it used to be a generic 500), so reaching it is the signal that the sections passed.
+        return s, j, (s == 422 and 'at least 5 keywords' in (j.get('message') or '') and not paper_id(title))
 
     s, j, ok = reached_keywords('AUTOTEST Scope V1', section_scope='abstract',
                                 **blank_sections(ALL[1:]))
