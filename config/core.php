@@ -6,6 +6,23 @@ require_once __DIR__ . '/workflow.php';
 require_once __DIR__ . '/../app/helpers/UploadHelper.php';
 require_once __DIR__ . '/../includes/recaptcha.php';
 
+/* A POST whose body PHP threw away before this file ran.
+ *
+ * When the body is larger than post_max_size, PHP discards it, prints a
+ * warning of its own ("POST Content-Length of N bytes exceeds the limit")
+ * and carries on with $_POST and $_FILES empty. Nothing after that can tell
+ * the request apart from an empty one: every `$_POST['action']` test fails,
+ * so no handler runs, the page renders as though it had been asked for
+ * normally, and the browser gets HTML and HTTP 200 where it expected JSON.
+ * On the upload page that surfaced as "Error connecting to server" about a
+ * file the server had simply refused to accept, with nothing anywhere saying
+ * so. The limits differ between this machine and staging, which is why it
+ * only showed up there.
+ *
+ * Checked before anything else because it has to be: $_POST is how the rest
+ * of the app decides what a request is. */
+guard_discarded_post();
+
 function csp_nonce(): string {
     static $nonce = null;
     if ($nonce === null) {
@@ -244,7 +261,29 @@ function csrf_verify(?string $redirect = null): void {
     exit;
   }
 
-  http_response_code(419);
+  /* 403, not 419. Apache does not know 419 (it is a Laravel convention, not an
+     HTTP code) and normalises it to 500, so every expired token has been
+     logged as a server fault on a server that was working correctly. */
+  http_response_code(403);
+
+  /* A background call gets this as JSON, because plain text is not something
+     any of them can read. Every fetch on the upload page parses the answer as
+     JSON, so a bare "Invalid CSRF token" made r.json() reject and the student
+     was shown "Error connecting to server" about a server that had answered
+     precisely and correctly. The wording says what actually happened, since a
+     stale token means the sign-in behind the page is no longer the live one. */
+  $wantsJson = (strpos($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json') !== false)
+      || (strtolower($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'xmlhttprequest');
+  if ($wantsJson) {
+    if (!headers_sent()) { header('Content-Type: application/json'); }
+    exit(json_encode([
+      'success' => false,
+      'message' => 'This page has been open long enough that its security token has expired. '
+                 . 'Reload the page and try again; your typed work is kept.',
+      'error'   => 'csrf_expired',
+    ]));
+  }
+
   exit('Invalid CSRF token');
 }
 
@@ -2843,4 +2882,50 @@ function supporting_doc_label(?string $type, ?string $name = null): string {
         ''                 => 'Copyright / IP Document',
     ];
     return $labels[$key] ?? ucwords(str_replace('_', ' ', (string)$type));
+}
+
+/**
+ * Answers a POST whose body PHP discarded for exceeding post_max_size.
+ *
+ * Only fires when the body really was dropped: a form content type with
+ * nothing parsed out of it and a Content-Length that says there was
+ * something to parse. A JSON body (the assistant posts one) leaves $_POST
+ * empty too and is deliberately not matched.
+ */
+function guard_discarded_post(): void {
+    if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') { return; }
+    if (!empty($_POST) || !empty($_FILES)) { return; }
+
+    $len = (int)($_SERVER['CONTENT_LENGTH'] ?? 0);
+    if ($len <= 0) { return; }
+
+    $ctype = strtolower($_SERVER['CONTENT_TYPE'] ?? '');
+    $isForm = strpos($ctype, 'multipart/form-data') !== false
+           || strpos($ctype, 'application/x-www-form-urlencoded') !== false;
+    if (!$isForm) { return; }
+
+    /* PHP's own warning is sitting in the output buffer at this point and
+       would prefix whatever we send, which is the very thing that stops the
+       browser reading the answer. Headers have not gone out yet (Apache
+       buffers), so the response can still be made clean. */
+    while (ob_get_level() > 0) { ob_end_clean(); }
+
+    $limit = function_exists('max_upload_label') ? max_upload_label() : ini_get('upload_max_filesize');
+    $message = 'That file is larger than this server accepts (limit ' . $limit . '). '
+             . 'Save the PDF at a smaller size, or ask for the server limit to be raised, and try again.';
+
+    /* Sec-Fetch-Dest is the browser's own word for what asked, and unlike
+       $_POST it survives a discarded body. require_role() reads the matching
+       Sec-Fetch-Mode for the same reason. */
+    $background = ($_SERVER['HTTP_SEC_FETCH_DEST'] ?? '') === 'empty'
+        || strpos($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json') !== false
+        || strtolower($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '') === 'xmlhttprequest';
+
+    http_response_code(413);
+    if ($background) {
+        header('Content-Type: application/json');
+        exit(json_encode(['success' => false, 'message' => $message, 'error' => 'post_too_large']));
+    }
+    header('Content-Type: text/plain; charset=utf-8');
+    exit($message);
 }

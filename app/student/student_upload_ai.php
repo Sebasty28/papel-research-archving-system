@@ -65,12 +65,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['act
             $locations[] = $row['publication_location'];
         }
         echo json_encode(['success' => true, 'data' => array_values(array_unique($locations))]);
-    } catch (Exception $e) { error_log('Location fetch error: ' . $e->getMessage()); echo json_encode(['success' => false, 'error' => 'Failed to load locations.']); }
+    } catch (Throwable $e) { error_log('Location fetch error: ' . $e->getMessage()); echo json_encode(['success' => false, 'error' => 'Failed to load locations.']); }
     exit;
 }
 
 // AI extraction step
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'extract_ai') {
+  while (ob_get_level() > 0) { ob_end_clean(); }
+  header('Content-Type: application/json');
+  /* The Groq call is given 30 seconds of its own (CURLOPT_TIMEOUT in
+     config/groq_config.php), and a server whose max_execution_time is 30 kills
+     the script while curl is still waiting: the request dies with no answer
+     and no log line of its own. Reading a thesis takes longer than a page
+     does, so this one handler is allowed the time its own timeout implies. */
+  if (function_exists('set_time_limit')) { @set_time_limit(120); }
   try {
     csrf_verify();
     
@@ -163,7 +171,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'extra
     echo json_encode(['success'=>true,'data'=>$result]); 
     exit;
     
-  } catch (Exception $e) {
+  } catch (Throwable $e) {
     http_response_code(500);
     // Messages we wrote for the student are shown as written; anything else
     // stays generic so internal detail never reaches the browser. Either way
@@ -392,7 +400,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
     echo json_encode(['success' => true, 'draft_id' => $draftId]);
     exit;
 
-  } catch (Exception $e) {
+  } catch (Throwable $e) {
     http_response_code(500);
     $shown = ($e instanceof UserFacingException)
       ? $e->getMessage()
@@ -4930,7 +4938,8 @@ const papelDoc = (function () {
         const token = document.querySelector('input[name="_token"]');
         if (token) fd.append(token.name, token.value);
 
-        return fetch('student_upload_ai.php', { method: 'POST', body: fd })
+        return fetch('student_upload_ai.php', { method: 'POST', body: fd,
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })
             .then(function (r) {
                 return r.json().catch(function () {
                     return { success: false, message: 'The server did not answer properly.' };
@@ -6933,7 +6942,8 @@ const papelDraft = (function () {
             // logo pill; a fetch is invisible to loading_bar.php's form hook.
             if (window.papelLoading) window.papelLoading.work.start();
             try {
-                const res = await fetch('student_upload_ai.php', { method: 'POST', body: body });
+                const res = await fetch('student_upload_ai.php', { method: 'POST', body: body,
+                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } });
                 /* Signed out, here or in another tab: the server says so plainly
                    now (require_role() in config/core.php). Swallowed with
                    everything else, this left somebody typing into a form that
@@ -7377,6 +7387,20 @@ document.getElementById('btnExtract').addEventListener('click', function(){
     return;
   }
   const pdfFile = source.file;
+
+  /* Extraction sends this one PDF and nothing else, so it is measured on its
+     own rather than through filesTooBig(), which adds up every file on the
+     form for the submit. The check matters because PHP throws an over-sized
+     body away before a line of this app runs: $_POST comes back empty, no
+     handler recognises the request, and the page answers a background call
+     with its own HTML. This is the only place it can be said plainly. */
+  if (POST_MAX && pdfFile.size + 65536 > POST_MAX) {
+    papelAlert('That PDF is ' + (pdfFile.size / 1048576).toFixed(1) + 'MB, and this server takes at most '
+      + POST_MAX_LABEL + ' in one request. Save it at a smaller size, or choose "Fill Manually" '
+      + 'and type the details in yourself.');
+    return;
+  }
+
   const sourceNote = pdfActive().length > 1 ? 'your ' + source.label + ' PDF' : 'your PDF';
   const readNote = pdfActive().length > 1 ? ', read from your ' + source.label + ' PDF' : '';
 
@@ -7421,8 +7445,33 @@ document.getElementById('btnExtract').addEventListener('click', function(){
   const tokenInput = document.querySelector('input[name="csrf_token"]') || document.querySelector('input[name="_token"]');
   if(tokenInput) fd.append(tokenInput.name, tokenInput.value);
 
-  fetch('student_upload_ai.php', {method:'POST', body:fd})
-  .then(r => r.json())
+  fetch('student_upload_ai.php', {
+    method: 'POST',
+    body: fd,
+    /* Declares what this call wants back. Without it the handler in
+       config/error_handler.php cannot tell a background call from a page view,
+       and answers an uncaught error with the styled HTML error page, 10 kB of
+       it: r.json() then rejects and the student is told the server could not
+       be reached, about a server that answered perfectly well. */
+    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+  })
+  /* Read as text and find the JSON in it, rather than trusting the whole body
+     to be JSON. PHP prints some warnings before a single line of this app
+     runs (an over-sized upload is the one that bit us: the warning comes from
+     "Unknown on line 0", so no ini_set of ours can stop it), and r.json() on a
+     body with anything in front of it rejects outright. The student then heard
+     that the server could not be reached, about a server that had answered
+     and said exactly what was wrong. */
+  .then(r => r.text().then(function (body) {
+      try { return JSON.parse(body); }
+      catch (err) {
+          const open = body.indexOf('{'), close = body.lastIndexOf('}');
+          if (open !== -1 && close > open) {
+              try { return JSON.parse(body.slice(open, close + 1)); } catch (e) {}
+          }
+          throw new Error('Not JSON (HTTP ' + r.status + '): ' + body.slice(0, 200));
+      }
+  }))
   .then(data => {
     if(data.success){
       document.getElementById('titleField').value = data.data.title || '';
@@ -7467,12 +7516,17 @@ document.getElementById('btnExtract').addEventListener('click', function(){
       });
       btn.parentElement.parentElement.appendChild(successMsg);
     } else {
-      papelAlert('❌ ' + (data.message || 'Extraction failed'));
+      papelAlert('❌ ' + (data.message || 'Extraction failed')
+        + (data.reference ? ' (reference ' + data.reference + ')' : ''));
     }
   })
   .catch(e => {
     console.error(e);
-    papelAlert('❌ Error connecting to server');
+    /* Either the request never left, or the answer was not JSON. The two need
+       different advice, so they are no longer reported as the same thing. */
+    papelAlert(navigator.onLine === false
+      ? '❌ You appear to be offline. Check your connection and press Extract again.'
+      : '❌ The server did not answer properly. Please try again, or choose "Fill Manually".');
   })
   .finally(() => {
     clearInterval(aiTimer);
@@ -8494,7 +8548,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Load publication location suggestions via AJAX
 document.addEventListener('DOMContentLoaded', () => {
-    fetch('student_upload_ai.php?action=get_locations')
+    fetch('student_upload_ai.php?action=get_locations',
+          { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })
         .then(r => r.json())
         .then(res => {
             if(res.success && res.data){

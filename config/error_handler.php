@@ -47,7 +47,11 @@ function show_safe_error(string $ref, int $httpCode = 500): void {
     $isAjax = (
         (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false) ||
         (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') ||
-        (isset($_SERVER['CONTENT_TYPE']) && strpos($_SERVER['CONTENT_TYPE'], 'multipart/form-data') !== false && isset($_POST['action']))
+        (isset($_SERVER['CONTENT_TYPE']) && strpos($_SERVER['CONTENT_TYPE'], 'multipart/form-data') !== false && isset($_POST['action'])) ||
+        /* The browser's own word for what asked. The test above it reads
+           $_POST, which is empty when PHP has discarded an over-sized body,
+           and an HTML error page is unreadable to the fetch that is waiting. */
+        (($_SERVER['HTTP_SEC_FETCH_DEST'] ?? '') === 'empty')
     );
 
     if ($isAjax) {
