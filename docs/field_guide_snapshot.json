@@ -1,5 +1,5 @@
 {
- "built": "2026-10-22 16:11",
+ "built": "2026-10-22 16:24",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -122,7 +122,7 @@
    "lines": 8891
   },
   "app/student/upload_diagnostics.php": {
-   "lines": 95
+   "lines": 161
   },
   "app/support_requests.php": {
    "lines": 289
