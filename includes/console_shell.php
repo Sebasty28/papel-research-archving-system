@@ -229,6 +229,25 @@ html[data-view="rows"] .paper-list .paper-card .paper-meta {
             mask-image: linear-gradient(to right, #000 calc(100% - 1.75rem), transparent);
 }
 html[data-view="rows"] .paper-list .paper-card .paper-meta .sep { flex: 0 0 auto; }
+/* Which sections the author chose to submit, when they left some out. A small
+   outlined chip beside the type and date, so a reviewer sees it before they open
+   the paper and does not mistake a deliberate gap for a missing piece. In the
+   rows view the meta fades out at its right edge, so the chip goes first, where
+   it cannot be cut off. It is defined here because this file is the one every
+   desk and the student dashboard already share. */
+.paper-meta .scope-chip {
+    display: inline-flex; align-items: center; gap: .25rem;
+    padding: .0625rem .5rem;
+    border: 1px solid var(--soft-maroon);
+    border-radius: 999px;
+    background: var(--cream);
+    color: var(--maroon);
+    font-size: .6875rem; font-weight: 500; line-height: 1.5;
+    white-space: nowrap;
+    cursor: help;
+}
+.paper-meta .scope-chip .material-symbols-outlined { font-size: 13px; }
+html[data-view="rows"] .paper-list .paper-card .paper-meta .scope-chip { order: -1; flex: 0 0 auto; }
 html[data-view="rows"] .paper-list .card-status {
     display: flex; align-items: center; gap: .75rem;
     white-space: nowrap; text-align: left; padding-right: 0;

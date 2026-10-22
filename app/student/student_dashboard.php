@@ -156,6 +156,7 @@ $papers = $result->fetch_all(MYSQLI_ASSOC);
 // ---- Reviewer names + decline feedback for the papers on this page -----
 $reviewers = [];   // paper_id => [review_level => full_name]
 $feedback  = [];   // paper_id => latest decline feedback
+$scopes    = [];   // paper_id => which sections the author chose to submit
 if ($papers) {
     $ids = array_column($papers, 'paper_id');
     $in  = implode(',', array_fill(0, count($ids), '?'));
@@ -186,6 +187,17 @@ if ($papers) {
         $feedback[$r['paper_id']] = $r['feedback'];   // last one wins = most recent
     }
     $fb->close();
+
+    /* Which sections the author chose to submit, for the chip on each card. One
+       query for the page, and from the same table the cards themselves came
+       from, since an archived paper has left research_papers. */
+    $sq = $conn->prepare("SELECT paper_id, imrad_content FROM $from_table WHERE paper_id IN ($in)");
+    $sq->bind_param($bt, ...$ids);
+    $sq->execute();
+    foreach ($sq->get_result()->fetch_all(MYSQLI_ASSOC) as $r) {
+        $scopes[(int)$r['paper_id']] = paper_scope_info($r['imrad_content']);
+    }
+    $sq->close();
 }
 
 // The student's Research Adviser is the faculty member who created their
@@ -410,6 +422,13 @@ ob_start();
                                     <?php if (!empty($r['publication_status'])): ?>
                                         <span class="sep">•</span>
                                         <span><?= e($r['publication_status']) ?></span>
+                                    <?php endif; ?>
+                                    <?php /* What the author chose to submit, when it is less than all of
+                                             it: the same chip their reviewers see on the desks. Nothing
+                                             for a complete paper. */
+                                    $scopeChip = paper_scope_chip($scopes[(int)$r['paper_id']] ?? paper_scope_info(null));
+                                    if ($scopeChip !== ''): ?>
+                                        <span class="sep">•</span><?= $scopeChip ?>
                                     <?php endif; ?>
                                     <?php /* When it left the repository, said here rather than
                                              left to be guessed at: a paper that disappears from

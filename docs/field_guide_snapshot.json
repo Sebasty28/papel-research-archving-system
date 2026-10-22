@@ -1,5 +1,5 @@
 {
- "built": "2026-10-22 17:25",
+ "built": "2026-10-22 22:37",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -53,7 +53,7 @@
    "lines": 1172
   },
   "app/faculty/faculty_review_dashboard.php": {
-   "lines": 165
+   "lines": 169
   },
   "app/faculty/head_review_dashboard.php": {
    "lines": 64
@@ -92,10 +92,10 @@
    "lines": 155
   },
   "app/review_paper.php": {
-   "lines": 841
+   "lines": 858
   },
   "app/student/paper_details.php": {
-   "lines": 729
+   "lines": 739
   },
   "app/student/pdf_viewer.php": {
    "lines": 331
@@ -107,7 +107,7 @@
    "lines": 104
   },
   "app/student/student_dashboard.php": {
-   "lines": 824
+   "lines": 843
   },
   "app/student/student_draft_delete.php": {
    "lines": 139
@@ -119,7 +119,7 @@
    "lines": 433
   },
   "app/student/student_upload_ai.php": {
-   "lines": 8891
+   "lines": 9380
   },
   "app/student/upload_diagnostics.php": {
    "lines": 196
@@ -143,13 +143,13 @@
    "lines": 1081
   },
   "archive/view_paper.php": {
-   "lines": 1002
+   "lines": 1012
   },
   "config/config.php": {
    "lines": 176
   },
   "config/core.php": {
-   "lines": 2976
+   "lines": 3169
   },
   "config/error_handler.php": {
    "lines": 173
@@ -194,7 +194,7 @@
    "lines": 94
   },
   "includes/console_shell.php": {
-   "lines": 346
+   "lines": 365
   },
   "includes/docx_writer.php": {
    "lines": 230
@@ -263,7 +263,7 @@
    "lines": 217
   },
   "includes/review_console.php": {
-   "lines": 1759
+   "lines": 1780
   },
   "includes/scroll_jump.php": {
    "lines": 93
@@ -466,11 +466,20 @@
   "tests/_mint.php": {
    "lines": 1
   },
+  "tests/_scope_probe.php": {
+   "lines": 120
+  },
+  "tests/_scope_unit.php": {
+   "lines": 152
+  },
   "tests/fixtures.py": {
    "lines": 200
   },
   "tests/harness.py": {
-   "lines": 299
+   "lines": 302
+  },
+  "tests/m10_section_scope.py": {
+   "lines": 506
   },
   "tests/m1_auth.py": {
    "lines": 309

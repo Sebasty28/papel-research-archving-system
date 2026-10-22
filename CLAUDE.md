@@ -397,6 +397,43 @@ attaches both again; withdrawing keeps them, and resubmitting deletes the ones
 it replaced. Extract with AI reads the IMRAD file when both are attached, since
 the form's editors are IMRAD-shaped.
 
+### Which written sections a paper was filed with
+
+A paper has six written sections (`paper_section_labels()`): the Abstract and five
+more. On arriving at Step 2 the author chooses which to submit: the Abstract only,
+or any combination (`askSectionScope()` in `student_upload_ai.php`, in the shared
+dialog, with a Change button to ask again). The Abstract is always included,
+because the cards, the search and the AI read the `abstract` column.
+
+The choice is stored **inside `imrad_content`**, under the reserved key `_scope`
+(a list of section keys), and **not in a column**. `ArchiveRepository` copies a
+fixed column list and `imrad_content` is on it, so archive and restore carry the
+choice with no change at all. A column would have to be added to `papers_archive`,
+to that list and to its bind types, and a server missing any one of them fails on
+archiving. Do not add one without reading `ArchiveRepository` first.
+
+- Ask `config/core.php`, do not parse the JSON by hand: `section_scope_parse()`,
+  `section_scope_resolve()`, `paper_section_scope()`, `paper_scope_info()`,
+  `paper_scope_chip()`, `paper_scope_notice()`.
+- **No `_scope` means complete**, and nothing is shown or claimed for the paper:
+  it was filed before the choice existed, or it is a draft saved before one was
+  made. Do not read it as a statement of what the author meant.
+- **The server decides.** Submit requires only the chosen sections and stores the
+  others empty whatever was posted. A draft keeps everything typed, so narrowing
+  the choice and widening it again loses no text.
+- **Reviewers check the PDF; the repository shows the typed sections.** The adviser
+  checklist is about the manuscript file and is unchanged. What the choice changes
+  is what gets *published*, so that is what the notices say.
+- It shows in the approval chain: a chip on the review desks (one shared card, so
+  all four roles) and on the student dashboard; a notice on `review_paper.php` and
+  in the Approve confirmation; the author's `paper_details.php`; the public paper
+  page; and the adviser's and Coordinator's notifications.
+- **Choosing must not autosave.** A bare upload form already counts as content (its
+  defaults), so saving on the choice alone wrote a device copy and raised
+  "Continue where you left off?" for someone who had only answered the question.
+  The autosave on typing, the leave-page guard and "Save as draft" all carry the
+  field already.
+
 ### Programmes
 
 `programs_map()` and `program_code()` in `config/core.php`. Full name in the
@@ -453,6 +490,19 @@ closed early by a stray `</div>`, a dialog painted under its own backdrop, a
 `\b` regex that never matched at end-of-string.
 
 Seed realistic data, assert, then clean up. Never leave test rows behind.
+
+**Scripted sign-in no longer works.** reCAPTCHA is configured, and it exists so a
+script cannot use the sign-in form ("Please confirm you are not a robot"). Write a
+session file for the account instead (see "Signed-in page without signing in" in
+the verification notes), which is what signing in does. The older suite in
+`tests/` (`run_all.py`) signs in by form as the Research Coordinator, whose
+password has also changed since it was written, so it cannot start; and its
+`full_submission` helper predates the two-manuscript upload (it posts
+`manuscript_type` as one word and the file as `research_pdf`). `tests/m10_section_scope.py`
+is standalone: it creates the AUTOTEST accounts through the app's own forms using a
+minted Coordinator session, submits for real (three Drive uploads), and removes the
+Drive files and any empty AUTOTEST folder before it removes the accounts. It takes
+step names to run a part (`python m10_section_scope.py legacy`).
 
 ### When there is no running app (cloud and web sessions)
 

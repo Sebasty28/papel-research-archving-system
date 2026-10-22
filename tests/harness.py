@@ -153,10 +153,13 @@ class Client(object):
         boundary = '----papel' + uuid.uuid4().hex
         out = []
         for k, v in data.items():
-            head = ('--' + boundary + crlf +
-                    'Content-Disposition: form-data; name="' + str(k) + '"' +
-                    crlf + crlf + str(v) + crlf)
-            out.append(head.encode())
+            # A list is one field sent several times, as a form sends a group
+            # of checkboxes called name[].
+            for one in (v if isinstance(v, (list, tuple)) else [v]):
+                head = ('--' + boundary + crlf +
+                        'Content-Disposition: form-data; name="' + str(k) + '"' +
+                        crlf + crlf + str(one) + crlf)
+                out.append(head.encode())
         for field, (filename, content, ctype) in files.items():
             if isinstance(content, str):
                 content = content.encode()

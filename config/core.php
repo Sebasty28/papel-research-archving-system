@@ -2637,6 +2637,199 @@ function paper_section_labels(): array {
 }
 
 /**
+ * The reserved key inside imrad_content that records which of the written
+ * sections the author chose to submit.
+ *
+ * It lives with the sections rather than in a column of its own, for a reason
+ * that is easy to lose. Archiving deletes the row from research_papers and
+ * writes it into papers_archive from one explicit column list
+ * (ArchiveRepository), and restoring reads the same list back. imrad_content is
+ * already on that list, so whatever rides inside it survives both with no change
+ * anywhere, and no server needs a migration run before it can take this code. A
+ * new column would have had to be added to two tables, to that list and to its
+ * bind types, and a server missing any one of them would have failed on
+ * archiving.
+ *
+ * Every reader loops over paper_section_labels() and indexes into the decoded
+ * object, so a key that is not one of those is invisible to all of them.
+ */
+const PAPER_SCOPE_KEY = '_scope';
+
+/**
+ * Reads a choice of sections from whatever carried it: the comma-separated
+ * string the form posts, or a list. Null means nothing valid was chosen.
+ *
+ * The result is always in the order paper_section_labels() gives, whatever order
+ * it arrived in, and always includes the abstract: the cards, the search and the
+ * AI all read the abstract column, so a paper without one cannot be listed.
+ * Anything that is not a known section is dropped, so a hand-made request cannot
+ * invent one.
+ */
+function section_scope_parse($raw): ?array {
+    if (is_string($raw)) { $raw = explode(',', $raw); }
+    if (!is_array($raw)) { return null; }
+
+    $known  = array_keys(paper_section_labels());
+    $picked = [];
+    foreach ($raw as $key) {
+        if (!is_scalar($key)) { continue; }
+        $key = trim((string)$key);
+        if (in_array($key, $known, true)) { $picked[$key] = true; }
+    }
+    if (!$picked) { return null; }
+    $picked['abstract'] = true;
+
+    return array_values(array_filter($known, function ($k) use ($picked) {
+        return isset($picked[$k]);
+    }));
+}
+
+/**
+ * The choice, or every section when none was made. That is what a page opened
+ * before this existed posts, so it keeps meaning "all of them".
+ */
+function section_scope_resolve($raw): array {
+    return section_scope_parse($raw) ?? array_keys(paper_section_labels());
+}
+
+/**
+ * The choice stored with a paper, or null when none was ever recorded.
+ *
+ * Null covers a paper filed before the choice existed and a draft saved before
+ * one was made. It is not the same as "all sections", and callers must not
+ * treat it as a claim about what the author meant.
+ */
+function paper_section_scope($imradContent): ?array {
+    if (!is_string($imradContent) || $imradContent === '') { return null; }
+    $decoded = json_decode($imradContent, true);
+    if (!is_array($decoded) || !array_key_exists(PAPER_SCOPE_KEY, $decoded)) { return null; }
+    return section_scope_parse($decoded[PAPER_SCOPE_KEY]);
+}
+
+/** "A", "A and B", "A, B and C". */
+function paper_scope_list(array $names): string {
+    $names = array_values($names);
+    $n = count($names);
+    if ($n === 0) { return ''; }
+    if ($n === 1) { return $names[0]; }
+    return implode(', ', array_slice($names, 0, -1)) . ' and ' . $names[$n - 1];
+}
+
+/**
+ * What a paper's stored sections say about the author's choice, in the shape
+ * every page needs.
+ *
+ *   kind      full | abstract | partial | legacy
+ *   keys      the section keys provided
+ *   provided  their labels
+ *   omitted   the labels of those left out
+ *   short     the words for a chip: "Abstract only", "3 of 6 sections"
+ *
+ * A legacy paper is treated as complete and nothing is claimed for it, because
+ * there is no way to know what its author intended.
+ */
+function paper_scope_info($imradContent): array {
+    $labels = paper_section_labels();
+    $scope  = paper_section_scope($imradContent);
+
+    if ($scope === null) {
+        return [
+            'recorded' => false, 'kind' => 'legacy',
+            'keys'     => array_keys($labels), 'provided' => array_values($labels),
+            'omitted'  => [], 'short' => '',
+        ];
+    }
+
+    $provided = [];
+    $omitted  = [];
+    foreach ($labels as $key => $label) {
+        if (in_array($key, $scope, true)) { $provided[] = $label; }
+        else                              { $omitted[]  = $label; }
+    }
+
+    if (!$omitted)               { $kind = 'full'; }
+    elseif (count($scope) === 1) { $kind = 'abstract'; }
+    else                         { $kind = 'partial'; }
+
+    $short = $kind === 'full'      ? 'All sections'
+           : ($kind === 'abstract' ? 'Abstract only'
+                                   : count($scope) . ' of ' . count($labels) . ' sections');
+
+    return [
+        'recorded' => true, 'kind' => $kind, 'keys' => $scope,
+        'provided' => $provided, 'omitted' => $omitted, 'short' => $short,
+    ];
+}
+
+/** Whether the author left sections out: the only case worth drawing attention to. */
+function paper_scope_is_partial(array $info): bool {
+    return in_array($info['kind'], ['abstract', 'partial'], true);
+}
+
+/**
+ * A chip for a paper whose author left sections out, and nothing for any other.
+ * A complete paper is the rule and is not flagged.
+ */
+function paper_scope_chip(array $info): string {
+    if (!paper_scope_is_partial($info)) { return ''; }
+    $title = 'Provided: ' . paper_scope_list($info['provided'])
+           . '. Left out by the author: ' . paper_scope_list($info['omitted']) . '.';
+    return '<span class="scope-chip" title="' . e($title) . '">'
+         . '<span class="material-symbols-outlined" aria-hidden="true">segment</span>'
+         . e($info['short']) . '</span>';
+}
+
+/**
+ * One sentence about the choice, worded for whoever is reading it. Empty for a
+ * complete or legacy paper, which has nothing to explain.
+ *
+ *   reviewer  on the review page, where an absent section could look like a fault
+ *   author    on the author's own page
+ *   reader    on the public page
+ *   brief     in a notification, where space is short
+ */
+function paper_scope_notice(array $info, string $audience): string {
+    if (!paper_scope_is_partial($info)) { return ''; }
+
+    $only  = $info['kind'] === 'abstract';
+    $given = paper_scope_list($info['provided']);
+    $left  = paper_scope_list($info['omitted']);
+    $count = count($info['keys']) . ' of ' . (count($info['keys']) + count($info['omitted']));
+
+    switch ($audience) {
+        case 'reviewer':
+            return ($only
+                    ? 'The author chose to submit only the Abstract as written text.'
+                    : 'The author chose to submit ' . $count . ' written sections: ' . $given . '.')
+                 . ' The others (' . $left . ') were left out on purpose, so their absence is not an omission,'
+                 . " and the paper's page will show only what was provided.";
+        case 'author':
+            return ($only
+                    ? 'You chose to submit the Abstract only.'
+                    : 'You chose to submit these sections: ' . $given . '.')
+                 . ' The others (' . $left . ") are not shown on this paper's page.";
+        case 'reader':
+            return $only
+                ? 'The author chose to publish only the Abstract of this paper.'
+                : 'The author chose to publish only these sections of this paper: ' . $given . '.';
+        default: // brief
+            return $only
+                ? 'The author chose to submit the Abstract only.'
+                : 'The author chose to submit ' . $count . ' sections: ' . $given . '.';
+    }
+}
+
+/** paper_scope_info() for a paper by id, for the places that hold only the id. */
+function paper_scope_info_for(int $paperId): array {
+    $q = db()->prepare("SELECT imrad_content FROM research_papers WHERE paper_id = ?");
+    $q->bind_param('i', $paperId);
+    $q->execute();
+    $row = $q->get_result()->fetch_assoc();
+    $q->close();
+    return paper_scope_info($row['imrad_content'] ?? null);
+}
+
+/**
  * An APA 7th-edition reference for a paper, built from what was filed.
  *
  * The archive is the paper's only publisher, so this always cites it as an

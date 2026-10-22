@@ -396,6 +396,7 @@ $reviewers = [];   // paper_id => review_level => name
 $feedback  = [];   // paper_id => latest decline feedback
 $docs      = [];   // paper_id => list of supporting documents
 $manuscripts = []; // paper_id => format => the paper's manuscript file rows
+$scopes    = [];   // paper_id => which sections the author chose to submit (paper_scope_info)
 if ($papers) {
     $ids = array_column($papers, 'paper_id');
     $in  = implode(',', array_fill(0, count($ids), '?'));
@@ -433,6 +434,19 @@ if ($papers) {
 
     // The manuscript files of every card on this page, in one query.
     $manuscripts = paper_manuscript_rows($ids);   // paper_id => format => row
+
+    /* Which sections each author chose to submit, in one query for the page. The
+       main query does not carry imrad_content, which holds every section in
+       full, so it is fetched here for the ids on screen and reduced to the few
+       words the card needs. The archive keeps the same column (it is on
+       ArchiveRepository's list), so an archived paper reads from its own table. */
+    $scopeTable = $rc_src === 'archive' ? 'papers_archive' : 'research_papers';
+    $sq = $conn->prepare("SELECT paper_id, imrad_content FROM $scopeTable WHERE paper_id IN ($in)");
+    $sq->bind_param($bt, ...$ids); $sq->execute();
+    foreach ($sq->get_result()->fetch_all(MYSQLI_ASSOC) as $r) {
+        $scopes[(int)$r['paper_id']] = paper_scope_info($r['imrad_content']);
+    }
+    $sq->close();
 }
 
 /* ---- Sidebar filter vocabularies --------------------------------------- */
@@ -1122,6 +1136,13 @@ html[data-view="rows"] .paper-list .card-status .paper-action { display: none; }
                                     <?php endif; ?>
                                     <span class="sep">•</span>
                                     <span>Submitted <?= e(date('M j, Y', strtotime($r['upload_date']))) ?></span>
+                                    <?php /* "Abstract only" or "3 of 6 sections", for a paper whose author
+                                             left sections out on purpose. Nothing for a complete one. The
+                                             markup is built and escaped by paper_scope_chip(). */
+                                    $scopeChip = paper_scope_chip($scopes[(int)$r['paper_id']] ?? paper_scope_info(null));
+                                    if ($scopeChip !== ''): ?>
+                                        <span class="sep">•</span><?= $scopeChip ?>
+                                    <?php endif; ?>
                                     <?php /* Only where somebody is expected to act: on a reading tab
                                              this would be a number with nothing to do about it. */ ?>
                                     <?php if ($actionable && !empty($r['rc_waiting_since'])):

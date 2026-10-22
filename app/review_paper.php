@@ -74,6 +74,12 @@ if (!$sections && trim((string)$paper['abstract']) !== '') {
     $sectionsAreLegacy = true;
 }
 
+/* Which of the sections the author chose to submit. A reviewer who sees only an
+   abstract on this page has to be able to tell a paper filed that way on purpose
+   from one that is missing its sections, and the person who approves it needs to
+   know what the published page will hold. Nothing is said for a complete paper. */
+$scopeInfo = paper_scope_info($paper['imrad_content'] ?? null);
+
 /* ---- Files, present and missing ------------------------------------------ */
 $docsRequired = paper_type_needs_documents($paper['paper_type'] ?? '');
 $expected = [
@@ -169,6 +175,13 @@ $approveLabel = $isAdviser ? 'Approve and forward' : 'Approve and publish';
 $approveLead  = $isAdviser
     ? 'This forwards the paper to the Research Coordinator, who makes the final decision.'
     : 'This publishes the paper to the public repository, where anyone can read it. It is the last step.';
+/* Said at the moment of deciding, because what a Coordinator publishes is the
+   page, and the page holds only what the author chose to submit. */
+if (paper_scope_is_partial($scopeInfo)) {
+    $approveLead .= ' The author chose to submit '
+        . ($scopeInfo['kind'] === 'abstract' ? 'the Abstract only' : 'only ' . paper_scope_list($scopeInfo['provided']))
+        . ', so the published page will show just that.';
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -497,6 +510,10 @@ $approveLead  = $isAdviser
 
         <div class="pd-card" id="pd-sec-paper">
             <h2><span class="material-symbols-outlined">article</span> Written Sections</h2>
+            <?php if (paper_scope_is_partial($scopeInfo)): ?>
+                <div class="pd-note"><span class="material-symbols-outlined">segment</span>
+                    <span><strong><?= e($scopeInfo['short']) ?>.</strong> <?= e(paper_scope_notice($scopeInfo, 'reviewer')) ?></span></div>
+            <?php endif; ?>
             <?php if (!$sections): ?>
                 <div class="pd-note"><span class="material-symbols-outlined">info</span>
                     <span>No written sections were saved with this submission.</span></div>

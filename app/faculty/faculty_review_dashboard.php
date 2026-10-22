@@ -78,8 +78,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['export'])) {
 
         $admin_id = creator_of($u['user_id']);
         if ($admin_id) {
+            /* The Coordinator is the one who publishes, so they are told what the
+               published page will and will not contain before they open it. */
+            $scopeNote = paper_scope_notice(paper_scope_info_for((int)$paper_id), 'brief');
             create_notification($admin_id, $paper_id, 'submission',
-                "Research Adviser approved {$student_name}'s paper. Pending your review.");
+                "Research Adviser approved {$student_name}'s paper. Pending your review."
+                . ($scopeNote !== '' ? ' ' . $scopeNote : ''));
         }
 
         /* And the author, who until now heard nothing at this step. Only the

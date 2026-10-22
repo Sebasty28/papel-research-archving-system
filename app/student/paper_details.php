@@ -70,6 +70,10 @@ if (!$sections && trim((string)$paper['abstract']) !== '') {
     $sectionsAreLegacy = true;
 }
 
+/* Which of the sections the author chose to submit, said back to them on their
+   own copy so the gap on this page is read as the choice it was. */
+$scopeInfo = paper_scope_info($paper['imrad_content'] ?? null);
+
 /* ---- Files -------------------------------------------------------------- */
 /* Every document this paper should have, whether or not it arrived. Showing
    only what was attached hides the thing a student most needs to see when a
@@ -494,6 +498,12 @@ $fill  = count($steps) > 1 ? max(0, min(100, ($done - 1) / (count($steps) - 1) *
         <!-- Step 2 -->
         <div class="pd-card" id="pd-sec-paper">
             <h2><span class="material-symbols-outlined">article</span> Written Sections</h2>
+            <?php if (paper_scope_is_partial($scopeInfo)): ?>
+                <div class="pd-note">
+                    <span class="material-symbols-outlined">segment</span>
+                    <span><strong><?= e($scopeInfo['short']) ?>.</strong> <?= e(paper_scope_notice($scopeInfo, 'author')) ?></span>
+                </div>
+            <?php endif; ?>
             <?php if (!$sections): ?>
                 <div class="pd-note">
                     <span class="material-symbols-outlined">info</span>

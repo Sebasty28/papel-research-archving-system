@@ -628,6 +628,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_manuscript'])
         <?php if ($sections): ?>
         <div class="pd-card" id="pd-sec-paper">
             <h2><span class="material-symbols-outlined">article</span> The Paper</h2>
+            <?php /* A reader who finds only an abstract should know that is what the
+                     author chose to publish, not that the page is incomplete. Said
+                     only for a paper whose author left sections out. */
+            $scopeInfo = paper_scope_info($paper['imrad_content'] ?? null);
+            if (paper_scope_is_partial($scopeInfo)): ?>
+                <div class="pd-note">
+                    <span class="material-symbols-outlined">segment</span>
+                    <span><?= e(paper_scope_notice($scopeInfo, 'reader')) ?></span>
+                </div>
+            <?php endif; ?>
             <?php foreach ($sectionLabels as $key => $label): ?>
                 <?php if (empty($sections[$key])) continue; ?>
                 <div class="pd-section" id="pd-sub-<?= e($key) ?>">

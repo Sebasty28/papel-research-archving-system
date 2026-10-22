@@ -311,6 +311,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
     foreach (array_keys(paper_section_labels()) as $key) {
       $sections[$key] = rich_text_sanitize((string)($_POST[$key] ?? ''));
     }
+    /* Which sections the author has chosen to submit, once they have chosen.
+       Nothing chosen yet is left unrecorded rather than guessed at, so the page
+       asks when the draft is next opened. Everything typed is kept whatever the
+       choice: narrowing it and widening it again must not lose a section the
+       student had already written. The choice is only enforced on submit. */
+    $scope = section_scope_parse($_POST['section_scope'] ?? null);
+    if ($scope !== null) { $sections[PAPER_SCOPE_KEY] = $scope; }
     $imradContent = json_encode($sections, JSON_UNESCAPED_UNICODE);
     $abstract     = rich_text_to_plain($sections['abstract']);
 
@@ -478,6 +485,12 @@ if ($draftRow) {
     $decoded = json_decode($draftRow['imrad_content'], true);
     if (is_array($decoded)) $sections = $decoded;
   }
+  /* The choice of sections goes back to the page as a field of its own, named
+     like the input that carries it ("section_scope"), which is how everything
+     else here is restored. The reserved key inside the stored object is not a
+     field of the form, so it is taken out before the rest is merged in. */
+  $draftScope = paper_section_scope($draftRow['imrad_content'] ?? null);
+  unset($sections[PAPER_SCOPE_KEY]);
   $draftPayload = [
     'id'     => (int)$draftRow['paper_id'],
     'fields' => array_merge([
@@ -491,6 +504,7 @@ if ($draftRow) {
       'manuscript_type'      => $draftRow['manuscript_type'],
       'publication_location' => $draftRow['publication_location'],
       'program_category'     => $draftRow['program_category'],
+      'section_scope'        => $draftScope ? implode(',', $draftScope) : '',
     ], $sections),
     'status' => $draftRow['publication_status'],
   ];
@@ -631,8 +645,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     // cards and the search both read that column as text.
     $sectionLabels = paper_section_labels();
     $sectionKeys   = array_keys($sectionLabels);
+
+    /* The sections the author chose to submit. A page opened before the choice
+       existed posts none, and that keeps meaning "all of them". The browser is
+       not what decides this: a section outside the choice is stored empty
+       whatever was posted for it, and one inside it must be written, so what is
+       filed always matches what the reviewers are told. */
+    $scope = section_scope_resolve($_POST['section_scope'] ?? null);
+
     $sections = [];
     foreach ($sectionKeys as $key) {
+        if (!in_array($key, $scope, true)) {
+            $sections[$key] = '';
+            continue;
+        }
         $clean = rich_text_sanitize((string)($_POST[$key] ?? ''));
         /* A section of nothing but a table of results, or a photograph of the
            apparatus, is written. The editor has always taken that view, so the
@@ -640,10 +666,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
            table-only section through every step and refused it at the last. */
         $hasFigure = (bool)preg_match('/<(img|table)\b/i', $clean);
         if (rich_text_to_plain($clean) === '' && !$hasFigure) {
-            throw new Exception('Please write the ' . $sectionLabels[$key] . ' section.');
+            /* A plain Exception here was replaced by the generic line further
+               down, so a student who got past the browser's own check was told
+               only that the upload failed. This is written for them. */
+            throw new UserFacingException('Please write the ' . $sectionLabels[$key] . ' section.');
         }
         $sections[$key] = $clean;
     }
+    $sections[PAPER_SCOPE_KEY] = $scope;
     $imradContent = json_encode($sections, JSON_UNESCAPED_UNICODE);
     $abstract     = rich_text_to_plain($sections['abstract']);
 
@@ -991,8 +1021,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     if ($u['user_role'] === 'student') {
         $adviserId = creator_of($u['user_id']);
         if ($adviserId) {
+            /* Said in the notice itself, because the adviser opens this to decide
+               what to do with the paper, and a paper filed with sections left out
+               on purpose should not be read as one that is missing them. Nothing
+               is added for a complete paper. */
+            $scopeNote = paper_scope_notice(paper_scope_info($imradContent), 'brief');
             create_notification($adviserId, $paper_id, 'submission',
-                $u['full_name'] . ' submitted "' . $title . '" for your review.');
+                $u['full_name'] . ' submitted "' . $title . '" for your review.'
+                . ($scopeNote !== '' ? ' ' . $scopeNote : ''));
         } else {
             error_log('Paper ' . $paper_id . ' submitted by user ' . $u['user_id']
                     . ' who has no Research Adviser (users.created_by is empty), so it will not appear in any review queue.');
@@ -3510,6 +3546,77 @@ body.pdf-docked > .site-footer {
     body.pdf-docked > .site-footer { margin-right: 0; width: auto; }
 }
 
+/* ===== Which sections to submit =====
+   The question asked on arriving at Step 2. It is the same dialog as every other
+   question on this page, so the head, the rule under it and the footer are the
+   ones the rest already use; it is only a little wider than the narrow notices,
+   so six rows and their hints sit on one line each. */
+.papel-dialog.is-choose { max-width: 520px; }
+.papel-dialog.is-choose .papel-dialog-body { padding: 1.125rem 1.5rem 0; }
+.papel-dialog.is-choose .papel-dialog-foot { padding: 1.125rem 1.5rem 1.25rem; }
+.scope-pick-lead { margin: 0 0 .875rem; color: var(--grey); font-size: .8125rem; line-height: 1.55; }
+.scope-pick-presets { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: .875rem; }
+/* The quick choices and the Change button share one look: small, outlined, and
+   filled when they describe what is currently ticked. */
+.scope-preset {
+    padding: .3125rem .75rem;
+    border: 1px solid var(--soft-maroon);
+    border-radius: var(--r-control, 4px);
+    background: var(--white);
+    color: var(--maroon);
+    font-family: var(--font-body);
+    font-size: .8125rem;
+    font-weight: 500;
+    line-height: 1.4;
+    cursor: pointer;
+    transition: background .15s, border-color .15s, color .15s;
+}
+.scope-preset:hover { background: var(--cream); border-color: var(--maroon); }
+.scope-preset:focus-visible { outline: 2px solid var(--maroon); outline-offset: 2px; }
+.scope-preset.is-on,
+.scope-preset.is-on:hover { background: var(--maroon); border-color: var(--maroon); color: var(--white); }
+.scope-pick-list { border: 0; margin: 0; padding: 0; min-width: 0; }
+.scope-opt {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    margin: 0 0 .375rem;
+    padding: .5rem .75rem;
+    border: 1px solid var(--border);
+    border-radius: var(--r-control, 4px);
+    background: var(--white);
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+}
+.scope-opt:hover { border-color: var(--soft-maroon); background: var(--cream); }
+.scope-opt.is-on { border-color: var(--maroon); }
+.scope-opt.is-locked { cursor: default; background: var(--cream); }
+.scope-opt input { flex: 0 0 auto; width: 1.0625rem; height: 1.0625rem; margin: 0; accent-color: var(--maroon); }
+.scope-opt-name { font-weight: 500; color: var(--ink); }
+.scope-opt-hint { margin-left: auto; padding-left: .5rem; font-size: .75rem; color: var(--grey); text-align: right; }
+.scope-pick-sum { margin: .75rem 0 0; font-size: .8125rem; color: var(--maroon); }
+
+/* The reminder at the top of Step 2: what was chosen, and the way to change it. */
+.scope-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: .625rem;
+    margin: 0 0 1.25rem;
+    padding: .625rem .875rem;
+    border: 1px solid var(--border);
+    border-radius: var(--r-control, 4px);
+    background: var(--cream);
+    font-size: .8125rem;
+    color: var(--ink);
+}
+.scope-bar .material-symbols-outlined { font-size: 18px; color: var(--maroon); flex: 0 0 auto; }
+.scope-bar-text { flex: 1 1 auto; min-width: 0; }
+.scope-bar-text strong { color: var(--maroon); font-weight: 600; }
+/* A section the author chose not to submit is not asked for: it is hidden, not
+   removed, so what was typed in it survives until the choice is widened again. */
+.doc-editor.is-out-of-scope { display: none; }
+
 /* The same dialog doubles as a prompt; the field sits under the message and
    above the buttons, so the padding is trimmed to avoid a double gap. */
 .papel-dialog-input {
@@ -3767,6 +3874,17 @@ body.pdf-docked > .site-footer {
                   </h3>
                 </div>
 
+                <?php /* Which written sections this paper is submitted with. It is
+                         asked on arriving here (askSectionScope() in the script
+                         below) and kept in the hidden section_scope field, and this
+                         bar is the way back to the question at any time. Reviewers
+                         are told what was chosen, so changing it later is safe. */ ?>
+                <div class="scope-bar" id="scopeBar">
+                  <span class="material-symbols-outlined" aria-hidden="true">segment</span>
+                  <span class="scope-bar-text">Sections you are submitting: <strong id="scopeBarValue">All sections</strong></span>
+                  <button type="button" class="scope-preset" id="btnChangeScope">Change</button>
+                </div>
+
                 <div class="ai-extraction-zone">
                   <?php /* One box for each manuscript type ticked in step 1: a paper
                            handed in as IMRAD and as Full Manuscript is one paper with
@@ -3858,9 +3976,11 @@ body.pdf-docked > .site-footer {
                     <div class="col-md-12">
                       <label class="form-label">Abstract &amp; IMRAD <span class="field-note ms-2">AI-extracted &amp; editable</span></label>
                       <div class="alert alert-info mb-3">
-                        Only the Abstract is taken from your PDF, copied word-for-word so you can
+                        <?php /* Rewritten by syncSectionScope() to follow the sections chosen;
+                                 this is what it says before anything has been chosen. */ ?>
+                        <span id="scopeNote">Only the Abstract is taken from your PDF, copied word-for-word so you can
                         check it against your paper. Write the Introduction, Methodology, Results
-                        and Discussion, Conclusion and References yourself. Every section is required.
+                        and Discussion, Conclusion and References yourself. Every section shown below is required.</span>
                         <?php /* The same explanation the dialog gives on arriving at this step, so
                                  closing that dialog does not put it out of reach. */ ?>
                         <button type="button" class="btn-why-sections" id="btnWhySections">
@@ -3946,6 +4066,11 @@ body.pdf-docked > .site-footer {
                     <input type="hidden" id="aiVariablesField" name="ai_variables">
                     <input type="hidden" id="aiSampleSizeField" name="ai_sample_size">
                     <input type="hidden" id="aiResearchFieldField" name="ai_research_field">
+                    <?php /* The sections the author chose to submit, comma-separated, empty
+                             until they have chosen. A named field of the form, so the browser
+                             copy, the server draft and the submission all carry it the way
+                             they carry every other value. */ ?>
+                    <input type="hidden" id="sectionScope" name="section_scope" value="">
                   </div>
                 </div>
 
@@ -4080,6 +4205,10 @@ body.pdf-docked > .site-footer {
                   <div class="review-item">
                     <div class="review-label">Year:</div>
                     <div class="review-value" id="reviewYear">-</div>
+                  </div>
+                  <div class="review-item">
+                    <div class="review-label">Sections:</div>
+                    <div class="review-value" id="reviewSections">-</div>
                   </div>
                   <div class="review-item">
                     <div class="review-label">Supporting Docs:</div>
@@ -4375,6 +4504,12 @@ function handleStatusChange(checkbox) {
    ========================================================================= */
 const papelDoc = (function () {
     const editors = {};                      // section key -> { root, surface, input, count }
+    /* The sections the author chose to submit, or null while no choice has been
+       made, which means every one of them: what this page always asked for. A
+       section outside the choice is hidden and is not asked for, but it is never
+       emptied, so widening the choice again brings back whatever was typed. */
+    let scope = null;
+    function inScope(key) { return scope === null || scope.indexOf(key) !== -1; }
     /* Alignment is a table cell's business, and is offered on the right-click
        menu over a table and in the table popover. Neither is a toolbar button,
        so none of them has a pressed state to reflect. */
@@ -6518,10 +6653,21 @@ const papelDoc = (function () {
         clear: function (key) { this.setText(key, ''); },
         clearAll: function () { Object.keys(editors).forEach(k => this.setText(k, '')); },
         syncAll:  function () { Object.keys(editors).forEach(k => refresh(editors[k])); },
-        // Returns the key of the first empty section, or null when all are filled.
+        // Returns the key of the first empty section the author is submitting,
+        // or null when all of those are filled. A section they chose to leave out
+        // is not empty in any way that matters, so it is never reported.
         firstEmpty: function () {
-            return Object.keys(editors).find(k => plainText(editors[k]) === '') || null;
+            return Object.keys(editors).find(k => inScope(k) && plainText(editors[k]) === '') || null;
         },
+        // Sets which sections are being submitted (a list of keys, or null for all)
+        // and hides the boxes outside it.
+        setScope: function (list) {
+            scope = Array.isArray(list) ? list.slice() : null;
+            Object.keys(editors).forEach(function (k) {
+                editors[k].root.classList.toggle('is-out-of-scope', !inScope(k));
+            });
+        },
+        inScope: inScope,
         flag: function (key) {
             const ed = editors[key]; if (!ed) return;
             ed.root.classList.add('is-invalid');
@@ -6840,8 +6986,11 @@ const papelDraft = (function () {
             if (Array.isArray(v)) return v.length > 0;
             if (typeof v !== 'string') return false;
             const text = v.replace(/<[^>]*>/g, '').trim();
-            // The year box is pre-filled, so on its own it means nothing.
-            return text !== '' && name !== 'year';
+            // The year box is pre-filled, so on its own it means nothing. Nor does
+            // a choice of sections: it is an answer to a question, not work, and
+            // counting it would raise "Continue where you left off?" for a student
+            // who did nothing but pick one.
+            return text !== '' && name !== 'year' && name !== 'section_scope';
         });
     }
 
@@ -6905,6 +7054,8 @@ const papelDraft = (function () {
         if (typeof syncSupportingDocs === 'function') syncSupportingDocs();
         // The ticks are back, so are the boxes that go with them.
         if (typeof syncPdfSlots === 'function') syncPdfSlots();
+        // The choice of sections is back in its field; the boxes follow it.
+        if (typeof syncSectionScope === 'function') syncSectionScope();
         if (typeof updateReview === 'function') updateReview();
 
         // Step 2 onwards needs a PDF, which cannot be restored, so the student
@@ -7293,7 +7444,14 @@ function goToStep(step) {
     }
     
     // Step 2's boxes follow whatever step 1 has ticked by now.
-    if (step === 2) syncPdfSlots();
+    if (step === 2) {
+        syncPdfSlots();
+        /* Which sections to submit is asked after this call returns, not during
+           it: a click on the step indicator that skips ahead runs goToStep once
+           per step on the way, and the question belongs to wherever the student
+           actually lands. It is asked only while no choice is recorded. */
+        setTimeout(function () { askSectionScope(false); }, 0);
+    }
 
     // Update review if going to step 4
     if (step === 4) {
@@ -7316,35 +7474,188 @@ let sectionsExplained = false;
 
 const CAN_DRAFT = <?= $canDraft ? 'true' : 'false' ?>;
 
-const SECTIONS_NOTE =
-    '<p>Your PDF and what you type here are read by different people, and they'
-  + ' are not interchangeable.</p>'
-  + (CAN_DRAFT
-      ? '<p><strong>The PDF goes to your reviewers.</strong> Your Research Adviser'
-        + ' and the Research Coordinator open it to check your work as you submitted'
-        + ' it, formatting, figures, appendices and all.</p>'
-      : '<p><strong>The PDF is the record of the paper itself.</strong> It is kept'
-        + ' as you submitted it, formatting, figures, appendices and all, and is'
-        + ' what anyone goes back to for the full document.</p>')
-  + '<p><strong>What you type is what the repository shows.</strong> When your'
-  + ' paper is published, a reader opens the page built from these boxes. The'
-  + ' PDF is not what they read, and it is not what the search looks through.</p>'
-  + '<p>That is why all six are required:</p>'
-  + '<ul>'
-  + '<li><strong>Abstract</strong>: taken from your PDF word for word, so check it.</li>'
-  + '<li><strong>Introduction</strong></li>'
-  + '<li><strong>Methodology</strong></li>'
-  + '<li><strong>Results and Discussion</strong></li>'
-  + '<li><strong>Conclusion</strong></li>'
-  + '<li><strong>References</strong></li>'
-  + '</ul>'
-  + '<p>You can paste them straight from your document. Tables, pictures and'
-  + ' links all survive the paste'
-  + (CAN_DRAFT
-      ? ', and a draft can be saved at any point.</p>'
-      : '. Your paper is published as soon as you submit it, with no review step,'
-        + ' so fill it in before you leave the page: drafts are for student'
-        + ' submissions only.</p>');
+/* ---------------------------------------------------------------------------
+   Which written sections this paper is submitted with.
+
+   Asked once, on arriving at step 2, and kept in the hidden section_scope field
+   so that it travels the way every other value does: into the copy kept in this
+   browser, into the draft on the server, and into the submission. The server is
+   what enforces it (section_scope_parse() in config/core.php and the submit
+   handler); this is what asks, and what hides the boxes the author has chosen
+   not to fill.
+   --------------------------------------------------------------------------- */
+// key => label, from the same list the server validates against.
+const SECTION_LABELS = <?= json_encode(paper_section_labels(), JSON_HEX_TAG | JSON_UNESCAPED_UNICODE) ?>;
+const SECTION_KEYS = Object.keys(SECTION_LABELS);
+// A few words beside each name in the question, so it is answered knowing what each is.
+const SECTION_HINTS = {
+    abstract: 'Always included',
+    introduction: 'Background and aims',
+    methodology: 'Design and instruments',
+    results_discussion: 'Findings and meaning',
+    conclusion: 'Conclusions and next steps',
+    references: 'Every source you cited'
+};
+
+function scopeField() { return document.getElementById('sectionScope'); }
+
+// "A", "A and B", "A, B and C"
+function joinNames(names) {
+    if (names.length <= 1) return names.join('');
+    return names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1];
+}
+
+// The recorded choice in the order the form lists the sections, or null when none is recorded.
+function currentScope() {
+    const field = scopeField();
+    const raw = field ? String(field.value || '').trim() : '';
+    if (!raw) return null;
+    const picked = raw.split(',').map(function (s) { return s.trim(); })
+        .filter(function (k) { return SECTION_KEYS.indexOf(k) !== -1; });
+    if (!picked.length) return null;
+    if (picked.indexOf('abstract') === -1) picked.push('abstract');      // never optional
+    return SECTION_KEYS.filter(function (k) { return picked.indexOf(k) !== -1; });
+}
+
+// The choice in words: "All sections", "Abstract only", or the names.
+function scopeWords(scope) {
+    const list = scope || SECTION_KEYS;
+    if (list.length === SECTION_KEYS.length) return 'All sections';
+    if (list.length === 1) return 'Abstract only';
+    return joinNames(list.map(function (k) { return SECTION_LABELS[k]; }));
+}
+
+// The notice above the boxes, which depends on what was chosen.
+function scopeNoticeText(scope) {
+    const lead = 'Only the Abstract is taken from your PDF, copied word-for-word so you can check it against your paper.';
+    const others = (scope || SECTION_KEYS).filter(function (k) { return k !== 'abstract'; })
+        .map(function (k) { return SECTION_LABELS[k]; });
+    return lead + (others.length
+        ? ' Write the ' + joinNames(others) + ' yourself.'
+        : ' You chose to submit the Abstract only, so there is nothing else to write.')
+        + ' Every section shown below is required.';
+}
+
+// Brings everything on the page into line with the recorded choice.
+function syncSectionScope() {
+    const scope = currentScope();
+    papelDoc.setScope(scope);
+
+    const value = document.getElementById('scopeBarValue');
+    if (value) value.textContent = scopeWords(scope);
+    const note = document.getElementById('scopeNote');
+    if (note) note.textContent = scopeNoticeText(scope);
+}
+
+function setSectionScope(list) {
+    const field = scopeField();
+    if (!field) return;
+    field.value = list ? list.join(',') : '';
+    syncSectionScope();
+    /* Deliberately not saved here. The autosave runs on typing and writes every
+       field, this one included; the leave-page guard saves it when the form is
+       dirty, and "Save as draft" posts it. Saving on the choice alone wrote a
+       device copy of an otherwise empty form (the form's defaults already count
+       as content), so the next visit opened with "Continue where you left off?"
+       for a student who had only answered a question. */
+}
+
+/* Waits until no dialog is on screen. They all share one box with one answer
+   slot, so opening a second while a first is up would leave the first never
+   answered. An alert raised by the very click that brought the student here, or
+   "Continue where you left off?" still waiting for its reply, are the likely ones. */
+function dialogIdle() {
+    return new Promise(function (resolve) {
+        const box = document.getElementById('papelDialog');
+        (function look() {
+            if (!box || !box.classList.contains('open')) { resolve(); return; }
+            setTimeout(look, 120);
+        })();
+    });
+}
+
+let scopeAsking = false;
+
+/* Asks which sections to submit. On arriving at step 2 it asks only when no
+   choice is recorded; the Change button passes force to ask again. Whatever the
+   answer is, closing the box with Escape included, it is recorded as it stands
+   ticked, and it starts as every section, so doing nothing keeps what this page
+   has always done. */
+async function askSectionScope(force) {
+    if (scopeAsking) return;
+    if (!force && currentScope() !== null) return;
+    if (typeof window.papelChoose !== 'function') return;
+
+    scopeAsking = true;
+    try {
+        await dialogIdle();
+        // The student may have moved on while another dialog was up.
+        if (!force && currentStep !== 2) return;
+
+        const picked = await window.papelChoose({
+            title: 'Which sections will you submit?',
+            icon: 'segment',
+            lead: 'Choose the written sections that go on your paper\'s page. Your PDF is always submitted in full'
+                + (CAN_DRAFT ? ', and your reviewers read the PDF.' : '.'),
+            confirmText: 'Continue',
+            sections: SECTION_KEYS.map(function (k) {
+                return { key: k, label: SECTION_LABELS[k], hint: SECTION_HINTS[k] || '', locked: k === 'abstract' };
+            }),
+            selected: currentScope() || SECTION_KEYS,
+            describe: function (keys) { return 'On your paper\'s page: ' + scopeWords(keys) + '.'; }
+        });
+        if (Array.isArray(picked) && picked.length) setSectionScope(picked);
+    } finally {
+        scopeAsking = false;
+    }
+}
+
+/* The explanation, written for the sections this author is submitting. It used to
+   be a constant that said all six were required, which stopped being true when
+   the choice was added. Everything put into it is either fixed text on this page
+   or a section label from the same list the server validates against, never
+   anything a person typed, which is what makes it safe to hand to the dialog as
+   markup. */
+function sectionsNote() {
+    const scope = currentScope() || SECTION_KEYS;
+    const partial = scope.length < SECTION_KEYS.length;
+    const items = scope.map(function (k) {
+        return k === 'abstract'
+            ? '<li><strong>Abstract</strong>: taken from your PDF word for word, so check it.</li>'
+            : '<li><strong>' + SECTION_LABELS[k] + '</strong></li>';
+    }).join('');
+
+    return '<p>Your PDF and what you type here are read by different people, and they'
+      + ' are not interchangeable.</p>'
+      + (CAN_DRAFT
+          ? '<p><strong>The PDF goes to your reviewers.</strong> Your Research Adviser'
+            + ' and the Research Coordinator open it to check your work as you submitted'
+            + ' it, formatting, figures, appendices and all.</p>'
+          : '<p><strong>The PDF is the record of the paper itself.</strong> It is kept'
+            + ' as you submitted it, formatting, figures, appendices and all, and is'
+            + ' what anyone goes back to for the full document.</p>')
+      + '<p><strong>What you type is what the repository shows.</strong> When your'
+      + ' paper is published, a reader opens the page built from these boxes. The'
+      + ' PDF is not what they read, and it is not what the search looks through.</p>'
+      + '<p>That is why ' + (partial ? 'the sections you chose are' : 'all six are') + ' required:</p>'
+      + '<ul>' + items + '</ul>'
+      + (partial
+          ? '<p>A section you leave out is simply not shown on your paper\'s page.'
+            + (CAN_DRAFT
+                ? ' <strong>Your reviewers are told you chose that</strong>, so it is not read as something missing.'
+                : ' The page says that the author chose to publish only these sections.')
+            + ' You can change your choice at any time with the Change button at the top of this step.</p>'
+          : '<p>If you would rather submit fewer sections, the Change button at the top of this step'
+            + ' lets you choose, for example, the Abstract only.'
+            + (CAN_DRAFT ? ' Your reviewers are told what you chose.' : '') + '</p>')
+      + '<p>You can paste them straight from your document. Tables, pictures and'
+      + ' links all survive the paste'
+      + (CAN_DRAFT
+          ? ', and a draft can be saved at any point.</p>'
+          : '. Your paper is published as soon as you submit it, with no review step,'
+            + ' so fill it in before you leave the page: drafts are for student'
+            + ' submissions only.</p>');
+}
 
 function explainSections(force) {
     if (sectionsExplained && !force) return Promise.resolve(false);
@@ -7353,7 +7664,7 @@ function explainSections(force) {
         title: 'Why you type the sections out',
         icon: 'menu_book',
         wide: true,
-        html: SECTIONS_NOTE
+        html: sectionsNote()
     });
 }
 
@@ -7372,7 +7683,10 @@ function updateReview() {
     document.getElementById('reviewTitle').textContent = title.value || '-';
     document.getElementById('reviewAuthors').textContent = authors.value || '-';
     document.getElementById('reviewYear').textContent = year.value || '-';
-    
+    // What will be on the paper's page, so a choice made a step ago is visible
+    // at the point it is about to take effect.
+    document.getElementById('reviewSections').textContent = scopeWords(currentScope());
+
     // Count supporting docs
     let docCount = 0;
     if (document.querySelector('input[name="ethics_clearance"]').files[0]) docCount++;
@@ -7621,11 +7935,15 @@ document.getElementById('btnExtract').addEventListener('click', function(){
       const successMsg = document.createElement('div');
       successMsg.id = 'extractMsg';
       successMsg.className = 'alert alert-success mt-3 alert-dismissable';
+      /* What is left to write is whatever the author chose to submit besides the
+         abstract. Names come from the section list, never from the paper. */
+      const stillToWrite = (currentScope() || SECTION_KEYS).filter(function (k) { return k !== 'abstract'; })
+        .map(function (k) { return SECTION_LABELS[k]; });
       successMsg.innerHTML = (papelDoc.text('abstract')
-        ? '<strong>Extraction complete' + readNote + '.</strong> Review the Abstract and edit if needed, '
-          + 'then write your Introduction, Methodology, and Results and Discussion.'
+        ? '<strong>Extraction complete' + readNote + '.</strong> Review the Abstract and edit if needed'
+          + (stillToWrite.length ? ', then write your ' + joinNames(stillToWrite) + '.' : '.')
         : '<strong>Extraction complete' + readNote + '.</strong> No abstract could be found in ' + sourceNote + ', so '
-          + 'please write all four sections yourself.')
+          + 'please write the Abstract' + (stillToWrite.length ? ' and the other sections you chose' : '') + ' yourself.')
         + '<button type="button" class="alert-close" aria-label="Dismiss">'
         + '<span class="material-symbols-outlined mi-18">close</span></button>';
       successMsg.querySelector('.alert-close').addEventListener('click', function () {
@@ -8416,6 +8734,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const whyBtn = document.getElementById('btnWhySections');
     if (whyBtn) whyBtn.addEventListener('click', function () { explainSections(true); });
 
+    // The way back to the question of which sections to submit, at any time.
+    const changeScopeBtn = document.getElementById('btnChangeScope');
+    if (changeScopeBtn) changeScopeBtn.addEventListener('click', function () { askSectionScope(true); });
+    // The editors exist by now, so the page can be put in line with the field's value.
+    syncSectionScope();
+
     // Manual entry button
     document.getElementById('btnManual').addEventListener('click', function() {
         if (!extractionSource()) {
@@ -8751,10 +9075,22 @@ document.addEventListener('DOMContentLoaded', () => {
     var resolver = null;
     var isPrompt = false;
     var isConfirm = false;
+    var isChoose = false;     // a list of options to tick, opened by papelChoose
+    var picker = null;        // what that list currently holds
+
+    /* Whatever opens the box starts from a plain one. A choice left half open by
+       a second dialog taking the box over must not leave the next notice wearing
+       its width, or answering with its options. */
+    function resetMode() {
+        isChoose = false;
+        picker = null;
+        dialogEl.classList.remove('is-choose');
+    }
 
     function close(value) {
         backdrop.classList.remove('open');
         dialogEl.classList.remove('is-wide');
+        dialogEl.classList.remove('is-choose');
         document.body.style.overflow = '';
         inputWrap.hidden = true;
         cancelBtn.hidden = true;
@@ -8772,12 +9108,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (resolver) { var r = resolver; resolver = null; r(value); }
         isPrompt = false;
         isConfirm = false;
+        isChoose = false;
+        picker = null;
         okBtn.textContent = 'OK';
         cancelBtn.textContent = 'Cancel';
     }
 
     window.papelAlert = function (message, opts) {
         opts = opts || {};
+        resetMode();
         // Legacy call sites prefixed failures with a cross; map that to tone.
         var text = String(message == null ? '' : message);
         var isError = opts.tone === 'error' || text.indexOf('❌') === 0;
@@ -8808,6 +9147,7 @@ document.addEventListener('DOMContentLoaded', () => {
        "cleared the field" apart from "changed their mind". */
     window.papelPrompt = function (message, opts) {
         opts = opts || {};
+        resetMode();
         msgEl.textContent = String(message == null ? '' : message);
         titleEl.textContent = opts.title || 'Enter a value';
         iconEl.textContent = opts.icon || 'edit';
@@ -8831,6 +9171,7 @@ document.addEventListener('DOMContentLoaded', () => {
        false for the other, so callers read as `if (await papelConfirm(...))`. */
     window.papelConfirm = function (message, opts) {
         opts = opts || {};
+        resetMode();
         msgEl.textContent = String(message == null ? '' : message);
         titleEl.textContent = opts.title || 'Are you sure?';
         iconEl.textContent = opts.icon || 'help';
@@ -8861,18 +9202,166 @@ document.addEventListener('DOMContentLoaded', () => {
         return new Promise(function (resolve) { resolver = resolve; });
     };
 
-    okBtn.addEventListener('click', function () {
-        close(isPrompt ? inputEl.value.trim() : (isConfirm ? true : undefined));
-    });
+    /* A list of options to tick, in the same box as every other question: head,
+       rule, body and buttons are the ones the rest use, and only the body differs.
+       It resolves with the keys that are ticked, in the order they were offered.
+
+       opts.sections  [{ key, label, hint, locked }]   locked ones are always ticked
+       opts.selected  keys ticked to begin with
+       opts.lead      a sentence above the choices
+       opts.describe  function(keys) giving the line that says what the choice means
+
+       Everything written into the box is set as text, never as markup. */
+    function buildPicker(opts) {
+        var sections = opts.sections || [];
+        var on = {};
+        (opts.selected || []).forEach(function (k) { on[k] = true; });
+        sections.forEach(function (s) { if (s.locked) on[s.key] = true; });
+
+        var root = document.createElement('div');
+        root.className = 'scope-pick';
+
+        if (opts.lead) {
+            var lead = document.createElement('p');
+            lead.className = 'scope-pick-lead';
+            lead.textContent = opts.lead;
+            root.appendChild(lead);
+        }
+
+        var presets = document.createElement('div');
+        presets.className = 'scope-pick-presets';
+        presets.setAttribute('role', 'group');
+        presets.setAttribute('aria-label', 'Quick choices');
+        var presetButtons = [
+            { name: 'Abstract only', keys: sections.filter(function (s) { return s.locked; }).map(function (s) { return s.key; }) },
+            { name: 'All sections',  keys: sections.map(function (s) { return s.key; }) }
+        ].map(function (p) {
+            var b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'scope-preset';
+            b.textContent = p.name;
+            b.addEventListener('click', function () {
+                boxes.forEach(function (box) { box.checked = p.keys.indexOf(box.value) !== -1; });
+                refresh();
+            });
+            presets.appendChild(b);
+            return { el: b, keys: p.keys };
+        });
+        root.appendChild(presets);
+
+        var list = document.createElement('fieldset');
+        list.className = 'scope-pick-list';
+        var legend = document.createElement('legend');
+        legend.className = 'visually-hidden';
+        legend.textContent = 'Sections to submit';
+        list.appendChild(legend);
+
+        var boxes = [];
+        sections.forEach(function (s) {
+            var row = document.createElement('label');
+            row.className = 'scope-opt' + (s.locked ? ' is-locked' : '');
+            var box = document.createElement('input');
+            box.type = 'checkbox';
+            box.value = s.key;
+            box.checked = !!on[s.key];
+            if (s.locked) box.disabled = true;
+            box.addEventListener('change', refresh);
+            var name = document.createElement('span');
+            name.className = 'scope-opt-name';
+            name.textContent = s.label;
+            var hint = document.createElement('span');
+            hint.className = 'scope-opt-hint';
+            hint.textContent = s.hint || '';
+            row.appendChild(box);
+            row.appendChild(name);
+            row.appendChild(hint);
+            list.appendChild(row);
+            boxes.push(box);
+        });
+        root.appendChild(list);
+
+        var sum = document.createElement('p');
+        sum.className = 'scope-pick-sum';
+        sum.setAttribute('aria-live', 'polite');
+        root.appendChild(sum);
+
+        function read() {
+            return boxes.filter(function (b) { return b.checked; }).map(function (b) { return b.value; });
+        }
+        function refresh() {
+            var keys = read();
+            boxes.forEach(function (b) { b.parentNode.classList.toggle('is-on', b.checked); });
+            // A quick choice is lit while it describes exactly what is ticked.
+            presetButtons.forEach(function (p) {
+                var same = p.keys.length === keys.length && p.keys.every(function (k) { return keys.indexOf(k) !== -1; });
+                p.el.classList.toggle('is-on', same);
+            });
+            sum.textContent = opts.describe ? opts.describe(keys) : '';
+        }
+        refresh();
+
+        return { root: root, read: read };
+    }
+
+    window.papelChoose = function (opts) {
+        opts = opts || {};
+        picker = buildPicker(opts);
+        msgEl.textContent = '';
+        msgEl.appendChild(picker.root);
+        dialogEl.classList.remove('is-wide');
+        dialogEl.classList.add('is-choose');
+        titleEl.textContent = opts.title || 'Choose';
+        iconEl.textContent = opts.icon || 'checklist';
+
+        okBtn.textContent = opts.confirmText || 'Continue';
+        cancelBtn.hidden = true;
+        altBtn.hidden = true;
+        inputWrap.hidden = true;
+        isPrompt = false;
+        isConfirm = false;
+        isChoose = true;
+
+        lastFocus = document.activeElement;
+        lastScrollY = window.scrollY;
+        backdrop.classList.add('open');
+        document.body.style.overflow = 'hidden';
+        okBtn.focus();
+        return new Promise(function (resolve) { resolver = resolve; });
+    };
+
+    /* What each way of closing answers. The confirming button and Enter give the
+       real answer; Escape and a click outside the box are "no". A choice has no
+       "no": closing it keeps what is ticked, which starts as everything, so
+       nothing is lost by closing it, and a person is never left unable to leave. */
+    function answer() {
+        if (isChoose && picker) return picker.read();
+        if (isPrompt) return inputEl.value.trim();
+        return isConfirm ? true : undefined;
+    }
+    function dismiss() {
+        if (isChoose && picker) return picker.read();
+        if (isConfirm) return false;
+        return isPrompt ? null : undefined;
+    }
+
+    okBtn.addEventListener('click', function () { close(answer()); });
     cancelBtn.addEventListener('click', function () { close(isConfirm ? false : null); });
     altBtn.addEventListener('click', function () { close('alt'); });
     backdrop.addEventListener('click', function (e) {
-        if (e.target === backdrop) close(isConfirm ? false : (isPrompt ? null : undefined));
+        if (e.target === backdrop) close(dismiss());
     });
     document.addEventListener('keydown', function (e) {
         if (!backdrop.classList.contains('open')) return;
-        if (e.key === 'Escape') { e.preventDefault(); close(isConfirm ? false : (isPrompt ? null : undefined)); }
-        else if (e.key === 'Enter') { e.preventDefault(); close(isPrompt ? inputEl.value.trim() : (isConfirm ? true : undefined)); }
+        if (e.key === 'Escape') { e.preventDefault(); close(dismiss()); }
+        else if (e.key === 'Enter') {
+            // A quick-choice button is pressed with Enter like any button, and
+            // answering the whole question over its head would make it unusable
+            // from the keyboard.
+            var focused = document.activeElement;
+            if (isChoose && focused && focused.classList && focused.classList.contains('scope-preset')) return;
+            e.preventDefault();
+            close(answer());
+        }
     });
 })();
 </script>
