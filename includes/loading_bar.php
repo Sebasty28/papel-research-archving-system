@@ -50,10 +50,13 @@
  * however it is sent: the submit event for an ordinary button, and a wrapped
  * HTMLFormElement.prototype.submit for the forms action_dialogs.php sends
  * after its confirmation, which never fire that event. Workflows that run
- * as background requests instead (the paper upload, the AI extraction,
- * saving a draft, deleting a notification) drive it by hand:
+ * as background requests instead (saving a draft, deleting a notification)
+ * drive it by hand:
  *     window.papelLoading.work.start();  ...  window.papelLoading.work.done();
  * with work.leave() in place of done() when the page moves on afterwards.
+ * The paper upload and the AI extraction are the two that do not: their overlay
+ * (student_upload_ai.php) plays the same logo inside its own card, and asking
+ * for the pill as well would put the animation on screen twice.
  *
  * Signing in is the exception: those forms carry data-splash and put up the
  * full-screen animation (includes/splash.php) instead, since that is the site
@@ -134,10 +137,7 @@ $loader_badge_gif = (defined('BASE_URL') ? BASE_URL : '/capstone')
 .papel-loader-badge {
     position: fixed;
     left: 50%;
-    /* A page that puts a loader of its own in the middle of the window (the
-       upload overlay is the one that does) moves the pill out of its way by
-       setting --papel-pill-top to where the pill's centre should sit. */
-    top: var(--papel-pill-top, 50%);
+    top: 50%;
     z-index: 20100;
     padding: 6px 16px;
     border-radius: 999px;
@@ -150,6 +150,11 @@ $loader_badge_gif = (defined('BASE_URL') ? BASE_URL : '/capstone')
     transition: opacity .2s ease, transform .2s ease, visibility .2s;
 }
 .papel-loader-badge img { display: block; width: 130px; height: auto; }
+/* The dark theme dims every picture by 8% (theme.php), but the pill around this
+   one is not dimmed, so in dark mode the GIF came out a shade darker than its
+   own plate, as a grey rectangle inside a white pill. The id is for the
+   specificity: the theme's rule outranks a class. */
+#papelWorkBadge img { filter: none; }
 .papel-loader-badge.is-working {
     opacity: 1;
     visibility: visible;
@@ -176,10 +181,6 @@ $loader_badge_gif = (defined('BASE_URL') ? BASE_URL : '/capstone')
     transition: opacity .2s ease, visibility .2s;
 }
 .papel-loader-veil.is-working { opacity: 1; visibility: visible; }
-/* A page that moves the pill out of the way of an overlay of its own (the
-   upload page, via --papel-pill-top) already dims and blurs behind that
-   overlay; a second veil over it would blur its progress card as well. */
-html[style*="--papel-pill-top"] .papel-loader-veil { display: none; }
 
 /* Someone who has asked for less movement still needs to know it is working,
    so the bar stays and breathes instead of travelling. A GIF cannot be paused

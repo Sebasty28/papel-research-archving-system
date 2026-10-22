@@ -55,12 +55,14 @@ $PDF_DOCK_MINIMISE  = !empty($PDF_DOCK_MINIMISE) && !$PDF_DOCK_HOME;
 
 .pdf-dock {
     position: fixed;
-    /* Between the site's maroon bands, never over them: below the navbar and
-       the breadcrumb strip, and above the footer once that is in view. Both
-       edges are measured from the page as it scrolls (placeTop below); the
-       fallbacks only matter if that never runs. It used to run from the
-       bottom of the navbar to the bottom of the window, so the strip and the
-       footer each stopped short at the panel's edge. */
+    /* Under the navbar, and above the footer once that is in view. Docked to the
+       right with room beside the breadcrumb links, it starts right under the
+       navbar and sits over the strip, whose own right-hand end it takes over, so
+       the panel's top never moves as the page scrolls. Anywhere else (docked to
+       the left, or too narrow to leave the links clear) it starts below the strip
+       instead, and follows it up as it scrolls away. Both edges are measured
+       from the page (placeTop below); the fallbacks only matter if that never
+       runs. */
     top: var(--pdf-dock-top, 57px);
     right: 0;
     bottom: var(--pdf-dock-bottom, 0px);
@@ -73,8 +75,16 @@ $PDF_DOCK_MINIMISE  = !empty($PDF_DOCK_MINIMISE) && !$PDF_DOCK_HOME;
     z-index: 900;
     display: none;
     flex-direction: column;
-    background: var(--white);
-    border-left: 1px solid var(--border);
+    /* Nothing under the header and the stage, which between them cover the whole
+       panel. It was white, and a white ground under them showed at the inner edge
+       as a pale hairline wherever that edge fell between two device pixels (at
+       110% to 175% zoom, in the window widths where it did), now that the panel
+       sits over the maroon strip. */
+    background: transparent;
+    /* No border on the inner edge either. It was a 1px pale line, invisible beside
+       the white page, but over the strip it showed as a thin light seam between
+       the strip and the panel's own maroon header. The header, the dark stage and
+       the shadow below already set the panel apart. */
     box-shadow: -4px 0 24px rgba(51, 0, 0, .10);
 }
 .pdf-dock.is-open { display: flex; }
@@ -256,6 +266,8 @@ body.pdf-docked > main.wrap {
     height: min(80vh, 56rem);
     z-index: auto;
     margin-top: 1rem;
+    /* A card in the page, so it keeps a ground, a frame and its rounded corners. */
+    background: var(--white);
     border: 1px solid var(--border);
     border-radius: var(--r-card, 8px);
     overflow: hidden;
@@ -272,7 +284,6 @@ body.pdf-docked > main.wrap {
 /* On the left: the right-hand panel, mirrored. */
 .pdf-dock.is-left {
     right: auto; left: 0;
-    border-left: 0; border-right: 1px solid var(--border);
     box-shadow: 4px 0 24px rgba(51, 0, 0, .10);
 }
 .pdf-dock.is-left .pdf-dock-grip { left: auto; right: -3px; }
@@ -310,6 +321,12 @@ body.pdf-docked .crumb-bar,
 body.pdf-docked-left .crumb-bar,
 body.pdf-docked .site-footer,
 body.pdf-docked-left .site-footer { position: relative; z-index: 902; }
+/* The one exception: docked to the right with the breadcrumb links clear of the
+   panel (placeTop sets this class), the panel starts at the navbar and sits over
+   the strip. Its top is then the navbar's own edge, which never moves, so there is
+   no edge for a scroll to leave behind, and the strip goes back to its ordinary
+   level, under the panel. */
+body.pdf-docked.pdf-over-strip .crumb-bar { z-index: 1; }
 
 /* The header is the handle for docking by drag. */
 .pdf-dock-grab { display: none; }
@@ -698,23 +715,62 @@ document.addEventListener('DOMContentLoaded', function () {
     // 'right' is the only place a panel without a home ever goes.
     var mode = home ? 'inline' : 'right';
 
-    /* The panel sits between the maroon bands. It starts below the navbar and
-       the breadcrumb strip together, as the upload page's docked chat does:
-       the navbar is sticky, but the strip scrolls away, so the top follows
-       the strip up until only the navbar is left. It ends above the footer
-       once the footer scrolls into view, rather than lying over it. Both
-       edges move with the page, so they are worked out again on every scroll
-       and resize, and whenever the page itself changes height. */
+    /* Where the panel sits. It ends above the footer once the footer scrolls
+       into view, rather than lying over it, and it starts under the navbar.
+
+       Docked to the right with the breadcrumb links clear of it, that is right
+       under the navbar, over the strip: the navbar is sticky, so the top is a
+       fixed edge and nothing about the scroll can move it. Docked to the left (the
+       links are at that end), or too narrow to leave them clear, it starts below
+       the strip as the upload page's docked chat does, and the top follows the
+       strip up as it scrolls away.
+
+       The edges are worked out again on every scroll and resize, and whenever the
+       page itself changes height. Whether the panel may sit over the strip depends
+       on widths, not on the scroll, so that is only decided when something that
+       could change it has happened (placeTop(true)): opening, docking, a resize,
+       a change in the page's height or in the panel's width. */
     var header  = document.querySelector('.site-header');
     var crumbs  = document.querySelector('.crumb-bar');
     var footer  = document.querySelector('.site-footer');
     var band    = { top: 57, bottom: 0 };
     var written = { top: null, bottom: null, header: null };
-    function placeTop() {
+    var over    = false;      // sitting over the breadcrumb strip
+
+    // How far across the window the breadcrumb links reach.
+    function crumbReach() {
+        var reach = 0;
+        if (crumbs) {
+            crumbs.querySelectorAll('.crumb-inner > *').forEach(function (el) {
+                reach = Math.max(reach, el.getBoundingClientRect().right);
+            });
+        }
+        return reach;
+    }
+    // Whether a panel this wide, on the right, would leave every link uncovered.
+    function clearOfCrumbs(w) { return crumbReach() + 16 <= viewW() - w; }
+
+    function leaveStrip() {
+        if (!over) return;
+        over = false;
+        document.body.classList.remove('pdf-over-strip');
+        written.top = null;
+    }
+    function decideOver() {
+        var next = !!crumbs && beside() && mode === 'right' && wide()
+                && clearOfCrumbs(dock.getBoundingClientRect().width);
+        if (next === over) return;
+        over = next;
+        document.body.classList.toggle('pdf-over-strip', over);
+        written.top = null;           // the top edge is about to move, so it is written again
+    }
+
+    function placeTop(measure) {
         var headerEdge = header ? Math.max(0, Math.round(header.getBoundingClientRect().bottom)) : 0;
+        if (measure) decideOver();
         if (header || crumbs) {
             var top = header ? header.getBoundingClientRect().bottom : 0;
-            if (crumbs) top = Math.max(top, crumbs.getBoundingClientRect().bottom);
+            if (crumbs && !over) top = Math.max(top, crumbs.getBoundingClientRect().bottom);
             band.top = Math.max(0, Math.round(top));
         }
         band.bottom = footer
@@ -766,8 +822,8 @@ document.addEventListener('DOMContentLoaded', function () {
        watched as well: a step of a form, or a section folding, moves the footer
        without any scroll at all. */
     if (window.ResizeObserver) {
-        if (header) { new ResizeObserver(function () { placeTop(); }).observe(header); }
-        new ResizeObserver(function () { placeTop(); }).observe(document.body);
+        if (header) { new ResizeObserver(function () { placeTop(true); }).observe(header); }
+        new ResizeObserver(function () { placeTop(true); }).observe(document.body);
     }
     /* And looked at again twice a second for as long as the panel is beside
        the page. The report above came from a machine whose cause could not be
@@ -777,7 +833,7 @@ document.addEventListener('DOMContentLoaded', function () {
        has moved. Started and stopped with the panel's own open and close. */
     var bandWatch = null;
     function watchBands(on) {
-        if (on && !bandWatch) bandWatch = setInterval(placeTop, 500);
+        if (on && !bandWatch) bandWatch = setInterval(function () { placeTop(true); }, 500);
         if (!on && bandWatch) { clearInterval(bandWatch); bandWatch = null; }
     }
 
@@ -804,7 +860,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (dock.classList.contains('is-open')) return;
         dock.classList.add('is-open');
         document.body.classList.add('pdf-docked');
-        placeTop();                     // the page has just made room, which can move the footer
+        placeTop(true);                 // the page has just made room, which can move the footer
         announce('open');
     }
 
@@ -857,9 +913,11 @@ document.addEventListener('DOMContentLoaded', function () {
             b.hidden = b.getAttribute('data-dock-to') === next;
         });
         /* Pinned to a side it is given its edges (the cache is cleared so they are
-           written now); back in its section it gives them up. */
+           written now); back in its section it gives them up. Its width is settled
+           first, because whether it may sit over the breadcrumb strip depends on it. */
         written.top = written.bottom = null;
-        if (next !== 'inline') { placeTop(); applyStored(); }
+        if (next !== 'right') leaveStrip();
+        if (next !== 'inline') { applyStored(); placeTop(true); }
         else { dock.style.top = ''; dock.style.bottom = ''; }
         fitInline();
         var now = beside();
@@ -886,6 +944,7 @@ document.addEventListener('DOMContentLoaded', function () {
         var was = beside();
         dock.classList.remove('is-open');
         document.body.classList.remove('pdf-docked', 'pdf-docked-left');
+        leaveStrip();
         stopShowing();                    // drop the pages and anything still loading
         markShowing(null);
         if (!home || was) announce('close');
@@ -980,6 +1039,8 @@ document.addEventListener('DOMContentLoaded', function () {
         document.documentElement.style.setProperty('--pdf-dock-w', px + 'px');
         grip.setAttribute('aria-valuenow', String(px));
         if (remember) { try { localStorage.setItem(KEY, String(px)); } catch (err) {} }
+        // A wider panel may reach the breadcrumb links, a narrower one may clear them.
+        placeTop(true);
         return px;
     }
 
@@ -1074,6 +1135,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (fullscreen()) document.exitFullscreen();
         dock.classList.remove('is-open');
         document.body.classList.remove('pdf-docked', 'pdf-docked-left');
+        leaveStrip();
         announce('close');
         syncRestoreTab();
     }
@@ -1159,9 +1221,14 @@ document.addEventListener('DOMContentLoaded', function () {
     // which the CSP allows, rather than with style attributes, which it drops.
     function showDrop(zone) {
         placeTop();
-        // Where the panel would actually sit: between the same bands.
-        var top = band.top, tall = window.innerHeight - band.top - band.bottom;
+        // Where the panel would actually sit: right under the navbar, over the
+        // strip, on the right when the links stay clear of it; below the strip
+        // anywhere else.
         var W = viewW(), w = dockWidth();
+        var headerEdge = header ? Math.round(header.getBoundingClientRect().bottom) : 0;
+        var stripEdge  = crumbs ? Math.max(headerEdge, Math.round(crumbs.getBoundingClientRect().bottom)) : headerEdge;
+        var top  = (zone === 'right' && crumbs && wide() && clearOfCrumbs(w)) ? headerEdge : stripEdge;
+        var tall = window.innerHeight - top - band.bottom;
         var box = zone === 'left'  ? [0, top, w, tall]
                 : zone === 'right' ? [W - w, top, w, tall]
                 :                    [W * 0.25 + 16, top + 16, W * 0.5 - 32, tall - 32];

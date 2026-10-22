@@ -76,10 +76,27 @@ lying over the breadcrumb strip and the footer. The order, front to back, is:
 | z-index | What |
 |---|---|
 | 903 | navbar while a panel is docked (900 otherwise) |
-| 902 | breadcrumb strip and footer (the strip only while a panel is docked; the footer also always on the upload page) |
+| 902 | footer (also always on the upload page), and the breadcrumb strip while a panel is docked below it |
 | 901 | Corpus |
 | 900 | the PDF panel |
 | 880 | scroll-to-top button, the docked chat |
+| 1 | the breadcrumb strip, its own level, while the PDF panel is docked right over it |
+
+**The PDF panel sits over the breadcrumb strip when it can.** Docked to the right
+with the breadcrumb links clear of it, it starts right under the navbar, over the
+strip's right-hand end (`pdf-over-strip` on `<body>`, decided by `decideOver()` in
+`pdf_dock.php` whenever a width could have changed). Its top is then the navbar's
+own edge, which never moves, so there is nothing for a scroll to leave behind.
+Docked to the left (the links are at that end), or too narrow to leave them clear,
+it starts below the strip, follows it up as it scrolls away, and the strip is in
+front of it, as the table above says. The docked chat is always the second kind.
+
+The pinned panel has **no border and no background of its own**: its header and
+stage cover it completely, and either one shows as a pale hairline against the
+maroon strip (the 1px `--border` always; a white ground wherever the inner edge
+falls between two device pixels, which happens at 110% to 175% zoom in some window
+widths). The in-page card keeps both. Check such an edge by reading pixels across
+it at several zoom levels, not by eye at 100%.
 
 **A CSS variable written on `<html>` is a page-wide restyle.** Custom properties
 inherit, so changing one on the root makes the browser re-check every element on
@@ -229,6 +246,14 @@ site. Drive it with `window.papelLoading.start()` and `.done()`;
 paints a progress bar of its own ends up with two of them, in two places: the
 student dashboard drew one across the top of its results column, which on that
 page is above the search box, so it read as a stray rule floating in the gap.
+
+The upload page's overlay is the one place the logo is not a pill: it plays the
+same GIF inside its own card and does not call `papelLoading.work.*`, since
+asking for both put the animation on screen twice. The GIF is not transparent
+(it carries an off-white ground), so it sits on a plate of that colour, and the
+dark theme's `img { filter: brightness(.92) }` has to be switched off for it
+(`#id img { filter: none }`, the id being for specificity) or the picture comes
+out darker than its plate.
 
 ### Styling
 

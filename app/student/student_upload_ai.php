@@ -1061,89 +1061,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
 }
 #uploadOverlay.active { display: flex; }
 
-/* The loader: a book with its pages turning. Two resting halves and three
-   leaves that flip across the spine on a stagger, so one is always in flight.
-   Built from tokens rather than an image, so it follows the theme into dark
-   mode and stays crisp at any pixel density. */
-.page-turn {
-    --pt-rule: var(--border);
-    position: relative;
-    width: 112px;
-    height: 78px;
-    margin-bottom: 1.6rem;
-    perspective: 460px;      /* shallow enough that a turning page foreshortens */
-}
-/* The pages already read and the ones still to come. */
-.page-turn-half {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    width: 50%;
-    background: var(--white);
-    border: 1px solid var(--border);
-}
-.page-turn-left  { left: 0;  border-right: none; border-radius: var(--r-control, 4px) 0 0 var(--r-control, 4px); }
-.page-turn-right { right: 0; border-left: none;  border-radius: 0 var(--r-control, 4px) var(--r-control, 4px) 0; }
+/* The loader: the PAPEL logo animation, the one the logo pill plays
+   (includes/loading_bar.php), standing in the card. The overlay is this page's
+   loader, so the page does not also ask for the pill while it is up: that would
+   be the same animation on screen twice.
 
-/* Ruled lines, drawn rather than drawn on, so they scale with the box. */
-.page-turn-half::before,
-.page-turn-leaf::before {
-    content: '';
-    position: absolute;
-    inset: 11px 9px;
-    background: repeating-linear-gradient(to bottom,
-                var(--pt-rule) 0 1.5px, transparent 1.5px 9px);
-    opacity: .7;
+   The GIF is not transparent. It carries a flat off-white ground of its own,
+   so it sits on a plate of that same colour. On the white card the plate melts
+   away; in dark mode, where the card is not white, the logo keeps a light
+   ground to read on instead of showing as a pale rectangle with square
+   corners. This is the one colour on the page that does not follow the theme,
+   because it is not ours to change: it is baked into the image. */
+.loading-logo {
+    margin-bottom: 1.4rem;
+    padding: 6px 20px;
+    border-radius: 999px;
+    background: #FDFCFC;
+    overflow: hidden;       /* the image is a rectangle; the plate is a pill */
 }
-
-/* The spine. A little darker than the rules so the fold reads as a fold. */
-.page-turn::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 50%;
-    width: 3px;
-    transform: translateX(-50%);
-    background: linear-gradient(to right,
-                rgba(0,0,0,.14), rgba(0,0,0,.05), rgba(0,0,0,.14));
-    z-index: 4;
+.loading-logo img {
+    display: block;
+    width: min(190px, 52vw);
+    height: auto;
 }
+/* The dark theme dims every picture on the site by 8% (theme.php). Here that
+   turns the GIF's ground a shade darker than its plate and brings the square
+   back. The id is for the specificity: the theme's rule outranks a class. */
+#uploadOverlay .loading-logo img { filter: none; }
 
-.page-turn-leaf {
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 50%;
-    height: 100%;
-    background: var(--white);
-    border: 1px solid var(--border);
-    border-left: none;
-    border-radius: 0 var(--r-control, 4px) var(--r-control, 4px) 0;
-    transform-origin: left center;
-    animation: pageTurn 2.4s cubic-bezier(.45,.05,.4,1) infinite;
-    /* The leaf looks the same from behind, so the gradient stands in for the
-       shadow a real page casts on itself as it lifts. */
-    box-shadow: -6px 0 12px rgba(40,2,2,.10);
-}
-.page-turn-leaf:nth-child(4) { animation-delay: .8s; }
-.page-turn-leaf:nth-child(5) { animation-delay: 1.6s; }
-
-/* Fades out flat against the left half, which is exactly where a turned page
-   comes to rest, then fades back in on the right for the next one. */
-@keyframes pageTurn {
-    0%   { transform: rotateY(0deg);    opacity: 0; }
-    6%   { transform: rotateY(-8deg);   opacity: 1; }
-    55%  { transform: rotateY(-160deg); opacity: 1; }
-    63%  { transform: rotateY(-180deg); opacity: 0; }
-    100% { transform: rotateY(-180deg); opacity: 0; }
-}
-
-/* Motion is the whole point of this one, so when it is unwelcome the book
-   simply sits there and the progress bar carries the message instead. */
+/* A GIF cannot be paused from CSS, so for anyone who has asked for less motion
+   (the system setting, or the site's own "Stop animations") the logo is left
+   out, as the pill leaves it out, and the progress bar carries the message. */
 @media (prefers-reduced-motion: reduce) {
-    .page-turn-leaf { animation: none; opacity: 0; }
+    .loading-logo { display: none; }
 }
+body.a11y-stop-animations .loading-logo { display: none; }
 
 /* White card */
 .loading-content {
@@ -1158,14 +1110,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     box-shadow: 0 24px 60px rgba(40,2,2,.28);
     max-width: 90vw;
     animation: slideUp 0.5s cubic-bezier(0.34,1.56,0.64,1);
-}
-.loading-text {
-    color: var(--maroon);
-    font-size: 1.4rem;
-    font-weight: 500;
-    letter-spacing: .2px;
-    text-align: center;
-    margin-bottom: .4rem;
 }
 .loading-status {
     color: var(--grey);
@@ -1205,15 +1149,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     font-weight: 500;
     letter-spacing: .8px;
     text-transform: uppercase;
-}
-
-.loading-dots { display: inline-block; }
-.loading-dots::after { content: ''; animation: dots 1.5s steps(4, end) infinite; }
-@keyframes dots {
-    0%, 20% { content: ''; }
-    40%      { content: '.'; }
-    60%      { content: '..'; }
-    80%, 100%{ content: '...'; }
 }
 
 * {
@@ -2089,9 +2024,6 @@ hr {
     align-items: flex-start;
     gap: 0.75rem;
   }
-
-  .loading-text { font-size: 1.5rem; }
-  .page-turn { width: 128px; height: 90px; }
 }
 
 /* Chatbot Styles - Enhanced - LEFT SIDE */
@@ -3572,18 +3504,13 @@ body.pdf-docked > .site-footer {
 <!-- Upload / extraction overlay -->
 <div id="uploadOverlay">
   <div class="loading-content">
-    <!-- The book. Decorative: the text below it says what is happening, and
-         a screen reader should hear that rather than five empty divs. -->
-    <div class="page-turn" aria-hidden="true">
-      <div class="page-turn-half page-turn-left"></div>
-      <div class="page-turn-half page-turn-right"></div>
-      <div class="page-turn-leaf"></div>
-      <div class="page-turn-leaf"></div>
-      <div class="page-turn-leaf"></div>
+    <!-- The PAPEL logo animation, the same file as the logo pill's (one download
+         between them). Decorative: the text below it says what is happening. -->
+    <div class="loading-logo" aria-hidden="true">
+      <img src="<?= BASE_URL ?>/assests/images/Logo-Loading-PAPEL-badge.gif" alt="" width="300" height="99">
     </div>
 
     <!-- Text -->
-    <div class="loading-text">Uploading your paper<span class="loading-dots"></span></div>
     <div class="loading-status" id="uploadStatusMsg">Preparing your files</div>
 
     <!-- Progress bar -->
@@ -7433,25 +7360,11 @@ function updateReview() {
                  : (docsNeeded ? 'Not attached yet' : 'Not applicable');
 }
 
-/* This page's overlay holds the middle of the window, which is where the logo
-   pill (includes/loading_bar.php) would otherwise land, one on top of the
-   other. These stack them instead: the pill sits just above the overlay's card
-   for as long as the overlay is up, and goes back to the middle afterwards. */
-function papelPillAboveOverlay() {
-    const card  = document.querySelector('#uploadOverlay .loading-content');
-    const badge = document.getElementById('papelWorkBadge');
-    if (!card || !badge) return;
-    /* Worked out from the heights rather than from the card's current box: the
-       card rises into place on an animation, and reading its position while
-       that is still running put the pill 30px too low, on top of it. The card
-       is centred, so where it will come to rest is known without waiting. */
-    const top = innerHeight / 2 - card.offsetHeight / 2 - 16 - badge.offsetHeight / 2;
-    document.documentElement.style.setProperty(
-        '--papel-pill-top', Math.max(badge.offsetHeight / 2 + 8, top) + 'px');
-}
-function papelPillRecentre() {
-    document.documentElement.style.removeProperty('--papel-pill-top');
-}
+/* The overlay is this page's loader, and its card plays the PAPEL logo
+   animation, so neither path below asks for the logo pill
+   (includes/loading_bar.php): it would be the same animation twice, one on top
+   of the other. The overlay already dims and blurs the page and takes the
+   clicks, which is the rest of what the pill's veil is for. */
 
 // Extract AI button handler
 document.getElementById('btnExtract').addEventListener('click', function(){
@@ -7477,7 +7390,6 @@ document.getElementById('btnExtract').addEventListener('click', function(){
   const statusEl  = document.getElementById('uploadStatusMsg');
 
   overlay.classList.add('active');
-  papelPillAboveOverlay();
   fillEl.style.width  = '10%';
   labelEl.textContent = '10%';
   statusEl.textContent = 'Sending ' + sourceNote + ' to AI...';
@@ -7509,9 +7421,6 @@ document.getElementById('btnExtract').addEventListener('click', function(){
   const tokenInput = document.querySelector('input[name="csrf_token"]') || document.querySelector('input[name="_token"]');
   if(tokenInput) fd.append(tokenInput.name, tokenInput.value);
 
-  // Extraction is a background request, so the form-submit hook in
-  // loading_bar.php never sees it: the logo pill has to be asked for.
-  if (window.papelLoading) window.papelLoading.work.start();
   fetch('student_upload_ai.php', {method:'POST', body:fd})
   .then(r => r.json())
   .then(data => {
@@ -7566,10 +7475,8 @@ document.getElementById('btnExtract').addEventListener('click', function(){
     papelAlert('❌ Error connecting to server');
   })
   .finally(() => {
-    if (window.papelLoading) window.papelLoading.work.done();
     clearInterval(aiTimer);
     overlay.classList.remove('active');
-    papelPillRecentre();
     fillEl.style.width  = '0%';
     labelEl.textContent = '0%';
     btn.disabled = false;
@@ -7609,11 +7516,7 @@ document.getElementById('uploadForm').addEventListener('submit', function(e){
     const statusEl  = document.getElementById('uploadStatusMsg');
 
     overlay.classList.add('active');
-    papelPillAboveOverlay();
     btn.disabled = true;
-    // Sent by XHR, which the form-submit hook in loading_bar.php cannot see.
-    const pill = window.papelLoading ? window.papelLoading.work : null;
-    if (pill) pill.start();
 
     // Cycling status messages timed to feel alive
     const messages = [
@@ -7661,23 +7564,18 @@ document.getElementById('uploadForm').addEventListener('submit', function(e){
                 // The paper is filed; the local draft has done its job.
                 papelDraft.beginSubmit();
                 papelDraft.clear();
-                if (pill) pill.leave();
                 setTimeout(function() {
                     window.location.href = res.redirect || 'student_dashboard.php';
                 }, 600);
             } else {
                 papelAlert('❌ Upload failed: ' + (res.message || 'Unknown error'));
-                if (pill) pill.done();
                 overlay.classList.remove('active');
-                papelPillRecentre();
                 btn.disabled = false;
                 fillEl.style.width = '0%';
             }
         } catch(err) {
             papelAlert('❌ Server error: ' + xhr.responseText.substring(0, 100));
-            if (pill) pill.done();
             overlay.classList.remove('active');
-            papelPillRecentre();
             btn.disabled = false;
             fillEl.style.width = '0%';
         }
@@ -7686,9 +7584,7 @@ document.getElementById('uploadForm').addEventListener('submit', function(e){
     xhr.addEventListener('error', function(){
         clearInterval(msgTimer);
         papelAlert('❌ Network error');
-        if (pill) pill.done();
         overlay.classList.remove('active');
-        papelPillRecentre();
         btn.disabled = false;
         fillEl.style.width = '0%';
     });
