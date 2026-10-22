@@ -22,12 +22,18 @@ require_once '../../config/groq_config.php';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     while (ob_get_level() > 0) { ob_end_clean(); }
     header('Content-Type: application/json');
+    /* A raw body (octet-stream, json, text) never reaches $_POST, so it is
+       measured here instead: the question each probe asks is only whether the
+       request arrived at all, and how much of it did. */
+    $raw = file_get_contents('php://input');
     exit(json_encode([
-        'ok'       => true,
-        'shape'    => (string)($_POST['shape'] ?? '(none)'),
-        'fields'   => count($_POST),
-        'files'    => count($_FILES),
-        'bytes_in' => (int)($_SERVER['CONTENT_LENGTH'] ?? 0),
+        'ok'        => true,
+        'shape'     => (string)($_POST['shape'] ?? $_GET['shape'] ?? '(raw)'),
+        'fields'    => count($_POST),
+        'files'     => count($_FILES),
+        'raw_bytes' => strlen((string)$raw),
+        'bytes_in'  => (int)($_SERVER['CONTENT_LENGTH'] ?? 0),
+        'ctype'     => (string)($_SERVER['CONTENT_TYPE'] ?? ''),
     ]));
 }
 
@@ -118,34 +124,54 @@ REFUSED with a 403 and an nginx page is the host, before PHP ever sees it.</p>
     return p;
   }
 
+  // Round two: which transport does this host actually let through? The first
+  // round showed every multipart POST refused and the one url-encoded POST
+  // allowed, so these ask how far that goes and what else is permitted.
+  /* Built in slices: String.fromCharCode.apply with a few hundred thousand
+     arguments exceeds the call argument limit and throws. */
+  function toBase64(u8) {
+    let s = '';
+    for (let i = 0; i < u8.length; i += 8192) {
+      s += String.fromCharCode.apply(null, u8.subarray(i, i + 8192));
+    }
+    return btoa(s);
+  }
+  const b64 = toBase64(bytes);
+
   const cases = [
-    ['1 tiny, url-encoded',          function () { return urlenc({ shape: 'tiny' }); }],
-    ['2 tiny, multipart',            function () { return form({ shape: 'tinymp' }); }],
-    ['3 20k of plain text',          function () { return form({ shape: 'plain20k', text: plain20k }); }],
-    ['4 a field containing HTML',    function () { return form({ shape: 'html', text: '<p>hello <b>world</b></p>' }); }],
-    ['5 20k of HTML',                function () { return form({ shape: 'html20k', text: html20k }); }],
-    ['6 a field that looks like SQL', function () { return form({ shape: 'sqlish', text: 'SELECT * FROM users WHERE 1=1' }); }],
-    ['7 small PDF attached',         function () { return form({ shape: 'pdfsmall' }, tinyPdf); }],
-    ['8 300KB PDF attached',         function () { return form({ shape: 'pdf300k' }, bigPdf); }],
-    ['9 PDF plus 20k of HTML',       function () { return form({ shape: 'both', text: html20k }, bigPdf); }]
+    ['1 url-encoded, tiny',          function () { return { body: urlenc({ shape: 'tiny' }) }; }],
+    ['2 url-encoded, 20k',           function () { return { body: urlenc({ shape: 'ue20k', text: plain20k }) }; }],
+    ['3 url-encoded, 20k of HTML',   function () { return { body: urlenc({ shape: 'uehtml', text: html20k }) }; }],
+    ['4 url-encoded, 400k base64',   function () { return { body: urlenc({ shape: 'ueb64', file: b64 }) }; }],
+    ['5 json body, tiny',            function () { return { body: JSON.stringify({ shape: 'jsontiny' }),
+                                                            type: 'application/json' }; }],
+    ['6 json body, 400k base64',     function () { return { body: JSON.stringify({ shape: 'jsonb64', file: b64 }),
+                                                            type: 'application/json' }; }],
+    ['7 raw octet-stream PDF',       function () { return { body: bigPdf, type: 'application/octet-stream',
+                                                            query: '?shape=octet' }; }],
+    ['8 text/plain base64',          function () { return { body: b64, type: 'text/plain',
+                                                            query: '?shape=textb64' }; }],
+    ['9 multipart (control)',        function () { return { body: form({ shape: 'mpcontrol' }) }; }]
   ];
 
   for (const row of cases) {
     const label = row[0];
+    const spec = row[1]();
     let verdict;
     try {
-      const r = await fetch(location.pathname, {
-        method: 'POST', body: row[1](),
-        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+      const headers = { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
+      if (spec.type) { headers['Content-Type'] = spec.type; }
+      const r = await fetch(location.pathname + (spec.query || ''), {
+        method: 'POST', body: spec.body, headers: headers
       });
       const text = await r.text();
       let parsed = null;
       try { parsed = JSON.parse(text); } catch (e) {}
       if (parsed && parsed.ok) {
-        verdict = 'HTTP ' + r.status + '  OK  (' + parsed.fields + ' fields, '
-                + parsed.files + ' file, ' + parsed.bytes_in + ' bytes)';
+        verdict = 'HTTP ' + r.status + '  OK  (' + parsed.fields + ' fields, ' + parsed.files
+                + ' file, raw ' + parsed.raw_bytes + ', sent ' + parsed.bytes_in + ')';
       } else {
-        const snippet = text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
+        const snippet = text.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
         verdict = 'HTTP ' + r.status + '  REFUSED  ' + (snippet || '(empty body)');
       }
     } catch (err) {
