@@ -7469,7 +7469,10 @@ document.getElementById('btnExtract').addEventListener('click', function(){
           if (open !== -1 && close > open) {
               try { return JSON.parse(body.slice(open, close + 1)); } catch (e) {}
           }
-          throw new Error('Not JSON (HTTP ' + r.status + '): ' + body.slice(0, 200));
+          const failure = new Error('The server answered HTTP ' + r.status + ' with no JSON in it.');
+          failure.papelStatus = r.status;
+          failure.papelBody = body;
+          throw failure;
       }
   }))
   .then(data => {
@@ -7521,12 +7524,24 @@ document.getElementById('btnExtract').addEventListener('click', function(){
     }
   })
   .catch(e => {
-    console.error(e);
-    /* Either the request never left, or the answer was not JSON. The two need
-       different advice, so they are no longer reported as the same thing. */
-    papelAlert(navigator.onLine === false
-      ? '❌ You appear to be offline. Check your connection and press Extract again.'
-      : '❌ The server did not answer properly. Please try again, or choose "Fill Manually".');
+    /* The whole answer goes to the console so it can be read or sent on: when
+       the body carries no JSON at all it is the host replying, not this app,
+       and the status is the only thing that says which host limit was hit. */
+    console.error('[PAPEL] extraction failed', e);
+    if (e && e.papelBody !== undefined) {
+      console.error('[PAPEL] status ' + e.papelStatus + ', body follows:', e.papelBody);
+    }
+    if (navigator.onLine === false) {
+      papelAlert('❌ You appear to be offline. Check your connection and press Extract again.');
+      return;
+    }
+    /* The status is named because this message means the server answered with
+       something no part of this app can produce, and which one it was decides
+       where to look: 504 or 508 is the host cutting a long request short, 403
+       its firewall, 200 a page where JSON was expected. */
+    const status = (e && e.papelStatus) ? ' (HTTP ' + e.papelStatus + ')' : '';
+    papelAlert('❌ The server did not answer properly' + status + '. Please try again, or choose '
+      + '"Fill Manually" to type the details in yourself.');
   })
   .finally(() => {
     clearInterval(aiTimer);

@@ -154,8 +154,13 @@ function call_groq_api($systemPrompt, $userPrompt, $maxTokens = 1024, $apiKey = 
         ],
         CURLOPT_SSL_VERIFYPEER => true, // Verify SSL certificate for security
         CURLOPT_SSL_VERIFYHOST => 2,
-        CURLOPT_TIMEOUT => 30, // Wait max 30 seconds for response
-        CURLOPT_CONNECTTIMEOUT => 10 // Wait max 10 seconds to connect
+        /* Under the host's own ceiling, deliberately. Free hosting cuts a
+           request off at about 30 seconds and answers with its own page,
+           which carries no JSON and so tells the student nothing. Giving up
+           first means PHP is still alive to say what happened in the shape
+           the page can read. */
+        CURLOPT_TIMEOUT => 20,
+        CURLOPT_CONNECTTIMEOUT => 8
     ]);
 
     // Execute the request and get response
