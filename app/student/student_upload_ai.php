@@ -318,6 +318,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
        student had already written. The choice is only enforced on submit. */
     $scope = section_scope_parse($_POST['section_scope'] ?? null);
     if ($scope !== null) { $sections[PAPER_SCOPE_KEY] = $scope; }
+    /* The sections the author added for themselves, with whatever has been typed in
+       them (an empty one is kept: it is a draft). Nothing chosen yet means every
+       standard section is in play, which only matters for which names are taken. */
+    $custom = paper_custom_clean($_POST['custom_sections'] ?? '', $_POST, $scope ?? array_keys(paper_section_labels()), false);
+    if ($custom) { $sections[PAPER_CUSTOM_KEY] = $custom; }
     $imradContent = json_encode($sections, JSON_UNESCAPED_UNICODE);
     $abstract     = rich_text_to_plain($sections['abstract']);
 
@@ -490,7 +495,15 @@ if ($draftRow) {
      else here is restored. The reserved key inside the stored object is not a
      field of the form, so it is taken out before the rest is merged in. */
   $draftScope = paper_section_scope($draftRow['imrad_content'] ?? null);
-  unset($sections[PAPER_SCOPE_KEY]);
+  unset($sections[PAPER_SCOPE_KEY], $sections[PAPER_CUSTOM_KEY]);
+  /* The author's own sections go back the same way: their names as one field
+     (custom_sections, a JSON list the page rebuilds the editors from) and each
+     body as the field of its own name, which is how the editors are filled. */
+  $draftCustom = paper_custom_sections($draftRow['imrad_content'] ?? null);
+  $draftCustomFields = ['custom_sections' => $draftCustom
+      ? json_encode(array_map(function ($c) { return ['key' => $c['key'], 'label' => $c['label']]; }, $draftCustom), JSON_UNESCAPED_UNICODE)
+      : ''];
+  foreach ($draftCustom as $c) { $draftCustomFields[$c['key']] = $c['html']; }
   $draftPayload = [
     'id'     => (int)$draftRow['paper_id'],
     'fields' => array_merge([
@@ -505,7 +518,7 @@ if ($draftRow) {
       'publication_location' => $draftRow['publication_location'],
       'program_category'     => $draftRow['program_category'],
       'section_scope'        => $draftScope ? implode(',', $draftScope) : '',
-    ], $sections),
+    ], $sections, $draftCustomFields),
     'status' => $draftRow['publication_status'],
   ];
 }
@@ -683,6 +696,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
         $sections[$key] = $clean;
     }
     $sections[PAPER_SCOPE_KEY] = $scope;
+    /* The sections the author added for themselves are required like any other the
+       author chose to submit, and are stored beside the standard ones. Only the
+       names and bodies are taken from the page; what counts as a name, how many
+       there may be and what a body may hold are decided here. */
+    $custom = paper_custom_clean($_POST['custom_sections'] ?? '', $_POST, $scope, true);
+    if ($custom) { $sections[PAPER_CUSTOM_KEY] = $custom; }
     $imradContent = json_encode($sections, JSON_UNESCAPED_UNICODE);
     $abstract     = rich_text_to_plain($sections['abstract']);
 
@@ -3619,7 +3638,12 @@ body.pdf-docked > .site-footer {
    question on this page, so the head, the rule under it and the footer are the
    ones the rest already use; it is only a little wider than the narrow notices,
    so six rows and their hints sit on one line each. */
-.papel-dialog.is-choose { max-width: 520px; }
+.papel-dialog.is-choose { max-width: 520px; display: flex; flex-direction: column; max-height: calc(100vh - 3rem); }
+/* With sections of their own the question can run taller than a short screen: the
+   head and the buttons stay put and the body between them scrolls. */
+.papel-dialog.is-choose .papel-dialog-head,
+.papel-dialog.is-choose .papel-dialog-foot { flex: 0 0 auto; }
+.papel-dialog.is-choose #papelDialogMessage { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .papel-dialog.is-choose .papel-dialog-body { padding: 1.125rem 1.5rem 0; }
 .papel-dialog.is-choose .papel-dialog-foot { padding: 1.125rem 1.5rem 1.25rem; }
 .scope-pick-lead { margin: 0 0 .875rem; color: var(--grey); font-size: .8125rem; line-height: 1.55; }
@@ -3662,7 +3686,53 @@ body.pdf-docked > .site-footer {
 .scope-opt input { flex: 0 0 auto; width: 1.0625rem; height: 1.0625rem; margin: 0; accent-color: var(--maroon); }
 .scope-opt-name { font-weight: 500; color: var(--ink); }
 .scope-opt-hint { margin-left: auto; padding-left: .5rem; font-size: .75rem; color: var(--grey); text-align: right; }
-.scope-pick-sum { margin: .75rem 0 0; font-size: .8125rem; color: var(--maroon); }
+.scope-pick-sum { margin: .75rem 0 0; padding-bottom: 1rem; font-size: .8125rem; color: var(--maroon); }
+
+/* Sections the author names themselves, under the six. */
+.scope-custom { margin-top: 1rem; padding-top: .875rem; border-top: 1px solid var(--border); }
+.scope-custom-head { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; margin: 0 0 .25rem; }
+.scope-custom-title { font-weight: 600; color: var(--ink); }
+.scope-custom-count { font-size: .75rem; color: var(--grey); }
+.scope-custom-help { margin: 0 0 .625rem; font-size: .8125rem; line-height: 1.5; color: var(--grey); }
+.scope-custom-lists { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: 0 0 .75rem; }
+.scope-custom-lists-label { font-size: .8125rem; color: var(--grey); }
+.scope-crows { list-style: none; margin: 0 0 .5rem; padding: 0; }
+.scope-crow { display: flex; align-items: center; gap: .5rem; margin: 0 0 .375rem; }
+.scope-crow-n { flex: 0 0 1.25rem; text-align: right; font-size: .75rem; color: var(--grey); }
+.scope-crow-input,
+.scope-add-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: .4375rem .625rem;
+    border: 1px solid var(--border-control, var(--border));
+    border-radius: var(--r-control, 4px);
+    background: var(--white);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: .875rem;
+    line-height: 1.4;
+}
+.scope-crow-x {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--r-control, 4px);
+    background: transparent;
+    color: var(--grey);
+    cursor: pointer;
+}
+.scope-crow-x:hover { background: var(--cream); border-color: var(--border); color: var(--maroon); }
+.scope-crow-x:focus-visible { outline: 2px solid var(--maroon); outline-offset: 2px; }
+.scope-crow-x .material-symbols-outlined { font-size: 18px; }
+.scope-crow-note { flex: 1 1 auto; min-width: 0; font-size: .8125rem; color: var(--grey); overflow-wrap: anywhere; }
+.scope-crow.is-dup .scope-crow-input { border-color: var(--maroon); }
+.scope-custom-add { display: flex; align-items: center; gap: .5rem; }
+.scope-custom-msg { margin: .375rem 0 0; min-height: 1.125rem; font-size: .75rem; line-height: 1.5; color: var(--maroon); }
 
 /* The reminder at the top of Step 2: what was chosen, and the way to change it. */
 .scope-bar {
@@ -4081,7 +4151,10 @@ body.pdf-docked > .site-footer {
                               'hint'  => $section_hints[$secKey] ?? '',
                           ];
                       }
-                      foreach ($paper_sections as $sec): ?>
+                      /* One editor, drawn once and used twice: for each of the six, and as the
+                         template the page copies for a section the author adds for themselves
+                         (papelDoc.addEditor). Two copies of this much markup would drift. */
+                      $renderEditor = function (array $sec) { ?>
                         <div class="doc-editor" data-section="<?= e($sec['key']) ?>">
                           <div class="doc-editor-head">
                             <span class="doc-editor-title"><?= e($sec['label']) ?> <span class="text-danger">*</span></span>
@@ -4124,7 +4197,13 @@ body.pdf-docked > .site-footer {
                                data-placeholder="<?= e($sec['hint']) ?>"></div>
                           <input type="hidden" name="<?= e($sec['name']) ?>" data-role="value">
                         </div>
-                      <?php endforeach; ?>
+                      <?php };
+                      foreach ($paper_sections as $sec) { $renderEditor($sec); } ?>
+                      <?php /* The author's own sections are added here, after the six. The template
+                               is inert (a <template>'s content is not part of the page or the form)
+                               until the script copies it; its key and name are replaced then. */ ?>
+                      <div id="customEditors"></div>
+                      <template id="customEditorTpl"><?php $renderEditor(['key' => 'custom_0', 'name' => 'custom_0', 'label' => 'Section', 'hint' => '']); ?></template>
                     </div>
                   
                     <!-- Hidden fields for AI data -->
@@ -4139,6 +4218,10 @@ body.pdf-docked > .site-footer {
                              copy, the server draft and the submission all carry it the way
                              they carry every other value. */ ?>
                     <input type="hidden" id="sectionScope" name="section_scope" value="">
+                    <?php /* The sections the author added for themselves: a JSON list of
+                             {key, label}, kept the way section_scope is. Each one's text is
+                             the field of the same name as its key (custom_1 ...). */ ?>
+                    <input type="hidden" id="customSections" name="custom_sections" value="">
                   </div>
                 </div>
 
@@ -4577,7 +4660,27 @@ const papelDoc = (function () {
        section outside the choice is hidden and is not asked for, but it is never
        emptied, so widening the choice again brings back whatever was typed. */
     let scope = null;
-    function inScope(key) { return scope === null || scope.indexOf(key) !== -1; }
+    function isCustom(key) { return /^custom_([1-9]|1[0-9]|2[0-4])$/.test(String(key)); }
+    /* A section the author added for themselves is always in play: adding it was the
+       choice. The scope list holds only the six. */
+    function inScope(key) { return isCustom(key) || scope === null || scope.indexOf(key) !== -1; }
+    // Puts a name on a box: the title, and the labels a screen reader reads.
+    function setEditorLabel(root, label) {
+        const title = root.querySelector('.doc-editor-title');
+        if (title) {
+            title.setAttribute('title', label);      // a long name is cut short on the bar; this shows all of it
+            const text = Array.prototype.filter.call(title.childNodes, function (n) { return n.nodeType === 3; })[0];
+            if (text) text.textContent = label + ' ';
+            else title.insertBefore(document.createTextNode(label + ' '), title.firstChild);
+        }
+        const bar = root.querySelector('.doc-toolbar');
+        if (bar) bar.setAttribute('aria-label', label + ' formatting');
+        const surface = root.querySelector('[data-role="surface"]');
+        if (surface) {
+            surface.setAttribute('aria-label', label);
+            surface.setAttribute('data-placeholder', 'Write the ' + label + ' of your paper here.');
+        }
+    }
     /* Alignment is a table cell's business, and is offered on the right-click
        menu over a table and in the table popover. Neither is a toolbar button,
        so none of them has a pressed state to reflect. */
@@ -6736,6 +6839,44 @@ const papelDoc = (function () {
             });
         },
         inScope: inScope,
+        /* A box for a section the author added: a copy of the template the page carries,
+           named and registered like the six. */
+        addEditor: function (key, label) {
+            const host = document.getElementById('customEditors');
+            const tpl = document.getElementById('customEditorTpl');
+            const src = tpl && tpl.content && tpl.content.querySelector('.doc-editor');
+            if (!isCustom(key) || editors[key] || !host || !src) return false;
+            const root = src.cloneNode(true);
+            root.setAttribute('data-section', key);
+            root.querySelector('[data-role="value"]').name = key;
+            setEditorLabel(root, label);
+            // In the page before it is initialised: the toolbar measures itself.
+            host.appendChild(root);
+            init(root);
+            /* The six are wired to the browser-copy autosave when the page loads, and a box
+               made later was not: typing in it saved nothing. A contenteditable raises no
+               input event on the form, so each surface has to say so itself. */
+            editors[key].surface.addEventListener('input', function () {
+                if (typeof papelDraft !== 'undefined') papelDraft.saveSoon();
+            });
+            return true;
+        },
+        removeEditor: function (key) {
+            const ed = editors[key];
+            if (!ed || !isCustom(key)) return;
+            if (ed.root.classList.contains('is-expanded')) toggleExpand(ed);
+            ed.root.remove();
+            delete editors[key];
+        },
+        relabel: function (key, label) {
+            const ed = editors[key]; if (!ed || !isCustom(key)) return;
+            setEditorLabel(ed.root, label);
+        },
+        // Puts the added boxes in the order of a list of keys.
+        orderCustom: function (keys) {
+            const host = document.getElementById('customEditors'); if (!host) return;
+            keys.forEach(function (k) { if (editors[k]) host.appendChild(editors[k].root); });
+        },
         flag: function (key) {
             const ed = editors[key]; if (!ed) return;
             ed.root.classList.add('is-invalid');
@@ -7055,10 +7196,11 @@ const papelDraft = (function () {
             if (typeof v !== 'string') return false;
             const text = v.replace(/<[^>]*>/g, '').trim();
             // The year box is pre-filled, so on its own it means nothing. Nor does
-            // a choice of sections: it is an answer to a question, not work, and
-            // counting it would raise "Continue where you left off?" for a student
-            // who did nothing but pick one.
-            return text !== '' && name !== 'year' && name !== 'section_scope';
+            // a choice of sections, or the names of sections the author added: they
+            // are answers to a question, not work, and counting them would raise
+            // "Continue where you left off?" for a student who did nothing but
+            // answer it. What they type inside those sections still counts.
+            return text !== '' && name !== 'year' && name !== 'section_scope' && name !== 'custom_sections';
         });
     }
 
@@ -7077,6 +7219,10 @@ const papelDraft = (function () {
     function apply(data) {
         const f = form();
         if (!f || !data) return;
+
+        /* The author's own sections first: their boxes have to exist before the
+           loop below can give them their text. A copy with none removes any. */
+        if (typeof restoreCustomSections === 'function') restoreCustomSections((data.fields || {}).custom_sections);
 
         Object.keys(data.fields).forEach(function (name) {
             const value = data.fields[name];
@@ -7565,7 +7711,68 @@ const SECTION_HINTS = {
     references: 'Every source you cited'
 };
 
+/* Sections the author adds for themselves, beside the six: a thesis's chapters, a
+   feasibility study's aspects. The names come from the person, so they are only ever
+   written into the page as text, and escaped wherever markup is built from them.
+   The limits are the server's (paper_custom_list() in config/core.php); these are the
+   same figures, so the dialog stops where the server would. */
+const CUSTOM_MAX = <?= (int)PAPER_CUSTOM_MAX ?>;
+const CUSTOM_KEY_MAX = <?= (int)PAPER_CUSTOM_KEY_MAX ?>;
+const CUSTOM_MAX_LABEL = <?= (int)PAPER_CHECKLIST_MAX_LABEL ?>;
+const CUSTOM_PRESETS = <?= json_encode(paper_custom_presets(), JSON_HEX_TAG | JSON_UNESCAPED_UNICODE) ?>;
+
 function scopeField() { return document.getElementById('sectionScope'); }
+function customField() { return document.getElementById('customSections'); }
+function isCustomKey(k) { return /^custom_([1-9]|1[0-9]|2[0-4])$/.test(String(k)); }
+
+function escHtml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// A recorded list, checked: [{ key, label }] with valid keys, real names, each key once.
+function parseCustom(raw) {
+    let list = [];
+    try { list = JSON.parse(raw || '[]'); } catch (err) { list = []; }
+    if (!Array.isArray(list)) return [];
+    const seen = {};
+    return list.filter(function (c) {
+        if (!c || !isCustomKey(c.key) || typeof c.label !== 'string' || !c.label.trim() || seen[c.key]) return false;
+        seen[c.key] = true;
+        return true;
+    }).slice(0, CUSTOM_MAX).map(function (c) { return { key: c.key, label: c.label.trim() }; });
+}
+
+// The sections the author added, in the order the page lists them.
+function currentCustom() {
+    const field = customField();
+    return parseCustom(field ? field.value : '');
+}
+function customLabels() { return currentCustom().map(function (c) { return c.label; }); }
+
+/* Puts the editors on the page, and the field that records them, in line with a list:
+   the ones no longer wanted are dropped, new ones get a box, renamed ones are renamed
+   and keep what was typed, and the boxes are put in the list's order. */
+function setCustomList(list) {
+    const want = (Array.isArray(list) ? list : []).slice(0, CUSTOM_MAX);
+    const wantKeys = want.map(function (c) { return c.key; });
+    papelDoc.keys().filter(isCustomKey).forEach(function (k) {
+        if (wantKeys.indexOf(k) === -1) papelDoc.removeEditor(k);
+    });
+    want.forEach(function (c) {
+        if (papelDoc.keys().indexOf(c.key) === -1) papelDoc.addEditor(c.key, c.label);
+        else papelDoc.relabel(c.key, c.label);
+    });
+    papelDoc.orderCustom(wantKeys);
+    const field = customField();
+    if (field) field.value = want.length ? JSON.stringify(want) : '';
+}
+
+// A draft, or the copy saved in this browser, comes back with their boxes before their text.
+function restoreCustomSections(raw) {
+    setCustomList(parseCustom(raw));
+    syncSectionScope();
+}
 
 // "A", "A and B", "A, B and C"
 function joinNames(names) {
@@ -7585,19 +7792,20 @@ function currentScope() {
     return SECTION_KEYS.filter(function (k) { return picked.indexOf(k) !== -1; });
 }
 
-// The choice in words: "All sections", "Abstract only", or the names.
-function scopeWords(scope) {
+// The choice in words: "All sections", "Abstract only", or the names, and any the author added.
+function scopeWords(scope, custom) {
     const list = scope || SECTION_KEYS;
-    if (list.length === SECTION_KEYS.length) return 'All sections';
-    if (list.length === 1) return 'Abstract only';
-    return joinNames(list.map(function (k) { return SECTION_LABELS[k]; }));
+    const own = custom || customLabels();
+    if (list.length === SECTION_KEYS.length) return own.length ? 'All sections and ' + joinNames(own) : 'All sections';
+    if (list.length === 1 && !own.length) return 'Abstract only';
+    return joinNames(list.map(function (k) { return SECTION_LABELS[k]; }).concat(own));
 }
 
 // The notice above the boxes, which depends on what was chosen.
 function scopeNoticeText(scope) {
     const lead = 'Only the Abstract is taken from your PDF, copied word-for-word so you can check it against your paper.';
     const others = (scope || SECTION_KEYS).filter(function (k) { return k !== 'abstract'; })
-        .map(function (k) { return SECTION_LABELS[k]; });
+        .map(function (k) { return SECTION_LABELS[k]; }).concat(customLabels());
     return lead + (others.length
         ? ' Write the ' + joinNames(others) + ' yourself.'
         : ' You chose to submit the Abstract only, so there is nothing else to write.')
@@ -7670,9 +7878,23 @@ async function askSectionScope(force) {
                 return { key: k, label: SECTION_LABELS[k], hint: SECTION_HINTS[k] || '', locked: k === 'abstract' };
             }),
             selected: currentScope() || SECTION_KEYS,
-            describe: function (keys) { return 'On your paper\'s page: ' + scopeWords(keys) + '.'; }
+            /* Sections of their own: the ones already on the page, and whether each has
+               text in it, so the box can warn before it throws that text away. */
+            custom: {
+                items: currentCustom().map(function (c) {
+                    return { key: c.key, label: c.label, hasText: papelDoc.text(c.key) !== '' };
+                }),
+                presets: CUSTOM_PRESETS,
+                max: CUSTOM_MAX,
+                keyMax: CUSTOM_KEY_MAX,
+                maxLen: CUSTOM_MAX_LABEL
+            },
+            describe: function (keys, custom) { return 'On your paper\'s page: ' + scopeWords(keys, custom) + '.'; }
         });
-        if (Array.isArray(picked) && picked.length) setSectionScope(picked);
+        if (picked && Array.isArray(picked.keys) && picked.keys.length) {
+            setCustomList(picked.custom || []);
+            setSectionScope(picked.keys);
+        }
     } finally {
         scopeAsking = false;
     }
@@ -7680,18 +7902,22 @@ async function askSectionScope(force) {
 
 /* The explanation, written for the sections this author is submitting. It used to
    be a constant that said all six were required, which stopped being true when
-   the choice was added. Everything put into it is either fixed text on this page
-   or a section label from the same list the server validates against, never
-   anything a person typed, which is what makes it safe to hand to the dialog as
-   markup. */
+   the choice was added. It is handed to the dialog as markup, so everything in it
+   is either fixed text on this page, a label from the list the server validates
+   against, or the name of a section the author added, which is a person's typing
+   and goes through escHtml(). */
 function sectionsNote() {
     const scope = currentScope() || SECTION_KEYS;
+    const own = customLabels();
     const partial = scope.length < SECTION_KEYS.length;
+    const chose = partial || own.length > 0;      // all six and nothing of their own is the usual case
     const items = scope.map(function (k) {
         return k === 'abstract'
             ? '<li><strong>Abstract</strong>: taken from your PDF word for word, so check it.</li>'
             : '<li><strong>' + SECTION_LABELS[k] + '</strong></li>';
-    }).join('');
+    }).concat(own.map(function (label) {
+        return '<li><strong>' + escHtml(label) + '</strong>: a section of your own.</li>';
+    })).join('');
 
     return '<p>Your PDF and what you type here are read by different people, and they'
       + ' are not interchangeable.</p>'
@@ -7705,7 +7931,7 @@ function sectionsNote() {
       + '<p><strong>What you type is what the repository shows.</strong> When your'
       + ' paper is published, a reader opens the page built from these boxes. The'
       + ' PDF is not what they read, and it is not what the search looks through.</p>'
-      + '<p>That is why ' + (partial ? 'the sections you chose are' : 'all six are') + ' required:</p>'
+      + '<p>That is why ' + (chose ? 'the sections you chose are' : 'all six are') + ' required:</p>'
       + '<ul>' + items + '</ul>'
       + (partial
           ? '<p>A section you leave out is simply not shown on your paper\'s page.'
@@ -8029,7 +8255,7 @@ document.getElementById('btnExtract').addEventListener('click', function(){
       /* What is left to write is whatever the author chose to submit besides the
          abstract. Names come from the section list, never from the paper. */
       const stillToWrite = (currentScope() || SECTION_KEYS).filter(function (k) { return k !== 'abstract'; })
-        .map(function (k) { return SECTION_LABELS[k]; });
+        .map(function (k) { return SECTION_LABELS[k]; }).concat(customLabels()).map(escHtml);
       successMsg.innerHTML = (papelDoc.text('abstract')
         ? '<strong>Extraction complete' + readNote + '.</strong> Review the Abstract and edit if needed'
           + (stillToWrite.length ? ', then write your ' + joinNames(stillToWrite) + '.' : '.')
@@ -9306,11 +9532,16 @@ document.addEventListener('DOMContentLoaded', () => {
        opts.sections  [{ key, label, hint, locked }]   locked ones are always ticked
        opts.selected  keys ticked to begin with
        opts.lead      a sentence above the choices
-       opts.describe  function(keys) giving the line that says what the choice means
+       opts.describe  function(keys, customLabels) giving the line that says what the choice means
+       opts.custom    optional. A block under the choices where the person names sections of
+                      their own: { items: [{ key, label, hasText }], presets:
+                      [{ id, name, items: [label] }], max, keyMax, maxLen }. With it the answer is
+                      { keys, custom: [{ key, label }] } instead of the keys alone.
 
        Everything written into the box is set as text, never as markup. */
     function buildPicker(opts) {
         var sections = opts.sections || [];
+        var cfg = opts.custom || null;
         var on = {};
         (opts.selected || []).forEach(function (k) { on[k] = true; });
         sections.forEach(function (s) { if (s.locked) on[s.key] = true; });
@@ -9325,14 +9556,31 @@ document.addEventListener('DOMContentLoaded', () => {
             root.appendChild(lead);
         }
 
+        var boxes = [];
+        var rows = [];            // the sections of their own: { key, label, orig, hasText, removed }
+        var addInput = null;      // set below when the question has a custom block
+        var customUi = null;
+
+        function fold(s) { return String(s == null ? '' : s).replace(/\s+/g, ' ').trim().toLowerCase(); }
+        function clean(s) { return String(s == null ? '' : s).replace(/\s+/g, ' ').trim().slice(0, cfg ? cfg.maxLen : 80); }
+        function liveRows() { return rows.filter(function (r) { return !r.removed; }); }
+        function tickedKeys() {
+            return boxes.filter(function (b) { return b.checked; }).map(function (b) { return b.value; });
+        }
+
+        var lockedKeys = sections.filter(function (s) { return s.locked; }).map(function (s) { return s.key; });
+        var presetDefs = [
+            { name: 'Abstract only', keys: lockedKeys, lit: function () { return !liveRows().length; } },
+            { name: 'All sections',  keys: sections.map(function (s) { return s.key; }), lit: function () { return true; } }
+        ];
+        // "Custom" leaves the Abstract and takes the person to the block where they name the rest.
+        if (cfg) presetDefs.push({ name: 'Custom', keys: lockedKeys, lit: function () { return liveRows().length > 0; }, focus: true });
+
         var presets = document.createElement('div');
         presets.className = 'scope-pick-presets';
         presets.setAttribute('role', 'group');
         presets.setAttribute('aria-label', 'Quick choices');
-        var presetButtons = [
-            { name: 'Abstract only', keys: sections.filter(function (s) { return s.locked; }).map(function (s) { return s.key; }) },
-            { name: 'All sections',  keys: sections.map(function (s) { return s.key; }) }
-        ].map(function (p) {
+        var presetButtons = presetDefs.map(function (p) {
             var b = document.createElement('button');
             b.type = 'button';
             b.className = 'scope-preset';
@@ -9340,9 +9588,13 @@ document.addEventListener('DOMContentLoaded', () => {
             b.addEventListener('click', function () {
                 boxes.forEach(function (box) { box.checked = p.keys.indexOf(box.value) !== -1; });
                 refresh();
+                if (p.focus && addInput) {
+                    addInput.scrollIntoView({ block: 'nearest' });
+                    addInput.focus();
+                }
             });
             presets.appendChild(b);
-            return { el: b, keys: p.keys };
+            return { el: b, def: p };
         });
         root.appendChild(presets);
 
@@ -9353,7 +9605,6 @@ document.addEventListener('DOMContentLoaded', () => {
         legend.textContent = 'Sections to submit';
         list.appendChild(legend);
 
-        var boxes = [];
         sections.forEach(function (s) {
             var row = document.createElement('label');
             row.className = 'scope-opt' + (s.locked ? ' is-locked' : '');
@@ -9377,23 +9628,275 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         root.appendChild(list);
 
+        /* ----- Sections of their own ----- */
+        if (cfg) {
+            (cfg.items || []).forEach(function (c) {
+                rows.push({ key: c.key, label: c.label, orig: c.label, hasText: !!c.hasText, removed: false });
+            });
+
+            var block = document.createElement('div');
+            block.className = 'scope-custom';
+
+            var head = document.createElement('div');
+            head.className = 'scope-custom-head';
+            var title = document.createElement('span');
+            title.className = 'scope-custom-title';
+            title.textContent = 'Sections of your own';
+            var count = document.createElement('span');
+            count.className = 'scope-custom-count';
+            head.appendChild(title);
+            head.appendChild(count);
+            block.appendChild(head);
+
+            var help = document.createElement('p');
+            help.className = 'scope-custom-help';
+            help.textContent = 'For a paper written in chapters or aspects rather than Introduction and Methodology. '
+                + 'Each one gets a box of its own on the next page and is required. They come after the sections above.';
+            block.appendChild(help);
+
+            var lists = document.createElement('div');
+            lists.className = 'scope-custom-lists';
+            lists.setAttribute('role', 'group');
+            lists.setAttribute('aria-label', 'Ready-made lists');
+            var listsLabel = document.createElement('span');
+            listsLabel.className = 'scope-custom-lists-label';
+            listsLabel.textContent = 'Start from:';
+            lists.appendChild(listsLabel);
+            (cfg.presets || []).forEach(function (p) {
+                var b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'scope-preset';
+                b.textContent = p.name;
+                b.addEventListener('click', function () { useList(p.items || []); });
+                lists.appendChild(b);
+            });
+            block.appendChild(lists);
+
+            var ul = document.createElement('ul');
+            ul.className = 'scope-crows';
+            block.appendChild(ul);
+
+            var add = document.createElement('div');
+            add.className = 'scope-custom-add';
+            addInput = document.createElement('input');
+            addInput.type = 'text';
+            addInput.className = 'scope-add-input';
+            addInput.maxLength = cfg.maxLen;
+            addInput.placeholder = 'Name a section, for example Executive Summary';
+            addInput.setAttribute('aria-label', 'Name of a section to add');
+            addInput.setAttribute('autocomplete', 'off');
+            var addBtn = document.createElement('button');
+            addBtn.type = 'button';
+            addBtn.className = 'scope-preset';
+            addBtn.textContent = 'Add';
+            add.appendChild(addInput);
+            add.appendChild(addBtn);
+            block.appendChild(add);
+
+            var msgEl = document.createElement('p');
+            msgEl.className = 'scope-custom-msg';
+            msgEl.setAttribute('aria-live', 'polite');
+            block.appendChild(msgEl);
+            root.appendChild(block);
+
+            // Which standard sections are ticked, by name: a section of your own cannot repeat one of those.
+            var tickedNames = function () {
+                var keys = tickedKeys(), out = {};
+                sections.forEach(function (s) { if (keys.indexOf(s.key) !== -1) out[fold(s.label)] = true; });
+                return out;
+            };
+            var nextKey = function () {
+                var used = {};
+                rows.forEach(function (r) { used[r.key] = true; });
+                for (var i = 1; i <= cfg.keyMax; i++) { if (!used['custom_' + i]) return 'custom_' + i; }
+                return null;
+            };
+            var say = function (text) { msgEl.textContent = text; };
+
+            var renderRows = function () {
+                ul.textContent = '';
+                var n = 0;
+                rows.forEach(function (r) {
+                    var li = document.createElement('li');
+                    li.className = 'scope-crow' + (r.removed ? ' is-removed' : '');
+                    var num = document.createElement('span');
+                    num.className = 'scope-crow-n';
+                    li.appendChild(num);
+                    r.li = li;
+                    if (r.removed) {
+                        var note = document.createElement('span');
+                        note.className = 'scope-crow-note';
+                        note.textContent = '\u201c' + clean(r.orig) + '\u201d will be removed, with what you typed in it.';
+                        var undo = document.createElement('button');
+                        undo.type = 'button';
+                        undo.className = 'scope-preset';
+                        undo.textContent = 'Undo';
+                        undo.addEventListener('click', function () { r.removed = false; renderRows(); refresh(); });
+                        li.appendChild(note);
+                        li.appendChild(undo);
+                    } else {
+                        n++;
+                        num.textContent = String(n);
+                        var input = document.createElement('input');
+                        input.type = 'text';
+                        input.className = 'scope-crow-input';
+                        input.value = r.label;
+                        input.maxLength = cfg.maxLen;
+                        input.setAttribute('aria-label', 'Section ' + n + ' name');
+                        input.setAttribute('autocomplete', 'off');
+                        input.addEventListener('input', function () { r.label = input.value; refresh(); });
+                        // Enter here moves on; it must not answer the whole question over the field's head.
+                        input.addEventListener('keydown', function (e) {
+                            if (e.key !== 'Enter') return;
+                            e.preventDefault();
+                            e.stopPropagation();
+                            addInput.focus();
+                        });
+                        var x = document.createElement('button');
+                        x.type = 'button';
+                        x.className = 'scope-crow-x';
+                        x.setAttribute('aria-label', 'Remove ' + (clean(r.label) || 'section ' + n));
+                        x.title = 'Remove';
+                        var xi = document.createElement('span');
+                        xi.className = 'material-symbols-outlined';
+                        xi.setAttribute('aria-hidden', 'true');
+                        xi.textContent = 'close';
+                        x.appendChild(xi);
+                        x.addEventListener('click', function () {
+                            // A section with text in it is kept, struck out, until the answer is given.
+                            if (r.hasText) r.removed = true; else rows.splice(rows.indexOf(r), 1);
+                            renderRows();
+                            refresh();
+                            addInput.focus();
+                        });
+                        li.appendChild(input);
+                        li.appendChild(x);
+                        r.input = input;
+                    }
+                    ul.appendChild(li);
+                });
+                var live = liveRows().length;
+                count.textContent = live + ' of ' + cfg.max;
+                /* Only the button is disabled at the limit. The box stays, so the cursor stays in it:
+                   a disabled field gives up focus, and the next Enter would then land on the page
+                   and answer the whole question. Enter in the box says why nothing was added. */
+                addBtn.disabled = live >= cfg.max;
+            };
+
+            var addFromInput = function () {
+                var label = clean(addInput.value);
+                if (!label) { say('Type a name first.'); addInput.focus(); return; }
+                var folded = fold(label);
+                if (liveRows().some(function (r) { return fold(r.label) === folded; })) {
+                    say('\u201c' + label + '\u201d is already in your list.');
+                    return;
+                }
+                if (tickedNames()[folded]) {
+                    say('\u201c' + label + '\u201d is already ticked above.');
+                    return;
+                }
+                var key = liveRows().length < cfg.max ? nextKey() : null;
+                if (!key) { say('You can add up to ' + cfg.max + ' sections of your own.'); return; }
+                rows.push({ key: key, label: label, orig: label, hasText: false, removed: false });
+                addInput.value = '';
+                renderRows();
+                refresh();
+                addInput.focus();
+            };
+            addBtn.addEventListener('click', addFromInput);
+            // Typing clears a complaint about the last attempt.
+            addInput.addEventListener('input', function () { refresh(); });
+            addInput.addEventListener('keydown', function (e) {
+                if (e.key !== 'Enter') return;
+                e.preventDefault();
+                e.stopPropagation();
+                addFromInput();
+            });
+
+            /* A ready-made list is the sections of that kind of paper, so choosing one
+               puts the Abstract and that list on the page: the standard sections are
+               unticked (tick any back if the paper has them too), the list's sections
+               replace the ones named, and a section already there under the same name
+               stays as it is, with whatever was typed in it. */
+            var useList = function (items) {
+                boxes.forEach(function (box) { box.checked = box.disabled; });
+                var want = {};
+                items.forEach(function (label) { want[fold(label)] = true; });
+                rows.slice().forEach(function (r) {
+                    if (r.removed || want[fold(r.label)]) return;
+                    if (r.hasText) r.removed = true; else rows.splice(rows.indexOf(r), 1);
+                });
+                var ordered = [];
+                items.forEach(function (label) {
+                    // A section taken out a moment ago, and still holding its text, comes back with it.
+                    var existing = rows.filter(function (r) { return fold(r.label) === fold(label); })[0];
+                    if (existing) { existing.removed = false; ordered.push(existing); return; }
+                    var key = ordered.length < cfg.max ? nextKey() : null;
+                    if (!key) return;
+                    var fresh = { key: key, label: clean(label), orig: clean(label), hasText: false, removed: false };
+                    rows.push(fresh);
+                    ordered.push(fresh);
+                });
+                rows = ordered.concat(rows.filter(function (r) { return ordered.indexOf(r) === -1; }));
+                renderRows();
+                refresh();
+            };
+
+            customUi = {
+                // Flags a section whose name is one of the ticked ones, which the server would drop.
+                refresh: function () {
+                    var ticked = tickedNames(), seen = {}, dups = [];
+                    liveRows().forEach(function (r) {
+                        var f = fold(clean(r.label));
+                        var dup = !!f && (ticked[f] || seen[f]);
+                        if (f) seen[f] = true;
+                        if (r.li) r.li.classList.toggle('is-dup', !!dup);
+                        if (dup) dups.push(clean(r.label));
+                    });
+                    say(dups.length
+                        ? '\u201c' + dups[0] + '\u201d is ticked above or listed twice, so it is not added again.'
+                        : '');
+                },
+                labels: function () { return readCustom(tickedKeys()).map(function (c) { return c.label; }); }
+            };
+            renderRows();
+        }
+
         var sum = document.createElement('p');
         sum.className = 'scope-pick-sum';
         sum.setAttribute('aria-live', 'polite');
         root.appendChild(sum);
 
+        /* Their sections as they will be kept: the names tidied, an empty one dropped, a
+           repeat dropped, and one that is the name of a ticked standard section dropped
+           (that box already covers it). A section with text in it whose name was cleared
+           keeps the name it had, so emptying a field never throws the text away. */
+        function readCustom(keys) {
+            var ticked = {}, seen = {}, out = [];
+            sections.forEach(function (s) { if (keys.indexOf(s.key) !== -1) ticked[fold(s.label)] = true; });
+            liveRows().forEach(function (r) {
+                var label = clean(r.label) || (r.hasText ? clean(r.orig) : '');
+                var f = fold(label);
+                if (!label || seen[f] || ticked[f]) return;
+                seen[f] = true;
+                out.push({ key: r.key, label: label });
+            });
+            return out;
+        }
         function read() {
-            return boxes.filter(function (b) { return b.checked; }).map(function (b) { return b.value; });
+            var keys = tickedKeys();
+            return cfg ? { keys: keys, custom: readCustom(keys) } : keys;
         }
         function refresh() {
-            var keys = read();
+            var keys = tickedKeys();
             boxes.forEach(function (b) { b.parentNode.classList.toggle('is-on', b.checked); });
             // A quick choice is lit while it describes exactly what is ticked.
             presetButtons.forEach(function (p) {
-                var same = p.keys.length === keys.length && p.keys.every(function (k) { return keys.indexOf(k) !== -1; });
-                p.el.classList.toggle('is-on', same);
+                var same = p.def.keys.length === keys.length && p.def.keys.every(function (k) { return keys.indexOf(k) !== -1; });
+                p.el.classList.toggle('is-on', same && p.def.lit());
             });
-            sum.textContent = opts.describe ? opts.describe(keys) : '';
+            if (customUi) customUi.refresh();
+            sum.textContent = opts.describe ? opts.describe(keys, cfg ? customUi.labels() : []) : '';
         }
         refresh();
 
@@ -9455,7 +9958,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // answering the whole question over its head would make it unusable
             // from the keyboard.
             var focused = document.activeElement;
-            if (isChoose && focused && focused.classList && focused.classList.contains('scope-preset')) return;
+            if (isChoose && focused && focused.tagName === 'BUTTON' && focused.closest && focused.closest('.scope-pick')) return;
             e.preventDefault();
             close(answer());
         }

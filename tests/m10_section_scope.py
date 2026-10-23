@@ -453,6 +453,237 @@ def legacy():
           'a legacy paper lost a section')
 
 
+# ------------------------------------------------- sections of the author's own
+T_CDRAFT = 'AUTOTEST Scope Custom Draft'
+T_CSEED = 'AUTOTEST Scope Custom Seeded'
+T_CFULL = 'AUTOTEST Scope Custom Plus Six'
+T_CSUB = 'AUTOTEST Scope Custom Submitted'
+CUSTOM_LIST = [{'key': 'custom_1', 'label': 'Executive Summary'},
+               {'key': 'custom_2', 'label': 'Marketing Aspect'},
+               {'key': 'custom_3', 'label': 'Technical Aspect'}]
+
+
+def custom_fields(n=3, **bodies):
+    """What the page posts for sections of the author's own: the list, and a body under each key."""
+    f = {'custom_sections': json.dumps(CUSTOM_LIST[:n])}
+    for c in CUSTOM_LIST[:n]:
+        f[c['key']] = '<p>AUTOTEST %s text.</p>' % c['label']
+    f.update(bodies)
+    return f
+
+
+def custom_stored(imrad):
+    """imrad_content for a seeded paper that carries sections of the author's own."""
+    o = dict((k, '<p>AUTOTEST %s.</p>' % k) for k in ALL)
+    o['_scope'] = imrad['scope']
+    for k in ALL:
+        if k not in imrad['scope']:
+            o[k] = ''
+    o['_custom'] = [{'key': c['key'], 'label': c['label'], 'html': '<p>AUTOTEST body of %s.</p>' % c['label']}
+                    for c in imrad['custom']]
+    return json.dumps(o)
+
+
+def custom_cheap():
+    """Everything about sections of the author's own that needs no Drive upload."""
+    c = student()
+    html = c.get(UPLOAD)
+    needs = ['id="customSections" name="custom_sections"', 'id="customEditors"', 'id="customEditorTpl"',
+             'const CUSTOM_PRESETS', 'addEditor: function']
+    missing = [n for n in needs if n not in html]
+    check('SC-45', not missing, 'the upload page carries the field for their names, the place their boxes go, '
+          'the box template and the ready-made lists', 'missing from the page: %s' % missing)
+    check('SC-46', html.count('data-section="custom_0"') == 1 and html.count('<div class="doc-editor"') == 7,
+          'the editor is drawn once more as an inert template: six boxes on the page and one to copy',
+          'editors on the page: %d, template copies: %d' % (html.count('<div class="doc-editor"') - 1, html.count('data-section="custom_0"')))
+
+    base = {'action': 'save_draft', 'title': T_CDRAFT, 'authors': F.STUDENT['full_name'],
+            'program_category': F.STUDENT['program'], 'paper_type': 'project', 'year': '2026',
+            'section_scope': 'abstract', 'abstract': '<p>AUTOTEST abstract.</p>'}
+
+    s, j = ajax(c, dict(base, **custom_fields()))
+    did = j.get('draft_id')
+    p = probe('paper', did) if did else {}
+    check('SC-47', did and [x['label'] for x in p.get('custom', [])] == [x['label'] for x in CUSTOM_LIST]
+          and all(x['len'] > 0 for x in p['custom']) and p.get('info_kind') == 'custom',
+          'a draft keeps their sections, names and text, and reads as a custom paper',
+          'status %s, reply %s, stored %s kind %s' % (s, j, p.get('custom'), p.get('info_kind')))
+
+    s, j2 = ajax(c, dict(base, title=T_CDRAFT + ' empty', **custom_fields(2, custom_1='')))
+    p2 = probe('paper', j2.get('draft_id')) if j2.get('draft_id') else {}
+    check('SC-48', j2.get('success') and [x['len'] > 0 for x in p2.get('custom', [])] == [False, True],
+          'a draft keeps a section that is still empty, since it is only a draft',
+          'reply %s stored %s' % (j2, p2.get('custom')))
+
+    html = c.get(UPLOAD + '?draft=%s' % did)
+    check('SC-49', '"custom_sections":"[{' in html and 'AUTOTEST Marketing Aspect text.' in html
+          and '"custom_2":"' in html and '"_custom"' not in html,
+          'reopening the draft hands back the list and each body as form fields, not the stored key',
+          'resume payload: names %s, body %s, raw key %s' % (
+              '"custom_sections":"[{' in html, 'AUTOTEST Marketing Aspect text.' in html, '"_custom"' in html))
+
+    # --- hostile posts
+    many = [{'key': 'custom_%d' % (i % 30), 'label': 'Hostile %d' % i} for i in range(500)]
+    bodies = dict(('custom_%d' % i, '<p>x</p>') for i in range(0, 30))
+    s, j3 = ajax(c, dict(base, title=T_CDRAFT + ' many', custom_sections=json.dumps(many), **bodies))
+    p3 = probe('paper', j3.get('draft_id')) if j3.get('draft_id') else {}
+    keys3 = [x['key'] for x in p3.get('custom', [])]
+    check('SC-50', j3.get('success') and len(keys3) == 12 and len(set(keys3)) == 12
+          and all(re.match(r'^custom_([1-9]|1[0-9]|2[0-4])$', k) for k in keys3),
+          'five hundred names with bad and repeated keys come to twelve clean ones',
+          'reply %s, stored keys %s' % (j3.get('success'), keys3))
+
+    hostile = [{'key': 'custom_1', 'label': '<b>Bold</b>   Name<script></script>'},
+               {'key': 'custom_2', 'label': '  BOLD   name '},
+               {'key': 'custom_3', 'label': 'Introduction'},
+               {'key': 'custom_4', 'label': 'Conclusion'},
+               {'key': '../../x', 'label': 'Path'},
+               {'key': 'custom_5', 'label': '   '}]
+    s, j4 = ajax(c, dict(base, title=T_CDRAFT + ' hostile', section_scope='abstract,introduction',
+                         custom_sections=json.dumps(hostile),
+                         custom_1='<p>a</p>', custom_2='<p>b</p>', custom_3='<p>c</p>', custom_4='<p>d</p>'))
+    p4 = probe('paper', j4.get('draft_id')) if j4.get('draft_id') else {}
+    labels4 = [x['label'] for x in p4.get('custom', [])]
+    check('SC-51', labels4 == ['Bold Name', 'Conclusion'],
+          'names are cleaned: tags stripped, a repeat of another name dropped (any case or spacing), a name equal '
+          'to a section being submitted dropped (Introduction), a bad key and a blank name dropped; Conclusion, '
+          'not ticked, stays',
+          'stored %s' % labels4)
+
+    s, j5 = ajax(c, dict(base, title=T_CDRAFT + ' junk', custom_sections='<script>', custom_1='<p>a</p>'))
+    p5 = probe('paper', j5.get('draft_id')) if j5.get('draft_id') else {}
+    check('SC-52', j5.get('success') and p5.get('custom') == [] and 'custom_1' not in p5.get('raw_keys', []),
+          'a list that is not JSON is ignored without an error, and the stray body is not stored',
+          'reply %s stored %s keys %s' % (j5, p5.get('custom'), p5.get('raw_keys')))
+
+    s, j6 = ajax(c, dict(base, title=T_CDRAFT + ' old'))
+    p6 = probe('paper', j6.get('draft_id')) if j6.get('draft_id') else {}
+    check('SC-53', j6.get('success') and p6.get('custom') == [] and '_custom' not in p6.get('raw_keys', []),
+          'a draft from a page that knows nothing of them stores no such key',
+          'stored %s keys %s' % (p6.get('custom'), p6.get('raw_keys')))
+
+    # --- the submit handler: the same names, and every body required
+    short = 'one, two'
+    s, j = submit(c, 'AUTOTEST Scope C1', keywords=short, section_scope='abstract', **custom_fields(3, custom_2='<p><br></p>'))
+    check('SC-54', s == 422 and (j.get('message') or '') == 'Please write the Marketing Aspect section.' and not paper_id('AUTOTEST Scope C1'),
+          'a section of their own with nothing in it is refused, by name, in words the student can read',
+          'HTTP %s %s' % (s, j))
+    s, j = submit(c, 'AUTOTEST Scope C2', keywords=short, section_scope='abstract', **custom_fields())
+    check('SC-55', s == 422 and 'at least 5 keywords' in (j.get('message') or '') and not paper_id('AUTOTEST Scope C2'),
+          'with every one written the sections check is passed (the keyword check, which follows it, is what stops this run)',
+          'HTTP %s %s' % (s, j))
+    s, j = submit(c, 'AUTOTEST Scope C3', keywords=short, section_scope='abstract',
+                  custom_sections=json.dumps(many), **bodies)
+    check('SC-56', s == 422 and 'at least 5 keywords' in (j.get('message') or ''),
+          'five hundred hostile names do not break the handler: the extras are dropped and the rest are checked',
+          'HTTP %s %s' % (s, j))
+    s, j = submit(c, 'AUTOTEST Scope C4', keywords=short, section_scope='abstract', custom_sections='not json',
+                  custom_1='')
+    check('SC-57', s == 422 and 'at least 5 keywords' in (j.get('message') or ''),
+          'a list that is not JSON means no sections of their own, not an error',
+          'HTTP %s %s' % (s, j))
+    leaked = H.one("SELECT COUNT(*) FROM research_papers WHERE title LIKE 'AUTOTEST Scope C_'")
+    check('SC-58', leaked == '0', 'none of those refused submissions left a paper behind', '%s papers were stored' % leaked)
+
+
+def custom_surfaces():
+    """How a paper with sections of the author's own reads to everyone, seeded rather than submitted."""
+    a = adviser()
+    c = student()
+    spec = {'scope': ['abstract'], 'custom': CUSTOM_LIST}
+    pid = F.seed_paper(status='pending_faculty', title=T_CSEED)
+    H.q("UPDATE research_papers SET imrad_content=%s WHERE paper_id=%s" % (H.esc(custom_stored(spec)), pid))
+    p = probe('paper', pid)
+    check('SC-59', p.get('info_kind') == 'custom' and p.get('info_short') == 'Custom: 4 sections',
+          'a paper with only the abstract and three sections of its own reads as "Custom: 4 sections"',
+          'kind %s short %s' % (p.get('info_kind'), p.get('info_short')))
+
+    rev = a.get('/app/review_paper.php?id=%s' % pid)
+    ids = re.findall(r'id="pd-sub-([a-z_0-9]+)"', rev)
+    check('SC-60', ids == ['abstract', 'custom_1', 'custom_2', 'custom_3'],
+          "the adviser's page lists the abstract, then their sections in order", 'sections shown: %s' % ids)
+    text = strip(rev)
+    check('SC-61', 'Executive Summary' in text and 'AUTOTEST body of Marketing Aspect.' in text
+          and 'Custom: 4 sections.' in text and 'were left out on purpose' in text,
+          'each carries its own name and text, and the page says the standard ones were left out on purpose',
+          'name/text/notice missing from the review page')
+    toc = re.findall(r'data-toc-target="pd-sub-(custom_\d)"', rev)
+    check('SC-62', toc == ['custom_1', 'custom_2', 'custom_3'], 'and the contents list has them too', 'toc: %s' % toc)
+    check('SC-63', 'only ' in rev and 'Abstract, Executive Summary, Marketing Aspect and Technical Aspect' in rev,
+          'the approve lead names what publishing will show, theirs included',
+          'approve lead does not name the sections')
+
+    desk = a.get('/app/faculty/faculty_review_dashboard.php')
+    row = desk.split(T_CSEED)[1][:2500] if T_CSEED in desk else ''
+    check('SC-64', 'scope-chip' in row and 'Custom: 4 sections' in row, 'the desk card carries the chip',
+          'no chip on the card')
+
+    own = strip(c.get('/app/student/paper_details.php?id=%s' % pid))
+    check('SC-65', 'AUTOTEST body of Technical Aspect.' in own and 'You chose to submit these sections: Abstract, Executive Summary, Marketing Aspect and Technical Aspect.' in own,
+          'the author sees them on their own record, with their own choice said back', 'author page lacks them')
+
+    H.q("UPDATE research_papers SET current_status='approved' WHERE paper_id=%s" % pid)
+    pubhtml = c.get('/archive/view_paper.php?id=%s' % pid)
+    shown = re.findall(r'id="pd-sub-([a-z_0-9]+)"', pubhtml)
+    check('SC-66', shown == ['abstract', 'custom_1', 'custom_2', 'custom_3'], 'the public page shows the same sections in the same order',
+          'public sections: %s' % shown)
+    check('SC-67', 'only these sections of this paper: Abstract, Executive Summary, Marketing Aspect and Technical Aspect.' in strip(pubhtml),
+          'and tells a reader what the author chose to publish', 'public note missing')
+
+    adviser_id = F.uid_of('faculty_id', F.ADVISER['faculty_id'])
+    r1 = probe('archive', pid, adviser_id)
+    p1 = probe('paper', pid)
+    r2 = probe('restore', pid)
+    p2 = probe('paper', pid)
+    check('SC-68', r1.get('ok') and p1.get('table') == 'papers_archive' and len(p1.get('custom', [])) == 3
+          and r2.get('ok') and p2.get('table') == 'research_papers' and [x['label'] for x in p2.get('custom', [])] == [x['label'] for x in CUSTOM_LIST],
+          'archiving and restoring keep their sections, with no change to the archive code or its tables',
+          'archive %s %s %s | restore %s %s %s' % (r1, p1.get('table'), p1.get('custom'), r2, p2.get('table'), p2.get('custom')))
+
+    # --- their sections on top of all six standard ones: a full paper, nothing flagged
+    pid2 = F.seed_paper(status='pending_faculty', title=T_CFULL)
+    H.q("UPDATE research_papers SET imrad_content=%s WHERE paper_id=%s" % (
+        H.esc(custom_stored({'scope': ALL, 'custom': CUSTOM_LIST[:2]})), pid2))
+    p = probe('paper', pid2)
+    rev2 = a.get('/app/review_paper.php?id=%s' % pid2)
+    ids2 = re.findall(r'id="pd-sub-([a-z_0-9]+)"', rev2)
+    check('SC-69', p.get('info_kind') == 'full' and ids2 == ALL + ['custom_1', 'custom_2']
+          and 'left out on purpose' not in strip(rev2) and 'Custom:' not in strip(rev2),
+          'two of their own on top of all six are a full paper: all eight shown, in order, with nothing flagged',
+          'kind %s, shown %s' % (p.get('info_kind'), ids2))
+    desk = a.get('/app/faculty/faculty_review_dashboard.php')
+    row = desk.split(T_CFULL)[1][:1500] if T_CFULL in desk else ''
+    check('SC-70', row != '' and 'scope-chip' not in row, 'and its card on the desk carries no chip', 'a full paper is flagged')
+
+
+def custom_submit():
+    """One real submission with sections of the author's own. Returns its id, or None."""
+    c = student()
+    adviser_id = F.uid_of('faculty_id', F.ADVISER['faculty_id'])
+    s, j = submit(c, T_CSUB, section_scope='abstract', **custom_fields())
+    pid = paper_id(T_CSUB)
+    if not j.get('success'):
+        check('SC-71', False, '', 'the submission did not go through: HTTP %s %s' % (s, j))
+        return None
+    p = probe('paper', pid)
+    check('SC-71', p.get('scope') == ['abstract'] and [x['label'] for x in p.get('custom', [])] == [x['label'] for x in CUSTOM_LIST]
+          and all(x['len'] > 0 for x in p['custom']) and p.get('info_kind') == 'custom',
+          'a submission stores the abstract and their three sections, each with its text',
+          'scope %s custom %s kind %s' % (p.get('scope'), p.get('custom'), p.get('info_kind')))
+    others = dict((k, v) for k, v in p['sections'].items() if k != 'abstract')
+    check('SC-72', not any(others.values()),
+          'the standard sections outside the choice are stored empty, whatever was posted for them',
+          'section lengths %s' % p['sections'])
+    notes = probe('notes', adviser_id)
+    check('SC-73', any('The author chose to submit 4 sections: Abstract, Executive Summary, Marketing Aspect and Technical Aspect.' in m for m in notes),
+          'the Research Adviser is told which sections, theirs included, in the notification',
+          'notifications: %s' % [m[:150] for m in notes])
+    rev = adviser().get('/app/review_paper.php?id=%s' % pid)
+    check('SC-74', re.findall(r'id="pd-sub-([a-z_0-9]+)"', rev) == ['abstract', 'custom_1', 'custom_2', 'custom_3'],
+          'and the review page shows them', 'sections on the review page: %s' % re.findall(r'id="pd-sub-([a-z_0-9]+)"', rev))
+    return pid
+
+
 def cleanup():
     ids = [r[0] for r in H.q("SELECT paper_id FROM research_papers WHERE title LIKE 'AUTOTEST%'")]
     out = probe('drive_clean', *ids) if ids else probe('drive_clean')
@@ -461,13 +692,13 @@ def cleanup():
 
 def run(only=()):
     """Every step, or just the named ones (unit, page_markup, drafts, validation,
-    submissions, legacy). Naming only the cheap ones avoids three real Drive
-    uploads while a test is being worked on."""
+    submissions, custom_cheap, custom_surfaces, custom_submit, legacy). Naming only the
+    cheap ones avoids the real Drive uploads while a test is being worked on."""
     def want(name):
         return not only or name in only
 
     print('\n== MODULE 10: choosing which sections to submit ==')
-    for fn in (unit, page_markup, drafts, validation):
+    for fn in (unit, page_markup, drafts, validation, custom_cheap):
         if want(fn.__name__):
             H.run('SC-' + fn.__name__, fn)
     if want('submissions'):
@@ -479,6 +710,10 @@ def run(only=()):
         if pid:
             H.run('SC-surfaces', lambda: surfaces(pid, pid_all, pid_part))
             H.run('SC-archive', lambda: archive_roundtrip(pid))
+    # After the steps above, whose "exactly two chips" checks would otherwise count these papers too.
+    for fn in (custom_surfaces, custom_submit):
+        if want(fn.__name__):
+            H.run('SC-' + fn.__name__, fn)
     if want('legacy'):
         H.run('SC-legacy', legacy)
 

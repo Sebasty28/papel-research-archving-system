@@ -70,6 +70,12 @@ if ($mode === 'paper') {
             'sections'  => $filled,
             'abstract'  => mb_substr((string)$row['abstract'], 0, 120),
             'info_kind' => paper_scope_info($row['imrad_content'])['kind'],
+            'info_short' => paper_scope_info($row['imrad_content'])['short'],
+            // The author's own sections: name and how much is written, never the text itself.
+            'custom'    => array_map(function ($c) {
+                return ['key' => $c['key'], 'label' => $c['label'], 'len' => mb_strlen(trim(strip_tags($c['html'])))];
+            }, paper_custom_sections($row['imrad_content'])),
+            'raw_keys'  => is_array($decoded) ? array_keys($decoded) : [],
         ]);
     }
     out(['table' => null]);

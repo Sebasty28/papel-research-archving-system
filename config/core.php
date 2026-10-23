@@ -2717,14 +2717,191 @@ function paper_scope_list(array $names): string {
 }
 
 /**
+ * The author's own sections, kept beside the six standard ones.
+ *
+ * A Feasibility Study has an Executive Summary and five Aspects, a thesis has
+ * chapters, and neither is helped by boxes named Methodology and Results and
+ * Discussion. The author can add sections of their own name in the question
+ * "Which sections will you submit?"; each gets an editor, is required like a
+ * ticked standard one, and is shown wherever the written sections are shown.
+ *
+ * They live inside imrad_content under this reserved key, for the same reason
+ * the choice does (see PAPER_SCOPE_KEY): archive and restore copy that column
+ * whole, and no server needs a migration run before it can take this code.
+ *
+ *   "_custom": [ {"key": "custom_1", "label": "Executive Summary", "html": "<p>...</p>"}, ... ]
+ *
+ * No such key means no sections of their own, so every paper filed before this
+ * existed reads exactly as it did.
+ */
+const PAPER_CUSTOM_KEY = '_custom';
+const PAPER_CUSTOM_MAX = 12;
+/* More keys than sections. A section the author is taking out while it still holds text is
+   kept, struck through, until they confirm, and keeps its key meanwhile; sections added in
+   the same breath need keys of their own. Twelve live plus twelve waiting is the most that
+   can be at once. */
+const PAPER_CUSTOM_KEY_MAX = 24;
+
+/** Whether a string is the key of an author's section: custom_1 to custom_24 and nothing else. */
+function paper_custom_key_valid($key): bool {
+    return is_string($key) && preg_match('/^custom_([1-9][0-9]?)$/', $key, $m) && (int)$m[1] <= PAPER_CUSTOM_KEY_MAX;
+}
+
+/**
+ * The ready-made lists the question offers to start from. They are the lists
+ * the adviser's checklist already uses, so a study is asked for the sections
+ * it is reviewed against. Full Manuscript and Undergraduate Thesis are the same
+ * chapters; both are offered because people look for either name.
+ */
+function paper_custom_presets(): array {
+    $t = paper_checklist_templates();
+    return [
+        ['id' => 'full_manuscript',  'name' => 'Full Manuscript',      'items' => array_values($t['undergrad_thesis']['items'])],
+        ['id' => 'undergrad_thesis', 'name' => 'Undergraduate Thesis', 'items' => array_values($t['undergrad_thesis']['items'])],
+        ['id' => 'feasibility',      'name' => 'Feasibility Study',    'items' => array_values($t['feasibility']['items'])],
+    ];
+}
+
+/**
+ * The names an author posted for their own sections, made into what may be
+ * kept: [['key', 'label'], ...] in the order given. The page's own limits are a
+ * convenience; this is the authority, so it never trusts them and never throws:
+ * whatever is not usable is dropped.
+ *
+ *   - a key must be custom_1 to custom_24, once
+ *   - the name has its tags and control characters stripped, runs of white
+ *     space made one, and is cut to a line's length (the checklist's rule)
+ *   - a name used twice is kept once, whatever the case
+ *   - a name that is the same as a standard section the author is also
+ *     submitting is dropped, since that box already covers it. One that matches
+ *     a standard section they left out stays: that is how a thesis puts its
+ *     References after its chapters rather than before them
+ *   - at most PAPER_CUSTOM_MAX
+ *
+ * $raw is the posted JSON, or the list itself; $scope the standard keys in play.
+ */
+function paper_custom_list($raw, array $scope): array {
+    if (is_string($raw)) { $raw = json_decode($raw, true); }
+    if (!is_array($raw)) { return []; }
+
+    $taken = [];
+    foreach (paper_section_labels() as $key => $label) {
+        if (in_array($key, $scope, true)) { $taken[mb_strtolower($label)] = true; }
+    }
+
+    $out  = [];
+    $keys = [];
+    foreach ($raw as $entry) {
+        if (count($out) >= PAPER_CUSTOM_MAX) { break; }
+        if (!is_array($entry) || !paper_custom_key_valid($entry['key'] ?? null)) { continue; }
+        if (isset($keys[$entry['key']])) { continue; }
+        $label = paper_checklist_label_clean($entry['label'] ?? '');
+        if ($label === '') { continue; }
+        $fold = mb_strtolower($label);
+        if (isset($taken[$fold])) { continue; }
+        $keys[$entry['key']] = true;
+        $taken[$fold] = true;
+        $out[] = ['key' => $entry['key'], 'label' => $label];
+    }
+    return $out;
+}
+
+/** Whether sanitised section HTML holds nothing the author wrote: no text, no picture, no table. */
+function paper_section_html_is_empty(string $clean): bool {
+    return rich_text_to_plain($clean) === '' && !preg_match('/<(img|table)\b/i', $clean);
+}
+
+/**
+ * The author's own sections as they are to be stored: the names cleaned as
+ * above, each body sanitised like any other section. With $require the body of
+ * every one must be written (a submission); without it an empty one is kept as
+ * it is (a draft, which keeps whatever has been typed so far).
+ *
+ * Returns [['key', 'label', 'html'], ...]. Throws UserFacingException, in words
+ * the student can act on, for a body left empty under $require.
+ */
+function paper_custom_clean($raw, array $post, array $scope, bool $require): array {
+    $out = [];
+    foreach (paper_custom_list($raw, $scope) as $c) {
+        $clean = rich_text_sanitize((string)($post[$c['key']] ?? ''));
+        if ($require && paper_section_html_is_empty($clean)) {
+            throw new UserFacingException('Please write the ' . $c['label'] . ' section.');
+        }
+        $out[] = ['key' => $c['key'], 'label' => $c['label'], 'html' => $clean];
+    }
+    return $out;
+}
+
+/**
+ * The author's own sections stored with a paper: [['key', 'label', 'html'], ...],
+ * empty for a paper that has none. Anything in the stored object that does not
+ * pass the same tests as a post is ignored, so a damaged row cannot break a page.
+ */
+function paper_custom_sections($imradContent): array {
+    if (!is_string($imradContent) || $imradContent === '') { return []; }
+    $decoded = json_decode($imradContent, true);
+    if (!is_array($decoded) || !is_array($decoded[PAPER_CUSTOM_KEY] ?? null)) { return []; }
+
+    $out  = [];
+    $seen = [];
+    foreach ($decoded[PAPER_CUSTOM_KEY] as $entry) {
+        if (count($out) >= PAPER_CUSTOM_MAX) { break; }
+        if (!is_array($entry) || !paper_custom_key_valid($entry['key'] ?? null) || isset($seen[$entry['key']])) { continue; }
+        $label = paper_checklist_label_clean($entry['label'] ?? '');
+        if ($label === '') { continue; }
+        $seen[$entry['key']] = true;
+        $out[] = ['key' => $entry['key'], 'label' => $label, 'html' => is_string($entry['html'] ?? null) ? $entry['html'] : ''];
+    }
+    return $out;
+}
+
+/**
+ * What a page shows of a paper's written sections, in the order it shows them:
+ * the six standard ones, then the author's own.
+ *
+ *   labels    key => name, every section the paper can have (the pages loop over this)
+ *   sections  key => HTML, only those with something in them
+ *   legacy    true when there were none and the abstract column stands in
+ *
+ * Three pages used to build this themselves, each from the six names alone.
+ * A section that holds only a picture or a table counts as written, as it does
+ * when it is submitted.
+ */
+function paper_sections_for_display($imradContent, $abstract): array {
+    $labels   = paper_section_labels();
+    $sections = [];
+
+    $decoded = (is_string($imradContent) && $imradContent !== '') ? json_decode($imradContent, true) : null;
+    if (is_array($decoded)) {
+        foreach ($labels as $key => $_) {
+            if (is_string($decoded[$key] ?? null) && !paper_section_html_is_empty($decoded[$key])) {
+                $sections[$key] = $decoded[$key];
+            }
+        }
+    }
+    foreach (paper_custom_sections($imradContent) as $c) {
+        $labels[$c['key']] = $c['label'];
+        if (!paper_section_html_is_empty($c['html'])) { $sections[$c['key']] = $c['html']; }
+    }
+
+    $legacy = false;
+    if (!$sections && trim((string)$abstract) !== '') {
+        $sections['abstract'] = '<p>' . nl2br(e((string)$abstract)) . '</p>';
+        $legacy = true;
+    }
+    return ['labels' => $labels, 'sections' => $sections, 'legacy' => $legacy];
+}
+
+/**
  * What a paper's stored sections say about the author's choice, in the shape
  * every page needs.
  *
- *   kind      full | abstract | partial | legacy
- *   keys      the section keys provided
- *   provided  their labels
- *   omitted   the labels of those left out
- *   short     the words for a chip: "Abstract only", "3 of 6 sections"
+ *   kind      full | abstract | partial | custom | legacy
+ *   keys      the standard section keys provided
+ *   provided  the labels of everything provided: the standard ones, then the author's own
+ *   omitted   the labels of the standard sections left out
+ *   custom    the labels of the author's own sections
+ *   short     the words for a chip: "Abstract only", "3 of 6 sections", "Custom: 7 sections"
  *
  * A legacy paper is treated as complete and nothing is claimed for it, because
  * there is no way to know what its author intended.
@@ -2732,12 +2909,13 @@ function paper_scope_list(array $names): string {
 function paper_scope_info($imradContent): array {
     $labels = paper_section_labels();
     $scope  = paper_section_scope($imradContent);
+    $custom = array_column(paper_custom_sections($imradContent), 'label');
 
     if ($scope === null) {
         return [
             'recorded' => false, 'kind' => 'legacy',
-            'keys'     => array_keys($labels), 'provided' => array_values($labels),
-            'omitted'  => [], 'short' => '',
+            'keys'     => array_keys($labels), 'provided' => array_merge(array_values($labels), $custom),
+            'omitted'  => [], 'custom' => $custom, 'short' => '',
         ];
     }
 
@@ -2747,24 +2925,30 @@ function paper_scope_info($imradContent): array {
         if (in_array($key, $scope, true)) { $provided[] = $label; }
         else                              { $omitted[]  = $label; }
     }
+    $provided = array_merge($provided, $custom);
 
+    /* Standard sections left out in favour of the author's own is a different
+       story from leaving them out: nothing is missing, the paper is organised
+       its own way. Their own sections on top of all six is simply a full paper. */
     if (!$omitted)               { $kind = 'full'; }
+    elseif ($custom)             { $kind = 'custom'; }
     elseif (count($scope) === 1) { $kind = 'abstract'; }
     else                         { $kind = 'partial'; }
 
     $short = $kind === 'full'      ? 'All sections'
            : ($kind === 'abstract' ? 'Abstract only'
-                                   : count($scope) . ' of ' . count($labels) . ' sections');
+           : ($kind === 'custom'   ? 'Custom: ' . count($provided) . ' sections'
+                                   : count($scope) . ' of ' . count($labels) . ' sections'));
 
     return [
         'recorded' => true, 'kind' => $kind, 'keys' => $scope,
-        'provided' => $provided, 'omitted' => $omitted, 'short' => $short,
+        'provided' => $provided, 'omitted' => $omitted, 'custom' => $custom, 'short' => $short,
     ];
 }
 
 /** Whether the author left sections out: the only case worth drawing attention to. */
 function paper_scope_is_partial(array $info): bool {
-    return in_array($info['kind'], ['abstract', 'partial'], true);
+    return in_array($info['kind'], ['abstract', 'partial', 'custom'], true);
 }
 
 /**
@@ -2795,7 +2979,10 @@ function paper_scope_notice(array $info, string $audience): string {
     $only  = $info['kind'] === 'abstract';
     $given = paper_scope_list($info['provided']);
     $left  = paper_scope_list($info['omitted']);
-    $count = count($info['keys']) . ' of ' . (count($info['keys']) + count($info['omitted']));
+    // "3 of 6" means nothing once the author has sections the six do not include.
+    $count = $info['kind'] === 'custom'
+        ? (string)count($info['provided'])
+        : count($info['keys']) . ' of ' . (count($info['keys']) + count($info['omitted']));
 
     switch ($audience) {
         case 'reviewer':

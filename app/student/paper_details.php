@@ -52,23 +52,13 @@ $status = (string)$paper['current_status'];
    before the section editors existed have only the plain `abstract` column,
    so that stands in and the page says as much rather than showing four empty
    boxes. */
-$sectionLabels = paper_section_labels();
-$sections = [];
-if (!empty($paper['imrad_content'])) {
-    $decoded = json_decode((string)$paper['imrad_content'], true);
-    if (is_array($decoded)) {
-        foreach ($sectionLabels as $key => $_) {
-            if (!empty($decoded[$key]) && trim(strip_tags((string)$decoded[$key])) !== '') {
-                $sections[$key] = (string)$decoded[$key];
-            }
-        }
-    }
-}
-$sectionsAreLegacy = false;
-if (!$sections && trim((string)$paper['abstract']) !== '') {
-    $sections['abstract'] = '<p>' . nl2br(e((string)$paper['abstract'])) . '</p>';
-    $sectionsAreLegacy = true;
-}
+/* The six standard sections, then any the author added for themselves (a Feasibility
+   Study's Executive Summary, a thesis's chapters). $sectionLabels holds every name the
+   paper can have, in order, so the loops below that walk it need no change. */
+$shown = paper_sections_for_display($paper['imrad_content'] ?? null, $paper['abstract'] ?? '');
+$sectionLabels = $shown['labels'];
+$sections = $shown['sections'];
+$sectionsAreLegacy = $shown['legacy'];
 
 /* Which of the sections the author chose to submit, said back to them on their
    own copy so the gap on this page is read as the choice it was. */

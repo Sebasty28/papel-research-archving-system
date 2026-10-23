@@ -609,21 +609,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_manuscript'])
         /* The paper as its authors wrote it. Stored as sanitised HTML per
            section; papers filed before the section editors existed have only
            the plain abstract, which stands in for the whole. */
-        $sectionLabels = paper_section_labels();
-        $sections = [];
-        if (!empty($paper['imrad_content'])) {
-            $decoded = json_decode((string)$paper['imrad_content'], true);
-            if (is_array($decoded)) {
-                foreach ($sectionLabels as $key => $_) {
-                    if (!empty($decoded[$key]) && trim(strip_tags((string)$decoded[$key])) !== '') {
-                        $sections[$key] = (string)$decoded[$key];
-                    }
-                }
-            }
-        }
-        if (!$sections && trim((string)($paper['abstract'] ?? '')) !== '') {
-            $sections['abstract'] = '<p>' . nl2br(e((string)$paper['abstract'])) . '</p>';
-        }
+        /* The six standard sections, then any the author added for themselves.
+           $sectionLabels holds every name the paper can have, in order. */
+        $shown = paper_sections_for_display($paper['imrad_content'] ?? null, $paper['abstract'] ?? '');
+        $sectionLabels = $shown['labels'];
+        $sections = $shown['sections'];
         ?>
         <?php if ($sections): ?>
         <div class="pd-card" id="pd-sec-paper">

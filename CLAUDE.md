@@ -553,6 +553,50 @@ archiving. Do not add one without reading `ArchiveRepository` first.
   The autosave on typing, the leave-page guard and "Save as draft" all carry the
   field already.
 
+### Sections of the author's own
+
+A Feasibility Study has an Executive Summary and five Aspects, a thesis has chapters, and
+boxes named Methodology and Results and Discussion help neither. In the same question as above
+the author can add **sections of their own name** (up to 12), typed or started from a ready-made
+list: Full Manuscript, Undergraduate Thesis (the same chapters) or Feasibility Study
+(`paper_custom_presets()`, which reads the lists the adviser's checklist uses, so a study is
+asked for the sections it is reviewed against). They sit **beside** the six, after them, not
+instead of them; the "Custom" quick choice leaves only the Abstract ticked and goes to the block.
+Each gets a box on Step 2 and is required like a ticked standard section. Plan:
+`docs/PLAN_custom_sections.md`.
+
+- **Stored inside `imrad_content` again**, under `_custom`: `[{"key","label","html"}]`, keys
+  `custom_1` to `custom_24` (more keys than sections: one taken out while it holds text is kept,
+  struck through, until the answer is given, and keeps its key meanwhile). No column and no
+  migration, so a copy of the site that is behind needs nothing run, and `ArchiveRepository` carries
+  it whole. No `_custom` means none, so every paper filed before this reads as it did.
+- **Ask `config/core.php`**: `paper_custom_list()` and `paper_custom_clean()` are what a post may
+  hold (names cleaned the checklist's way, repeats dropped, 12 at most, a bad key dropped, never an
+  error but for a body left empty), `paper_custom_sections()` is what is stored,
+  `paper_sections_for_display()` is what a page shows: the six, then theirs. The three readers
+  (`review_paper.php`, `paper_details.php`, `archive/view_paper.php`) take `$sectionLabels` and
+  `$sections` from it; **a new reader must, not loop over `paper_section_labels()`**, which is
+  blind to them. It also counts a section holding only a picture or a table as written, as submit does.
+- **A name equal to a standard section that is being submitted is dropped** (that box already covers
+  it). One equal to a section left out stays: that is how a thesis puts References after its chapters
+  and not before them. Choosing a ready-made list therefore unticks the standard sections.
+- **Kind `custom` in `paper_scope_info()`**: their own sections *and* standard ones left out. Chip
+  "Custom: N sections", and the notices count what was provided ("4 written sections") instead of
+  "3 of 6". Their own on top of all six is `full`, and nothing is flagged.
+- **On the page**: the editor is drawn once (`$renderEditor` in `student_upload_ai.php`) and once more as
+  an inert `<template>`; `papelDoc.addEditor()` copies it. Their names travel in the hidden
+  `custom_sections` field (JSON), each body in the field named by its key (`custom_1`). `apply()`
+  rebuilds the boxes **before** it sets their text, or there is nothing to put it in.
+- **Traps already met while building it.** `papelChoose` answers `{keys, custom}` only when it is
+  given `opts.custom`; with none it answers the array it always did. A *disabled* input gives up
+  focus, and the next Enter then lands on the page and answers the whole question, so at the limit
+  only the Add button is disabled. A box made after load is not wired to the browser-copy autosave
+  (a contenteditable raises no input event on the form), so `addEditor()` wires its own surface.
+  `hasContent()` ignores `custom_sections`, as it does `section_scope`: choosing must not autosave.
+- **A name is a person's typing.** It is written with `textContent` and escaped with `escHtml()`
+  wherever markup is built (the Step 4 explanation, the extraction notice). The dialog's body scrolls
+  inside the box, so twelve rows fit a short screen.
+
 ### The review checklist
 
 What the Research Adviser confirms while reading a paper. Its heading is a dropdown of
@@ -668,9 +712,10 @@ password has also changed since it was written, so it cannot start; and its
 `full_submission` helper predates the two-manuscript upload (it posts
 `manuscript_type` as one word and the file as `research_pdf`). `tests/m10_section_scope.py`
 is standalone: it creates the AUTOTEST accounts through the app's own forms using a
-minted Coordinator session, submits for real (three Drive uploads), and removes the
+minted Coordinator session, submits for real (four Drive uploads), and removes the
 Drive files and any empty AUTOTEST folder before it removes the accounts. It takes
-step names to run a part (`python m10_section_scope.py legacy`).
+step names to run a part (`python m10_section_scope.py legacy`; `custom_cheap` and
+`custom_surfaces` cover sections of the author's own with no upload at all).
 `tests/m11_submit_failures.py` is its companion for what a failed submission says: it
 sets Google Drive aside (token, in the database and in the file) and renames the
 notifications table for one request, to produce real failures, and puts both back in a
