@@ -116,6 +116,16 @@ t('chapters label: thesis, including the retired names',
 t('chapters label: anything else is just Chapters',
     paper_checklist_chapters_label('journal') === 'Chapters' && paper_checklist_chapters_label(null) === 'Chapters');
 
+/* ---- the paper types a student can choose ------------------------------- */
+t('types: the dropdown offers a capstone, a thesis and a feasibility study',
+    array_keys(paper_types()) === ['capstone', 'undergrad_thesis', 'project'], show(array_keys(paper_types())));
+t('types: a journal article and a conference paper are no longer offered',
+    !isset(paper_types()['journal']) && !isset(paper_types()['conference']));
+t('types: but papers already filed under them keep their names',
+    paper_type_label('journal') === 'Journal Article' && paper_type_label('conference') === 'Conference Paper');
+t('types: and the retired ones are not on the offered list twice',
+    !array_intersect_key(paper_types(), paper_types_retired()));
+
 /* ---- one section name --------------------------------------------------- */
 t('label: plain stays', paper_checklist_label_clean('Introduction') === 'Introduction');
 t('label: spaces trimmed and collapsed', paper_checklist_label_clean("  Intro \t  duction  ") === 'Intro duction');

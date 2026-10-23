@@ -447,7 +447,7 @@ chapter(
         ('h', 'Step 1: Paper Details'),
         ('bullets', [
             'Choose your academic program, the paper type and the other basic facts.',
-            'Paper types: **Capstone Project**, **Undergraduate Thesis**, **Conference Paper**, **Journal Article** and **Feasibility Study**.',
+            'Paper types: **Capstone Project**, **Undergraduate Thesis** and **Feasibility Study**.',
         ]),
         ('h', 'Step 2: Upload & Details'),
         ('bullets', [

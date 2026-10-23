@@ -137,7 +137,7 @@ def submit(client, title, **extra):
     one word where the page now posts a group, and the file under its old name.
     """
     fields = {
-        'action': 'upload_paper', 'paper_type': 'journal', 'research_type': 'quantitative',
+        'action': 'upload_paper', 'paper_type': 'undergrad_thesis', 'research_type': 'quantitative',
         'manuscript_type[]': ['Full Manuscript'],
         'title': title, 'authors': F.STUDENT['full_name'],
         'program_category': F.STUDENT['program'],
@@ -197,7 +197,7 @@ def page_markup():
 def drafts():
     c = student()
     base = {'action': 'save_draft', 'title': T_DRAFT, 'authors': F.STUDENT['full_name'],
-            'program_category': F.STUDENT['program'], 'paper_type': 'journal', 'year': '2026'}
+            'program_category': F.STUDENT['program'], 'paper_type': 'undergrad_thesis', 'year': '2026'}
 
     f = dict(base, section_scope='abstract',
              abstract='<p>AUTOTEST abstract.</p>', introduction='<p>AUTOTEST typed before narrowing.</p>')
@@ -294,7 +294,7 @@ def submissions():
 
     # --- abstract only, submitted from a draft that had text in another section
     s, d = ajax(c, {'action': 'save_draft', 'title': T_ABS, 'authors': F.STUDENT['full_name'],
-                    'program_category': F.STUDENT['program'], 'paper_type': 'journal',
+                    'program_category': F.STUDENT['program'], 'paper_type': 'undergrad_thesis',
                     'section_scope': 'abstract', 'abstract': '<p>AUTOTEST abstract.</p>',
                     'introduction': '<p>typed before narrowing</p>'})
     did = d.get('draft_id')

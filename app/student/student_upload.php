@@ -25,8 +25,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         
         // Validate paper type
         $paperType = trim($_POST['paper_type'] ?? '');
-        $validTypes = ['article','capstone','conference','journal','project','research','thesis']; // Sorted for binary search
-        if (!binary_search_exists($paperType, $validTypes)) {
+        // The same list the dropdown above is built from, so a type that is no longer offered is refused here too.
+        if (!array_key_exists($paperType, paper_types())) {
             throw new Exception('Invalid paper type');
         }
         

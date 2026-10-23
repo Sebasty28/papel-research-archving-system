@@ -2367,8 +2367,6 @@ function paper_types(): array {
     return [
         'capstone'         => 'Capstone Project',
         'undergrad_thesis' => 'Undergraduate Thesis',
-        'conference'       => 'Conference Paper',
-        'journal'          => 'Journal Article',
         'project'          => 'Feasibility Study',
     ];
 }
@@ -2585,9 +2583,12 @@ function paper_manuscript_entries(int $paperId, array $paper, ?array $rows = nul
 
 function paper_types_retired(): array {
     return [
-        'research' => 'Research Paper',
-        'article'  => 'Article',
-        'thesis'   => 'Thesis',
+        'research'   => 'Research Paper',
+        'article'    => 'Article',
+        'thesis'     => 'Thesis',
+        // No longer offered (the department files capstones, theses and feasibility studies).
+        'conference' => 'Conference Paper',
+        'journal'    => 'Journal Article',
     ];
 }
 

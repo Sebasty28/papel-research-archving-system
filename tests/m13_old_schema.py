@@ -135,7 +135,7 @@ def docs_of(pid):
 def submit(client, title, formats=('Full Manuscript',), docs=None, extra=None):
     """A submission through the real handler, posting what the page posts today."""
     fields = {
-        'action': 'upload_paper', 'paper_type': 'journal', 'research_type': 'quantitative',
+        'action': 'upload_paper', 'paper_type': 'undergrad_thesis', 'research_type': 'quantitative',
         'manuscript_type[]': list(formats),
         'title': title, 'authors': F.STUDENT['full_name'],
         'program_category': F.STUDENT['program'],

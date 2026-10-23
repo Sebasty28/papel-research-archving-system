@@ -141,7 +141,7 @@ def t026():
     c = F.student_client()
     try:
         s, body = full_submission(c, title, pdf=big, docs=False,
-                                  paper_type='journal')
+                                  paper_type='undergrad_thesis')
     except Exception as e:
         s, body = 0, str(e)
     stored = bool(paper_row(title))
@@ -159,7 +159,7 @@ def t027():
     c = F.student_client()
     s, body = full_submission(
         c, title, pdf=b'This is a Word document, not a PDF at all.',
-        docs=False, paper_type='journal')
+        docs=False, paper_type='undergrad_thesis')
     stored = bool(paper_row(title))
     msg = message_in(body)
     check('ID-027', not stored and ('PDF' in msg or msg != ''),
@@ -173,12 +173,12 @@ def t028():
     title = 'AUTOTEST Missing Metadata'
     c = F.student_client()
     s, body = full_submission(c, title, omit=('research_date',), docs=False,
-                              paper_type='journal')
+                              paper_type='undergrad_thesis')
     stored = bool(paper_row(title))
     msg = message_in(body)
     # And a missing section is caught too.
     s2, body2 = full_submission(c, title + ' 2', extra={'methodology': ''},
-                                docs=False, paper_type='journal')
+                                docs=False, paper_type='undergrad_thesis')
     stored2 = bool(paper_row(title + ' 2'))
     check('ID-028', not stored and not stored2,
           'missing date of completion and an empty section are both refused '
@@ -276,7 +276,7 @@ def t033():
     title = 'AUTOTEST Manual Entry'
     H.q("DELETE FROM research_papers WHERE title=%s" % H.esc(title))
     c = F.student_client()
-    s, body = full_submission(c, title, paper_type='journal', docs=False)
+    s, body = full_submission(c, title, paper_type='undergrad_thesis', docs=False)
     row = paper_row(title)
     check('ID-033', bool(row),
           'a manually typed paper submits and is stored as %s'
@@ -290,7 +290,7 @@ def t034():
     """Submitting with no PDF at all."""
     title = 'AUTOTEST No PDF'
     c = F.student_client()
-    fields = {'action': 'upload_paper', 'paper_type': 'journal',
+    fields = {'action': 'upload_paper', 'paper_type': 'undergrad_thesis',
               'title': title, 'authors': F.STUDENT['full_name'],
               'program_category': F.STUDENT['program'],
               'research_date': '2026-03-15',
@@ -393,7 +393,7 @@ def t037():
     # whether several authors are kept.
     fields = {'action': 'save_draft', 'draft_id': '0', 'title': title,
               'authors': authors, 'year': '2026',
-              'research_date': '2026-03-15', 'paper_type': 'journal',
+              'research_date': '2026-03-15', 'paper_type': 'undergrad_thesis',
               'research_type': 'quantitative', 'manuscript_type': 'full',
               'program_category': F.STUDENT['program'],
               'keywords': 'autotest, automation, suite, testing, repository'}
@@ -416,7 +416,7 @@ def t038():
               'authors': F.STUDENT['full_name'], 'year': '2026',
               'research_date': '2026-03-15',
               'keywords': 'autotest, automation, suite, testing, repository',
-              'paper_type': 'journal', 'research_type': 'quantitative',
+              'paper_type': 'undergrad_thesis', 'research_type': 'quantitative',
               'manuscript_type': 'full',
               'program_category': F.STUDENT['program']}
     for k in SECTIONS:

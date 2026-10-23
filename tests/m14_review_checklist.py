@@ -255,7 +255,27 @@ def diagnostics():
           'the diagnostics page reports no gap for the checklist column', 'it said: %s' % words[words.find('Database'):][:200])
 
 
-STEPS = [('unit', unit), ('pages', pages), ('approving', approving), ('old_form', old_form),
+def paper_types():
+    """Journal Article and Conference Paper are no longer offered, on the form or by the handler."""
+    s = M10.student()
+    html = s.get(M10.UPLOAD)
+    m = re.search(r'<select[^>]*name="paper_type"[^>]*>(.*?)</select>', html, re.S)
+    options = re.findall(r'<option value="([^"]*)"[^>]*>([^<]*)</option>', m.group(1)) if m else []
+    offered = [(v, l.strip()) for v, l in options if v]
+    check('CK-19', offered == [('capstone', 'Capstone Project'), ('undergrad_thesis', 'Undergraduate Thesis'),
+                                 ('project', 'Feasibility Study')],
+          'the upload form offers a Capstone Project, an Undergraduate Thesis and a Feasibility Study, and nothing else',
+          'offered %s' % offered)
+    for code in ('journal', 'conference'):
+        title = 'AUTOTEST Removed Type %s' % code
+        status, reply = M10.submit(s, title, paper_type=code)
+        made = H.one("SELECT COUNT(*) FROM research_papers WHERE title=%s" % H.esc(title))
+        check('CK-20-' + code, not reply.get('success') and made == '0',
+              'a hand-made post of the removed type "%s" is refused and files nothing' % code,
+              'status %s, reply %s, rows %s' % (status, reply, made))
+
+
+STEPS = [('unit', unit), ('paper_types', paper_types), ('pages', pages), ('approving', approving), ('old_form', old_form),
          ('refusals', refusals), ('second_round', second_round), ('desk_window', desk_window),
          ('diagnostics', diagnostics)]
 

@@ -422,7 +422,7 @@ def t078():
     c = F.student_client()
     title = 'AUTOTEST Empty File'
     s, body = M4.full_submission(c, title, pdf=b'', docs=False,
-                                 paper_type='journal')
+                                 paper_type='undergrad_thesis')
     stored = bool(M4.paper_row(title))
     msg = M4.message_in(body)
     check('ID-078', not stored,

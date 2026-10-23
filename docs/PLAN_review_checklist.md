@@ -69,7 +69,7 @@ sees the adviser's list read-only.
 - **Lists** in code (`paper_checklist_templates()`): `imrad`, `undergrad_thesis`, `capstone`,
   `feasibility`, `blank`.
 - **Starting list** (`paper_checklist_default()`): Feasibility Study type gets Feasibility; filed
-  as IMRAD only gets IMRaD; Journal and Conference papers get IMRaD; anything else gets the chapters
+  as IMRAD only gets IMRaD; Journal and Conference papers (types no longer offered, still carried by old papers) get IMRaD; anything else gets the chapters
   list named for its type.
 - **Storage**: `paper_checklist.items_json` holds the list as left (template key, edited flag,
   labels, ticks); a row without it is an old row and is read from the eleven columns.
@@ -98,4 +98,4 @@ New: `includes/review_checklist.php`, `scripts/migrations/run_checklist_items_mi
 
 Editing the ready-made lists from a screen; reusable lists per adviser; reordering rows; saving the
 checklist when a paper is returned; autosaving while the adviser reads; lists of their own for
-Journal Article and Conference Paper (they start on IMRaD).
+Journal Article and Conference Paper (no longer offered; old papers of those types start on IMRaD).

@@ -1,5 +1,5 @@
 {
- "built": "2026-10-23 20:16",
+ "built": "2026-10-23 20:31",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -149,7 +149,7 @@
    "lines": 176
   },
   "config/core.php": {
-   "lines": 3664
+   "lines": 3665
   },
   "config/error_handler.php": {
    "lines": 228
@@ -467,7 +467,7 @@
    "lines": 73
   },
   "tests/_checklist_unit.php": {
-   "lines": 244
+   "lines": 254
   },
   "tests/_failure_unit.php": {
    "lines": 70
@@ -512,7 +512,7 @@
    "lines": 566
   },
   "tests/m14_review_checklist.py": {
-   "lines": 288
+   "lines": 308
   },
   "tests/m1_auth.py": {
    "lines": 309
