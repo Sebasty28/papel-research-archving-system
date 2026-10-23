@@ -76,8 +76,12 @@ class Client(object):
         self.redirect = ''
         self.last_url = BASE + '/'
 
-    def raw(self, path, data=None, headers=None, timeout=60, raw_body=None):
-        """One request, redirects NOT followed, so a 302 can be asserted."""
+    def raw(self, path, data=None, headers=None, timeout=180, raw_body=None):
+        """One request, redirects NOT followed, so a 302 can be asserted.
+
+        The timeout is generous on purpose: a real submission makes about a dozen
+        sequential calls to Google Drive, and on a slow connection that is well over
+        a minute without anything being wrong."""
         url = path if path.startswith('http') else BASE + path
         body = raw_body
         if data is not None:

@@ -21,10 +21,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $folder_id = trim($_POST['gdrive_folder_id'] ?? '');
         if ($folder_id === '') {
             flash('error', 'Enter a folder link or ID first.');
-        } elseif (update_gdrive_parent_folder_id($folder_id, $u['user_id'])) {
-            flash('success', 'Storage folder updated. New uploads will go here.');
+        } elseif (!is_gdrive_connected()) {
+            // A folder can only be checked from the account it will be written to.
+            flash('error', 'Connect Google Drive first, so the folder can be checked against the account it will be written to.');
         } else {
-            flash('error', 'That folder could not be saved. Check the link or ID and try again.');
+            /* Looked at before it is kept. This used to save whatever was pasted, and
+               staging ended up pointing at a folder in a Google account the connected
+               one cannot see, so every paper failed at the last step with nothing on
+               this page to say why. A folder is saved only once Drive confirms the
+               connected account can add files to it; if Drive cannot be asked, it is
+               not saved either, since "could not check" is not "fine". */
+            $check = gdrive_check_folder($folder_id);
+            if ($check['state'] !== 'ok') {
+                flash('error', 'That folder was not saved. ' . gdrive_folder_explain($check));
+            } elseif (update_gdrive_parent_folder_id($folder_id, $u['user_id'])) {
+                flash('success', 'Storage folder updated to "' . $check['name'] . '". New uploads will go here.');
+            } else {
+                flash('error', 'That folder could not be saved. Check the link or ID and try again.');
+            }
         }
     }
     header("Location: $SELF");
@@ -34,6 +48,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $current   = get_gdrive_parent_folder_id();
 $connected = is_gdrive_connected();
 $authUrl   = get_gdrive_auth_url();
+
+/* The folder as Google sees it, not just as it is written down. "Connected" says
+   the account is let in; it says nothing about whether this folder is somewhere
+   that account can write, and it is the folder that decides whether a paper can
+   be submitted. Asked only when there is a connection to ask with. */
+$folderCheck = $connected ? gdrive_check_folder($current) : null;
+$folderBad   = $folderCheck && gdrive_folder_is_unusable($folderCheck);
 
 // Who set it, and when: a setting this consequential should say who touched it.
 $meta = null;
@@ -168,7 +189,14 @@ if ($sc) $stored = (int)($sc->fetch_assoc()['n'] ?? 0);
                 <div>
                     <?php if ($connected): ?>
                         <strong>Google Drive is connected.</strong>
-                        <p class="set-status-note">Students can submit papers, and reviewers can open them.</p>
+                        <p class="set-status-note">
+                            <?php if ($folderBad): ?>
+                                The connection works, but <strong>the storage folder below cannot be used</strong>,
+                                so papers still cannot be submitted.
+                            <?php else: ?>
+                                Students can submit papers, and reviewers can open them.
+                            <?php endif; ?>
+                        </p>
                     <?php else: ?>
                         <strong>Google Drive is not connected.</strong>
                         <p class="set-status-note">
@@ -192,9 +220,9 @@ if ($sc) $stored = (int)($sc->fetch_assoc()['n'] ?? 0);
 
         <div class="set-card">
             <h2>Storage folder in use</h2>
-            <div class="set-status <?= $current ? '' : 'is-unset' ?>">
+            <div class="set-status <?= ($current && !$folderBad) ? '' : 'is-unset' ?>">
                 <span class="set-status-ico">
-                    <span class="material-symbols-outlined"><?= $current ? 'folder' : 'folder_off' ?></span>
+                    <span class="material-symbols-outlined"><?= ($current && !$folderBad) ? 'folder' : 'folder_off' ?></span>
                 </span>
                 <div>
                     <?php if ($current): ?>
@@ -207,6 +235,16 @@ if ($sc) $stored = (int)($sc->fetch_assoc()['n'] ?? 0);
                             <?php endif; ?>
                             <?= $stored ?> paper<?= $stored === 1 ? '' : 's' ?> filed in Drive so far.
                         </p>
+                        <?php if ($folderCheck && $folderCheck['state'] === 'ok'): ?>
+                            <p class="set-status-note"><strong>Reachable:</strong> "<?= e($folderCheck['name']) ?>".
+                                The connected account can add files to it.</p>
+                        <?php elseif ($folderBad): ?>
+                            <p class="set-status-note"><strong>This folder cannot be used.</strong>
+                                <?= e(gdrive_folder_explain($folderCheck)) ?>
+                                <strong>No paper can be submitted until a usable folder is saved below.</strong></p>
+                        <?php elseif ($folderCheck): ?>
+                            <p class="set-status-note"><?= e(gdrive_folder_explain($folderCheck)) ?></p>
+                        <?php endif; ?>
                     <?php else: ?>
                         <strong>No folder set.</strong>
                         <p class="set-status-note">

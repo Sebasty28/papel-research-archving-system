@@ -210,6 +210,30 @@ own "Upload failed:" and dropped the reference.
   returns false. Staging runs 8.4, so a statement that fails quietly here can end a
   request there.
 
+**The first real cause, on staging, was the storage folder.** Drive was connected, and
+every paper still failed: the cause the dialog finally showed was Drive answering
+`404 File not found` to the folder ID in `system_settings.gdrive_parent_folder_id`, a
+folder in a Google account the connected one cannot see. The connection and the folder
+are two separate settings and fail separately.
+
+- `gdrive_check_folder()` asks Drive whether the connected account can add files to a
+  folder (`ok`, `unset`, `not_found`, `not_folder`, `trashed`, `read_only`, `unknown`).
+  `unknown` means Drive could not be asked and is **not** a verdict; only the four
+  definite faults (`gdrive_folder_is_unusable()`) stop a submission.
+- The Storage Folder page (`app/admin/gdrive_settings.php`, **Director only**) checks a
+  folder before saving it and refuses with the reason; it also shows whether the current
+  one is usable, since "connected" says nothing about that. The Coordinator can connect
+  Drive (`pages/gdrive_callback.php`) but cannot change the folder.
+- A submission checks the folder first and tells the student in words, without the ID.
+
+**Setting up a copy of the site** (staging, production) needs three things by hand, none
+of which a deploy does: the database, the Drive connection (Reconnect on the Storage
+Folder page, signed in as the Google account that owns or can edit the folder), and the
+storage folder, which is **different on each copy** and must be one that connected
+account can edit. Open the folder in that account's Drive to be sure before pasting it.
+A deploy leaves `.env` and `config/gdrive_token.json` alone (see
+`.github/workflows/deploy-staging.yml`), so they have to exist on the server already.
+
 ### `bind_param` type-string length
 
 `'sssisssi'` must have exactly one character per parameter. A mismatch fails at
@@ -540,6 +564,12 @@ sets Google Drive aside (token, in the database and in the file) and renames the
 notifications table for one request, to produce real failures, and puts both back in a
 `finally`. If a run is killed, check `system_settings` for a `gdrive_system_token__aside`
 key and `config/` for `gdrive_token.json.aside`, and that a `notifications` table exists.
+`tests/m12_storage_folder.py` covers the storage folder: it points the real local
+setting at the exact ID staging could not use, briefly, and puts the row back (value,
+user and time) in a `finally`, with a copy kept in the system temp folder
+(`papel_folder_setting.json`) that the next run restores from if one was killed. Drive is
+only ever read. The test client's timeout is 180 seconds because a real submission is a
+dozen sequential Drive calls and a slow connection makes that over a minute.
 
 ### When there is no running app (cloud and web sessions)
 

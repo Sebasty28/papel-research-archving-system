@@ -524,9 +524,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
   $stagingDirs = [];     // staging folders, removed if they are left empty
   $inTx        = false;
 
+  /* Filing a paper is about a dozen calls to Google Drive in a row (a folder
+     looked up or made at each of five levels, then the file, then who may read
+     it), and each one is a round trip. On a slow connection that runs past the
+     60 seconds a shared host allows a script, and the host then kills it in the
+     middle of the Drive work and answers with a page of its own: no paper, files
+     left on Drive, and nothing the student can read. The upload gets the time its
+     own steps need. The host may cap this; where it does, nothing is worse off. */
+  if (function_exists('set_time_limit')) { @set_time_limit(180); }
+
   try {
     csrf_verify();
-    
+
     /* Validate paper type against the same list the dropdown was built from,
        so the form can never offer something the handler then refuses. A
        retired type is rejected here on purpose: it may still sit on an older
@@ -713,8 +722,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
        could open. It is asked first now, before anything is stored. */
     if (function_exists('upload_paper_to_gdrive') && function_exists('is_gdrive_connected') && !is_gdrive_connected()) {
         error_log('Submission refused: Google Drive is not connected on this server.');
+        // The Research Coordinator and the Director can both connect it (pages/gdrive_callback.php).
         throw new UserFacingException('Papers cannot be stored on this server yet, because Google Drive has not been '
-            . 'connected to it. Nothing was submitted. Please ask your Research Coordinator to connect it, then try again.');
+            . 'connected to it. Nothing was submitted. Please let your Research Coordinator or the Director know, '
+            . 'then try again. Either of them can connect it.');
+    }
+
+    /* And the folder papers are filed under, which is a separate thing from the
+       connection and fails separately. Staging was connected, and still refused
+       every paper, because its folder setting named a folder in a Google account
+       the connected one cannot see: Drive answered 404 "File not found" on the
+       very last step, after the PDF had been moved, and the student read "Upload
+       failed". Only a definite answer stops a submission. If Drive simply cannot
+       be asked just now, the upload goes on and says what really went wrong. */
+    if (function_exists('upload_paper_to_gdrive') && function_exists('gdrive_check_folder')) {
+        $folderCheck = gdrive_check_folder(get_gdrive_parent_folder_id());
+        if (gdrive_folder_is_unusable($folderCheck)) {
+            error_log('Submission refused: the Google Drive storage folder ' . $folderCheck['id']
+                . ' cannot be used (' . $folderCheck['state'] . ').');
+            throw new UserFacingException(gdrive_folder_explain($folderCheck, 'student'));
+        }
     }
 
     // 2. Duplicate Title Check

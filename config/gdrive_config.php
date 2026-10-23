@@ -119,6 +119,101 @@ function update_gdrive_parent_folder_id(string $folderId, int $userId): bool
     return $stmt->execute();
 }
 
+/**
+ * Whether the connected Google account can put files in a folder.
+ *
+ * The storage folder used to be saved as whatever text was pasted, and nothing
+ * looked at it again until a student's PDF had already been moved and Drive
+ * answered 404 "File not found" to the folder it was told to file under. That is
+ * what happened on staging: the setting held a folder in a Google account the
+ * connected one cannot see. A copy of the site has its own database, its own
+ * token and its own folder setting, and nothing makes the three agree.
+ *
+ * state: ok         the folder is there and files can be added to it
+ *        unset      no folder is set, so uploads go to the root of the account,
+ *                   which is allowed
+ *        not_found  the connected account cannot see it: another account's folder
+ *                   it was never shared with, a mistyped ID, or one deleted
+ *        not_folder it is a file
+ *        trashed    it is in the bin
+ *        read_only  visible, but the account may not add to it
+ *        unknown    Drive could not be asked (no network, a Google error). This
+ *                   is not a verdict, and callers must not treat it as one.
+ *
+ * Answers are kept for the request, so asking twice costs one call.
+ */
+function gdrive_check_folder(string $folderId): array
+{
+    static $seen = [];
+    $folderId = extract_gdrive_folder_id($folderId);
+    if (isset($seen[$folderId])) return $seen[$folderId];
+
+    $out = ['state' => 'unknown', 'name' => '', 'id' => $folderId];
+    if ($folderId === '') {
+        $out['state'] = 'unset';
+        return $seen[$folderId] = $out;
+    }
+
+    try {
+        $service = new Google_Service_Drive(get_gdrive_client());
+        $f = $service->files->get($folderId, [
+            'fields'            => 'id,name,mimeType,trashed,capabilities/canAddChildren',
+            // Without this a folder in a Shared Drive answers 404 as though it were not there.
+            'supportsAllDrives' => true,
+        ]);
+        $out['name'] = (string)$f->getName();
+        $caps = $f->getCapabilities();
+        if ($f->getMimeType() !== 'application/vnd.google-apps.folder')      $out['state'] = 'not_folder';
+        elseif ($f->getTrashed())                                            $out['state'] = 'trashed';
+        elseif ($caps && $caps->getCanAddChildren() === false)               $out['state'] = 'read_only';
+        else                                                                 $out['state'] = 'ok';
+    } catch (Throwable $e) {
+        // Google's own answer for "no such file, as far as this account can tell".
+        $out['state'] = ((int)$e->getCode() === 404) ? 'not_found' : 'unknown';
+        if ($out['state'] === 'unknown') {
+            error_log('GDrive folder check could not be completed: ' . $e->getMessage());
+        }
+    }
+    return $seen[$folderId] = $out;
+}
+
+/** Whether a check found a definite fault, as opposed to a folder that is fine or an answer that is not known. */
+function gdrive_folder_is_unusable(array $check): bool
+{
+    return in_array($check['state'], ['not_found', 'not_folder', 'trashed', 'read_only'], true);
+}
+
+/**
+ * What a folder check means, in words. 'admin' is for the person who can change
+ * the setting and says what to do; 'student' is for someone who cannot, and says
+ * only what happened and who to tell.
+ */
+function gdrive_folder_explain(array $check, string $audience = 'admin'): string
+{
+    if ($audience === 'student') {
+        return 'Papers cannot be stored right now, because the Google Drive storage folder cannot be used. '
+             . 'Nothing was submitted. Please let your Research Coordinator or the Director know, then try again. '
+             . 'The Director can fix it under Storage Folder.';
+    }
+    switch ($check['state']) {
+        case 'not_found':
+            return 'The connected Google account cannot find this folder. It may belong to a different Google account '
+                 . 'that has not shared it with the one connected here, or the ID may be mistyped, or the folder deleted. '
+                 . 'Open it while signed in to the connected account to be sure, or choose another folder.';
+        case 'not_folder':
+            return 'That is a file, not a folder. Open the folder itself and copy the address from there.';
+        case 'trashed':
+            return 'That folder is in the bin of the Google account that owns it. Restore it, or choose another folder.';
+        case 'read_only':
+            return 'The connected Google account can see this folder but cannot add files to it. '
+                 . 'It needs edit access, or must own the folder.';
+        case 'unknown':
+            return 'Google Drive could not be asked about this folder just now. Try again in a moment.';
+        default:
+            return '';
+    }
+}
+
 // ── OAuth client ──────────────────────────────────────────────────────────────
 
 /**
