@@ -553,6 +553,40 @@ archiving. Do not add one without reading `ArchiveRepository` first.
   The autosave on typing, the leave-page guard and "Save as draft" all carry the
   field already.
 
+### The review checklist
+
+What the Research Adviser confirms while reading a paper. Its heading is a dropdown of
+ready-made lists (`paper_checklist_templates()` in `config/core.php`): IMRaD Sections,
+Undergraduate Thesis Sections and Capstone Project Sections (Chapter 1 to 5 and References: the
+old "Full Manuscript" list, under the name of what is being reviewed), Feasibility Study
+Sections (Executive Summary, the Marketing, Technical, Management, Financial and
+Socio-Economic Aspects, References, Appendices: the chapters of the BSIE studies on file), and a Blank list. **Edit sections** lets the adviser add, remove or rename sections
+**for that one paper**; only a code change edits the ready-made lists.
+
+- **Stored as the adviser left it**, in `paper_checklist.items_json`
+  (`{"v":1,"template":"...","edited":true,"items":[{"label":"...","ok":true}]}`), so changing a
+  list in code never rewrites what a student was shown. A row with no `items_json` was written by
+  the old form and is read from its eleven columns, its chapters headed by the paper's type and
+  never "Full Manuscript". Ask `config/core.php`, do not parse by hand: `paper_checklist_load()`,
+  `paper_checklist_clean()` (the authority on what a post may hold: 20 sections, 80 characters,
+  tags stripped, repeats dropped, at least one), `paper_checklist_save()`,
+  `paper_checklist_default()`.
+- **The starting list follows the file format first, then the type**: filed as IMRAD only gives
+  IMRaD, a Feasibility Study gets its own, anything else the chapters list named for its type
+  (two of the three theses on record were filed as IMRAD, so the type alone would be wrong). It is
+  only a starting point.
+- **One editor, in two places**: `includes/review_checklist.php`, used by `app/review_paper.php`
+  and by the approve window on the adviser's desk (`includes/review_console.php`). It posts
+  `ck_template`, `ck_label[n]` and `ck_ok[n]`; the old eleven field names are still accepted.
+- **Only the adviser edits, and only on Approve.** The Coordinator reads the adviser's list (their
+  boxes used to look editable and nothing they changed was kept). Return saves no checklist.
+- **The save is an upsert.** It was a plain INSERT against `unique_paper`, so a paper the
+  Coordinator returned and the adviser approved again kept its old ticks here (the failure was
+  silent on PHP 8.0) and threw on PHP 8.1+, which ended in the 500 page with the paper unforwarded.
+- **A server without the column** (`paper_checklist_json_ready()`; see "A copy of the database can
+  be behind the code") still works: three lists, no editing, a notice saying why, and the old
+  columns as before.
+
 ### Programmes
 
 `programs_map()` and `program_code()` in `config/core.php`. Full name in the
@@ -583,7 +617,9 @@ Recent ones: `run_student_cohort_migration.php` (academic_year, section),
 `run_supporting_doc_type_repair.php` (`supporting_documents.document_type` from
 ENUM to `VARCHAR`, plus `document_name`),
 `run_paper_manuscripts_migration.php` (creates `paper_manuscripts` and backfills
-one row for every paper that already has a file).
+one row for every paper that already has a file),
+`run_checklist_items_migration.php` (adds `paper_checklist.items_json`, which the editable review
+checklist is stored in).
 
 Run the last two on any other server before it takes this code. Until
 `paper_manuscripts` exists the pages fall back to the paper's own columns and
@@ -596,6 +632,8 @@ paste, Go. It is safe to run twice, repairs the rows already written, and closes
 line per step saying what it did. It was checked against the PHP migrations (same tables,
 same rows) and by pasting it into phpMyAdmin itself. See "A copy of the database can be
 behind the code" under Traps before adding the next one.
+`scripts/migrations/sql/2026-10-23_checklist_items.sql` does the checklist column
+(`run_checklist_items_migration.php`, `paper_checklist.items_json`) the same way.
 
 Papers deleted from `research_papers` leave rows behind in `approval_workflow`,
 `paper_checklist`, `supporting_documents` and `paper_manuscripts`. `papers_archive` is *meant* to
@@ -656,6 +694,14 @@ at the scratch database: `auto_prepend_file` is **not** run for `php -r`, so a p
 be a script file. If a run is killed, drop `papel_m13` and stop the `php.exe` on port 8093
 by its PID.
 
+`tests/m14_review_checklist.py` covers the review checklist against the running site, with no
+Drive: the unit cases in `tests/_checklist_unit.php`, what the review page offers each reader,
+approving with each list and with edited ones, the old form's fields, refused and hostile lists,
+a second round of approval, the desk's approve window, and the Coordinator's read-only view.
+The dropdown, edit mode and posted fields were driven in a real Chrome (typing with
+`Input.insertText` and Enter); that script is not in the repository. `m13` also covers the
+checklist column.
+
 ### When there is no running app (cloud and web sessions)
 
 Claude Code on the web, scheduled cloud agents and `/code-review ultra` all run
@@ -703,8 +749,9 @@ describe the dev box, not the cloud checkout.
 
 ## Known gaps
 
-- **Staging's database is behind the code until `scripts/migrations/sql/2026-10-21_catch_up.sql`
-  has been run there.** The pages work around the gaps (the adviser's desk no longer fails),
+- **Staging's database is behind the code until both files in `scripts/migrations/sql/`
+  (`2026-10-21_catch_up.sql` and `2026-10-23_checklist_items.sql`) have been run there.** The adviser's
+  checklist is limited to three fixed lists with no editing until the second one is. The pages work around the gaps (the adviser's desk no longer fails),
   but the copyright document is filed as "Other Document", a student's name for an extra
   document is lost, and a paper cannot be handed in as both IMRAD and Full Manuscript. Open
   `app/student/upload_diagnostics.php` as staff: "Database" reads "No gaps" once it is done.

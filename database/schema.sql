@@ -157,6 +157,7 @@ CREATE TABLE IF NOT EXISTS `paper_checklist` (
   `full_ch4` tinyint(1) DEFAULT 0,
   `full_ch5` tinyint(1) DEFAULT 0,
   `full_references` tinyint(1) DEFAULT 0,
+  `items_json` text DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`checklist_id`),
   UNIQUE KEY `unique_paper` (`paper_id`)

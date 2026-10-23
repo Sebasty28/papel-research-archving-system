@@ -42,6 +42,7 @@ import urllib.error, urllib.request
 import harness as H
 import fixtures as F
 import m4_submission as M4
+import m14_review_checklist as M14
 from harness import R, check
 
 UPLOAD = M4.UPLOAD
@@ -55,6 +56,8 @@ PREPEND = os.path.join(H.HERE, '_old_schema_prepend.php')
 PROBE = os.path.join(H.HERE, '_scope_probe.php')
 PROBE_OS = os.path.join(H.HERE, '_old_schema_probe.php')
 CATCH_UP = os.path.normpath(os.path.join(H.HERE, '..', 'scripts', 'migrations', 'sql', '2026-10-21_catch_up.sql'))
+CHECKLIST_SQL = os.path.normpath(os.path.join(H.HERE, '..', 'scripts', 'migrations', 'sql', '2026-10-23_checklist_items.sql'))
+SQL_FILES = [CATCH_UP, CHECKLIST_SQL]
 SERVER_LOG = os.path.join(tempfile.gettempdir(), 'papel_m13_server.log')
 COORDINATOR_ID = 151
 ALL = ['abstract', 'introduction', 'methodology', 'results_discussion', 'conclusion', 'references']
@@ -170,6 +173,7 @@ def build():
     code, _, err = mysql(SCRATCH, (
         "DELETE FROM supporting_documents WHERE doc_id >= 0;"
         "DROP TABLE IF EXISTS paper_manuscripts;"
+        "ALTER TABLE paper_checklist DROP COLUMN items_json;"
         "ALTER TABLE supporting_documents DROP COLUMN document_name;"
         "ALTER TABLE supporting_documents MODIFY document_type "
         "ENUM('ethics_clearance','consent_form','data_collection','other') NOT NULL DEFAULT 'other';"))
@@ -253,7 +257,7 @@ def shape():
         keys = json.loads(out.strip().splitlines()[-1])
     except (ValueError, IndexError):
         pass
-    check('OS-01', sorted(keys) == ['document_name', 'document_type', 'paper_manuscripts'],
+    check('OS-01', sorted(keys) == ['checklist_items', 'document_name', 'document_type', 'paper_manuscripts'],
           'the application reports the three gaps in the copy: %s' % ', '.join(sorted(keys)),
           'schema_gaps() said %s (exit %s) %s' % (keys, code, err[-120:]))
 
@@ -297,8 +301,9 @@ def diagnostics():
     a = adviser()
     page = a.get('/app/student/upload_diagnostics.php')
     words = strip(page)
-    check('OS-06', 'schema gaps: 3' in words and 'paper_manuscripts' in words and 'ALTER TABLE supporting_documents' in words,
-          'staff see the three gaps and the SQL that closes them',
+    check('OS-06', 'schema gaps: 4' in words and 'paper_manuscripts' in words and 'ALTER TABLE paper_checklist' in words
+          and 'ALTER TABLE supporting_documents' in words,
+          'staff see the four gaps and the SQL that closes them',
           'the Database section said: %s' % words[words.find('Database'):][:240])
     s = student()
     sw = strip(s.get('/app/student/upload_diagnostics.php'))
@@ -355,16 +360,18 @@ def submissions_old():
 
 def catch_up():
     """The SQL for phpMyAdmin repairs the copy, repairs the rows, and is safe to run twice."""
-    code, out, err = mysql(SCRATCH, stdin_path=CATCH_UP)
-    check('OS-13', code == 0, 'the catch-up SQL runs clean', 'exit %s: %s' % (code, err[:200]))
+    runs = [mysql(SCRATCH, stdin_path=f) for f in SQL_FILES]
+    check('OS-13', all(r[0] == 0 for r in runs), 'both SQL files run clean',
+          'exit %s: %s' % ([r[0] for r in runs], ' | '.join(r[2][:120] for r in runs)))
 
     cols = dict((r[0], r[1]) for r in H.q(
         "SELECT column_name, column_type FROM information_schema.columns WHERE table_schema='%s' "
         "AND table_name='supporting_documents' AND column_name IN ('document_type','document_name')" % SCRATCH))
     table = H.q("SHOW TABLES LIKE 'paper_manuscripts'")
-    check('OS-14', cols.get('document_type', '').startswith('varchar') and 'document_name' in cols and table,
-          'document_type is a VARCHAR, document_name exists, paper_manuscripts exists',
-          'columns %s, table %s' % (cols, table))
+    has_items = H.q("SHOW COLUMNS FROM paper_checklist LIKE 'items_json'")
+    check('OS-14', cols.get('document_type', '').startswith('varchar') and 'document_name' in cols and table and has_items,
+          'document_type is a VARCHAR, document_name exists, paper_manuscripts exists, paper_checklist has items_json',
+          'columns %s, table %s, items_json %s' % (cols, table, has_items))
 
     pid = paper_id(T_OLD)
     kinds = sorted(k for k, _ in docs_of(pid)) if pid else []
@@ -374,7 +381,9 @@ def catch_up():
 
     before = H.q("SELECT doc_id, document_type FROM supporting_documents ORDER BY doc_id")
     before_m = H.q("SELECT paper_id, format FROM paper_manuscripts ORDER BY paper_id, format")
-    code2, _, err2 = mysql(SCRATCH, stdin_path=CATCH_UP)
+    again = [mysql(SCRATCH, stdin_path=f) for f in SQL_FILES]
+    code2 = max(r[0] for r in again)
+    err2 = ' | '.join(r[2] for r in again)
     after = H.q("SELECT doc_id, document_type FROM supporting_documents ORDER BY doc_id")
     after_m = H.q("SELECT paper_id, format FROM paper_manuscripts ORDER BY paper_id, format")
     check('OS-16', code2 == 0 and before == after and before_m == after_m,
@@ -389,21 +398,92 @@ def catch_up():
 
 
 def sql_file_shape():
-    """The catch-up file ends on a statement that reads no table.
+    """Every SQL file for phpMyAdmin ends on a statement that reads no table.
 
     phpMyAdmin looks at the last statement of a pasted script and, if it reads from a
     database, switches to that database before running any of it: a closing SELECT
     from information_schema made every DATABASE() above it answer information_schema,
     and step 2 was refused with #1044. The mysql client does not do this, so no other
     case here would notice an edit that brought it back."""
-    text = open(CATCH_UP, encoding='utf-8').read()
-    body = chr(10).join(l for l in text.splitlines() if not l.lstrip().startswith('--'))
-    statements = [x.strip() for x in body.split(';') if x.strip()]
-    last = statements[-1] if statements else ''
-    flat = ' ' + re.sub(r'\s+', ' ', last.lower()) + ' '
-    check('OS-21', last.upper().startswith('SELECT') and ' from ' not in flat and 'information_schema' not in flat,
-          'the catch-up file ends on a statement that reads no table (phpMyAdmin switches database to it otherwise)',
-          'last statement: %s' % re.sub(r'\s+', ' ', last)[:160])
+    folder = os.path.dirname(CATCH_UP)
+    files = sorted(f for f in os.listdir(folder) if f.endswith('.sql'))
+    bad = []
+    for name in files:
+        text = open(os.path.join(folder, name), encoding='utf-8').read()
+        body = chr(10).join(l for l in text.splitlines() if not l.lstrip().startswith('--'))
+        statements = [x.strip() for x in body.split(';') if x.strip()]
+        last = statements[-1] if statements else ''
+        flat = ' ' + re.sub(r'\s+', ' ', last.lower()) + ' '
+        if not (last.upper().startswith('SELECT') and ' from ' not in flat and 'information_schema' not in flat):
+            bad.append('%s ends: %s' % (name, re.sub(r'\s+', ' ', last)[:120]))
+    check('OS-21', files and not bad,
+          'each SQL file (%s) ends on a statement that reads no table' % ', '.join(files),
+          '; '.join(bad))
+
+
+def checklist_old():
+    """The checklist while the column is missing: limited, and it still works on the strict server."""
+    a = adviser()
+    pid = M14.seed('AUTOTEST Old Schema Checklist', 'IMRAD', 'journal')
+    STATE['checklist_paper'] = pid
+    cfg = M14.editor_config(a.get('/app/review_paper.php?id=%s' % pid))
+    check('OS-22', cfg and cfg['canEdit'] is False and [l['key'] for l in cfg['lists']] == ['imrad', 'undergrad_thesis', 'capstone']
+          and 'database update' in cfg['notice'],
+          'the editor is limited to the three lists the old columns can hold, cannot be edited, and says why',
+          'config %s' % (json.dumps(cfg)[:200] if cfg else None))
+    fp = M14.seed('AUTOTEST Old Schema Feasibility', 'IMRAD', 'project')
+    start = (M14.editor_config(a.get('/app/review_paper.php?id=%s' % fp)) or {}).get('template')
+    check('OS-23', start == 'imrad', 'a feasibility study starts on a list this server can keep',
+          'it started on %s' % start)
+
+    M14.approve(a, pid, 'imrad', M14.IMRAD5, ticked=(0, 2))
+    flags = H.q("SELECT imrad_intro, imrad_method, imrad_result FROM paper_checklist WHERE paper_id=%s" % pid)
+    check('OS-24', M14.status_of(pid) == 'pending_admin' and flags == [['1', '0', '1']],
+          'approving saves the list in the old columns',
+          'status %s, flags %s' % (M14.status_of(pid), flags))
+
+    # A paper approved, returned, revised and approved again: a plain INSERT hits the unique key,
+    # which PHP 8.1 turns into an exception and this server does not swallow.
+    H.q("UPDATE research_papers SET current_status='pending_faculty' WHERE paper_id=%s" % pid)
+    s, body = M14.approve(a, pid, 'imrad', M14.IMRAD5, ticked=(1,))
+    flags = H.q("SELECT imrad_intro, imrad_method, imrad_result FROM paper_checklist WHERE paper_id=%s" % pid)
+    n = H.one("SELECT COUNT(*) FROM paper_checklist WHERE paper_id=%s" % pid)
+    check('OS-25', M14.status_of(pid) == 'pending_admin' and n == '1' and flags == [['0', '1', '0']],
+          'approving the same paper a second time replaces its checklist, with mysqli throwing as on PHP 8.1+',
+          'status %s, rows %s, flags %s, page: %s' % (M14.status_of(pid), n, flags, M14.text_of(body)[:120]))
+
+    p3 = M14.seed('AUTOTEST Old Schema Checklist Custom', 'IMRAD', 'journal')
+    s3, body3 = M14.approve(a, p3, 'imrad', M14.IMRAD5 + ['Extra section'])
+    check('OS-26', M14.status_of(p3) == 'pending_faculty' and 'database update' in M14.text_of(body3),
+          'a custom list is refused in words, and the paper stays with the adviser',
+          'status %s, page: %s' % (M14.status_of(p3), M14.text_of(body3)[:140]))
+    text = M14.text_of(student().get('/app/student/paper_details.php?id=%s' % pid).split('Review Checklist', 1)[-1][:6000])
+    check('OS-27', 'IMRaD Sections' in text and 'Indicated' in text,
+          'the author reads it', 'student page said: %s' % text[:200])
+
+
+def checklist_new():
+    """And once the column is there the editor is whole, and the strict server takes a second round."""
+    a = adviser()
+    pid = M14.seed('AUTOTEST Caught Up Checklist', 'IMRAD', 'journal')
+    cfg = M14.editor_config(a.get('/app/review_paper.php?id=%s' % pid))
+    check('OS-28', cfg and cfg['canEdit'] is True and len(cfg['lists']) == 5 and not cfg['notice'],
+          'the editor is whole: five lists, editable, no notice', 'config %s' % (json.dumps(cfg)[:200] if cfg else None))
+    M14.approve(a, pid, 'imrad', M14.IMRAD5 + ['Extra section'], ticked=(0,))
+    first = M14.stored(pid)
+    H.q("UPDATE research_papers SET current_status='pending_faculty' WHERE paper_id=%s" % pid)
+    M14.approve(a, pid, 'feasibility', ['Executive Summary', 'Risks'], ticked=(0, 1))
+    second = M14.stored(pid)
+    n = H.one("SELECT COUNT(*) FROM paper_checklist WHERE paper_id=%s" % pid)
+    check('OS-29', first and first['edited'] is True and second and second['template'] == 'feasibility'
+          and [i['label'] for i in second['items']] == ['Executive Summary', 'Risks'] and n == '1',
+          'a custom list is kept, and a second approval replaces it, in one row',
+          'rows %s, first %s, second %s' % (n, first, second))
+    old = STATE.get('checklist_paper')
+    text = M14.text_of(student().get('/app/student/paper_details.php?id=%s' % old).split('Review Checklist', 1)[-1][:6000]) if old else ''
+    check('OS-30', 'IMRaD Sections' in text and 'Indicated' in text,
+          'a checklist recorded while the column was missing still reads after it is added',
+          'student page said: %s' % text[:200])
 
 
 def submissions_new():
@@ -435,7 +515,8 @@ def submissions_new():
 
 # ----------------------------------------------------------------- run / clean
 STEPS = [('sql_file_shape', sql_file_shape), ('shape', shape), ('pages', pages), ('diagnostics', diagnostics), ('failure_page', failure_page),
-         ('submissions_old', submissions_old), ('catch_up', catch_up), ('submissions_new', submissions_new)]
+         ('checklist_old', checklist_old), ('submissions_old', submissions_old), ('catch_up', catch_up),
+         ('checklist_new', checklist_new), ('submissions_new', submissions_new)]
 
 
 def cleanup():

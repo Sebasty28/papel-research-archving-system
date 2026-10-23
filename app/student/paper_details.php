@@ -137,28 +137,10 @@ $missingRequired = 0;
 foreach ($files as $f) if (!$f['href'] && $f['required']) $missingRequired++;
 
 /* ---- The adviser's checklist -------------------------------------------- */
-$cs = $conn->prepare("SELECT * FROM paper_checklist WHERE paper_id = ? ORDER BY checklist_id DESC LIMIT 1");
-$cs->bind_param('i', $paper_id);
-$cs->execute();
-$checklist = $cs->get_result()->fetch_assoc();
-$cs->close();
-
-$chapterItems = [
-    'full_ch1'        => 'Chapter 1',
-    'full_ch2'        => 'Chapter 2',
-    'full_ch3'        => 'Chapter 3',
-    'full_ch4'        => 'Chapter 4',
-    'full_ch5'        => 'Chapter 5',
-    'full_references' => 'References',
-];
-$checklistGroups = paper_checklist_groups($paper['manuscript_type'] ?? null);
-$imradItems = [
-    'imrad_intro'      => 'Introduction',
-    'imrad_method'     => 'Methodology',
-    'imrad_result'     => 'Results',
-    'imrad_discussion' => 'Discussion',
-    'imrad_references' => 'References',
-];
+/* The list the adviser recorded, whichever way it was written: their own list for
+   this paper, or the groups of the old form. One shape either way. */
+require_once ROOT_PATH . '/includes/review_checklist.php';
+$checklist = paper_checklist_load($paper_id, $paper['manuscript_type'] ?? null, $paper['paper_type'] ?? null);
 
 /* ---- Who reviewed it ---------------------------------------------------- */
 $reviewers = [];
@@ -425,31 +407,8 @@ $fill  = count($steps) > 1 ? max(0, min(100, ($done - 1) / (count($steps) - 1) *
             <?php endif; ?>
 
             <div class="pd-check-grid">
-                <?php if ($checklist && $checklistGroups['full']): ?>
-                    <div>
-                        <div class="pd-check-head">Full Manuscript</div>
-                        <?php foreach ($chapterItems as $col => $label): ?>
-                            <?php $yes = !empty($checklist[$col]); ?>
-                            <div class="pd-check-row <?= $yes ? 'is-yes' : ($returned ? 'is-gap' : 'is-no') ?>">
-                                <span class="material-symbols-outlined"><?= $yes ? 'check_circle' : ($returned ? 'error' : 'radio_button_unchecked') ?></span>
-                                <span class="pd-check-name"><?= e($label) ?></span>
-                                <span class="pd-check-state"><?= $yes ? 'Indicated' : ($returned ? 'Missing' : 'Not indicated') ?></span>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
-                <?php endif; ?>
-                <?php if ($checklist && $checklistGroups['imrad']): ?>
-                    <div>
-                        <div class="pd-check-head">IMRaD Sections</div>
-                        <?php foreach ($imradItems as $col => $label): ?>
-                            <?php $yes = !empty($checklist[$col]); ?>
-                            <div class="pd-check-row <?= $yes ? 'is-yes' : ($returned ? 'is-gap' : 'is-no') ?>">
-                                <span class="material-symbols-outlined"><?= $yes ? 'check_circle' : ($returned ? 'error' : 'radio_button_unchecked') ?></span>
-                                <span class="pd-check-name"><?= e($label) ?></span>
-                                <span class="pd-check-state"><?= $yes ? 'Indicated' : ($returned ? 'Missing' : 'Not indicated') ?></span>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
+                <?php if ($checklist): ?>
+                    <?= review_checklist_groups_html($checklist, !empty($returned)) ?>
                 <?php endif; ?>
 
                 <?php /* Files are not read from the checklist table: this column reports
@@ -478,8 +437,8 @@ $fill  = count($steps) > 1 ? max(0, min(100, ($done - 1) / (count($steps) - 1) *
                 <div class="pd-note pd-note--after">
                     <span class="material-symbols-outlined">verified_user</span>
                     <span>Recorded by <?= e($reviewers['faculty'] ?? 'your Research Adviser') ?>
-                          when the paper was approved<?= !empty($checklist['created_at'])
-                            ? ' on ' . e(date('F j, Y', strtotime($checklist['created_at']))) : '' ?>.</span>
+                          when the paper was approved<?= !empty($checklist['recorded_at'])
+                            ? ' on ' . e(date('F j, Y', strtotime($checklist['recorded_at']))) : '' ?>.</span>
                 </div>
             <?php endif; ?>
         </div>

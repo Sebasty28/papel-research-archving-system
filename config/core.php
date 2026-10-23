@@ -3024,6 +3024,372 @@ function paper_checklist_groups(?string $manuscriptType): array {
     return ['full' => true, 'imrad' => true];
 }
 
+/* =========================================================================
+   The review checklist
+
+   What the Research Adviser confirms while reading a paper. It used to be eleven
+   fixed yes/no columns, one run for IMRaD and one for chapters, picked by the
+   file format alone. A feasibility study has neither, and the reviewer could not
+   change a line, so the list is now chosen from a few ready-made ones and may be
+   edited for the one paper it is recorded on.
+
+   What is saved is the list as the adviser left it, labels included, in
+   paper_checklist.items_json. A later change to a ready-made list below must not
+   rewrite what a student was shown, so nothing is looked up by key afterwards.
+   A row without items_json was written by the old form and is read from the old
+   columns (paper_checklist_load).
+   ========================================================================= */
+
+const PAPER_CHECKLIST_MAX_ITEMS = 20;
+const PAPER_CHECKLIST_MAX_LABEL = 80;
+
+/**
+ * The ready-made lists, in the order the dropdown offers them.
+ *
+ * "Full Manuscript" is not a list any more: its chapters are the Undergraduate
+ * Thesis and Capstone Project lists, which are the same six lines under the name
+ * of what is being reviewed. The Feasibility Study list is the outline for that
+ * paper type. 'blank' starts empty, for a paper nothing else fits.
+ */
+function paper_checklist_templates(): array
+{
+    $chapters = ['Chapter 1', 'Chapter 2', 'Chapter 3', 'Chapter 4', 'Chapter 5', 'References'];
+    return [
+        'imrad' => [
+            'label' => 'IMRaD Sections',
+            'items' => ['Introduction', 'Methodology', 'Results', 'Discussion', 'References'],
+        ],
+        'undergrad_thesis' => ['label' => 'Undergraduate Thesis Sections', 'items' => $chapters],
+        'capstone'         => ['label' => 'Capstone Project Sections',     'items' => $chapters],
+        /* The chapters of the BSIE feasibility studies on file: an executive summary, the five
+           aspects, then the references and appendices. Taken from the contents pages of the
+           manuscripts (Shampease and VegiMix list exactly these); a study that adds a chapter,
+           a conclusion for one, is covered by adding it for that paper. */
+        'feasibility' => [
+            'label' => 'Feasibility Study Sections',
+            'items' => ['Executive Summary', 'Marketing Aspect', 'Technical Aspect', 'Management Aspect',
+                        'Financial Aspect', 'Socio-Economic Aspect', 'References', 'Appendices'],
+        ],
+        'blank' => ['label' => 'Blank list', 'items' => []],
+    ];
+}
+
+/**
+ * The eleven columns the old form wrote, by the family of list they belonged to.
+ * 'chapters' is what the Undergraduate Thesis and Capstone Project lists share.
+ */
+function paper_checklist_legacy_columns(): array
+{
+    return [
+        'imrad' => [
+            'imrad_intro' => 'Introduction', 'imrad_method' => 'Methodology', 'imrad_result' => 'Results',
+            'imrad_discussion' => 'Discussion', 'imrad_references' => 'References',
+        ],
+        'chapters' => [
+            'full_ch1' => 'Chapter 1', 'full_ch2' => 'Chapter 2', 'full_ch3' => 'Chapter 3',
+            'full_ch4' => 'Chapter 4', 'full_ch5' => 'Chapter 5', 'full_references' => 'References',
+        ],
+    ];
+}
+
+/** Which family of old columns a list maps onto, or null for a list they cannot hold. */
+function paper_checklist_family(?string $templateKey): ?string
+{
+    if ($templateKey === 'imrad') return 'imrad';
+    if ($templateKey === 'undergrad_thesis' || $templateKey === 'capstone') return 'chapters';
+    return null;
+}
+
+/**
+ * Whether the database has the column the editable checklist is stored in.
+ *
+ * It was added on 23 October. A copy of the site built from the export staging
+ * started from has no such column and no shell to add it with, so every caller
+ * asks first (see schema_gaps(), and scripts/migrations/sql/ for the SQL).
+ */
+function paper_checklist_json_ready(): bool
+{
+    static $ready = null;
+    if ($ready === null) {
+        $r = db()->query("SHOW COLUMNS FROM paper_checklist LIKE 'items_json'");
+        $ready = $r && $r->num_rows > 0;
+    }
+    return $ready;
+}
+
+/**
+ * The lists this server can actually keep. Without the column only the three
+ * the old columns can hold are on offer, and they cannot be edited.
+ */
+function paper_checklist_templates_offered(): array
+{
+    $all = paper_checklist_templates();
+    if (paper_checklist_json_ready()) return $all;
+    return array_intersect_key($all, array_flip(['imrad', 'undergrad_thesis', 'capstone']));
+}
+
+/**
+ * Which list a reviewer is given to start with. Only a starting point: the
+ * dropdown changes it.
+ *
+ * The file format comes first, because real papers disagree with their type (two
+ * of the three undergraduate theses on record were handed in as IMRaD, and an
+ * IMRaD paper has no chapters to tick). A Feasibility Study has an outline of its
+ * own whatever format it was filed in. A paper with no format recorded, or filed
+ * as a full manuscript or both ways, gets the chapters list named for its type.
+ */
+function paper_checklist_default(?string $manuscriptType, ?string $paperType): string
+{
+    $type = strtolower(trim((string)$paperType));
+    if ($type === 'project') return 'feasibility';
+    if (paper_declared_formats($manuscriptType) === ['imrad']) return 'imrad';
+    if ($type === 'journal' || $type === 'conference') return 'imrad';
+    return $type === 'capstone' ? 'capstone' : 'undergrad_thesis';
+}
+
+/**
+ * What a chapters group is called on a row the old form wrote. It used to read
+ * "Full Manuscript", which is no longer a list.
+ */
+function paper_checklist_chapters_label(?string $paperType): string
+{
+    $type = strtolower(trim((string)$paperType));
+    if ($type === 'capstone') return 'Capstone Project Sections';
+    if (in_array($type, ['undergrad_thesis', 'thesis', 'research', 'article'], true)) return 'Undergraduate Thesis Sections';
+    return 'Chapters';
+}
+
+/**
+ * One section name, made safe to keep and to show: tags and control characters
+ * gone, runs of white space made one space, cut to the length a line can hold.
+ * Empty when nothing usable is left.
+ */
+function paper_checklist_label_clean($raw): string
+{
+    if (!is_scalar($raw)) return '';
+    $text = strip_tags((string)$raw);
+    $text = preg_replace('/[\x00-\x1F\x7F]+/u', ' ', $text) ?? '';
+    $text = preg_replace('/\s+/u', ' ', $text) ?? '';
+    return trim(mb_substr(trim($text), 0, PAPER_CHECKLIST_MAX_LABEL));
+}
+
+/**
+ * What a reviewer posted, made into what is kept. The page's own checks are a
+ * convenience; this is the authority.
+ *
+ * Returns ['template', 'edited', 'items' => [['label', 'ok'], ...]], or
+ * ['legacy' => [column => 0|1, ...]] when the post carries the eleven fixed
+ * fields of the old form instead, which are still accepted so that nothing that
+ * posts them (an old page, a test) breaks. Throws UserFacingException with a
+ * sentence the reviewer can act on.
+ */
+function paper_checklist_clean(array $post): array
+{
+    if (!isset($post['ck_label']) || !is_array($post['ck_label'])) {
+        $flags = [];
+        foreach (paper_checklist_legacy_columns() as $columns) {
+            foreach (array_keys($columns) as $col) $flags[$col] = isset($post[$col]) ? 1 : 0;
+        }
+        return ['legacy' => $flags];
+    }
+
+    $templates = paper_checklist_templates();
+    $template  = (string)($post['ck_template'] ?? 'blank');
+    if (!isset($templates[$template])) $template = 'blank';
+
+    $tooLong = 'That checklist is too long. It can hold up to ' . PAPER_CHECKLIST_MAX_ITEMS . ' sections.';
+    // Refused before it is read, so a hand-made post of thousands of fields costs nothing.
+    if (count($post['ck_label']) > PAPER_CHECKLIST_MAX_ITEMS * 5) throw new UserFacingException($tooLong);
+
+    $ticked = (isset($post['ck_ok']) && is_array($post['ck_ok'])) ? $post['ck_ok'] : [];
+    $items  = [];
+    $seen   = [];
+    foreach ($post['ck_label'] as $n => $raw) {
+        $label = paper_checklist_label_clean($raw);
+        if ($label === '') continue;
+        $key = mb_strtolower($label);
+        if (isset($seen[$key])) continue;            // the same section twice is one section
+        $seen[$key] = true;
+        $items[] = ['label' => $label, 'ok' => !empty($ticked[$n])];
+    }
+    if (count($items) > PAPER_CHECKLIST_MAX_ITEMS) throw new UserFacingException($tooLong);
+    if (!$items) throw new UserFacingException('Keep at least one section on the checklist, or choose a list.');
+
+    $edited = $template === 'blank' || array_column($items, 'label') !== $templates[$template]['items'];
+    return ['template' => $template, 'edited' => $edited, 'items' => $items];
+}
+
+/**
+ * The old columns a list can be written to, for a server that has no items_json.
+ * Only a ready-made list, unedited, fits them; anything else is refused in words
+ * rather than saved wrongly.
+ */
+function paper_checklist_flags_from_list(array $clean): array
+{
+    $family  = paper_checklist_family((string)($clean['template'] ?? ''));
+    $columns = $family !== null ? paper_checklist_legacy_columns()[$family] : null;
+    $items   = $clean['items'] ?? [];
+    if ($columns === null || !empty($clean['edited']) || count($items) !== count($columns)) {
+        throw new UserFacingException(
+            'Custom checklists need a database update that has not been installed on this server yet. '
+          . 'Choose the IMRaD, Undergraduate Thesis or Capstone Project list as it stands.');
+    }
+    $flags = [];
+    foreach (paper_checklist_legacy_columns() as $cols) {
+        foreach (array_keys($cols) as $col) $flags[$col] = 0;
+    }
+    $i = 0;
+    foreach (array_keys($columns) as $col) {
+        $flags[$col] = !empty($items[$i++]['ok']) ? 1 : 0;
+    }
+    return $flags;
+}
+
+/**
+ * Records a paper's checklist, replacing the one it had.
+ *
+ * An upsert: a paper the Coordinator returned, the student resubmitted and the
+ * adviser approves again already has a row, and the plain INSERT this replaced
+ * hit the unique key. Silently here (the old ticks stayed), and as an exception
+ * on PHP 8.1 and later, which ended in the error page with the paper unforwarded.
+ */
+function paper_checklist_save(int $paperId, array $clean): void
+{
+    $conn = db();
+    $legacyCols = [];
+    foreach (paper_checklist_legacy_columns() as $cols) {
+        foreach (array_keys($cols) as $col) $legacyCols[] = $col;
+    }
+
+    if (isset($clean['items']) && paper_checklist_json_ready()) {
+        $json = json_encode([
+            'v'        => 1,
+            'template' => $clean['template'],
+            'edited'   => (bool)$clean['edited'],
+            'items'    => array_map(function ($it) { return ['label' => $it['label'], 'ok' => (bool)$it['ok']]; }, $clean['items']),
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        // The old columns are cleared, so a stale tick from an earlier round cannot sit beside the new list.
+        $resets = implode(', ', array_map(function ($c) { return "$c = 0"; }, $legacyCols));
+        $st = $conn->prepare(
+            "INSERT INTO paper_checklist (paper_id, items_json) VALUES (?, ?)
+             ON DUPLICATE KEY UPDATE items_json = VALUES(items_json), $resets, created_at = CURRENT_TIMESTAMP");
+        $st->bind_param('is', $paperId, $json);
+        $st->execute();
+        $st->close();
+        return;
+    }
+
+    $flags = isset($clean['legacy']) ? $clean['legacy'] : paper_checklist_flags_from_list($clean);
+    $names = array_keys($flags);
+    $update = implode(', ', array_map(function ($c) { return "$c = VALUES($c)"; }, $names));
+    $clearJson = paper_checklist_json_ready() ? ', items_json = NULL' : '';
+    $st = $conn->prepare(
+        "INSERT INTO paper_checklist (paper_id, " . implode(', ', $names) . ")
+         VALUES (?, " . implode(', ', array_fill(0, count($names), '?')) . ")
+         ON DUPLICATE KEY UPDATE $update$clearJson, created_at = CURRENT_TIMESTAMP");
+    $values = array_values($flags);
+    $st->bind_param(str_repeat('i', count($values) + 1), $paperId, ...$values);
+    $st->execute();
+    $st->close();
+}
+
+/**
+ * A paper's recorded checklist in one shape, whichever way it was written, or null
+ * when none was recorded.
+ *
+ *   groups       [['key', 'label', 'items' => [['label', 'ok'], ...]], ...]
+ *   edited       the adviser changed the ready-made list for this paper
+ *   legacy       true for a row the old form wrote
+ *   template     the list's key (null for a legacy row)
+ *   recorded_at  when the paper was approved
+ *
+ * A legacy row shows the groups the paper's format asked about, as it always did
+ * (paper_checklist_groups), the chapters group under the name of the paper's type.
+ */
+function paper_checklist_load(int $paperId, ?string $manuscriptType, ?string $paperType): ?array
+{
+    $st = db()->prepare("SELECT * FROM paper_checklist WHERE paper_id = ? ORDER BY checklist_id DESC LIMIT 1");
+    $st->bind_param('i', $paperId);
+    $st->execute();
+    $row = $st->get_result()->fetch_assoc();
+    $st->close();
+    if (!$row) return null;
+
+    $templates = paper_checklist_templates();
+    $when = $row['created_at'] ?? null;
+
+    if (!empty($row['items_json'])) {
+        $d = json_decode((string)$row['items_json'], true);
+        if (is_array($d) && !empty($d['items']) && is_array($d['items'])) {
+            $items = [];
+            foreach (array_slice($d['items'], 0, PAPER_CHECKLIST_MAX_ITEMS) as $it) {
+                $label = is_array($it) ? paper_checklist_label_clean($it['label'] ?? '') : '';
+                if ($label !== '') $items[] = ['label' => $label, 'ok' => !empty($it['ok'])];
+            }
+            if ($items) {
+                $key = (string)($d['template'] ?? 'blank');
+                if (!isset($templates[$key])) $key = 'blank';
+                return [
+                    'groups'      => [['key' => $key, 'label' => $key === 'blank' ? 'Checklist' : $templates[$key]['label'], 'items' => $items]],
+                    'edited'      => !empty($d['edited']),
+                    'legacy'      => false,
+                    'template'    => $key,
+                    'recorded_at' => $when,
+                ];
+            }
+        }
+    }
+
+    $shown   = paper_checklist_groups($manuscriptType);
+    $columns = paper_checklist_legacy_columns();
+    $groups  = [];
+    if ($shown['full']) {
+        $groups[] = ['key' => 'chapters', 'label' => paper_checklist_chapters_label($paperType),
+                     'items' => paper_checklist_legacy_items($row, $columns['chapters'])];
+    }
+    if ($shown['imrad']) {
+        $groups[] = ['key' => 'imrad', 'label' => $templates['imrad']['label'],
+                     'items' => paper_checklist_legacy_items($row, $columns['imrad'])];
+    }
+    return ['groups' => $groups, 'edited' => false, 'legacy' => true, 'template' => null, 'recorded_at' => $when];
+}
+
+/** A row of the old columns as a list of items, in the order of the map. */
+function paper_checklist_legacy_items(array $row, array $columnMap): array
+{
+    $items = [];
+    foreach ($columnMap as $col => $label) $items[] = ['label' => $label, 'ok' => !empty($row[$col])];
+    return $items;
+}
+
+/**
+ * Where the editor starts for a paper: the list as it was last recorded when there
+ * is one, otherwise the default list with nothing ticked. An old row cannot hold a
+ * list of its own, so its ticks are carried onto the default list by name.
+ */
+function paper_checklist_editor_state(?array $loaded, string $default): array
+{
+    if ($loaded && !$loaded['legacy'] && !empty($loaded['groups'][0]['items'])) {
+        return ['template' => $loaded['template'], 'items' => $loaded['groups'][0]['items']];
+    }
+    $templates = paper_checklist_templates();
+    if (!isset($templates[$default])) $default = 'imrad';
+
+    $before = [];
+    if ($loaded) {
+        $family = paper_checklist_family($default);
+        foreach ($loaded['groups'] as $g) {
+            if ($g['key'] !== $family) continue;
+            foreach ($g['items'] as $it) $before[$it['label']] = $it['ok'];
+        }
+    }
+    $items = [];
+    foreach ($templates[$default]['items'] as $label) {
+        $items[] = ['label' => $label, 'ok' => !empty($before[$label])];
+    }
+    return ['template' => $default, 'items' => $items];
+}
+
 /**
  * A link that opens a paper or one of its supporting documents.
  *
@@ -3234,6 +3600,16 @@ function schema_gaps(): array
                       . "  PRIMARY KEY (manuscript_id),\n"
                       . "  UNIQUE KEY uq_paper_format (paper_id, format)\n"
                       . ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;",
+        ];
+    }
+
+    if (!paper_checklist_json_ready()) {
+        $gaps[] = [
+            'key'    => 'checklist_items',
+            'what'   => 'paper_checklist.items_json does not exist',
+            'effect' => "The adviser's checklist is limited to the IMRaD, Undergraduate Thesis and Capstone Project lists as they stand: "
+                      . 'no Feasibility Study list, and no section can be added, removed or renamed.',
+            'sql'    => "ALTER TABLE paper_checklist\n  ADD COLUMN items_json TEXT NULL AFTER full_references;",
         ];
     }
 

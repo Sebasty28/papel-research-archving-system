@@ -326,6 +326,8 @@ html.sidebar-left .pd-side-swap .side-icon-right { display: inline-flex; }
 .pd-check-state { font-size: .6875rem; color: var(--grey); }
 .pd-check-row.is-yes .pd-check-state { color: var(--maroon); }
 .pd-check-row.is-gap .pd-check-state { color: var(--maroon); font-weight: 500; }
+/* Said once on a list the adviser changed for this paper. */
+.ck-tag { margin-left: .5rem; font-size: .6875rem; font-weight: 400; color: var(--grey); }
 
 /* A banner introduces what follows, so it always carries the gap below it
    itself: the inline margins dotted through the markup were what let it sit

@@ -142,7 +142,9 @@ def teardown(verbose=True):
     papers = [r[0] for r in H.q(
         "SELECT paper_id FROM research_papers WHERE title LIKE 'AUTOTEST%'")]
     for p in papers:
-        for t in ('approval_workflow', 'paper_checklist', 'supporting_documents',
+        # paper_manuscripts has no foreign key, so a paper's rows outlive it: a real submission
+        # (m10, m13) leaves them behind unless they are named here.
+        for t in ('approval_workflow', 'paper_checklist', 'supporting_documents', 'paper_manuscripts',
                   'paper_favorites', 'imrad_checklist', 'ai_processing_log'):
             has = H.one("SELECT COUNT(*) FROM information_schema.columns WHERE "
                         "table_schema='capstone_db' AND table_name='%s' "

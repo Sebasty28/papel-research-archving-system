@@ -126,24 +126,14 @@ $missingRequired = 0;
 foreach ($files as $f) if (!$f['href'] && $f['required']) $missingRequired++;
 
 /* ---- The checklist, as it stands ----------------------------------------- */
-$cs = $conn->prepare("SELECT * FROM paper_checklist WHERE paper_id = ? ORDER BY checklist_id DESC LIMIT 1");
-$cs->bind_param('i', $paper_id);
-$cs->execute();
-$checklist = $cs->get_result()->fetch_assoc();
-$cs->close();
+require_once ROOT_PATH . '/includes/review_checklist.php';
+$checklist = paper_checklist_load($paper_id, $paper['manuscript_type'] ?? null, $paper['paper_type'] ?? null);
 
-$chapterItems = [
-    'full_ch1' => 'Chapter 1', 'full_ch2' => 'Chapter 2', 'full_ch3' => 'Chapter 3',
-    'full_ch4' => 'Chapter 4', 'full_ch5' => 'Chapter 5', 'full_references' => 'References',
-];
-$imradItems = [
-    'imrad_intro' => 'Introduction', 'imrad_method' => 'Methodology', 'imrad_result' => 'Results',
-    'imrad_discussion' => 'Discussion', 'imrad_references' => 'References',
-];
-
-/* An IMRaD paper has no numbered chapters, so that half of the checklist is not
-   asked for at all. A full manuscript is asked about both. */
-$groups = paper_checklist_groups($paper['manuscript_type'] ?? null);
+/* Only the adviser the paper is waiting on edits the list, and the desk's approve
+   handler is what saves it. The Coordinator reads what the adviser recorded. The
+   boxes they were shown before looked editable, and nothing they changed was ever
+   kept. */
+$canEditChecklist = $isAdviser && $myQueue;
 
 /* ---- History ------------------------------------------------------------- */
 $reviewers = [];
@@ -194,27 +184,6 @@ if (paper_scope_is_partial($scopeInfo)) {
 <?php require_once ROOT_PATH.'/includes/paper_record_css.php'; ?>
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 
-/* The checklist is filled in here rather than read, so its rows are controls. */
-.rv-check-row {
-    display: flex; align-items: center; gap: .5rem;
-    padding: .25rem 0; font-size: .8125rem; color: var(--ink); cursor: pointer;
-}
-.rv-check-row input { accent-color: var(--maroon); flex: 0 0 auto; }
-.rv-check-row span { flex: 1 1 auto; }
-/* #confirmDone used to set this via a style="" attribute: dropped silently
-   by the CSP (style-src carries no 'unsafe-inline'), which is why it still
-   rendered as the browser's default blue. */
-#confirmDone { accent-color: var(--maroon); margin-top: .2rem; }
-.rv-check-head {
-    display: flex; align-items: center; justify-content: space-between; gap: .5rem;
-    font-size: .75rem; font-weight: 600; color: var(--maroon);
-    padding-bottom: .5rem; margin-bottom: .5rem; border-bottom: 1px solid var(--border);
-}
-.rv-tick-all {
-    background: none; border: none; padding: 0; cursor: pointer;
-    font-family: inherit; font-size: .6875rem; color: var(--grey); text-decoration: underline;
-}
-.rv-tick-all:hover { color: var(--maroon); }
 .rv-field { display: block; margin-top: 1.25rem; }
 .rv-field span.rv-label {
     display: block; font-size: .75rem; font-weight: 500; color: var(--ink); margin-bottom: .35rem;
@@ -419,64 +388,31 @@ if (paper_scope_is_partial($scopeInfo)) {
             <?php if (!$myQueue): ?>
                 <div class="pd-note"><span class="material-symbols-outlined">lock</span>
                     <span>Only the reviewer this paper is waiting on can change the checklist.</span></div>
-                <div class="pd-check-grid">
-                    <?php
-                    $shown = [];
-                    if ($groups['full'])  $shown[] = ['Full Manuscript', $chapterItems];
-                    if ($groups['imrad']) $shown[] = ['IMRaD Sections',  $imradItems];
-                    foreach ($shown as $group): ?>
-                        <div>
-                            <div class="pd-check-head"><?= e($group[0]) ?></div>
-                            <?php foreach ($group[1] as $col => $label): $yes = !empty($checklist[$col]); ?>
-                                <div class="pd-check-row <?= $yes ? 'is-yes' : 'is-no' ?>">
-                                    <span class="material-symbols-outlined"><?= $yes ? 'check_circle' : 'radio_button_unchecked' ?></span>
-                                    <span class="pd-check-name"><?= e($label) ?></span>
-                                    <span class="pd-check-state"><?= $yes ? 'Indicated' : 'Not indicated' ?></span>
-                                </div>
-                            <?php endforeach; ?>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
+                <?php if ($checklist): ?>
+                    <div class="pd-check-grid"><?= review_checklist_groups_html($checklist) ?></div>
+                <?php else: ?>
+                    <div class="pd-note"><span class="material-symbols-outlined">info</span>
+                        <span>No checklist has been recorded for this paper.</span></div>
+                <?php endif; ?>
             <?php else: ?>
                 <form method="post" action="<?= e($deskUrl) ?>" id="reviewForm">
                     <?= csrf_field() ?>
                     <input type="hidden" name="paper_id" value="<?= (int)$paper_id ?>">
                     <input type="hidden" name="action" id="reviewAction" value="approve">
 
-                    <div class="pd-check-grid">
-                        <?php if ($groups['full']): ?>
-                        <div>
-                            <div class="rv-check-head">
-                                <span>Full Manuscript</span>
-                                <button type="button" class="rv-tick-all" data-group="full">Tick all</button>
-                            </div>
-                            <div data-group-box="full">
-                                <?php foreach ($chapterItems as $col => $label): ?>
-                                    <label class="rv-check-row">
-                                        <input type="checkbox" name="<?= e($col) ?>" <?= !empty($checklist[$col]) ? 'checked' : '' ?>>
-                                        <span><?= e($label) ?></span>
-                                    </label>
-                                <?php endforeach; ?>
-                            </div>
-                        </div>
+                    <?php if ($canEditChecklist): ?>
+                        <?= review_checklist_editor('rvCk', review_checklist_config($checklist, $paper['manuscript_type'] ?? null, $paper['paper_type'] ?? null)) ?>
+                        <?php review_checklist_assets(); ?>
+                    <?php else: /* the Coordinator: the adviser's list, to read */ ?>
+                        <?php if ($checklist): ?>
+                            <div class="pd-note"><span class="material-symbols-outlined">verified_user</span>
+                                <span>This is the checklist your Research Adviser recorded. Only they can change it.</span></div>
+                            <div class="pd-check-grid"><?= review_checklist_groups_html($checklist) ?></div>
+                        <?php else: ?>
+                            <div class="pd-note"><span class="material-symbols-outlined">info</span>
+                                <span>Your Research Adviser did not record a checklist for this paper.</span></div>
                         <?php endif; ?>
-                        <?php if ($groups['imrad']): ?>
-                        <div>
-                            <div class="rv-check-head">
-                                <span>IMRaD Sections</span>
-                                <button type="button" class="rv-tick-all" data-group="imrad">Tick all</button>
-                            </div>
-                            <div data-group-box="imrad">
-                                <?php foreach ($imradItems as $col => $label): ?>
-                                    <label class="rv-check-row">
-                                        <input type="checkbox" name="<?= e($col) ?>" <?= !empty($checklist[$col]) ? 'checked' : '' ?>>
-                                        <span><?= e($label) ?></span>
-                                    </label>
-                                <?php endforeach; ?>
-                            </div>
-                        </div>
-                        <?php endif; ?>
-                    </div>
+                    <?php endif; ?>
 
                     <label class="rv-field">
                         <span class="rv-label" id="feedbackLabel">Note for the student (optional when approving)</span>
@@ -625,34 +561,29 @@ document.addEventListener('DOMContentLoaded', function () {
     var dlg   = document.getElementById('confirmDialog');
     var done  = document.getElementById('confirmDone');
     var yes   = document.getElementById('confirmYes');
-    var boxes = form.querySelectorAll('input[type="checkbox"]');
     var count = document.getElementById('tickCount');
 
-    function ticked() {
-        var n = 0;
-        boxes.forEach(function (b) { if (b.checked) n++; });
-        return n;
+    /* The adviser's list is an editor (includes/review_checklist.php); the
+       Coordinator's is the adviser's list as plain rows. Either way the count and
+       the "still unticked" line are read from what is on the page. */
+    var ck = window.papelChecklist ? window.papelChecklist.get('rvCk') : null;
+    function counts() {
+        if (ck) return ck.counts();
+        var rows = form.querySelectorAll('.pd-check-row');
+        return { ticked: form.querySelectorAll('.pd-check-row.is-yes').length, total: rows.length };
+    }
+    function gaps() {
+        if (ck) return ck.gaps();
+        var out = [];
+        form.querySelectorAll('.pd-check-row.is-no .pd-check-name').forEach(function (n) { out.push(n.textContent.trim()); });
+        return out;
     }
     function showCount() {
-        count.textContent = ticked() + ' of ' + boxes.length + ' checklist items ticked';
+        var c = counts();
+        count.textContent = c.total ? c.ticked + ' of ' + c.total + ' checklist items ticked' : '';
     }
-    boxes.forEach(function (b) { b.addEventListener('change', showCount); });
+    if (ck) ck.onChange(showCount);
     showCount();
-
-    form.querySelectorAll('.rv-tick-all').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            /* The button carries data-group too, so a plain [data-group=...]
-               lookup found the button itself and ticked nothing. The column of
-               checkboxes has its own attribute. */
-            var group = form.querySelector('[data-group-box="' + btn.dataset.group + '"]');
-            if (!group) return;
-            var inputs = group.querySelectorAll('input[type="checkbox"]');
-            var turnOn = Array.prototype.some.call(inputs, function (i) { return !i.checked; });
-            inputs.forEach(function (i) { i.checked = turnOn; });
-            btn.textContent = turnOn ? 'Clear all' : 'Tick all';
-            showCount();
-        });
-    });
 
     function ask(action) {
         var approving = action === 'approve';
@@ -665,13 +596,10 @@ document.addEventListener('DOMContentLoaded', function () {
             : 'This sends the paper back to the student as a draft so they can revise and submit it again.';
 
         // Name what is still unticked rather than only counting it.
-        var gaps = [];
-        boxes.forEach(function (b) {
-            if (!b.checked) gaps.push(b.parentNode.querySelector('span').textContent.trim());
-        });
+        var left = gaps();
         var gapEl = document.getElementById('confirmGaps');
-        gapEl.textContent = (approving && gaps.length)
-            ? 'Still unticked: ' + gaps.join(', ') + '. The student sees this checklist.'
+        gapEl.textContent = (approving && left.length)
+            ? (ck ? 'Still unticked: ' : 'Your Research Adviser left these unticked: ') + left.join(', ') + '. The student sees this checklist.'
             : '';
 
         document.getElementById('confirmDoneLabel').textContent = approving
@@ -690,7 +618,11 @@ document.addEventListener('DOMContentLoaded', function () {
         document.body.style.overflow = '';
     }
 
-    document.getElementById('btnApprove').addEventListener('click', function () { ask('approve'); });
+    document.getElementById('btnApprove').addEventListener('click', function () {
+        // An empty list, or two sections with one name, is said on the editor itself.
+        if (ck && !ck.valid()) return;
+        ask('approve');
+    });
     document.getElementById('btnReturn').addEventListener('click', function () {
         // Returning without saying why leaves the student guessing.
         var note = document.getElementById('reviewFeedback');

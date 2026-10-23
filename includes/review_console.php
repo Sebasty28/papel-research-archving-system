@@ -45,6 +45,7 @@ if (!isset($RC) || !is_array($RC)) {
 }
 require_once ROOT_PATH.'/config/workflow.php';
 require_once ROOT_PATH.'/config/gdrive_config.php';
+if (!empty($RC['checklist'])) require_once ROOT_PATH.'/includes/review_checklist.php';
 
 $RC += [
     'role'      => '',
@@ -774,19 +775,6 @@ html[data-view="rows"] .paper-list .card-status .paper-action { display: none; }
 .rc-field textarea:focus { outline: none; border-color: var(--maroon); }
 .rc-hint { display: block; font-size: .6875rem; color: var(--grey); margin-top: .35rem; }
 .rc-checklist { border: 1px solid var(--border); border-radius: var(--r-card, 8px); padding: .75rem .875rem; }
-.rc-check-group + .rc-check-group { margin-top: .75rem; padding-top: .75rem; border-top: 1px solid var(--border); }
-.rc-check-head {
-    display: flex; align-items: center; justify-content: space-between; gap: .5rem;
-    font-size: .75rem; font-weight: 500; color: var(--maroon); margin-bottom: .35rem;
-}
-.rc-check-all {
-    background: none; border: none; padding: 0; cursor: pointer;
-    font-family: inherit; font-size: .6875rem; color: var(--grey); text-decoration: underline;
-}
-.rc-check-all:hover { color: var(--maroon); }
-.rc-check-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: .25rem .75rem; }
-.rc-check { display: flex; align-items: center; gap: .4rem; font-size: .75rem; color: var(--ink); cursor: pointer; }
-.rc-check input { accent-color: var(--maroon); }
 
 /* The sidebar's own tools use .sidebar-link from browse_console.php, so they
    match the Browse card everywhere else on the site. Only the small print that
@@ -1220,14 +1208,14 @@ html[data-view="rows"] .paper-list .card-status .paper-action { display: none; }
                                     <button type="button" class="btn-sm-maroon js-rc-act"
                                             data-act="approve" data-paper="<?= $pid ?>"
                                             data-title="<?= e($r['title']) ?>" data-student="<?= e($r['author_name']) ?>"
-                                            data-format="<?= e((string)($r['manuscript_type'] ?? '')) ?>">
+                                            <?= !empty($RC['checklist']) ? 'data-ck-default="' . e(review_checklist_default_key($r['manuscript_type'] ?? null, $r['paper_type'] ?? null)) . '"' : '' ?>>
                                         <span class="material-symbols-outlined mi-18">check_circle</span>
                                         <?= e($RC['approve_label'] ?? 'Approve') ?>
                                     </button>
                                     <button type="button" class="btn-sm-outline js-rc-act"
                                             data-act="decline" data-paper="<?= $pid ?>"
                                             data-title="<?= e($r['title']) ?>" data-student="<?= e($r['author_name']) ?>"
-                                            data-format="<?= e((string)($r['manuscript_type'] ?? '')) ?>">
+                                            <?= !empty($RC['checklist']) ? 'data-ck-default="' . e(review_checklist_default_key($r['manuscript_type'] ?? null, $r['paper_type'] ?? null)) . '"' : '' ?>>
                                         <span class="material-symbols-outlined mi-18">undo</span>
                                         Return with feedback
                                     </button>
@@ -1444,35 +1432,13 @@ html[data-view="rows"] .paper-list .card-status .paper-action { display: none; }
         <p class="rc-lead" id="rcLead"></p>
 
         <?php if ($RC['checklist']): ?>
-        <div class="rc-checklist" id="rcChecklist">
-            <div class="rc-check-group" data-group-box="imrad">
-                <div class="rc-check-head">
-                    <span>IMRaD sections present</span>
-                    <button type="button" class="rc-check-all" data-group="imrad">Tick all</button>
-                </div>
-                <div class="rc-check-grid" data-group="imrad">
-                    <label class="rc-check"><input type="checkbox" name="imrad_intro"> Introduction</label>
-                    <label class="rc-check"><input type="checkbox" name="imrad_method"> Methodology</label>
-                    <label class="rc-check"><input type="checkbox" name="imrad_result"> Results</label>
-                    <label class="rc-check"><input type="checkbox" name="imrad_discussion"> Discussion</label>
-                    <label class="rc-check"><input type="checkbox" name="imrad_references"> References</label>
-                </div>
-            </div>
-            <div class="rc-check-group" data-group-box="full">
-                <div class="rc-check-head">
-                    <span>Full manuscript chapters</span>
-                    <button type="button" class="rc-check-all" data-group="full">Tick all</button>
-                </div>
-                <div class="rc-check-grid" data-group="full">
-                    <label class="rc-check"><input type="checkbox" name="full_ch1"> Chapter 1</label>
-                    <label class="rc-check"><input type="checkbox" name="full_ch2"> Chapter 2</label>
-                    <label class="rc-check"><input type="checkbox" name="full_ch3"> Chapter 3</label>
-                    <label class="rc-check"><input type="checkbox" name="full_ch4"> Chapter 4</label>
-                    <label class="rc-check"><input type="checkbox" name="full_ch5"> Chapter 5</label>
-                    <label class="rc-check"><input type="checkbox" name="full_references"> References</label>
-                </div>
-            </div>
+        <?php /* The same editor as the review page: the dropdown of lists and the
+                 add / remove / rename of sections for this paper. Built afresh each time
+                 the window opens, from the list suited to the paper that was clicked. */ ?>
+        <div class="rc-checklist" id="rcChecklist" data-ck="<?= e(json_encode(review_checklist_lists(), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT)) ?>">
+            <div id="rcCk"></div>
         </div>
+        <?php review_checklist_assets(); ?>
         <?php endif; ?>
 
         <label class="rc-field">
@@ -1699,6 +1665,7 @@ var dHint  = document.getElementById('rcHint');
 var dOk    = document.getElementById('rcOk');
 var dPaper = document.getElementById('rcPaperId');
 var dAct   = document.getElementById('rcAction');
+var dCk    = null;     // the checklist editor while the window is open for an approval
 
 var APPROVE_LEAD = <?= json_encode($RC['approve_lead'] ?? 'This paper moves on to the next stage of review.') ?>;
 var APPROVE_BTN  = <?= json_encode($RC['approve_label'] ?? 'Approve') ?>;
@@ -1724,16 +1691,16 @@ document.addEventListener('click', function (e) {
 
     if (dList) {
         dList.style.display = approving ? '' : 'none';
-        /* A paper written in IMRaD has no numbered chapters, so it is not asked
-           about them: an unticked "Chapter 4" would otherwise show on the
-           student's record as though part of the paper were missing. */
-        var imradOnly = (btn.dataset.format || '').toUpperCase() === 'IMRAD';
-        var fullBox = dList.querySelector('[data-group-box="full"]');
-        if (fullBox) {
-            fullBox.style.display = imradOnly ? 'none' : '';
-            fullBox.querySelectorAll('input[type="checkbox"]').forEach(function (b) {
-                if (imradOnly) b.checked = false;      // nothing hidden is submitted as ticked
-            });
+        /* Built afresh for each paper, so nothing ticked for the last one is carried
+           to this one, and from the list the server chose for it (its type and the
+           format it was filed in). A return posts no checklist at all. */
+        if (dCk) { dCk.destroy(); dCk = null; }
+        if (approving && window.papelChecklist) {
+            var cfg = JSON.parse(dList.getAttribute('data-ck'));
+            var start = cfg.lists.filter(function (l) { return l.key === btn.dataset.ckDefault; })[0] || cfg.lists[0];
+            cfg.template = start.key;
+            cfg.items = start.items.map(function (label) { return { label: label, ok: false }; });
+            dCk = window.papelChecklist.mount(document.getElementById('rcCk'), cfg);
         }
     }
 
@@ -1757,17 +1724,10 @@ document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && dlg.classList.contains('open')) { e.preventDefault(); closeDialog(); }
 });
 
-// "Tick all" for a checklist group: the common case is that everything is
-// present, and ticking eleven boxes one at a time invites skipping the read.
-dlg.addEventListener('click', function (e) {
-    var all = e.target.closest('.rc-check-all');
-    if (!all) return;
-    var grid = dlg.querySelector('.rc-check-grid[data-group="' + all.dataset.group + '"]');
-    if (!grid) return;
-    var boxes = grid.querySelectorAll('input[type="checkbox"]');
-    var turnOn = Array.prototype.some.call(boxes, function (b) { return !b.checked; });
-    Array.prototype.forEach.call(boxes, function (b) { b.checked = turnOn; });
-    all.textContent = turnOn ? 'Clear all' : 'Tick all';
+// An approval with nothing on the checklist, or two sections of one name, is said on
+// the editor and does not leave the window.
+document.getElementById('rcForm').addEventListener('submit', function (e) {
+    if (dAct.value === 'approve' && dCk && !dCk.valid()) e.preventDefault();
 });
 <?php endif; ?>
 

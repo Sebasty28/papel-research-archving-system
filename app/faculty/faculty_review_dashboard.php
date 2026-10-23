@@ -54,20 +54,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['export'])) {
     }
 
     if ($action === 'approve') {
-        // What the adviser confirmed was present, kept with the paper.
-        $flags = [];
-        foreach (['imrad_intro','imrad_method','imrad_result','imrad_discussion','imrad_references',
-                  'full_ch1','full_ch2','full_ch3','full_ch4','full_ch5','full_references'] as $f) {
-            $flags[] = isset($_POST[$f]) ? 1 : 0;
+        /* What the adviser confirmed was present, kept with the paper. It is read
+           and kept before anything moves: a list that cannot be kept sends the adviser
+           back with the reason and the paper stays where it is. Saved as an upsert, so
+           a paper approved a second time (returned by the Coordinator, revised, sent
+           again) replaces its checklist instead of failing on the one it already has. */
+        try {
+            paper_checklist_save($paper_id, paper_checklist_clean($_POST));
+        } catch (UserFacingException $ex) {
+            flash('error', $ex->getMessage());
+            header("Location: $SELF"); exit;
         }
-        $stmt = $conn->prepare(
-            "INSERT INTO paper_checklist
-                (paper_id, imrad_intro, imrad_method, imrad_result, imrad_discussion, imrad_references,
-                 full_ch1, full_ch2, full_ch3, full_ch4, full_ch5, full_references)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?)");
-        $stmt->bind_param('iiiiiiiiiiii', $paper_id, ...$flags);
-        $stmt->execute();
-        $stmt->close();
 
         add_workflow($paper_id, $u['user_id'], 'faculty', 'approved', $feedback);
         set_status($paper_id, 'pending_admin');

@@ -1,5 +1,5 @@
 {
- "built": "2026-10-23 14:28",
+ "built": "2026-10-23 20:16",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -53,7 +53,7 @@
    "lines": 1172
   },
   "app/faculty/faculty_review_dashboard.php": {
-   "lines": 169
+   "lines": 166
   },
   "app/faculty/head_review_dashboard.php": {
    "lines": 64
@@ -92,10 +92,10 @@
    "lines": 155
   },
   "app/review_paper.php": {
-   "lines": 858
+   "lines": 790
   },
   "app/student/paper_details.php": {
-   "lines": 739
+   "lines": 698
   },
   "app/student/pdf_viewer.php": {
    "lines": 331
@@ -149,7 +149,7 @@
    "lines": 176
   },
   "config/core.php": {
-   "lines": 3288
+   "lines": 3664
   },
   "config/error_handler.php": {
    "lines": 228
@@ -239,7 +239,7 @@
    "lines": 241
   },
   "includes/paper_record_css.php": {
-   "lines": 419
+   "lines": 421
   },
   "includes/password_audit_tab.php": {
    "lines": 201
@@ -262,8 +262,11 @@
   "includes/recaptcha.php": {
    "lines": 217
   },
+  "includes/review_checklist.php": {
+   "lines": 486
+  },
   "includes/review_console.php": {
-   "lines": 1780
+   "lines": 1740
   },
   "includes/scroll_jump.php": {
    "lines": 93
@@ -364,6 +367,9 @@
   "scripts/migrations/run_analytics_migration.php": {
    "lines": 20
   },
+  "scripts/migrations/run_checklist_items_migration.php": {
+   "lines": 45
+  },
   "scripts/migrations/run_checklist_migration.php": {
    "lines": 29
   },
@@ -460,6 +466,9 @@
   "scripts/utilities/sweep_section_images.php": {
    "lines": 73
   },
+  "tests/_checklist_unit.php": {
+   "lines": 244
+  },
   "tests/_failure_unit.php": {
    "lines": 70
   },
@@ -485,7 +494,7 @@
    "lines": 152
   },
   "tests/fixtures.py": {
-   "lines": 200
+   "lines": 202
   },
   "tests/harness.py": {
    "lines": 306
@@ -500,7 +509,10 @@
    "lines": 249
   },
   "tests/m13_old_schema.py": {
-   "lines": 485
+   "lines": 566
+  },
+  "tests/m14_review_checklist.py": {
+   "lines": 288
   },
   "tests/m1_auth.py": {
    "lines": 309
