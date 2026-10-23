@@ -424,7 +424,7 @@ if ($papers) {
     $fb->close();
 
     $dq = $conn->prepare(
-        "SELECT doc_id, paper_id, document_type, document_name, file_path, gdrive_file_id
+        "SELECT doc_id, paper_id, document_type, " . supporting_doc_name_sql() . ", file_path, gdrive_file_id
          FROM supporting_documents WHERE paper_id IN ($in) ORDER BY doc_id ASC");
     $dq->bind_param($bt, ...$ids); $dq->execute();
     foreach ($dq->get_result()->fetch_all(MYSQLI_ASSOC) as $r) {

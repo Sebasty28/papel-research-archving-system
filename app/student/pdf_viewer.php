@@ -31,7 +31,7 @@ if ($qPaper > 0 || $qDoc > 0 || $qMs > 0) {
     $doc  = null;
     $ms   = null;
     if ($qDoc > 0) {
-        $st = $conn->prepare("SELECT paper_id, document_type, document_name FROM supporting_documents WHERE doc_id = ?");
+        $st = $conn->prepare("SELECT paper_id, document_type, " . supporting_doc_name_sql() . " FROM supporting_documents WHERE doc_id = ?");
         $st->bind_param('i', $qDoc);
         $st->execute();
         $doc = $st->get_result()->fetch_assoc();

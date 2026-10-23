@@ -1,5 +1,5 @@
 {
- "built": "2026-10-23 12:35",
+ "built": "2026-10-23 13:54",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -116,13 +116,13 @@
    "lines": 26
   },
   "app/student/student_upload.php": {
-   "lines": 433
+   "lines": 435
   },
   "app/student/student_upload_ai.php": {
-   "lines": 9465
+   "lines": 9477
   },
   "app/student/upload_diagnostics.php": {
-   "lines": 196
+   "lines": 235
   },
   "app/support_requests.php": {
    "lines": 289
@@ -149,10 +149,10 @@
    "lines": 176
   },
   "config/core.php": {
-   "lines": 3169
+   "lines": 3288
   },
   "config/error_handler.php": {
-   "lines": 194
+   "lines": 228
   },
   "config/gdrive_config.php": {
    "lines": 750
@@ -317,7 +317,7 @@
    "lines": 851
   },
   "pages/error_page.php": {
-   "lines": 190
+   "lines": 227
   },
   "pages/gdrive_callback.php": {
    "lines": 37
@@ -472,8 +472,14 @@
   "tests/_mint.php": {
    "lines": 1
   },
+  "tests/_old_schema_prepend.php": {
+   "lines": 25
+  },
+  "tests/_old_schema_probe.php": {
+   "lines": 42
+  },
   "tests/_scope_probe.php": {
-   "lines": 120
+   "lines": 140
   },
   "tests/_scope_unit.php": {
    "lines": 152
@@ -492,6 +498,9 @@
   },
   "tests/m12_storage_folder.py": {
    "lines": 249
+  },
+  "tests/m13_old_schema.py": {
+   "lines": 485
   },
   "tests/m1_auth.py": {
    "lines": 309

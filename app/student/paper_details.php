@@ -94,7 +94,7 @@ $expected = [
    manuscript is one file or two (IMRAD and Full Manuscript), so it comes from
    paper_manuscript_entries() and is listed ahead of the documents. */
 $found = [];
-$ds = $conn->prepare("SELECT doc_id, document_type, document_name, file_path, gdrive_file_id FROM supporting_documents WHERE paper_id = ? ORDER BY doc_id ASC");
+$ds = $conn->prepare("SELECT doc_id, document_type, " . supporting_doc_name_sql() . ", file_path, gdrive_file_id FROM supporting_documents WHERE paper_id = ? ORDER BY doc_id ASC");
 $ds->bind_param('i', $paper_id);
 $ds->execute();
 foreach ($ds->get_result()->fetch_all(MYSQLI_ASSOC) as $d) {

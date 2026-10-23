@@ -10,6 +10,12 @@
  *
  * Signed-in only, and it prints no secret: a key is reported as present or
  * absent and by length, never by value.
+ *
+ * Staff also get a Database section: the server version, whether it is strict,
+ * and which schema changes the code expects that this copy of the database does
+ * not have yet (schema_gaps()), with the SQL that supplies each. A copy with no
+ * shell cannot run the migration scripts, and without this the first sign of a
+ * missing column was a 500 page on the adviser's desk.
  */
 require_once '../../config/core.php';
 require_role(['student', 'faculty', 'admin', 'super_admin', 'head_academic', 'librarian']);
@@ -60,6 +66,21 @@ foreach (['GROQ_API_KEY', 'GROQ_API_KEY_UPLOAD', 'GROQ_API_KEY_UPLOAD_2'] as $k)
 }
 $line('AI_PROXY_URL', defined('AI_PROXY_URL') && AI_PROXY_URL !== '' ? AI_PROXY_URL : '(not set)');
 
+/* Staff only. A student has no use for the schema, and it is not theirs to read. */
+$isStaff = in_array((string)(current_user()['user_role'] ?? ''), ['faculty', 'admin', 'super_admin', 'head_academic', 'librarian'], true);
+$dbRows  = [];
+$gaps    = [];
+if ($isStaff) {
+    $dbLine = function (string $label, $value) use (&$dbRows) { $dbRows[] = sprintf('%-28s %s', $label . ':', $value); };
+    $info   = db()->query('SELECT VERSION() AS v, @@sql_mode AS m')->fetch_assoc() ?: ['v' => '?', 'm' => ''];
+    $strict = (bool)preg_match('/STRICT_(TRANS|ALL)_TABLES/', (string)$info['m']);
+    $dbLine('database server', $info['v']);
+    $dbLine('sql_mode', $info['m'] !== '' ? $info['m'] : '(empty)');
+    $dbLine('strict mode', $strict ? 'yes, a value a column cannot hold is refused' : 'no, a value a column cannot hold is changed quietly');
+    $gaps = schema_gaps();
+    $dbLine('schema gaps', count($gaps) ?: 'none');
+}
+
 $apiHost = parse_url(defined('GROQ_API_URL') ? GROQ_API_URL : 'https://api.groq.com', PHP_URL_HOST);
 $ip = gethostbyname($apiHost);
 $line('dns ' . $apiHost, $ip === $apiHost ? 'FAILED to resolve' : $ip);
@@ -87,6 +108,24 @@ if (function_exists('curl_init')) {
 <h1>Upload diagnostics</h1>
 <h2>Server</h2>
 <pre><?= htmlspecialchars(implode(PHP_EOL, $rows), ENT_QUOTES, 'UTF-8') ?></pre>
+
+<?php if ($isStaff): ?>
+<h2>Database</h2>
+<pre><?= htmlspecialchars(implode(PHP_EOL, $dbRows), ENT_QUOTES, 'UTF-8') ?></pre>
+<?php if (!$gaps): ?>
+<p>No gaps: none of the schema changes made since 14 October 2026 is missing. (Anything older is not checked here.)</p>
+<?php else: ?>
+<p>This database is behind the code. Each gap below is a page that fails or a feature that
+quietly does less. Run <code>scripts/migrations/sql/2026-10-21_catch_up.sql</code> from the
+repository in phpMyAdmin (SQL tab, with this site's database selected), then reload this page.
+The statements it holds are these, if you would rather run one at a time:</p>
+<?php foreach ($gaps as $g): ?>
+<p><strong><?= htmlspecialchars($g['what'], ENT_QUOTES, 'UTF-8') ?></strong><br>
+<?= htmlspecialchars($g['effect'], ENT_QUOTES, 'UTF-8') ?></p>
+<pre><?= htmlspecialchars($g['sql'], ENT_QUOTES, 'UTF-8') ?></pre>
+<?php endforeach; ?>
+<?php endif; ?>
+<?php endif; ?>
 
 <h2>What does this host refuse?</h2>
 <p>Each row is one POST to this page, differing in a single way. A row marked

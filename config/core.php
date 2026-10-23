@@ -3122,6 +3122,125 @@ function supporting_doc_label(?string $type, ?string $name = null): string {
 }
 
 /**
+ * Whether supporting_documents has its document_name column.
+ *
+ * It was added by run_supporting_doc_type_repair.php on 21 October, and a copy of
+ * the site only has it if someone ran that. Staging was set up a week earlier, has
+ * no shell to run the script from and does not receive scripts/ either, so for it
+ * every page that names the column in a query failed with "Unknown column", and the
+ * adviser's desk, which does so as soon as a paper is waiting on it, ended in a 500.
+ * The queries ask this first, so a server that is behind shows documents under
+ * their type's name rather than not at all. scripts/migrations/sql/ holds the same
+ * change as SQL, for phpMyAdmin.
+ */
+function supporting_documents_have_name(): bool
+{
+    static $has = null;
+    if ($has === null) {
+        $r = db()->query("SHOW COLUMNS FROM supporting_documents LIKE 'document_name'");
+        $has = $r && $r->num_rows > 0;
+    }
+    return $has;
+}
+
+/** The document_name entry of a select list: the column, or NULL standing in for it where there is none. */
+function supporting_doc_name_sql(): string
+{
+    return supporting_documents_have_name() ? 'document_name' : 'NULL AS document_name';
+}
+
+/**
+ * The type to write for a supporting document.
+ *
+ * On a server the repair migration has not reached, document_type is still an ENUM
+ * of the original four, and a value outside it is stored as an empty string on a
+ * lenient server and refused on a strict one (the diagnostics page says which this
+ * is): either way the copyright document was lost, or the submission failed at its
+ * very last step. Such a document is filed as "other" instead, which keeps the file
+ * and the submission, and the catch-up (the migration script or the SQL file) reads
+ * the real type back out of the file's name when it is eventually run.
+ */
+function supporting_doc_type_for_storage(string $type): string
+{
+    static $allowed = false;      // false: not read yet. null: not an ENUM, so anything fits.
+    if ($allowed === false) {
+        $allowed = null;
+        $r   = db()->query("SHOW COLUMNS FROM supporting_documents LIKE 'document_type'");
+        $col = $r ? $r->fetch_assoc() : null;
+        if ($col && stripos((string)$col['Type'], 'enum(') === 0
+                 && preg_match_all("/'([^']*)'/", (string)$col['Type'], $m)) {
+            $allowed = $m[1];
+        }
+    }
+    if ($allowed === null || in_array($type, $allowed, true)) return $type;
+
+    error_log("supporting_documents.document_type cannot hold '$type' on this server (run_supporting_doc_type_repair.php has not been applied); filed as 'other'.");
+    return in_array('other', $allowed, true) ? 'other' : (string)$allowed[0];
+}
+
+/**
+ * What this copy of the database is missing that the code expects, with the SQL
+ * that supplies it.
+ *
+ * Schema changes reach other copies of the site as a script in scripts/migrations/
+ * or a .sql export, and a copy that has no shell cannot run the first (scripts/ is
+ * deliberately not deployed: several of the older ones have no guard and would be
+ * reachable by anyone). So the check is in the application, where a person with no
+ * shell can read it, and the statements are given here ready to paste into
+ * phpMyAdmin. The same statements are in scripts/migrations/sql/.
+ *
+ * Each entry: key, what (the gap), effect (what a server in this state does), sql.
+ * Empty when nothing is missing. Only the schema changes since 14 October are
+ * listed: anything earlier is in the export staging was built from.
+ */
+function schema_gaps(): array
+{
+    $gaps = [];
+
+    $type = db()->query("SHOW COLUMNS FROM supporting_documents LIKE 'document_type'");
+    $col  = $type ? $type->fetch_assoc() : null;
+    if ($col && stripos((string)$col['Type'], 'enum(') === 0) {
+        $gaps[] = [
+            'key'    => 'document_type',
+            'what'   => 'supporting_documents.document_type is still an ENUM of four values (' . $col['Type'] . ')',
+            'effect' => 'The copyright document cannot be stored under its own name, and a paper that carries one '
+                      . 'is filed with it as "Other Document".',
+            'sql'    => "ALTER TABLE supporting_documents\n  MODIFY document_type VARCHAR(50) NOT NULL DEFAULT 'other';",
+        ];
+    }
+
+    if (!supporting_documents_have_name()) {
+        $gaps[] = [
+            'key'    => 'document_name',
+            'what'   => 'supporting_documents.document_name does not exist',
+            'effect' => 'A document a student names themselves loses its name and shows as "Other Document".',
+            'sql'    => "ALTER TABLE supporting_documents\n  ADD COLUMN document_name VARCHAR(255) NULL AFTER document_type;",
+        ];
+    }
+
+    if (!paper_manuscripts_ready()) {
+        $gaps[] = [
+            'key'    => 'paper_manuscripts',
+            'what'   => 'The table paper_manuscripts does not exist',
+            'effect' => 'A paper cannot be handed in as both IMRAD and Full Manuscript; each keeps its one file in its own columns.',
+            'sql'    => "CREATE TABLE IF NOT EXISTS paper_manuscripts (\n"
+                      . "  manuscript_id  INT(11)      NOT NULL AUTO_INCREMENT,\n"
+                      . "  paper_id       INT(11)      NOT NULL,\n"
+                      . "  format         VARCHAR(20)  NOT NULL,\n"
+                      . "  file_path      VARCHAR(500) NOT NULL DEFAULT '',\n"
+                      . "  gdrive_file_id VARCHAR(255) DEFAULT NULL,\n"
+                      . "  file_size      BIGINT(20)   DEFAULT NULL,\n"
+                      . "  uploaded_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,\n"
+                      . "  PRIMARY KEY (manuscript_id),\n"
+                      . "  UNIQUE KEY uq_paper_format (paper_id, format)\n"
+                      . ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;",
+        ];
+    }
+
+    return $gaps;
+}
+
+/**
  * Answers a POST whose body PHP discarded for exceeding post_max_size.
  *
  * Only fires when the body really was dropped: a form content type with

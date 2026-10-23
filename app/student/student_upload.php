@@ -172,8 +172,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     if (!$docGdriveId) {
                         throw new Exception("Failed to upload supporting document ($type) to Google Drive.");
                     }
+                    // A server that has not run the document_type repair cannot hold every kind; this files it under one it can.
+                    $storedType = supporting_doc_type_for_storage($type);
                     $st = $conn->prepare("INSERT INTO supporting_documents (paper_id, document_type, file_path, gdrive_file_id) VALUES (?,?,?,?)");
-                    $st->bind_param('isss', $paper_id, $type, $fullUrlRel, $docGdriveId);
+                    $st->bind_param('isss', $paper_id, $storedType, $fullUrlRel, $docGdriveId);
                     $st->execute();
                     
                     // Drive has it and the row is written, so the staging copy can go.

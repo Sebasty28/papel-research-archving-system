@@ -35,9 +35,46 @@ function log_error_detail(string $ref, string $type, string $message, string $fi
 }
 
 /**
- * Show a generic error response (HTML or JSON based on request type)
+ * The cause of a failure, worded for someone testing a copy of the site.
+ *
+ * Null on production, which must never say what went wrong, and null for a
+ * UserFacingException, whose message was written for the reader and is already
+ * in front of them. Anywhere else: the class, the message, where it happened,
+ * and the error wrapped inside it when there is one. A catch-all page that names
+ * no cause is right for a live site and a trap on staging, where the one place
+ * the cause is written down is a server log that nobody testing can open.
  */
-function show_safe_error(string $ref, int $httpCode = 500): void {
+function error_detail_for(\Throwable $e): ?string {
+    if (!defined('APP_ENV') || APP_ENV === 'production' || $e instanceof UserFacingException) {
+        return null;
+    }
+    $detail = get_class($e) . ': ' . $e->getMessage()
+        . ' [' . basename($e->getFile()) . ':' . $e->getLine() . ']';
+    /* The error that was wrapped, when there is one. A Drive upload fails with
+       a sentence written for the reader, and the real reason (a refused token,
+       a missing folder) is the exception inside it. */
+    for ($inner = $e->getPrevious(); $inner && strlen($detail) < 380; $inner = $inner->getPrevious()) {
+        $detail .= ' <- ' . get_class($inner) . ': ' . $inner->getMessage();
+    }
+    return substr($detail, 0, 500);
+}
+
+/** The same for an error that is not an exception (a fatal caught at shutdown). */
+function error_detail_plain(string $type, string $message, string $file, int $line): ?string {
+    if (!defined('APP_ENV') || APP_ENV === 'production') {
+        return null;
+    }
+    return substr($type . ': ' . $message . ' [' . basename($file) . ':' . $line . ']', 0, 500);
+}
+
+/**
+ * Show a generic error response (HTML or JSON based on request type)
+ *
+ * $detail is the cause, already worded by error_detail_for() or
+ * error_detail_plain(), which return null on production. It reaches the page and
+ * the JSON only when it is given, so the production response is unchanged.
+ */
+function show_safe_error(string $ref, int $httpCode = 500, ?string $detail = null): void {
     // Don't send headers if they've already been sent
     if (!headers_sent()) {
         http_response_code($httpCode);
@@ -63,7 +100,7 @@ function show_safe_error(string $ref, int $httpCode = 500): void {
             'error' => 'An unexpected error occurred. Please try again.',
             'message' => 'An unexpected error occurred. Please try again.',
             'reference' => $ref
-        ]);
+        ] + ($detail !== null ? ['detail' => $detail] : []));
     } else {
         // Try to include the styled error page
         $errorPage = __DIR__ . '/../pages/error_page.php';
@@ -71,6 +108,7 @@ function show_safe_error(string $ref, int $httpCode = 500): void {
             // Make ref available to the error page
             $error_reference = $ref;
             $error_http_code = $httpCode;
+            $error_detail    = $detail;
             include $errorPage;
         } else {
             // Minimal fallback
@@ -78,6 +116,9 @@ function show_safe_error(string $ref, int $httpCode = 500): void {
             echo '<h1>Something went wrong</h1>';
             echo '<p>An unexpected error occurred. Please try again later.</p>';
             echo '<p><strong>Reference:</strong> ' . htmlspecialchars($ref) . '</p>';
+            if ($detail !== null) {
+                echo '<p><strong>Cause:</strong> ' . htmlspecialchars($detail) . '</p>';
+            }
             echo '</body></html>';
         }
     }
@@ -107,7 +148,7 @@ function custom_error_handler(int $errno, string $errstr, string $errfile, int $
     // Only show error page for fatal-level errors
     // Warnings and notices are logged silently
     if (in_array($errno, [E_ERROR, E_USER_ERROR])) {
-        show_safe_error($ref);
+        show_safe_error($ref, 500, error_detail_plain($type, $errstr, $errfile, $errline));
     }
 
     // Return true to prevent PHP's default error handler
@@ -127,7 +168,7 @@ function custom_exception_handler(\Throwable $exception): void {
         $exception->getLine(),
         $exception->getTraceAsString()
     );
-    show_safe_error($ref);
+    show_safe_error($ref, 500, error_detail_for($exception));
 }
 
 /**
@@ -138,7 +179,7 @@ function custom_shutdown_handler(): void {
     if ($error !== null && in_array($error['type'], [E_ERROR, E_CORE_ERROR, E_COMPILE_ERROR, E_PARSE])) {
         $ref = generate_error_ref();
         log_error_detail($ref, 'Fatal Error (Shutdown)', $error['message'], $error['file'], $error['line']);
-        show_safe_error($ref);
+        show_safe_error($ref, 500, error_detail_plain('Fatal Error', $error['message'], $error['file'], $error['line']));
     }
 }
 
@@ -178,16 +219,9 @@ function safe_error_message(\Throwable $e, string $userMessage = 'An unexpected 
         'message' => $userMessage,
         'reference' => $ref
     ];
-    if (defined('APP_ENV') && APP_ENV !== 'production' && !($e instanceof UserFacingException)) {
-        $detail = get_class($e) . ': ' . $e->getMessage()
-            . ' [' . basename($e->getFile()) . ':' . $e->getLine() . ']';
-        /* The error that was wrapped, when there is one. A Drive upload fails with
-           a sentence written for the reader, and the real reason (a refused token,
-           a missing folder) is the exception inside it. */
-        for ($inner = $e->getPrevious(); $inner && strlen($detail) < 380; $inner = $inner->getPrevious()) {
-            $detail .= ' <- ' . get_class($inner) . ': ' . $inner->getMessage();
-        }
-        $out['detail'] = substr($detail, 0, 500);
+    $detail = error_detail_for($e);
+    if ($detail !== null) {
+        $out['detail'] = $detail;
     }
     return $out;
 }

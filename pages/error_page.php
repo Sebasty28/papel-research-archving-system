@@ -3,9 +3,13 @@
  * Custom Error Page
  * Shows a user-friendly error with reference ID only.
  * Variables expected: $error_reference, $error_http_code
+ * Optional: $error_detail, the cause. Only a copy of the site that is not
+ * production is ever given one (see error_detail_for() in error_handler.php), so
+ * production shows the reference alone.
  */
 $error_reference = $error_reference ?? 'UNKNOWN';
 $error_http_code = $error_http_code ?? 500;
+$error_detail    = $error_detail ?? null;
 $app_name = defined('APP_NAME') ? APP_NAME : 'PAPEL';
 $base_url = defined('BASE_URL') ? BASE_URL : '/capstone';
 
@@ -126,6 +130,33 @@ $description = $descriptions[$error_http_code] ?? 'An unexpected error occurred.
     margin-bottom: 2rem;
     border: 1px solid #e2e8f0;
   }
+  /* The cause, on a copy of the site that is not the live one. Left-aligned and
+     allowed to wrap anywhere: a SQL error runs to one long unbroken name. */
+  .error-detail {
+    text-align: left;
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    color: #7c2d12;
+    border-radius: var(--r-card, 8px);
+    padding: 0.75rem 1rem;
+    margin-bottom: 2rem;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+  .error-detail strong {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .error-detail code {
+    font-family: 'Courier New', monospace;
+    color: inherit;
+  }
+  /* The page is centred and does not scroll, which would cut a long cause off. */
+  body.has-detail { overflow-y: auto; }
   .error-actions {
     display: flex;
     gap: 1rem;
@@ -173,12 +204,18 @@ $description = $descriptions[$error_http_code] ?? 'An unexpected error occurred.
 </style>
 <?php require_once __DIR__ . '/../includes/focus_ring.php'; ?>
 </head>
-<body>
+<body<?= $error_detail !== null ? ' class="has-detail"' : '' ?>>
 <div class="error-container">
     <div class="error-code"><?= (int)$error_http_code ?></div>
     <h1 class="error-title"><?= htmlspecialchars($title) ?></h1>
     <p class="error-description"><?= htmlspecialchars($description) ?></p>
     <div class="error-ref">Reference: <?= htmlspecialchars($error_reference) ?></div>
+    <?php if ($error_detail !== null && $error_detail !== ''): ?>
+    <div class="error-detail">
+        <strong>Cause (shown because this is not the live site)</strong>
+        <code><?= htmlspecialchars($error_detail) ?></code>
+    </div>
+    <?php endif; ?>
     <div class="error-actions">
         <a href="javascript:history.back()" class="btn-back">← Go Back</a>
         <a href="<?= htmlspecialchars($base_url) ?>" class="btn-home">Home</a>

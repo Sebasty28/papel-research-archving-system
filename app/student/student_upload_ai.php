@@ -974,9 +974,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
             }
             $driveMade[] = $docGdriveId;
 
-            // document_type is a VARCHAR now, so 'copyright_doc' is kept as it is written.
+            /* document_type is a VARCHAR now, so 'copyright_doc' is kept as it is
+               written. A server that has not run the repair still has the old ENUM,
+               which does not list it: there that is a failed insert (PHP 8.1+) or an
+               empty string (8.0), and either way a submission that cannot be filed.
+               The helper files the document under a kind the column can hold. */
+            $storedType = supporting_doc_type_for_storage($docType);
             $st = $conn->prepare("INSERT INTO supporting_documents (paper_id,document_type,file_path,gdrive_file_id) VALUES (?,?,?,?)");
-            $st->bind_param('isss', $paper_id, $docType, $fullUrlRel, $docGdriveId);
+            $st->bind_param('isss', $paper_id, $storedType, $fullUrlRel, $docGdriveId);
             if (!$st->execute()) throw new Exception('Database insert failed.');
 
             // Drive has it and the row is written, so the staging copy can go.
@@ -1011,8 +1016,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
           /* Kept as 'other', with the name the student typed beside it. The name
              used to be written into document_type, an ENUM with no such value,
              which stored an empty string and lost the name. */
-          $st = $conn->prepare("INSERT INTO supporting_documents (paper_id,document_type,document_name,file_path,gdrive_file_id) VALUES (?,'other',?,?,?)");
-          $st->bind_param('isss', $paper_id, $otherName, $fullUrlRel, $otherGdriveId);
+          $otherStored = supporting_doc_type_for_storage('other');
+          if (supporting_documents_have_name()) {
+              $st = $conn->prepare("INSERT INTO supporting_documents (paper_id,document_type,document_name,file_path,gdrive_file_id) VALUES (?,?,?,?,?)");
+              $st->bind_param('issss', $paper_id, $otherStored, $otherName, $fullUrlRel, $otherGdriveId);
+          } else {
+              // No document_name column yet on this server (the repair has not run): file it without the name.
+              $st = $conn->prepare("INSERT INTO supporting_documents (paper_id,document_type,file_path,gdrive_file_id) VALUES (?,?,?,?)");
+              $st->bind_param('isss', $paper_id, $otherStored, $fullUrlRel, $otherGdriveId);
+          }
           if (!$st->execute()) throw new Exception('Database insert failed.');
 
           // Drive has it and the row is written, so the staging copy can go.

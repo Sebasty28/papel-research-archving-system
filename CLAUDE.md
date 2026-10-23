@@ -209,6 +209,13 @@ own "Upload failed:" and dropped the reference.
 - PHP 8.1+ makes mysqli **throw** on a failed query; 8.0 (here) stays silent and
   returns false. Staging runs 8.4, so a statement that fails quietly here can end a
   request there.
+- **The 500 page and the JSON error say the cause too, off production.** An uncaught
+  exception used to end as a styled page with a reference and nothing else, so a failure
+  on staging could only be read from a server log nobody testing can open.
+  `show_safe_error()` now takes the cause as a third argument, built by
+  `error_detail_for()` (an exception) or `error_detail_plain()` (a fatal caught at
+  shutdown); both return null on production and for a `UserFacingException`.
+  `pages/error_page.php` shows it in a "Cause" box and the JSON branch adds `detail`.
 
 **The first real cause, on staging, was the storage folder.** Drive was connected, and
 every paper still failed: the cause the dialog finally showed was Drive answering
@@ -233,6 +240,43 @@ storage folder, which is **different on each copy** and must be one that connect
 account can edit. Open the folder in that account's Drive to be sure before pasting it.
 A deploy leaves `.env` and `config/gdrive_token.json` alone (see
 `.github/workflows/deploy-staging.yml`), so they have to exist on the server already.
+
+### A copy of the database can be behind the code
+
+Staging was built from a database export on 14 October. Two schema changes came a
+week later (`supporting_documents.document_type` became a `VARCHAR` and gained
+`document_name`; `paper_manuscripts` was created), and staging has **no shell to run a
+migration script from**. `scripts/**` is not deployed either (`deploy-staging.yml`), and
+it must stay that way: several of the older scripts have no web guard. So its database
+stayed as it was, five queries named `document_name`, and the Research Adviser's desk
+ended in the "Something Went Wrong" page for any adviser with a paper waiting. Nothing
+showed it here, where the migration had run. The first sign was a faculty login that
+"went to an error".
+
+A query that names a column or table a migration added breaks on every copy that has
+not run it. So a migration ships with four things, not one:
+
+- **The structure** in `database/schema.sql`, so a copy built from now on is right.
+- **The SQL**, in `scripts/migrations/sql/`, for phpMyAdmin (the only tool such a host
+  gives you). Each step checks `information_schema` first and skips itself, so it is
+  safe to run twice, and the file ends with a line saying what it did.
+- **A gap check** in `schema_gaps()` (`config/core.php`): what is missing, what that
+  does to the site, and the statement that closes it. Staff see it under "Database" on
+  `app/student/upload_diagnostics.php`, which reads "No gaps" once the SQL has run.
+- **A tolerant path** until every copy is known to be caught up. Ask
+  `supporting_documents_have_name()` or use `supporting_doc_name_sql()` before naming
+  the column in a SELECT, and `supporting_doc_type_for_storage()` before writing a kind
+  the old ENUM cannot hold (it files the document as `other` and logs why). Remove the
+  tolerance only when nobody is behind.
+
+**phpMyAdmin looks at the last statement of a pasted script.** If that statement reads
+from a database (`FROM information_schema.COLUMNS`), it switches to that database before
+running *any* of the script, so every `DATABASE()` above it answered `information_schema`,
+step 1 skipped itself, and step 2 was refused with `#1044 Access denied ... to database
+'information_schema'`. The mysql client does not do this, which is why it passed there.
+End such a script with a statement that reads no table (the catch-up file's closing
+`SELECT CONCAT(...)` of session variables). Test a pasted script in phpMyAdmin itself, not
+only with `mysql < file.sql`.
 
 ### `bind_param` type-string length
 
@@ -499,8 +543,12 @@ database, short code (`BSIT`) in tables and chips.
 
 ## Database
 
-**Not in the repository.** Schema changes are shared as a `.sql` export or a
-migration script in `scripts/migrations/`.
+The data is not in the repository. The **structure** is: `database/schema.sql` (tables
+only, no data) is what a new copy of the site imports (phpMyAdmin, pick the database,
+Import; or `php scripts/setup.php`), and staging was built from it on 14 October. After a
+migration, export the structure again so a fresh copy comes out right. A copy that was
+built *before* the migration has to be brought up to date by hand: a migration script in
+`scripts/migrations/`, or, where there is no shell, the SQL in `scripts/migrations/sql/`.
 
 Migrations are plain PHP, safe to run twice, and idempotent — they check whether
 the column exists first. Run them from the CLI:
@@ -522,6 +570,13 @@ Run the last two on any other server before it takes this code. Until
 `paper_manuscripts` exists the pages fall back to the paper's own columns and
 the upload page refuses a paper ticked both ways (and says so), so nothing
 breaks, but nothing can be handed in twice either.
+
+A server with no shell (staging) cannot run those. `scripts/migrations/sql/2026-10-21_catch_up.sql`
+does the last two in plain SQL for phpMyAdmin: SQL tab, with the site's database selected,
+paste, Go. It is safe to run twice, repairs the rows already written, and closes with a
+line per step saying what it did. It was checked against the PHP migrations (same tables,
+same rows) and by pasting it into phpMyAdmin itself. See "A copy of the database can be
+behind the code" under Traps before adding the next one.
 
 Papers deleted from `research_papers` leave rows behind in `approval_workflow`,
 `paper_checklist`, `supporting_documents` and `paper_manuscripts`. `papers_archive` is *meant* to
@@ -571,6 +626,17 @@ user and time) in a `finally`, with a copy kept in the system temp folder
 only ever read. The test client's timeout is 180 seconds because a real submission is a
 dozen sequential Drive calls and a slow connection makes that over a minute.
 
+`tests/m13_old_schema.py` is the companion for a database that is behind the code. It
+copies the live database into a scratch one (`papel_m13`), puts it back to its 14 October
+shape, and serves the same code from a second PHP server (`php -S 127.0.0.1:8093`) pointed
+at the copy with mysqli throwing as it does from PHP 8.1. It then fills the adviser's desk,
+files papers with the copyright document and a named extra one (three real Drive uploads in
+all, removed afterwards), runs the catch-up SQL, and files again. The live database is never
+written to. `tests/_old_schema_prepend.php` is what points that server, and the CLI probes,
+at the scratch database: `auto_prepend_file` is **not** run for `php -r`, so a probe has to
+be a script file. If a run is killed, drop `papel_m13` and stop the `php.exe` on port 8093
+by its PID.
+
 ### When there is no running app (cloud and web sessions)
 
 Claude Code on the web, scheduled cloud agents and `/code-review ultra` all run
@@ -618,6 +684,12 @@ describe the dev box, not the cloud checkout.
 
 ## Known gaps
 
+- **Staging's database is behind the code until `scripts/migrations/sql/2026-10-21_catch_up.sql`
+  has been run there.** The pages work around the gaps (the adviser's desk no longer fails),
+  but the copyright document is filed as "Other Document", a student's name for an extra
+  document is lost, and a paper cannot be handed in as both IMRAD and Full Manuscript. Open
+  `app/student/upload_diagnostics.php` as staff: "Database" reads "No gaps" once it is done.
+  Delete this entry then.
 - **`time_to_approval` is only written from now on.** `PaperService` stamps it
   on the Coordinator's approval, so the tile fills for papers approved since
   that was added. Papers approved before it have no figure and never will.

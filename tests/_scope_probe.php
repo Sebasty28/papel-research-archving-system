@@ -23,6 +23,26 @@ $conn = db();
 
 function out($v): void { echo json_encode($v, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), "\n"; exit(0); }
 
+/** True when a Drive folder has a file in it at any depth (a sub-folder alone does not count). */
+function folder_tree_has_files(Google_Service_Drive $service, string $folderId): bool
+{
+    $page = null;
+    do {
+        $r = $service->files->listFiles([
+            'q'         => "'" . $folderId . "' in parents and trashed=false",
+            'fields'    => 'nextPageToken,files(id,mimeType)',
+            'pageSize'  => 100,
+            'pageToken' => $page,
+        ]);
+        foreach ($r->getFiles() as $kid) {
+            if ($kid->getMimeType() !== 'application/vnd.google-apps.folder') { return true; }
+            if (folder_tree_has_files($service, $kid->getId())) { return true; }
+        }
+        $page = $r->getNextPageToken();
+    } while ($page);
+    return false;
+}
+
 if ($mode === 'paper') {
     $id = (int)($argv[2] ?? 0);
     foreach (['research_papers', 'papers_archive'] as $table) {
@@ -107,11 +127,11 @@ if ($mode === 'drive_clean') {
     ]);
     foreach ($folders->getFiles() as $f) {
         if (strpos($f->getName(), 'AUTOTEST') !== 0) { continue; }
-        $kids = $service->files->listFiles([
-            'q' => "'" . $f->getId() . "' in parents and trashed=false",
-            'fields' => 'files(id)', 'pageSize' => 1,
-        ]);
-        if (count($kids->getFiles()) === 0 && delete_from_gdrive($f->getId())) { $deleted['folders']++; }
+        /* Empty, or holding nothing but empty folders: a paper that carried supporting
+           documents leaves its "Supporting Documents" folder behind inside the one it
+           made, so a check for no children at all never reached it. Anything with a
+           file anywhere beneath it is left alone. */
+        if (!folder_tree_has_files($service, $f->getId()) && delete_from_gdrive($f->getId())) { $deleted['folders']++; }
     }
     out($deleted);
 }
