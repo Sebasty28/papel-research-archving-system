@@ -126,6 +126,25 @@ The expanded section used `60px` against a bar of 37px, so 23px of the
 breadcrumb strip showed above it as a gap; on a phone the bar is 61px, and a
 `top: 0` override left the box's own toolbar underneath it.
 
+### One wheel event is not one notch
+
+`assests/js/papel-pdf-view.js` zooms on Ctrl + wheel, in the full-window viewer and in the
+panel alike. It used to take a whole step for every wheel *event*, and a touchpad or a
+free-spinning wheel sends dozens a second: a one-second flick went from 100% to the 25%
+floor in 35ms, and a gentle pinch from 100% to 500% in 200ms. The movement is now gathered
+(a mouse notch is 100, a step needs 40) and two steps are never closer than `WHEEL_GAP`
+(140ms), so a touchpad and a mouse zoom at the same pace as the buttons, about seven steps
+a second at most. Both share `STEPS`, the browser's own ladder (25, 33, 50, 67, 75, 80, 90,
+100, 110, 125, 150 ...); it is finer than the old 25/50/75/100 on purpose, so do not go back
+to jumps of a quarter or a half of the page.
+
+Test it with real wheel events on a fixed clock: `Input.dispatchMouseEvent` with
+`modifiers: 2`, sent **without waiting for each reply**. Calling `zoomIn()` in a loop skips
+the wheel code altogether, and a driver that waits for every event lets a slow redraw pass
+for a slow hand. A paper's PDF comes from Drive, which is not always to hand: `pdf_viewer.php`
+with no `?paper=` takes a local file by `postMessage({type: 'papel-pdf-file', file:
+<ArrayBuffer>, name})`, the way the upload page hands it one, which is enough to test with.
+
 ### `style="..."` attributes are dropped
 
 `style-src` in the CSP has no `'unsafe-inline'`, and that blocks style

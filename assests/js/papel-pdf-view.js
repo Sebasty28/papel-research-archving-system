@@ -32,7 +32,12 @@
 
     var MIN_ZOOM = 0.25;
     var MAX_ZOOM = 5;
-    var STEPS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4, 5];
+    /* The levels a click on a zoom button, or a notch of the wheel, moves between.
+       They are the ones the browser's own PDF viewer uses, so the pace is one
+       readers already know: 10 to 25% a step. The ladder here used to run
+       100, 75, 50, 25 and 100, 125, 150, 200, so one click took a quarter or half
+       of the page's size away and the document jumped instead of zooming. */
+    var STEPS = [0.25, 0.33, 0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5];
 
     function create(options) {
         var scroller = options.scroller;
@@ -711,12 +716,40 @@
             if (e.button === 1) e.preventDefault();
         });
 
-        // Ctrl/Cmd + wheel zooms, matching every other document viewer. A plain
-        // wheel is left alone so scrolling through the pages still works.
+        /* Ctrl/Cmd + wheel zooms, matching every other document viewer. A plain
+           wheel is left alone so scrolling through the pages still works.
+
+           A step used to be taken for every wheel EVENT. A mouse notch is one
+           event, but a touchpad (two fingers with Ctrl held, or a pinch) and a
+           free-spinning wheel send dozens a second, and each one took a whole
+           step: a short flick crossed the range from 100% to 25% in a fifth of a
+           second. So the movement is gathered, a notch's worth makes a step, and
+           two steps are never closer than WHEEL_GAP. That puts a touchpad and a
+           mouse at one readable pace, the same as the buttons. */
+        var WHEEL_STEP = 40;     // gathered movement that makes a step (a mouse notch is 100)
+        var WHEEL_GAP  = 140;    // fewest milliseconds between two wheel-driven steps
+        var WHEEL_REST = 250;    // a pause this long ends a gesture, and what was gathered is let go
+        var wheelGathered = 0, wheelLast = 0, wheelStepped = 0;
+
         scroller.addEventListener('wheel', function (e) {
             if (!e.ctrlKey && !e.metaKey) return;
             e.preventDefault();
-            step(e.deltaY < 0 ? 1 : -1);
+
+            var now = performance.now();
+            if (now - wheelLast > WHEEL_REST) wheelGathered = 0;
+            wheelLast = now;
+
+            /* Firefox reports a notch as three lines, and some mice report pages,
+               not pixels. Turned into pixels so a notch is a notch everywhere. */
+            var delta = e.deltaY * (e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 100 : 1);
+            if (wheelGathered * delta < 0) wheelGathered = 0;     // turned the other way: start again
+            wheelGathered += delta;
+
+            if (Math.abs(wheelGathered) < WHEEL_STEP) return;
+            if (now - wheelStepped < WHEEL_GAP) return;           // too soon: keep gathering
+            wheelStepped = now;
+            step(wheelGathered < 0 ? 1 : -1);
+            wheelGathered = 0;
         }, { passive: false });
 
         /* Re-rasterise when the pages' own width changes: these are our
