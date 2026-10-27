@@ -824,7 +824,7 @@ $types_res = $conn->query("SELECT DISTINCT paper_type FROM research_papers WHERE
                                 <div class="form-check">
                                     <input class="form-check-input" type="radio" name="type" id="type_<?= e($t['paper_type']) ?>" value="<?= e($t['paper_type']) ?>" <?= $filter_type===$t['paper_type']?'checked':'' ?>>
                                     <label class="form-check-label" for="type_<?= e($t['paper_type']) ?>">
-                                        <?= e(ucfirst($t['paper_type'])) ?>
+                                        <?= e(paper_type_label($t['paper_type'])) ?>
                                     </label>
                                 </div>
                                 <?php endwhile; ?>
@@ -877,7 +877,7 @@ $types_res = $conn->query("SELECT DISTINCT paper_type FROM research_papers WHERE
                     </h2>
                     
                     <div class="paper-meta">
-                        <span class="badge-type"><?= e(ucfirst($r['paper_type'] ?? 'Research')) ?></span>
+                        <span class="badge-type"><?= e(paper_type_label($r['paper_type'] ?? 'research')) ?></span>
                         <span class="paper-year"><?= e($r['year']) ?></span>
                     </div>
                     

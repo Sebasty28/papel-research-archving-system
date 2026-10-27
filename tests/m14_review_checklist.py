@@ -263,8 +263,9 @@ def paper_types():
     options = re.findall(r'<option value="([^"]*)"[^>]*>([^<]*)</option>', m.group(1)) if m else []
     offered = [(v, l.strip()) for v, l in options if v]
     check('CK-19', offered == [('capstone', 'Capstone Project'), ('undergrad_thesis', 'Undergraduate Thesis'),
-                                 ('project', 'Feasibility Study')],
-          'the upload form offers a Capstone Project, an Undergraduate Thesis and a Feasibility Study, and nothing else',
+                                 ('project', 'Feasibility Study'), ('other', 'Other')],
+          'the upload form offers a Capstone Project, an Undergraduate Thesis, a Feasibility Study and Other '
+          '(the student types their own), and nothing else',
           'offered %s' % offered)
     for code in ('journal', 'conference'):
         title = 'AUTOTEST Removed Type %s' % code

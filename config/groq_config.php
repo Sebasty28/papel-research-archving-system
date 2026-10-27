@@ -147,7 +147,8 @@ function call_groq_api($systemPrompt, $userPrompt, $maxTokens = 1024, $apiKey = 
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true, // Return response as string
         CURLOPT_POST => true, // Use POST method
-        CURLOPT_POSTFIELDS => json_encode($payload), // Send our data as JSON
+        // Substituted rather than refused: json_encode() returns false on one bad byte, and the request then goes out empty.
+        CURLOPT_POSTFIELDS => json_encode($payload, JSON_INVALID_UTF8_SUBSTITUTE),
         CURLOPT_HTTPHEADER => [
             'Content-Type: application/json',
             'Authorization: Bearer ' . trim($key) // Authenticate with API key
@@ -252,7 +253,7 @@ function extract_gdrive_pdf_text($fileId) {
         }
         
         $text = preg_replace('/\s+/', ' ', $text);
-        return trim(substr($text, 0, 25000));
+        return trim(pdf_text_clip($text, 25000));
     } catch (Exception $e) {
         error_log('GDrive PDF extraction error: ' . $e->getMessage());
         return '';
@@ -330,7 +331,8 @@ function build_metadata_result(array $aiMeta, string $abstract, string $fallback
     }
 
     return [
-        'title'                  => $aiMeta['title'] ?? 'Untitled',
+        // Empty when the AI found none, so the page leaves the box as it was rather than writing "Untitled".
+        'title'                  => is_string($aiMeta['title'] ?? null) ? trim($aiMeta['title']) : '',
         'authors'                => $authors,
         'year'                   => $aiMeta['year'] ?? (int)date('Y'),
         'keywords'               => $keywords,
@@ -342,6 +344,21 @@ function build_metadata_result(array $aiMeta, string $abstract, string $fallback
         'ai_sample_size'         => '',
         'ai_research_field'      => '',
     ];
+}
+
+/**
+ * Text read from a PDF, made safe to search and to send: invalid UTF-8 replaced, then
+ * cut to at most $bytes without splitting a character.
+ *
+ * substr() counts bytes, and cutting at a fixed byte splits "\u00F1", "\u20B1" or a curly
+ * quote in two whenever one falls on the line. The whole text is then invalid UTF-8: every
+ * /u pattern reading it fails (the abstract of a paper that plainly had one was not found),
+ * and json_encode() returns false, so the request to the AI went out with no body at all
+ * and the student was told "The AI could not identify the details in this document".
+ */
+function pdf_text_clip(string $text, int $bytes): string {
+    $text = mb_scrub($text, 'UTF-8');
+    return strlen($text) <= $bytes ? $text : mb_strcut($text, 0, $bytes, 'UTF-8');
 }
 
 function extract_pdf_text($filePath) {
@@ -358,7 +375,7 @@ function extract_pdf_text($filePath) {
         // Clean up the text: remove extra spaces, tabs, newlines
         $text = trim(preg_replace('/\s+/', ' ', $text));
 
-        return substr($text, 0, 25000);
+        return pdf_text_clip($text, 25000);
         
     } catch (Exception $e) {
         error_log('PDF parsing error: ' . $e->getMessage());
@@ -377,7 +394,7 @@ function extract_pdf_text($filePath) {
         $text = preg_replace('/[^\x20-\x7E\n\r\t]/', ' ', $text);
         $text = trim(preg_replace('/\s+/', ' ', $text));
 
-        return substr($text, 0, 20000); // Return up to 20k chars for fallback
+        return pdf_text_clip($text, 20000); // up to 20k bytes for the fallback
     }
 }
 
@@ -428,7 +445,7 @@ function extract_metadata_with_groq($pdfText, $modelChoice = '1') {
     $userPrompt .= '  "keywords": ["keyword1", "keyword2"]'."\n";
     $userPrompt .= "}\n\n";
     
-    $userPrompt .= "Research Paper Text (first 8000 characters):\n" . substr($pdfText, 0, 8000);
+    $userPrompt .= "Research Paper Text (first 8000 characters):\n" . pdf_text_clip((string)$pdfText, 8000);
 
     /* The engine in play and the other one behind it. Which is which comes
        from ai_engine_current(); nobody picks it on the form any more. */
@@ -472,61 +489,135 @@ function extract_metadata_with_groq($pdfText, $modelChoice = '1') {
 }
 
 /**
- * Extracts the abstract directly from PDF text using pattern matching.
- * Looks for text between "Abstract" heading and "Keywords" / "Introduction" / "I." section.
- * This is more reliable than AI because it copies the exact text.
+ * The abstract, copied from the paper's own text, or null when the paper has none
+ * that can be read.
  *
- * @param string $pdfText - Raw text extracted from the PDF
- * @return string|null - The abstract text, or null if not found
+ * Never generated: what the repository shows as a paper's abstract has to be the
+ * author's words. So when there is no abstract, the answer is null and only the
+ * title, authors, year and keywords are filled in (the student writes the Abstract,
+ * or leaves it out in Custom). A wrong abstract is worse than none, because it looks
+ * like an answer; every rule here was written against a real paper it got wrong:
+ *
+ *   - a heading with nothing under it (IMRAD-CommEase: "ABSTRACT I. INTRODUCTION",
+ *     the abstract itself an image) ran on until a "Keywords" pages later and handed
+ *     back the Introduction. Now the text must start as prose and stop at the next
+ *     heading.
+ *   - the table of contents ("Abstract……………v", "ABSTRACT......5") is not a heading.
+ *   - a thesis abstract page opens with Title, Researcher, Degree, Institution, Year
+ *     and Adviser (the BSIE feasibility studies), which is not the abstract.
+ *   - the page's running head ("POLYTECHNIC UNIVERSITY OF THE PHILIPPINES vi") and
+ *     its page number fall in the middle of the text.
+ *
+ * @param string $pdfText Text of the PDF, as extract_pdf_text() gives it
+ * @return string|null
  */
 function extract_abstract_from_text($pdfText) {
-    if (empty($pdfText) || strlen($pdfText) < 50) return null;
+    if (!is_string($pdfText) || strlen($pdfText) < 50) return null;
+    // Invalid UTF-8 would make every pattern below fail (pdf_text_clip()).
+    $pdfText = mb_scrub($pdfText, 'UTF-8');
+    // Zero-width spaces come out of some PDFs between every word of a heading.
+    $text = preg_replace('/[\x{200B}\x{200C}\x{200D}\x{FEFF}]/u', '', $pdfText) ?? $pdfText;
+    $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
 
-    // Normalize whitespace but preserve newlines for section detection
-    $text = preg_replace('/[ \t]+/', ' ', $pdfText);
-
-    // ── Strategy 1: Find text between "Abstract" and "Keywords" ──
-    $patterns = [
-        // "Abstract" ... "Keywords" (most common, most reliable)
-        '/\b(?:ABSTRACT|Abstract)\s*[:\-]?\s*\n?(.*?)(?=\s*(?:Keywords?\s*[:\-]|KEY\s*WORDS?\s*[:\-]|Key\s*[Ww]ords?\s*[:\-]))/si',
-        // "Abstract" ... Introduction with required number/roman prefix (strict: avoids matching "introduction" mid-sentence)
-        '/\b(?:ABSTRACT|Abstract)\s*[:\-]?\s*\n?(.*?)(?=\s*(?:(?:\d+\.?\d*\.?\s+|I\.\s+)[Ii]ntroduction|INTRODUCTION\b))/s',
-        // "Abstract" ... "Background" section heading
-        '/\b(?:ABSTRACT|Abstract)\s*[:\-]?\s*\n?(.*?)(?=\s*(?:BACKGROUND\b|Background\s*[:\-]))/si',
-        // "Abstract" ... any numbered/roman section heading (requires uppercase word after number)
-        '/\b(?:ABSTRACT|Abstract)\s*[:\-]?\s*\n?(.*?)(?=\s*(?:[IVX]+\.\s+[A-Z][A-Z]|[0-9]+\.\s+[A-Z][A-Z]))/s',
-    ];
-
-    foreach ($patterns as $pattern) {
-        if (preg_match($pattern, $text, $matches)) {
-            $abstract = trim($matches[1]);
-            // Clean up: remove extra whitespace and newlines
-            $abstract = preg_replace('/\s+/', ' ', $abstract);
-            $abstract = trim($abstract);
-
-            // Validate: abstract should be at least 50 chars and not too long (max ~3000)
-            if (strlen($abstract) >= 50 && strlen($abstract) <= 5000) {
-                return $abstract;
-            }
-        }
+    if (!preg_match_all('/\b(?:ABSTRACT|Abstract)\b\s*[:.\-\x{2013}\x{2014}]?\s*/u', $text, $m, PREG_OFFSET_CAPTURE)) {
+        return null;
     }
+    foreach ($m[0] as [$heading, $at]) {
+        /* By characters, not bytes: a byte count can cut a letter like the n with a
+           tilde, or the peso sign, in two, and every /u pattern after it then fails. */
+        $rest = mb_substr(substr($text, $at + strlen($heading)), 0, 8000);
+        // A line of the table of contents: leader dots, then a page number.
+        if (preg_match('/^[\s.\x{2026}\x{00B7}_]*[.\x{2026}\x{00B7}_]{3,}/u', $rest)) continue;
 
-    // ── Strategy 2: Take text after "Abstract" heading and cut at known section names ──
-    if (preg_match('/\b(?:ABSTRACT|Abstract)\s*[:\-]?\s*\n?\s*(.{100,3000})/s', $text, $matches)) {
-        $candidate = $matches[1];
-        // Cut at numbered headings, all-caps section names, or "Introduction:" pattern
-        $parts = preg_split(
-            '/\s+(?=(?:\d+\.?\s+[A-Z][a-z]|[IVX]+\.\s+[A-Z]|INTRODUCTION\b|METHODOLOGY\b|METHODS\b|RESULTS\b|DISCUSSION\b|CONCLUSION\b|REFERENCES\b|BACKGROUND\b))/s',
-            $candidate,
-            2
-        );
-        $abstract = trim(preg_replace('/\s+/', ' ', $parts[0]));
-        if (strlen($abstract) >= 50 && strlen($abstract) <= 3000) {
-            return $abstract;
-        }
+        $body = abstract_strip_header_block($rest);
+        $body = abstract_cut_at_end($body);
+        $body = abstract_clean($body);
+        if ($body === null) continue;
+        return $body;
     }
-
     return null;
+}
+
+/**
+ * Takes off a thesis abstract page's opening block: "Title : ... Researcher : ...
+ * Degree : ... Adviser : Engr. Gio M. Marcos", the abstract proper following straight
+ * on. Two such labels at least, so a sentence that happens to start "Title:" is left.
+ */
+function abstract_strip_header_block(string $s): string {
+    $label = '(?:Title|Researchers?|Authors?|Proponents?|Students?|Degree|Program(?:me)?|Course|Major|'
+           . 'Specialization|Institution|School|College|Campus|University|Department|'
+           . '(?:Academic |School )?Year|Semester|Date(?: Completed)?|Advis[eo]rs?|Research Advis[eo]r)';
+    if (!preg_match_all('/(?:^|\s)' . $label . '\s*:\s*/u', mb_substr($s, 0, 1500), $lm, PREG_OFFSET_CAPTURE)) return $s;
+    // The block opens the text, and its labels follow one another closely.
+    if ($lm[0][0][1] > 3) return $s;
+    $chain = [$lm[0][0]];
+    for ($k = 1; $k < count($lm[0]); $k++) {
+        if ($lm[0][$k][1] - $lm[0][$k - 1][1] > 400) break;
+        $chain[] = $lm[0][$k];
+    }
+    if (count($chain) < 2) return $s;
+
+    // The last label's value runs to where the prose begins.
+    $last = end($chain);
+    $after = ltrim(substr($s, $last[1] + strlen($last[0])));
+    $words = preg_split('/ /u', $after) ?: [];
+    $particles = ['de', 'dela', 'del', 'delos', 'los', 'la', 'van', 'von', 'y', 'and'];
+    $n = count($words);
+    for ($i = 0; $i < $n; $i++) {
+        $next = $words[$i + 1] ?? '';
+        /* A capitalised word followed by a lower-case one starts a sentence ("Hair care
+           products", "This study explores"); a name is capitals and initials. */
+        if (preg_match('/^[A-Z][a-z\x{00E0}-\x{00FF}]+$/u', $words[$i])
+            && preg_match('/^[a-z\x{00E0}-\x{00FF}]/u', $next)
+            && !in_array(strtolower($next), $particles, true)) {
+            return implode(' ', array_slice($words, $i));
+        }
+    }
+    return '';                              // a block and nothing after it: no abstract
+}
+
+/** Where the abstract stops: its keywords, or the next heading of the paper. */
+function abstract_cut_at_end(string $s): string {
+    $ends = [
+        '/\b(?:Key\s?words?|KEY\s?WORDS?|Keyword\(s\)|Index Terms)\s*[:\-\x{2013}\x{2014}]/u',
+        '/\b(?:(?:[IVX]+|\d+)\.?\s+)?(?:INTRODUCTION|Introduction)\b(?=\s+[A-Z])/u',
+        '/\b(?:CHAPTER|Chapter)\s+(?:[IVX]+|\d+|ONE|One)\b/u',
+        '/\b(?:TABLE OF CONTENTS|Table of Contents|LIST OF (?:TABLES|FIGURES)|List of (?:Tables|Figures))\b/u',
+        '/\b(?:ACKNOWLEDGE?MENTS?|Acknowledge?ments?|DEDICATION|Dedication|APPROVAL SHEET|Approval Sheet)\b/u',
+        '/\b(?:BACKGROUND OF THE STUDY|Background of the Study|STATEMENT OF THE PROBLEM)\b/u',
+        '/\b(?:MARKETING|TECHNICAL|MANAGEMENT|FINANCIAL|SOCIO-ECONOMIC) ASPECTS?\b/u',
+        '/\b(?:METHODOLOGY|RESULTS AND DISCUSSION|REFERENCES|BIBLIOGRAPHY)\b/u',
+    ];
+    $cut = strlen($s);
+    foreach ($ends as $re) {
+        if (preg_match($re, $s, $mm, PREG_OFFSET_CAPTURE) && $mm[0][1] < $cut) $cut = $mm[0][1];
+    }
+    return substr($s, 0, $cut);
+}
+
+/** The running head, page numbers and loose ends out; null when what is left is not an abstract. */
+function abstract_clean(string $s): ?string {
+    // The page's running head, and the page number printed beside it.
+    $s = preg_replace('/\bPOLYTECHNIC UNIVERSITY OF THE PHILIPPINES(?:\s*[\x{2013}\-]\s*B[I\x{00CD}]\x{00D1}?AN CAMPUS)?\s+(?:[ivxlcdm]{1,6}|\d{1,3})\b\s*/u', '', $s) ?? $s;
+    // A page number left at the very end, from the page the abstract ended on.
+    $s = preg_replace('/\s+(?:[ivxlcdm]{1,6}|\d{1,3})\s*$/u', '', trim($s)) ?? $s;
+    $s = trim(preg_replace('/\s+/u', ' ', $s) ?? $s);
+
+    /* Prose, not the next heading or a fragment: it opens with a letter and runs to a
+       few sentences. Thirty words is the shortest abstract worth keeping; past the
+       limit it has almost certainly run on into the paper. */
+    if ($s === '' || !preg_match('/^[\p{L}"\x{201C}(]/u', $s)) return null;
+    $words = preg_split('/\s+/u', $s) ?: [];
+    if (count($words) < 30 || mb_strlen($s) > 6000) return null;
+    if (!preg_match('/[.!?]["\x{201D})]?$/u', $s)) {
+        // Ends mid-sentence: keep it to the last full stop, if that leaves enough.
+        $stop = max(strrpos($s, '. '), strrpos($s, '.'));
+        if ($stop !== false && $stop > 0) {
+            $kept = substr($s, 0, $stop + 1);
+            if (count(preg_split('/\s+/u', $kept) ?: []) >= 30) return $kept;
+        }
+    }
+    return $s;
 }
 
 /**
@@ -596,7 +687,7 @@ function generate_statistical_analysis($pdfText, $apiKey = null, $modelChoice = 
     $userPrompt .= '  "research_field": "..."'."\n";
     $userPrompt .= "}\n\n";
     
-    $userPrompt .= "Text:\n" . substr($pdfText, 0, 20000);
+    $userPrompt .= "Text:\n" . pdf_text_clip((string)$pdfText, 20000);
 
     // Use caller-supplied key, or fall back to upload key, with backup fallback on rate-limit
     if ($modelChoice === '2') {

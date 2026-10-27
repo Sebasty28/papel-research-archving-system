@@ -29,6 +29,15 @@
  * chevron, the site's own list and the same keyboard, while staying the input
  * the form submits. See the combo section near the bottom.
  *
+ * A real `<select>` can be made one that is typed in too: `data-type-in`. Typing
+ * narrows its list, the arrows move through it and Enter picks; the select stays
+ * the control the form submits, so its value is still always one of its options.
+ * With `data-type-in-other="<value>"` and `data-type-in-field="<id of a text input>"`
+ * a name that matches nothing can be kept: it is offered as `Use "..."`, and
+ * picking it chooses that option and puts the name in that input (the upload
+ * form's paper type, whose Other takes a name). Without them, text that matches
+ * nothing is not an answer, and the box goes back to what was chosen.
+ *
  * Anything that should keep the native control can say so with `data-no-skin`.
  */
 ?>
@@ -123,6 +132,12 @@ select.is-skinned {
 }
 .sel-arrow:hover { color: var(--maroon, #820707); }
 .sel-field[aria-expanded="true"] ~ .sel-arrow .sel-chev { transform: rotate(180deg); }
+/* A select that can be typed in: the box is a text field dressed as the button. */
+.sel-typein > .sel-type { cursor: text; padding-right: 1.9rem; line-height: 1.5; }
+.sel-typein > .sel-type::placeholder { color: var(--grey, #545054); opacity: 1; }
+.sel-typein > .sel-type:focus { outline: none; border-color: var(--maroon, #820707); }
+/* The row that keeps what was typed when it is not on the list. */
+.sel-opt.is-typed span { font-style: italic; }
 /* Said rather than shown as an empty box: a list that opens with nothing in it
    reads as broken, where this reads as an answer. */
 .sel-none { padding: .4rem .55rem; font-size: .8125rem; color: var(--grey, #545054); }
@@ -385,11 +400,11 @@ select.is-skinned {
             Object.defineProperty(el, prop, {
                 configurable: true,
                 get: function () { return proto.get.call(this); },
-                set: function (v) { proto.set.call(this, v); paint(state); }
+                set: function (v) { proto.set.call(this, v); state.paint(state); }
             });
         });
         // `disabled` is toggled by a few pages too.
-        new MutationObserver(function () { paint(state); })
+        new MutationObserver(function () { state.paint(state); })
             .observe(el, { attributes: true, attributeFilter: ['disabled'] });
     }
 
@@ -584,7 +599,271 @@ select.is-skinned {
         }
     }
 
+    /* ======================= a select that can be typed in ==================
+       The upload form's paper type and programme are lists long enough, or
+       known well enough, that a student would rather type than scroll. Opt in
+       with `data-type-in` on the select (see the note at the top of the file).
+
+       The select stays in place as the real control, exactly as skin() leaves
+       it: name, value, `required`, and the page's script reading `.value`. What
+       is typed only ever decides which of its options is chosen. */
+    function typein(select) {
+        if (select.dataset.noSkin !== undefined) return;
+        if (select.multiple || select.size > 1) return;
+        if (select.classList.contains('is-skinned')) return;
+
+        var id = 'sel' + (++seq);
+        var wrap = document.createElement('div');
+        wrap.className = 'sel sel-combo sel-typein';
+
+        var input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'sel-btn sel-type';
+        input.id = id + 'b';
+        input.setAttribute('role', 'combobox');
+        input.setAttribute('aria-autocomplete', 'list');
+        input.setAttribute('aria-expanded', 'false');
+        input.setAttribute('aria-controls', id + 'm');
+        input.setAttribute('autocomplete', 'off');
+        input.spellcheck = false;
+        var first = select.options[0];
+        input.placeholder = (first && first.value === '' ? first.textContent.trim() : '') || 'Type or choose';
+
+        var arrow = document.createElement('button');
+        arrow.type = 'button';
+        arrow.className = 'sel-arrow';
+        arrow.tabIndex = -1;
+        arrow.setAttribute('aria-hidden', 'true');
+        arrow.innerHTML = CHEV;
+
+        var menu = document.createElement('div');
+        menu.className = 'sel-menu';
+        menu.id = id + 'm';
+        menu.setAttribute('role', 'listbox');
+        menu.hidden = true;
+
+        select.parentNode.insertBefore(wrap, select);
+        wrap.appendChild(select);
+        wrap.appendChild(input);
+        wrap.appendChild(arrow);
+        document.body.appendChild(menu);
+        select.classList.add('is-skinned', 'is-typein');
+        select.setAttribute('tabindex', '-1');
+        select.setAttribute('aria-hidden', 'true');
+
+        var label = select.id && document.querySelector('label[for="' + select.id + '"]');
+        if (label) input.setAttribute('aria-labelledby', (label.id || (label.id = id + 'l')));
+        else {
+            var near = wrap.parentNode && wrap.parentNode.querySelector('.form-label');
+            if (near) input.setAttribute('aria-label', near.textContent.replace('*', '').trim());
+        }
+
+        var field = select.dataset.typeInField ? document.getElementById(select.dataset.typeInField) : null;
+        var state = { select: select, btn: input, menu: menu, active: -1, filter: false,
+                      other: field ? (select.dataset.typeInOther || '') : '', field: field,
+                      build: typeBuild, paint: typePaint };
+        input._sel = state;
+        menu._sel = state;
+
+        typeBuild(state);
+        typePaint(state);
+        hookValue(state);
+        // The name beside Other is also set from script (a draft coming back), with no event.
+        if (field) hookField(state, field);
+
+        arrow.addEventListener('mousedown', function (e) { e.preventDefault(); });
+        arrow.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!state.menu.hidden) { close(state); return; }
+            state.filter = false;
+            open(state);
+            input.focus();
+        });
+        input.addEventListener('click', function (e) {
+            e.stopPropagation();
+            if (state.menu.hidden) { state.filter = false; open(state); }
+        });
+        // Clicking into it to type over the answer: the answer is selected, so typing replaces it.
+        input.addEventListener('focus', function () { input.select(); });
+        input.addEventListener('input', function () {
+            state.filter = true;
+            state.dirty = true;
+            open(state);
+        });
+        input.addEventListener('keydown', function (e) { onTypeKey(state, e); });
+        // Leaving the box settles what was typed into one of the options, or puts the answer back.
+        input.addEventListener('blur', function () {
+            if (state.dirty) commitTyped(state);
+            close(state);
+        });
+
+        new MutationObserver(function () { typeBuild(state); typePaint(state); })
+            .observe(select, { childList: true, subtree: true });
+        select.addEventListener('change', function () { typePaint(state); });
+    }
+
+    function typeOptions(state) {
+        return Array.prototype.filter.call(state.select.options, function (o) {
+            return o.value !== '' && !o.disabled;
+        });
+    }
+
+    /** The options, narrowed to what has been typed, and the typed name itself when it can be kept. */
+    function typeBuild(state) {
+        var menu = state.menu;
+        var typed = state.btn.value.replace(/\s+/g, ' ').trim();
+        var want = state.filter ? typed.toLowerCase() : '';
+        menu.innerHTML = '';
+        var shown = 0;
+        typeOptions(state).forEach(function (o) {
+            var text = o.textContent.trim();
+            if (want && (text + ' ' + o.value).toLowerCase().indexOf(want) < 0) return;
+            menu.appendChild(typeRow(state, o.value, text, null));
+            shown++;
+        });
+        /* Offered only when nothing on the list matches: "feas" is somebody on their way
+           to Feasibility Study, not a type of their own. Leaving the box with a name of
+           their own still keeps it (commitTyped()). */
+        if (state.other && state.filter && typed && !shown) {
+            menu.appendChild(typeRow(state, state.other, 'Use \u201c' + typed + '\u201d', typed));
+        }
+        if (!menu.children.length) {
+            var none = document.createElement('div');
+            none.className = 'sel-none';
+            none.textContent = 'Nothing on the list matches that.';
+            menu.appendChild(none);
+        }
+    }
+
+    function typeRow(state, value, text, typed) {
+        var el = document.createElement('div');
+        el.className = 'sel-opt' + (typed !== null ? ' is-typed' : '');
+        el.setAttribute('role', 'option');
+        el.innerHTML = TICK + '<span></span>';
+        el.lastChild.textContent = text;
+        el.dataset.value = value;
+        if (typed !== null) el.dataset.typed = typed;
+        el.addEventListener('mousedown', function (e) { e.preventDefault(); });   // keep the caret
+        el.addEventListener('click', function (e) {
+            e.stopPropagation();
+            typeChoose(state, value, typed);
+        });
+        el.addEventListener('mousemove', function () {
+            setActive(state, options(state).indexOf(el));
+        });
+        return el;
+    }
+
+    /** What the box says when nobody is typing: the answer, or for Other the name given. */
+    function typeText(state) {
+        var sel = state.select;
+        if (state.other && sel.value === state.other && state.field) return state.field.value.trim();
+        var chosen = sel.options[sel.selectedIndex];
+        return chosen && chosen.value !== '' ? chosen.textContent.trim() : '';
+    }
+
+    function typePaint(state) {
+        if (!(state.dirty && document.activeElement === state.btn)) {
+            state.btn.value = typeText(state);
+            state.dirty = false;
+        }
+        state.btn.disabled = state.select.disabled;
+        var sel = state.select;
+        options(state).forEach(function (el) {
+            var on = el.dataset.value === sel.value
+                && (el.dataset.typed === undefined || !state.field || el.dataset.typed === state.field.value.trim());
+            el.setAttribute('aria-selected', on ? 'true' : 'false');
+        });
+    }
+
+    function typeChoose(state, value, typed) {
+        var changed = state.select.value !== value;
+        var sel = state.select;
+        if (state.field && state.other) {
+            var name = value === state.other ? (typed !== null ? typed : '') : state.field.value;
+            if (state.field.value !== name) {
+                state.field.value = name;
+                state.field.dispatchEvent(new Event('input', { bubbles: true }));
+                changed = true;
+            }
+        }
+        sel.value = value;
+        state.dirty = false;
+        state.filter = false;
+        typePaint(state);
+        close(state);
+        if (changed) {
+            sel.dispatchEvent(new Event('input', { bubbles: true }));
+            sel.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        /* Other with no name yet: the box is where the name goes. */
+        if (value === state.other && !typeText(state)) state.btn.focus();
+    }
+
+    /* Typed and left: an option whose name it is, the typed name kept as Other when
+       this select takes one, or else the answer as it was. */
+    function commitTyped(state) {
+        var typed = state.btn.value.replace(/\s+/g, ' ').trim();
+        state.dirty = false;
+        if (typed === typeText(state)) return;
+        if (typed === '') { typeChoose(state, '', null); return; }
+        var hit = typeOptions(state).filter(function (o) {
+            return o.textContent.trim().toLowerCase() === typed.toLowerCase();
+        })[0];
+        if (hit) { typeChoose(state, hit.value, null); return; }
+        if (state.other) { typeChoose(state, state.other, typed); return; }
+        typePaint(state);
+    }
+
+    function onTypeKey(state, e) {
+        var openNow = !state.menu.hidden;
+        var rows = options(state);
+        switch (e.key) {
+            case 'ArrowDown':
+                e.preventDefault();
+                if (openNow) setActive(state, state.active + 1);
+                else { state.filter = false; open(state); }
+                return;
+            case 'ArrowUp':
+                e.preventDefault();
+                if (openNow) setActive(state, state.active - 1);
+                else { state.filter = false; open(state); }
+                return;
+            case 'Enter':
+                if (!openNow) return;               // the form's own Enter, as ever
+                e.preventDefault();
+                var el = rows[state.active];
+                if (el) typeChoose(state, el.dataset.value, el.dataset.typed !== undefined ? el.dataset.typed : null);
+                else commitTyped(state);
+                return;
+            case 'Escape':
+                if (openNow || state.dirty) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    state.dirty = false;
+                    typePaint(state);               // back to the answer, untouched
+                    close(state);
+                }
+                return;
+            case 'Tab':
+                if (openNow) close(state);
+                return;
+        }
+    }
+
+    function hookField(state, field) {
+        var proto = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+        if (!proto || !proto.set) return;
+        Object.defineProperty(field, 'value', {
+            configurable: true,
+            get: function () { return proto.get.call(this); },
+            set: function (v) { proto.set.call(this, v); typePaint(state); }
+        });
+    }
+
     function skinAll(root) {
+        (root || document).querySelectorAll('select[data-type-in]:not(.is-skinned)').forEach(typein);
         (root || document).querySelectorAll('select:not(.is-skinned)').forEach(skin);
         (root || document).querySelectorAll('input[list][data-combo]:not(.is-combo)')
             .forEach(combo);
@@ -602,7 +881,7 @@ select.is-skinned {
                 for (var j = 0; j < records[i].addedNodes.length; j++) {
                     var n = records[i].addedNodes[j];
                     if (n.nodeType !== 1) continue;
-                    if (n.tagName === 'SELECT') skin(n);
+                    if (n.tagName === 'SELECT') (n.dataset.typeIn !== undefined ? typein : skin)(n);
                     else if (n.tagName === 'INPUT') {
                         if (n.hasAttribute('list') && n.dataset.combo !== undefined) combo(n);
                     } else skinAll(n);

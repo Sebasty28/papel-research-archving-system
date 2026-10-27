@@ -2396,6 +2396,104 @@ function paper_types(): array {
     ];
 }
 
+/* ---- "Other", for a paper type or a manuscript type the lists do not name ------------
+   Both dropdowns end in Other, the way a Google Form does: the student picks it and
+   types what their paper is (a Case Study, a Policy Brief). What they type is kept
+   with the paper and shown wherever the type is shown, in place of the word Other.
+
+   Neither needs a column. paper_type and manuscript_type are already VARCHARs, so the
+   typed name is stored in them with a marker in front ("other:Case Study",
+   "Other: Policy Brief"), and every page that names a type goes through
+   paper_type_label() or manuscript_type_label(), which take the marker off. A copy of
+   the site whose database is behind the code needs nothing run for this. */
+
+/** The value the paper type dropdown posts for Other, and the marker in front of a stored one. */
+const PAPER_TYPE_OTHER        = 'other';
+const PAPER_TYPE_OTHER_PREFIX = 'other:';
+/* paper_type is VARCHAR(50), and the marker takes six of those. */
+const PAPER_TYPE_OTHER_MAX    = 40;
+/* manuscript_type is VARCHAR(100). */
+const MANUSCRIPT_OTHER        = 'Other';
+const MANUSCRIPT_OTHER_MAX    = 60;
+
+/**
+ * What a person typed beside Other, made safe to keep and to show: tags and control
+ * characters gone, runs of white space made one, commas taken out (manuscript_type
+ * is a comma-separated list, so a comma inside a name would split it in two), cut
+ * to $max characters. Empty when nothing usable is left.
+ */
+function other_name_clean($raw, int $max): string {
+    if (!is_scalar($raw)) return '';
+    $text = strip_tags((string)$raw);
+    $text = preg_replace('/[\x00-\x1F\x7F]+/u', ' ', $text) ?? '';
+    $text = str_replace(',', ' ', $text);
+    $text = preg_replace('/\s+/u', ' ', $text) ?? '';
+    return trim(mb_substr(trim($text), 0, $max));
+}
+
+/** The name typed for a paper type of Other ("Case Study"), or null when the type is not Other. */
+function paper_type_other_name(?string $paperType): ?string {
+    $type = (string)$paperType;
+    if (stripos($type, PAPER_TYPE_OTHER_PREFIX) !== 0) return null;
+    return other_name_clean(substr($type, strlen(PAPER_TYPE_OTHER_PREFIX)), PAPER_TYPE_OTHER_MAX);
+}
+
+/**
+ * What the paper_type column should hold for what the form posted.
+ *
+ * $strict is a submission: an unknown code is refused (null), and Other with nothing
+ * typed beside it is refused in words the student can act on. Not strict is a draft,
+ * which keeps whatever has been answered so far: Other with no name yet is kept as
+ * "other:", and an unknown code as nothing.
+ */
+function paper_type_from_post($code, $otherRaw, bool $strict): ?string {
+    $code = strtolower(trim(is_scalar($code) ? (string)$code : ''));
+    if (array_key_exists($code, paper_types())) return $code;
+    if ($code === PAPER_TYPE_OTHER) {
+        $name = other_name_clean($otherRaw, PAPER_TYPE_OTHER_MAX);
+        if ($name === '' && $strict) {
+            throw new UserFacingException('Please type your paper type in the box beside Other.');
+        }
+        return PAPER_TYPE_OTHER_PREFIX . $name;
+    }
+    return $strict ? null : '';
+}
+
+/**
+ * The folder a paper's files are filed under for its type, on disk and on Drive.
+ *
+ * Every typed type goes in the one folder "other". The name a student typed is not
+ * a safe folder name: a colon cannot be in a Windows path at all (the first paper
+ * filed as Other failed here, moving its PDF into "other:Case Study"), and a slash or
+ * two dots would walk out of the uploads folder. The name is kept on the paper.
+ */
+function paper_type_folder(string $paperType): string {
+    return paper_type_other_name($paperType) !== null ? PAPER_TYPE_OTHER : $paperType;
+}
+
+/**
+ * The paper types to offer as a filter: the ones on the form, then Other, which
+ * matches every paper whose author typed their own.
+ */
+function paper_type_filter_options(): array {
+    return paper_types() + [PAPER_TYPE_OTHER => 'Other'];
+}
+
+/**
+ * A WHERE fragment for filtering on a paper type, adding its value to $params and its
+ * type to $types. "other" matches every typed one; anything else is matched exactly.
+ */
+function paper_type_filter_sql(string $column, string $value, array &$params, string &$types): string {
+    if (strtolower($value) === PAPER_TYPE_OTHER) {
+        $params[] = PAPER_TYPE_OTHER_PREFIX . '%';
+        $types   .= 's';
+        return "$column LIKE ?";
+    }
+    $params[] = $value;
+    $types   .= 's';
+    return "$column = ?";
+}
+
 /**
  * Types no longer offered, but still carried by papers already submitted.
  *
@@ -2421,8 +2519,18 @@ function manuscript_types(): array
  * names separated by a comma. Anything not on the list is dropped rather than
  * stored, so a hand-made post cannot put arbitrary text on the record.
  */
-function manuscript_types_posted($posted): string
+function manuscript_types_posted($posted, $otherRaw = null): string
 {
+    /* Other stands on its own: a paper handed in as something the list does not
+       name is that, and not also an IMRAD or a Full Manuscript (the page unticks the
+       others when it is ticked, and this is the authority). It is stored with what was
+       typed beside it, "Other: Policy Brief"; a draft may not have a name yet. */
+    foreach ((array)$posted as $one) {
+        if (trim((string)$one) === MANUSCRIPT_OTHER) {
+            $name = other_name_clean($otherRaw, MANUSCRIPT_OTHER_MAX);
+            return $name !== '' ? MANUSCRIPT_OTHER . ': ' . $name : MANUSCRIPT_OTHER;
+        }
+    }
     $allowed = manuscript_types();
     $picked  = [];
     foreach ((array)$posted as $one) {
@@ -2449,13 +2557,39 @@ function manuscript_format_key(?string $name): ?string
     $name = trim((string)$name);
     if ($name === 'IMRAD')           return 'imrad';
     if ($name === 'Full Manuscript') return 'full';
+    if ($name === MANUSCRIPT_OTHER || strpos($name, MANUSCRIPT_OTHER . ':') === 0) return 'other';
     return null;
 }
 
 /** The name a student reads for a format key. */
 function manuscript_format_label(string $key): string
 {
+    if ($key === 'other') return MANUSCRIPT_OTHER;
     return $key === 'full' ? 'Full Manuscript' : 'IMRAD';
+}
+
+/** The name typed for a manuscript type of Other ("Policy Brief"), or null when it is not Other. */
+function manuscript_other_name(?string $manuscriptType): ?string
+{
+    foreach (explode(',', (string)$manuscriptType) as $one) {
+        $one = trim($one);
+        if ($one === MANUSCRIPT_OTHER) return '';
+        if (strpos($one, MANUSCRIPT_OTHER . ':') === 0) {
+            return other_name_clean(substr($one, strlen(MANUSCRIPT_OTHER) + 1), MANUSCRIPT_OTHER_MAX);
+        }
+    }
+    return null;
+}
+
+/**
+ * The manuscript type as a reader should see it: "IMRAD, Full Manuscript", or for
+ * Other the name the author typed ("Policy Brief"), never the stored marker.
+ */
+function manuscript_type_label(?string $manuscriptType): string
+{
+    $other = manuscript_other_name($manuscriptType);
+    if ($other !== null) return $other !== '' ? $other : MANUSCRIPT_OTHER;
+    return trim((string)$manuscriptType);
 }
 
 /**
@@ -2470,7 +2604,7 @@ function paper_declared_formats(?string $manuscriptType): array
         if ($key !== null) $found[$key] = true;
     }
     $out = [];
-    foreach (['imrad', 'full'] as $key) {
+    foreach (['imrad', 'full', 'other'] as $key) {
         if (isset($found[$key])) $out[] = $key;
     }
     return $out;
@@ -2489,6 +2623,7 @@ function paper_primary_format(array $formats): ?string
 {
     if (in_array('full', $formats, true))  return 'full';
     if (in_array('imrad', $formats, true)) return 'imrad';
+    if (in_array('other', $formats, true)) return 'other';
     return null;
 }
 
@@ -2527,7 +2662,7 @@ function paper_manuscript_rows(array $paperIds): array
         "SELECT manuscript_id, paper_id, format, file_path, gdrive_file_id, file_size
            FROM paper_manuscripts
           WHERE paper_id IN (" . implode(',', array_fill(0, count($ids), '?')) . ")
-          ORDER BY paper_id, FIELD(format, 'imrad', 'full')");
+          ORDER BY paper_id, FIELD(format, 'imrad', 'full', 'other')");
     if (!$st) return [];
     $st->bind_param(str_repeat('i', count($ids)), ...$ids);
     $st->execute();
@@ -2562,7 +2697,7 @@ function paper_manuscript_entries(int $paperId, array $paper, ?array $rows = nul
     }
 
     $present = [];
-    foreach (['imrad', 'full'] as $key) {
+    foreach (['imrad', 'full', 'other'] as $key) {
         $r = $rows[$key] ?? null;
         if ($r && paper_file_url($r['gdrive_file_id'] ?? null, $r['file_path'] ?? null)) {
             $present[$key] = $r;
@@ -2634,6 +2769,8 @@ function paper_type_needs_documents(?string $paperType): bool {
 
 /** Human-readable name for a paper type, for use in messages. */
 function paper_type_label(?string $paperType): string {
+    $other = paper_type_other_name($paperType);
+    if ($other !== null) return $other !== '' ? $other : 'Other';
     $labels = paper_types() + paper_types_retired();
     $key = strtolower(trim((string)$paperType));
     return $labels[$key] ?? ucwords(str_replace('_', ' ', (string)$paperType));
@@ -2691,9 +2828,26 @@ const PAPER_SCOPE_KEY = '_scope';
  * Anything that is not a known section is dropped, so a hand-made request cannot
  * invent one.
  */
-function section_scope_parse($raw): ?array {
+/**
+ * What the form posts for "none of the six": a paper written entirely in sections of
+ * its author's own (Custom), Abstract left out. An empty field already means "nothing
+ * chosen yet", so "none" needs a word of its own.
+ */
+const SECTION_SCOPE_NONE = '_none';
+
+/*
+ * $forceAbstract is the rule for every paper but one kind. The Abstract may be left out
+ * only by an author submitting sections of their own (Custom), and the caller is the one
+ * that knows whether there are any: it asks with false, and puts the Abstract back
+ * itself when there are none (section_scope_for()).
+ */
+function section_scope_parse($raw, bool $forceAbstract = true): ?array {
+    if (is_string($raw) && trim($raw) === SECTION_SCOPE_NONE) {
+        return $forceAbstract ? ['abstract'] : [];
+    }
     if (is_string($raw)) { $raw = explode(',', $raw); }
     if (!is_array($raw)) { return null; }
+    if (!$raw && !$forceAbstract) { return []; }
 
     $known  = array_keys(paper_section_labels());
     $picked = [];
@@ -2703,7 +2857,7 @@ function section_scope_parse($raw): ?array {
         if (in_array($key, $known, true)) { $picked[$key] = true; }
     }
     if (!$picked) { return null; }
-    $picked['abstract'] = true;
+    if ($forceAbstract) { $picked['abstract'] = true; }
 
     return array_values(array_filter($known, function ($k) use ($picked) {
         return isset($picked[$k]);
@@ -2714,8 +2868,24 @@ function section_scope_parse($raw): ?array {
  * The choice, or every section when none was made. That is what a page opened
  * before this existed posts, so it keeps meaning "all of them".
  */
-function section_scope_resolve($raw): array {
-    return section_scope_parse($raw) ?? array_keys(paper_section_labels());
+function section_scope_resolve($raw, bool $forceAbstract = true): array {
+    return section_scope_parse($raw, $forceAbstract) ?? array_keys(paper_section_labels());
+}
+
+/**
+ * The standard sections a post asks for, with the Abstract left out only where the
+ * author has sections of their own to stand in for it. Anything else gets the Abstract
+ * back: the cards, the search and the AI read it, and a paper with no written section
+ * at all would have nothing on its page.
+ *
+ * $resolve is a submission (nothing chosen means all six); otherwise a draft, where
+ * nothing chosen stays null.
+ */
+function section_scope_for($raw, $customRaw, bool $resolve): ?array {
+    $scope = $resolve ? section_scope_resolve($raw, false) : section_scope_parse($raw, false);
+    if ($scope === null || in_array('abstract', $scope, true)) { return $scope; }
+    if (paper_custom_list($customRaw, $scope)) { return $scope; }
+    return $resolve ? section_scope_resolve($raw) : section_scope_parse($raw);
 }
 
 /**
@@ -2729,7 +2899,10 @@ function paper_section_scope($imradContent): ?array {
     if (!is_string($imradContent) || $imradContent === '') { return null; }
     $decoded = json_decode($imradContent, true);
     if (!is_array($decoded) || !array_key_exists(PAPER_SCOPE_KEY, $decoded)) { return null; }
-    return section_scope_parse($decoded[PAPER_SCOPE_KEY]);
+    /* A paper with sections of its own may have been filed without the Abstract
+       (section_scope_for()), so its list is read as it stands. Any other is repaired
+       the way a post is, Abstract put back, an empty list unrecorded. */
+    return section_scope_parse($decoded[PAPER_SCOPE_KEY], !paper_custom_sections($imradContent));
 }
 
 /** "A", "A and B", "A, B and C". */
@@ -2781,6 +2954,10 @@ function paper_custom_key_valid($key): bool {
 function paper_custom_presets(): array {
     $t = paper_checklist_templates();
     return [
+        /* The form's own five after the Abstract, as sections of the author's own, so they
+           keep the order the author gives them. Only a row called Abstract is filed as the
+           real Abstract (the upload page's picker), since the cards and the search read it. */
+        ['id' => 'imrad',            'name' => 'IMRAD',                'items' => array_values(array_diff(paper_section_labels(), ['Abstract']))],
         ['id' => 'full_manuscript',  'name' => 'Full Manuscript',      'items' => array_values($t['undergrad_thesis']['items'])],
         ['id' => 'undergrad_thesis', 'name' => 'Undergraduate Thesis', 'items' => array_values($t['undergrad_thesis']['items'])],
         ['id' => 'feasibility',      'name' => 'Feasibility Study',    'items' => array_values($t['feasibility']['items'])],
@@ -3355,7 +3532,11 @@ function paper_checklist_default(?string $manuscriptType, ?string $paperType): s
 {
     $type = strtolower(trim((string)$paperType));
     if ($type === 'project') return 'feasibility';
-    if (paper_declared_formats($manuscriptType) === ['imrad']) return 'imrad';
+    $formats = paper_declared_formats($manuscriptType);
+    if ($formats === ['imrad']) return 'imrad';
+    /* Handed in as something the lists do not name (a Policy Brief): no ready-made
+       list fits, and the adviser builds one for it from a blank list. */
+    if ($formats === ['other']) return 'blank';
     if ($type === 'journal' || $type === 'conference') return 'imrad';
     return $type === 'capstone' ? 'capstone' : 'undergrad_thesis';
 }

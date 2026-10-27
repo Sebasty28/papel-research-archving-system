@@ -130,7 +130,8 @@ if (isset($_GET['ajax_search'])) {
 /* ---- View state -------------------------------------------------------- */
 // Shared by the filter bar's own select and the export's "filtered by" line
 // further down, so the two can never disagree about what a type is called.
-$rcTypeLabels = ['capstone' => 'Capstone Project', 'research' => 'Research Paper', 'thesis' => 'Thesis'];
+// The types on the upload form, then Other, which matches every type an author typed themselves.
+$rcTypeLabels = paper_type_filter_options();
 
 $search        = trim($_GET['q'] ?? '');
 $filter_type   = trim($_GET['type'] ?? '');
@@ -190,7 +191,7 @@ if ($search) {
     $where .= " AND (rp.title LIKE ? OR rp.keywords LIKE ? OR rp.abstract LIKE ? OR u.full_name LIKE ?)";
     $t = "%$search%"; array_push($params, $t, $t, $t, $t); $types .= 'ssss';
 }
-if ($filter_type)    { $where .= " AND rp.paper_type = ?"; $params[] = $filter_type; $types .= 's'; }
+if ($filter_type)    { $where .= " AND " . paper_type_filter_sql('rp.paper_type', $filter_type, $params, $types); }
 if ($filter_prog)    { $where .= " AND u.program = ?";     $params[] = $filter_prog; $types .= 's'; }
 if ($filter_section) { $where .= " AND u.section LIKE ?";  $params[] = "%$filter_section%"; $types .= 's'; }
 if ($filter_ay)      { $where .= " AND u.academic_year = ?"; $params[] = $filter_ay; $types .= 's'; }

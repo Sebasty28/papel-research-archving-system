@@ -159,7 +159,11 @@ t('custom key: 0, 25, 99, 012, a path and a number are not',
     && !paper_custom_key_valid('../x') && !paper_custom_key_valid('custom_1 ') && !paper_custom_key_valid(1)
     && !paper_custom_key_valid(null) && !paper_custom_key_valid('Custom_1'));
 
-$ps = paper_custom_presets();
+$ps = array_values(array_filter(paper_custom_presets(), function ($p) { return $p['id'] !== 'imrad'; }));
+$imradPreset = array_values(array_filter(paper_custom_presets(), function ($p) { return $p['id'] === 'imrad'; }))[0] ?? null;
+t('presets: IMRAD comes first, the five sections of the form after the Abstract',
+    paper_custom_presets()[0]['name'] === 'IMRAD' && $imradPreset['items'] === ['Introduction', 'Methodology', 'Results and Discussion', 'Conclusion', 'References'],
+    show($imradPreset));
 t('presets: Full Manuscript, Undergraduate Thesis and Feasibility Study',
     array_column($ps, 'name') === ['Full Manuscript', 'Undergraduate Thesis', 'Feasibility Study'], show(array_column($ps, 'name')));
 t('presets: Full Manuscript and Undergraduate Thesis are the same chapters',
@@ -167,8 +171,8 @@ t('presets: Full Manuscript and Undergraduate Thesis are the same chapters',
 t('presets: the Feasibility Study list is the adviser checklist\'s',
     $ps[2]['items'] === paper_checklist_templates()['feasibility']['items'], show($ps[2]['items']));
 t('presets: every item is usable as a name as it stands and fits the limit',
-    (function () use ($ps) {
-        foreach ($ps as $p) {
+    (function () {
+        foreach (paper_custom_presets() as $p) {
             if (count($p['items']) > PAPER_CUSTOM_MAX) return false;
             foreach ($p['items'] as $i) { if ($i === '' || paper_checklist_label_clean($i) !== $i) return false; }
         }
@@ -322,6 +326,21 @@ t('custom info: a paper without any is untouched (kind, chip and words as before
     && paper_scope_info($mk(['abstract'], []))['custom'] === []);
 t('custom info: an old paper with no choice recorded stays legacy',
     paper_scope_info(json_encode(['abstract' => '<p>A</p>']))['kind'] === 'legacy' && paper_scope_info(null)['provided'] === array_values(paper_section_labels()));
+$nc = json_encode([PAPER_SCOPE_KEY => [], 'abstract' => '',
+    PAPER_CUSTOM_KEY => [['key' => 'custom_1', 'label' => 'Executive Summary', 'html' => '<p>x</p>']]]);
+t('no abstract: a paper of sections of its own only keeps its empty list as stored',
+    paper_section_scope($nc) === [] && paper_scope_info($nc)['kind'] === 'custom'
+    && paper_scope_info($nc)['provided'] === ['Executive Summary'], show(paper_scope_info($nc)));
+t('no abstract: the form says "none" with a word of its own',
+    section_scope_parse(SECTION_SCOPE_NONE, false) === [] && section_scope_parse(SECTION_SCOPE_NONE) === ['abstract']);
+$one = json_encode([['key' => 'custom_1', 'label' => 'Executive Summary']]);
+t('no abstract: allowed only with a section of their own, on submit and in a draft',
+    section_scope_for(SECTION_SCOPE_NONE, $one, true) === [] && section_scope_for(SECTION_SCOPE_NONE, '', true) === ['abstract']
+    && section_scope_for('introduction', $one, true) === ['introduction'] && section_scope_for('introduction', '[]', true) === ['abstract', 'introduction']
+    && section_scope_for(SECTION_SCOPE_NONE, $one, false) === [] && section_scope_for('', $one, false) === null);
+t('no abstract: a hand-made section of their own called Abstract stays one of theirs (the page files that row as the real Abstract)',
+    section_scope_for(SECTION_SCOPE_NONE, json_encode([['key' => 'custom_1', 'label' => 'Abstract']]), true) === []
+    && paper_custom_list([['key' => 'custom_1', 'label' => 'Abstract']], []) !== []);
 t('custom info: the reserved keys are not sections of the six',
     !array_key_exists(PAPER_CUSTOM_KEY, paper_section_labels()) && PAPER_CUSTOM_KEY !== PAPER_SCOPE_KEY);
 

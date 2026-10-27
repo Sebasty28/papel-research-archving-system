@@ -582,6 +582,27 @@ def custom_cheap():
     check('SC-57', s == 422 and 'at least 5 keywords' in (j.get('message') or ''),
           'a list that is not JSON means no sections of their own, not an error',
           'HTTP %s %s' % (s, j))
+    # --- Custom with no Abstract: optional only when there are sections of their own
+    s, j = submit(c, 'AUTOTEST Scope C5', keywords=short, section_scope='_none', abstract='', **custom_fields())
+    check('SC-75', s == 422 and 'at least 5 keywords' in (j.get('message') or ''),
+          'sections of their own with no Abstract pass the sections check (it is optional in Custom)',
+          'HTTP %s %s' % (s, j))
+    s, j = submit(c, 'AUTOTEST Scope C6', keywords=short, section_scope='_none', abstract='')
+    check('SC-76', s == 422 and (j.get('message') or '') == 'Please write the Abstract section.',
+          '"none of the six" with nothing of their own still asks for the Abstract',
+          'HTTP %s %s' % (s, j))
+    s, j = submit(c, 'AUTOTEST Scope C7', keywords=short, section_scope='introduction', abstract='',
+                  custom_sections='[]', introduction='<p>x</p>')
+    check('SC-77', s == 422 and (j.get('message') or '') == 'Please write the Abstract section.',
+          'and a choice that leaves the Abstract out without any of their own is repaired, Abstract asked for',
+          'HTTP %s %s' % (s, j))
+    s, j8 = ajax(c, dict(base, title=T_CDRAFT + ' no abstract', section_scope='_none', abstract='', **custom_fields()))
+    p8 = probe('paper', j8.get('draft_id')) if j8.get('draft_id') else {}
+    html8 = c.get(UPLOAD + '?draft=%s' % j8.get('draft_id'))
+    check('SC-78', p8.get('scope') == [] and len(p8.get('custom', [])) == 3 and '"section_scope":"_none"' in html8,
+          'a draft without the Abstract keeps that, and hands it back as "none"',
+          'stored %s, payload has none %s' % (p8.get('scope'), '"section_scope":"_none"' in html8))
+
     leaked = H.one("SELECT COUNT(*) FROM research_papers WHERE title LIKE 'AUTOTEST Scope C_'")
     check('SC-58', leaked == '0', 'none of those refused submissions left a paper behind', '%s papers were stored' % leaked)
 
@@ -639,6 +660,27 @@ def custom_surfaces():
           and r2.get('ok') and p2.get('table') == 'research_papers' and [x['label'] for x in p2.get('custom', [])] == [x['label'] for x in CUSTOM_LIST],
           'archiving and restoring keep their sections, with no change to the archive code or its tables',
           'archive %s %s %s | restore %s %s %s' % (r1, p1.get('table'), p1.get('custom'), r2, p2.get('table'), p2.get('custom')))
+
+    # --- sections of their own and no Abstract at all
+    pid3 = F.seed_paper(status='pending_faculty', title=T_CSEED + ' No Abstract')
+    o = {'_scope': [], '_custom': [{'key': c_['key'], 'label': c_['label'], 'html': '<p>AUTOTEST body of %s.</p>' % c_['label']}
+                                   for c_ in CUSTOM_LIST]}
+    for k in ALL:
+        o[k] = ''
+    H.q("UPDATE research_papers SET imrad_content=%s, abstract='' WHERE paper_id=%s" % (H.esc(json.dumps(o)), pid3))
+    rev3 = a.get('/app/review_paper.php?id=%s' % pid3)
+    ids3 = re.findall(r'id="pd-sub-([a-z_0-9]+)"', rev3)
+    check('SC-79', a.last_status == 200 and ids3 == ['custom_1', 'custom_2', 'custom_3']
+          and 'Custom: 3 sections' in strip(rev3) and 'left out on purpose' in strip(rev3),
+          'a paper with no Abstract shows its three sections, and says the rest were left out on purpose',
+          'status %s, sections %s' % (a.last_status, ids3))
+    H.q("UPDATE research_papers SET current_status='approved' WHERE paper_id=%s" % pid3)
+    pub3 = c.get('/archive/view_paper.php?id=%s' % pid3)
+    idx3 = c.get('/archive/index.php')
+    check('SC-80', c.last_status == 200 and re.findall(r'id="pd-sub-([a-z_0-9]+)"', pub3) == ['custom_1', 'custom_2', 'custom_3']
+          and 'Something Went Wrong' not in strip(idx3) and (T_CSEED + ' No Abstract') in strip(idx3),
+          'its public page and the repository listing both open, with no Abstract to show',
+          'public %s, listed %s' % (re.findall(r'id="pd-sub-([a-z_0-9]+)"', pub3), (T_CSEED + ' No Abstract') in strip(idx3)))
 
     # --- their sections on top of all six standard ones: a full paper, nothing flagged
     pid2 = F.seed_paper(status='pending_faculty', title=T_CFULL)

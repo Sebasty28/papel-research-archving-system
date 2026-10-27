@@ -888,7 +888,13 @@
             var doc;
             try { doc = frame.contentDocument; } catch (err) { return; }   // not ours
             if (!doc) return;
-            [".site-header", ".nav-photo", ".crumb-bar", ".site-footer"].forEach(function (sel) {
+            /* The same goes for the furniture fixed to the window's edge. Inside the
+               frame it is pinned to the frame's edge instead, so the accessibility tab
+               and the "Make it yours" card showed twice, one copy just inside the
+               other, which read as the window looking into itself. The page around
+               the frame already offers both. */
+            [".site-header", ".nav-photo", ".crumb-bar", ".site-footer",
+             "#a11y-widget", "#themeWelcome"].forEach(function (sel) {
                 doc.querySelectorAll(sel).forEach(function (el) { el.style.display = "none"; });
             });
 

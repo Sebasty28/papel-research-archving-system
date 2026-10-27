@@ -321,7 +321,7 @@ if (paper_scope_is_partial($scopeInfo)) {
                 $facts = [
                     'Academic Program'      => $paper['program_category'] ?? '',
                     'Paper / Research Type' => !empty($paper['paper_type']) ? paper_type_label($paper['paper_type']) : '',
-                    'Manuscript Type'       => $paper['manuscript_type'] ?? '',
+                    'Manuscript Type'       => manuscript_type_label($paper['manuscript_type'] ?? ''),
                     'Paper Status'          => $paper['publication_status'] ?? '',
                     'Published In'          => $paper['publication_location'] ?? '',
                     'Date Completed'        => !empty($paper['research_date']) ? date('F j, Y', strtotime($paper['research_date'])) : '',

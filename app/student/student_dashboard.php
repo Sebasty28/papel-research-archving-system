@@ -98,7 +98,7 @@ if ($search) {
     $where .= " AND (rp.title LIKE ? OR rp.keywords LIKE ? OR rp.abstract LIKE ?)";
     $t = "%$search%"; array_push($params, $t, $t, $t); $types .= 'sss';
 }
-if ($filter_type)  { $where .= " AND rp.paper_type = ?";        $params[] = $filter_type;  $types .= 's'; }
+if ($filter_type)  { $where .= " AND " . paper_type_filter_sql('rp.paper_type', $filter_type, $params, $types); }
 if ($filter_year)  { $where .= " AND COALESCE(YEAR(rp.research_date), rp.year) = ?"; $params[] = $filter_year; $types .= 'i'; }
 if ($filter_month >= 1 && $filter_month <= 12) { $where .= " AND MONTH(rp.research_date) = ?"; $params[] = $filter_month; $types .= 'i'; }
 if ($filter_day   >= 1 && $filter_day   <= 31) { $where .= " AND DAY(rp.research_date) = ?";   $params[] = $filter_day;   $types .= 'i'; }
@@ -609,10 +609,10 @@ ob_start();
                     <label class="filter-radio">
                         <input type="radio" name="type" value="" <?= $filter_type === '' ? 'checked' : '' ?>> All Types
                     </label>
-                    <?php foreach (['capstone', 'research', 'thesis'] as $tv): ?>
+                    <?php foreach (paper_type_filter_options() as $tv => $tl): ?>
                         <label class="filter-radio">
                             <input type="radio" name="type" value="<?= e($tv) ?>" <?= $filter_type === $tv ? 'checked' : '' ?>>
-                            <?= e(paper_type_label($tv)) ?>
+                            <?= e($tl) ?>
                         </label>
                     <?php endforeach; ?>
                 </div>

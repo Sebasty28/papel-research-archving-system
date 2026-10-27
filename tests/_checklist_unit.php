@@ -249,5 +249,60 @@ $back = json_decode($json, true);
 t('round trip: what is stored decodes to what was cleaned', $back['items'] === $clean['items'] && $back['template'] === 'feasibility' && $back['edited'] === true);
 t('round trip: nothing in the JSON is more than the fields it names', array_keys($back) === ['v', 'template', 'edited', 'items']);
 
+/* ---- Other, for a paper type and a manuscript type ------------------------ */
+t('other type: a typed paper type is kept with its marker, cleaned',
+    paper_type_from_post('other', "  <b>Case</b>\t Study ", true) === 'other:Case Study', show(paper_type_from_post('other', "  <b>Case</b>\t Study ", true)));
+t('other type: and read back as the name alone',
+    paper_type_label('other:Case Study') === 'Case Study' && paper_type_other_name('other:Case Study') === 'Case Study');
+t('other type: a name is cut to the column, marker included',
+    strlen(paper_type_from_post('other', str_repeat('x', 500), true)) <= 50);
+t('other type: Other with nothing typed is refused on submit, in words',
+    (function () { try { paper_type_from_post('other', '   ', true); return false; } catch (UserFacingException $e) { return strpos($e->getMessage(), 'beside Other') !== false; } })());
+t('other type: but a draft keeps it, name to come',
+    paper_type_from_post('other', '', false) === 'other:' && paper_type_label('other:') === 'Other');
+t('other type: an offered type is kept as its code; a retired or unknown one is refused on submit',
+    paper_type_from_post('project', 'ignored', true) === 'project' && paper_type_from_post('journal', '', true) === null
+    && paper_type_from_post('<script>', '', true) === null && paper_type_from_post(['x'], '', true) === null);
+t('other type: the supporting documents stay optional',
+    paper_type_needs_documents('other:Case Study') === false && paper_type_needs_documents('capstone') === true);
+t('other type: the filter offers the form\'s types and then Other',
+    array_keys(paper_type_filter_options()) === ['capstone', 'undergrad_thesis', 'project', 'other']);
+$fp = []; $ft = '';
+$frag = paper_type_filter_sql('rp.paper_type', 'other', $fp, $ft);
+t('other type: filtering on Other matches every typed one',
+    $frag === 'rp.paper_type LIKE ?' && $fp === ['other:%'] && $ft === 's', show([$frag, $fp, $ft]));
+$fp = []; $ft = '';
+t('other type: any other filter value is matched exactly',
+    paper_type_filter_sql('rp.paper_type', 'capstone', $fp, $ft) === 'rp.paper_type = ?' && $fp === ['capstone']);
+t('other type: a name that looks like a code is still only a name',
+    paper_type_label('other:capstone') === 'capstone' && paper_type_label('capstone') === 'Capstone Project');
+
+t('other manuscript: Other is stored with its name',
+    manuscript_types_posted(['Other'], 'Policy Brief') === 'Other: Policy Brief');
+t('other manuscript: and stands alone, whatever else was ticked',
+    manuscript_types_posted(['IMRAD', 'Other', 'Full Manuscript'], 'Policy Brief') === 'Other: Policy Brief');
+t('other manuscript: a comma cannot split the stored list',
+    manuscript_types_posted(['Other'], 'Policy, Brief') === 'Other: Policy Brief'
+    && paper_declared_formats(manuscript_types_posted(['Other'], 'A, B, IMRAD')) === ['other'], show(manuscript_types_posted(['Other'], 'A, B, IMRAD')));
+t('other manuscript: tags and long names are cleaned and cut to the column',
+    strpos(manuscript_types_posted(['Other'], '<script>x</script>Brief'), '<') === false
+    && strlen(manuscript_types_posted(['Other'], str_repeat('y', 500))) <= 100);
+t('other manuscript: no name yet is kept as Other (a draft), and the handler can tell',
+    manuscript_types_posted(['Other'], '') === 'Other' && manuscript_other_name('Other') === '');
+t('other manuscript: the format is other, its one file is the primary one',
+    paper_declared_formats('Other: Policy Brief') === ['other'] && paper_primary_format(['other']) === 'other');
+t('other manuscript: shown as the name the author typed',
+    manuscript_type_label('Other: Policy Brief') === 'Policy Brief' && manuscript_type_label('IMRAD, Full Manuscript') === 'IMRAD, Full Manuscript'
+    && manuscript_type_label('Other') === 'Other' && manuscript_type_label(null) === '');
+t('other manuscript: the two named types are unchanged',
+    manuscript_types_posted(['IMRAD', 'Full Manuscript'], 'ignored') === 'IMRAD, Full Manuscript'
+    && paper_declared_formats('IMRAD, Full Manuscript') === ['imrad', 'full']);
+t('other manuscript: the checklist starts on a blank list; the others start as before',
+    paper_checklist_default('Other: Policy Brief', 'capstone') === 'blank'
+    && paper_checklist_default('Other: Policy Brief', 'project') === 'feasibility'
+    && paper_checklist_default('IMRAD', 'other:Case Study') === 'imrad'
+    && paper_checklist_default('Full Manuscript', 'other:Case Study') === 'undergrad_thesis'
+    && paper_checklist_default('Full Manuscript', 'capstone') === 'capstone');
+
 echo "SUMMARY passed=$passed failed=$failed\n";
 exit($failed ? 1 : 0);

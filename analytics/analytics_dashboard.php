@@ -223,7 +223,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
         fputcsv($out, ['Filtered by',
             'Year: '    . ($fYear    ?: 'all'),
             'Program: ' . ($fProgram ?: 'all'),
-            'Type: '    . ($fType    ?: 'all'),
+            'Type: '    . ($fType    ? paper_type_label($fType) : 'all'),
             'Status: '  . ($fStatus  ?: 'all'),
             'Search: '  . ($fQuery   ?: 'none')]);
     }
@@ -243,7 +243,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     fputcsv($out, ['BY PAPER TYPE']);
     fputcsv($out, ['Type', 'Submissions', 'Share (%)']);
     foreach ($paperTypeStats as $r) {
-        fputcsv($out, [$r['paper_type'], $r['count'],
+        fputcsv($out, [paper_type_label($r['paper_type']), $r['count'],
             $totalPapers > 0 ? round(($r['count'] / $totalPapers) * 100, 1) : 0]);
     }
     fputcsv($out, []);
@@ -258,7 +258,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
                               $FROM $WHERE ORDER BY {$SORTS[$sort][0]} $dir"));
     foreach ($everything as $r) {
         fputcsv($out, [substr((string)$r['upload_date'], 0, 10), $r['title'], $r['student'],
-                       $r['program'], $r['paper_type'], $r['current_status']]);
+                       $r['program'], paper_type_label($r['paper_type']), $r['current_status']]);
     }
     fclose($out);
     exit;
@@ -283,7 +283,7 @@ if (in_array($exportFormat, ['xlsx', 'docx', 'pdf'], true)) {
         $bits = [];
         if ($fYear)    $bits[] = 'Year ' . $fYear;
         if ($fProgram) $bits[] = program_code($fProgram) ?: $fProgram;
-        if ($fType)    $bits[] = ucfirst($fType);
+        if ($fType)    $bits[] = paper_type_label($fType);
         if ($fStatus)  $bits[] = str_replace('_', ' ', $fStatus);
         if ($fQuery)   $bits[] = 'matching "' . $fQuery . '"';
         $filterLine = 'Filtered by ' . implode(' · ', $bits);
@@ -339,7 +339,7 @@ if (in_array($exportFormat, ['xlsx', 'docx', 'pdf'], true)) {
         $x->section('By paper type');
         $x->headRow(['Type', 'Submissions', 'Share of all papers (%)']);
         foreach ($paperTypeStats as $r) {
-            $x->row([ucfirst((string)$r['paper_type']), (int)$r['count'],
+            $x->row([paper_type_label((string)$r['paper_type']), (int)$r['count'],
                      $totalPapers > 0 ? round(($r['count'] / $totalPapers) * 100, 1) : 0]);
         }
 
@@ -352,7 +352,7 @@ if (in_array($exportFormat, ['xlsx', 'docx', 'pdf'], true)) {
         foreach ($everything as $r) {
             $x->row([substr((string)$r['upload_date'], 0, 10), $r['title'], $r['student'],
                      program_code((string)$r['program']) ?: $r['program'],
-                     ucfirst((string)$r['paper_type']),
+                     paper_type_label((string)$r['paper_type']),
                      ucwords(str_replace('_', ' ', (string)$r['current_status']))], [0]);
         }
 
@@ -393,7 +393,7 @@ if (in_array($exportFormat, ['xlsx', 'docx', 'pdf'], true)) {
 
         $d->heading('By paper type');
         $d->table([['Type', 3, 'left'], ['Submissions', 1, 'right'], ['Share', 1, 'right']],
-                  array_map(fn($r) => [ucfirst((string)$r['paper_type']),
+                  array_map(fn($r) => [paper_type_label((string)$r['paper_type']),
                                        (string)(int)$r['count'],
                                        ($totalPapers > 0
                                             ? round(($r['count'] / $totalPapers) * 100, 1)
@@ -453,7 +453,7 @@ if (in_array($exportFormat, ['xlsx', 'docx', 'pdf'], true)) {
 
     $pdf->heading('By paper type');
     $pdf->table([['Type', 259, 'l'], ['Submissions', 120, 'r'], ['Share', 120, 'r']],
-                array_map(fn($r) => [ucfirst((string)$r['paper_type']),
+                array_map(fn($r) => [paper_type_label((string)$r['paper_type']),
                                      (string)(int)$r['count'],
                                      ($totalPapers > 0
                                         ? round(($r['count'] / $totalPapers) * 100, 1)
@@ -792,7 +792,7 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
                 <select name="type" id="fType">
                     <option value="">All types</option>
                     <?php foreach ($optTypes as $t): ?>
-                        <option value="<?= e($t) ?>" <?= $fType === $t ? 'selected' : '' ?>><?= e($t) ?></option>
+                        <option value="<?= e($t) ?>" <?= $fType === $t ? 'selected' : '' ?>><?= e(paper_type_label($t)) ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
@@ -979,7 +979,7 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
                         <tr>
                             <td>
                                 <a href="<?= e($qs(['type' => $row['paper_type'] === 'Unspecified' ? '' : $row['paper_type'], 'page' => 1])) ?>"
-                                   class="an-sort"><?= e($row['paper_type']) ?></a>
+                                   class="an-sort"><?= e(paper_type_label($row['paper_type'])) ?></a>
                             </td>
                             <td class="an-num an-strong" data-value="<?= (int)$row['count'] ?>"><?= number_format((int)$row['count']) ?></td>
                             <td class="an-num" data-value="<?= $pct ?>">
@@ -1072,7 +1072,7 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
                         <td title="<?= e($p['program'] ?? '') ?>">
                             <?= e($p['program'] ? (function_exists('program_code') ? program_code($p['program']) : $p['program']) : 'N/A') ?>
                         </td>
-                        <td><?= e($p['paper_type'] ?: 'N/A') ?></td>
+                        <td><?= e($p['paper_type'] ? paper_type_label($p['paper_type']) : 'N/A') ?></td>
                         <td><span class="an-status <?= e($cls) ?>"><?= e($label) ?></span></td>
                         <td class="an-when"><?= e(date('M j, Y', strtotime($p['upload_date']))) ?></td>
                     </tr>
@@ -1166,10 +1166,10 @@ document.addEventListener('DOMContentLoaded', function () {
         'monthly'  => [['label' => 'Last month', 'value' => $lastMonth],
                        ['label' => 'This month', 'value' => $thisMonth]],
         'approval' => array_map(function ($r) {
-            return ['label' => $r['paper_type'], 'value' => (float)$r['rate']];
+            return ['label' => paper_type_label($r['paper_type']), 'value' => (float)$r['rate']];
         }, $approvalByType),
         'types'    => array_map(function ($r) {
-            return ['label' => $r['paper_type'], 'value' => (int)$r['count']];
+            return ['label' => paper_type_label($r['paper_type']), 'value' => (int)$r['count']];
         }, $paperTypeStats),
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 

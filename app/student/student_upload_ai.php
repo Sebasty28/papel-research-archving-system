@@ -316,7 +316,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
        asks when the draft is next opened. Everything typed is kept whatever the
        choice: narrowing it and widening it again must not lose a section the
        student had already written. The choice is only enforced on submit. */
-    $scope = section_scope_parse($_POST['section_scope'] ?? null);
+    // The Abstract may be left out only for sections of the author's own (section_scope_for()).
+    $scope = section_scope_for($_POST['section_scope'] ?? null, $_POST['custom_sections'] ?? '', false);
     if ($scope !== null) { $sections[PAPER_SCOPE_KEY] = $scope; }
     /* The sections the author added for themselves, with whatever has been typed in
        them (an empty one is kept: it is a draft). Nothing chosen yet means every
@@ -327,9 +328,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
     $abstract     = rich_text_to_plain($sections['abstract']);
 
     $keywords    = trim($_POST['keywords'] ?? '');
-    $paperType   = trim($_POST['paper_type'] ?? '');
+    // Other is kept with whatever has been typed beside it so far ("other:Case Study").
+    $paperType   = paper_type_from_post($_POST['paper_type'] ?? '', $_POST['paper_type_other'] ?? '', false);
     $researchTy  = trim($_POST['research_type'] ?? '');
-    $manuscript  = manuscript_types_posted($_POST['manuscript_type'] ?? []);
+    $manuscript  = manuscript_types_posted($_POST['manuscript_type'] ?? [], $_POST['manuscript_type_other'] ?? '');
     $statusArr   = $_POST['paper_status'] ?? [];
     $pubStatus   = is_array($statusArr) ? implode(', ', $statusArr) : '';
     $pubLocation = trim($_POST['publication_location'] ?? '');
@@ -512,12 +514,17 @@ if ($draftRow) {
       'year'                 => $draftRow['year'],
       'research_date'        => $draftRow['research_date'],
       'keywords'             => $draftRow['keywords'],
-      'paper_type'           => $draftRow['paper_type'],
-      'research_type'        => $draftRow['research_type'],
-      'manuscript_type'      => $draftRow['manuscript_type'],
+      /* Other goes back as what the form posts: the choice, and the name in the box
+         beside it, not the stored "other:Case Study" that no option carries. */
+      'paper_type'            => paper_type_other_name($draftRow['paper_type']) !== null ? PAPER_TYPE_OTHER : $draftRow['paper_type'],
+      'paper_type_other'      => (string)paper_type_other_name($draftRow['paper_type']),
+      'research_type'         => $draftRow['research_type'],
+      'manuscript_type'       => manuscript_other_name($draftRow['manuscript_type']) !== null ? MANUSCRIPT_OTHER : $draftRow['manuscript_type'],
+      'manuscript_type_other' => (string)manuscript_other_name($draftRow['manuscript_type']),
       'publication_location' => $draftRow['publication_location'],
       'program_category'     => $draftRow['program_category'],
-      'section_scope'        => $draftScope ? implode(',', $draftScope) : '',
+      // Nothing recorded is an empty field; none of the six (Custom, no Abstract) is a word of its own.
+      'section_scope'        => $draftScope === null ? '' : ($draftScope ? implode(',', $draftScope) : SECTION_SCOPE_NONE),
     ], $sections, $draftCustomFields),
     'status' => $draftRow['publication_status'],
   ];
@@ -553,8 +560,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
        so the form can never offer something the handler then refuses. A
        retired type is rejected here on purpose: it may still sit on an older
        paper, but nothing new may be filed under one. */
-    $paperType = trim($_POST['paper_type'] ?? '');
-    if (!array_key_exists($paperType, paper_types())) {
+    $paperType = paper_type_from_post($_POST['paper_type'] ?? '', $_POST['paper_type_other'] ?? '', true);
+    if ($paperType === null) {
       throw new Exception('Invalid paper type');
     }
     
@@ -578,9 +585,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
        is one PDF to find for each of them and none for a format that was not
        ticked. The browser will not leave step 1 without one, but the browser is
        not the thing being trusted. */
-    $manuscriptType = manuscript_types_posted($_POST['manuscript_type'] ?? []);
+    $manuscriptType = manuscript_types_posted($_POST['manuscript_type'] ?? [], $_POST['manuscript_type_other'] ?? '');
     if ($manuscriptType === '') {
         throw new UserFacingException('Please choose at least one manuscript type.');
+    }
+    if (manuscript_other_name($manuscriptType) === '') {
+        throw new UserFacingException('Please type what your manuscript is called, in the box beside Other.');
     }
     $formats = paper_declared_formats($manuscriptType);
     $dual    = count($formats) > 1;
@@ -593,7 +603,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     // One PDF for each format that was ticked.
     $pdfs = [];
     foreach ($formats as $fmt) {
-        $label = manuscript_format_label($fmt);
+        // An Other file is named in the student's own words ("your Policy Brief PDF").
+        $label = $fmt === 'other' ? manuscript_type_label($manuscriptType) : manuscript_format_label($fmt);
         $f = $_FILES['pdf_' . $fmt] ?? null;
         // A page opened before this update still posts its one file as research_pdf.
         if ((!$f || ($f['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE)
@@ -611,11 +622,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
         $pdfs[$fmt] = $f;
     }
     // A file for a format that was not ticked is refused, not quietly stored.
-    foreach (['imrad', 'full'] as $fmt) {
+    foreach (['imrad', 'full', 'other'] as $fmt) {
         $f = $_FILES['pdf_' . $fmt] ?? null;
         if (!in_array($fmt, $formats, true) && $f && ($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
             throw new UserFacingException(
-                'A ' . manuscript_format_label($fmt) . ' PDF was attached, but that manuscript type is not ticked. '
+                'A PDF was attached for ' . manuscript_format_label($fmt) . ', but that manuscript type is not ticked. '
               . 'Tick it in step 1, or remove the file.');
         }
     }
@@ -673,7 +684,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
        not what decides this: a section outside the choice is stored empty
        whatever was posted for it, and one inside it must be written, so what is
        filed always matches what the reviewers are told. */
-    $scope = section_scope_resolve($_POST['section_scope'] ?? null);
+    /* The Abstract is required unless the author is submitting sections of their own
+       instead (Custom), in which case it is theirs to leave out. */
+    $scope = section_scope_for($_POST['section_scope'] ?? null, $_POST['custom_sections'] ?? '', true);
 
     $sections = [];
     foreach ($sectionKeys as $key) {
@@ -779,7 +792,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     if(strlen($safeTitle)> 30) $safeTitle = substr($safeTitle, 0, 30);
     $submissionFolder = "{$unique}_{$safeTitle}";
 
-    $destDir = __DIR__ . "/uploads/research/$programFolder/$paperType/$y/$m/$submissionFolder";
+    // The type's folder, never a typed name (paper_type_folder()).
+    $typeFolder = paper_type_folder($paperType);
+    $destDir = __DIR__ . "/uploads/research/$programFolder/$typeFolder/$y/$m/$submissionFolder";
     ensure_dir($destDir);
     $stagingDirs[] = $destDir;
 
@@ -807,7 +822,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
       $gdriveId = null;
       // Note: The gdrive function receives the local path, not the URL path. This is correct.
       if (function_exists('upload_paper_to_gdrive')) {
-        $gdriveId = upload_paper_to_gdrive($destPath, $driveName, $programFolder, (string)$year, $paperType, $title, 'PAPEL - DOCUMENTS', $u['user_id']);
+        $gdriveId = upload_paper_to_gdrive($destPath, $driveName, $programFolder, (string)$year, $typeFolder, $title, 'PAPEL - DOCUMENTS', $u['user_id']);
       }
       if (!$gdriveId) {
         throw new Exception('Google Drive upload failed. Please check system configuration.');
@@ -815,7 +830,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
       $driveMade[] = $gdriveId;
 
       $stored[$fmt] = [
-        'rel'   => "uploads/research/$programFolder/$paperType/$y/$m/$submissionFolder/" . basename($destPath),
+        'rel'   => "uploads/research/$programFolder/$typeFolder/$y/$m/$submissionFolder/" . basename($destPath),
         'size'  => filesize($destPath) ?: 0,
         'drive' => $gdriveId,
       ];
@@ -980,13 +995,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
           $dest = $supDir . "/{$paper_id}_{$docType}_{$safe}.pdf";
           if (move_uploaded_file($_FILES[$docType]['tmp_name'], $dest)) {
             $stagedFiles[] = $dest;
-            $rel = "uploads/research/$programFolder/$paperType/$y/$m/$submissionFolder/supporting_documents/" . basename($dest);
+            $rel = "uploads/research/$programFolder/$typeFolder/$y/$m/$submissionFolder/supporting_documents/" . basename($dest);
             $fullUrlRel = $rel;   // relative, for the reasons above
 
             // Upload to Google Drive
             $docGdriveId = null;
             if (function_exists('upload_supporting_doc_to_gdrive')) {
-                $docGdriveId = upload_supporting_doc_to_gdrive($dest, ucfirst(str_replace('_', ' ', $docType)) . '.pdf', $programFolder, (string)$year, $paperType, $title, $u['user_id']);
+                $docGdriveId = upload_supporting_doc_to_gdrive($dest, ucfirst(str_replace('_', ' ', $docType)) . '.pdf', $programFolder, (string)$year, $typeFolder, $title, $u['user_id']);
             }
             if (!$docGdriveId) {
                 throw new Exception("Failed to upload supporting document ($docType) to Google Drive.");
@@ -1019,13 +1034,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
         $dest = $supDir . "/{$paper_id}_{$otherType}_{$safe}.pdf";
         if (move_uploaded_file($_FILES['other_doc']['tmp_name'], $dest)) {
           $stagedFiles[] = $dest;
-          $rel = "uploads/research/$programFolder/$paperType/$y/$m/$submissionFolder/supporting_documents/" . basename($dest);
+          $rel = "uploads/research/$programFolder/$typeFolder/$y/$m/$submissionFolder/supporting_documents/" . basename($dest);
           $fullUrlRel = $rel;   // relative, for the reasons above
 
           // Upload to Google Drive
           $otherGdriveId = null;
           if (function_exists('upload_supporting_doc_to_gdrive')) {
-              $otherGdriveId = upload_supporting_doc_to_gdrive($dest, ucfirst(str_replace('_', ' ', $otherType)) . '.pdf', $programFolder, (string)$year, $paperType, $title, $u['user_id']);
+              $otherGdriveId = upload_supporting_doc_to_gdrive($dest, ucfirst(str_replace('_', ' ', $otherType)) . '.pdf', $programFolder, (string)$year, $typeFolder, $title, $u['user_id']);
           }
           if (!$otherGdriveId) {
               throw new Exception("Failed to upload optional document ($otherType) to Google Drive.");
@@ -1478,6 +1493,15 @@ body {
   flex-wrap: wrap;
 }
 .check-row .form-check { margin-bottom: 0; }
+/* Other, the way a Google Form has it: the word, then a short box to type in. Typing
+   in the box ticks it. */
+.check-row .form-check.other-check { display: flex; align-items: center; gap: .5rem; }
+.other-check .form-check-input { flex: 0 0 auto; }
+/* As tall as the row of boxes it sits in, not a full-size field: .form-control's own
+   height and padding are what made it stand a head taller than its neighbours. */
+.check-row .other-input { width: 13rem; max-width: 100%; height: 30px; min-height: 0; padding: .125rem .5rem; font-size: .875rem; line-height: 1.4; }
+.paper-type-other { margin-top: .5rem; }
+.paper-type-other[hidden] { display: none; }
 /* A journal name is a short thing; the full width of the card overstated it. */
 .pub-location { max-width: 32rem; }
 
@@ -1569,7 +1593,12 @@ body.pdf-docked .doc-editor.is-expanded { right: var(--pdf-dock-w, 460px); }
    changes, so the body class can outlive it, and keyed on the class alone this
    would pin the panel to a box's edges with no box there to line up with. */
 /* !important: pdf_dock.php writes the panel's live top and bottom onto it inline. */
-body.doc-expanded:has(.doc-editor.is-expanded) .pdf-dock { top: var(--pdf-dock-top, 37px) !important; bottom: 0 !important; }
+body.doc-expanded:has(.doc-editor.is-expanded) .pdf-dock:not(.is-inline) { top: var(--pdf-dock-top, 37px) !important; bottom: 0 !important; }
+/* Docked as a card it stands off the edges with rounded corners; beside a section that
+   fills the window it is flush with them again, the two of them one screen. */
+body.doc-expanded:has(.doc-editor.is-expanded) .pdf-dock.as-card:not(.is-inline) { right: 0; border: 0; border-radius: 0; padding: 0; background: transparent; box-shadow: -4px 0 24px rgba(51, 0, 0, .10); }
+body.doc-expanded:has(.doc-editor.is-expanded) .pdf-dock.as-card:not(.is-inline) .pdf-dock-head,
+body.doc-expanded:has(.doc-editor.is-expanded) .pdf-dock.as-card:not(.is-inline) .pdf-dock-stage { border-radius: 0; }
 
 /* While a section is expanded the chat and the accessibility button step out
    of the way: nothing is closed or reset, they are only hidden, so both come
@@ -1579,58 +1608,95 @@ body.doc-expanded:has(.doc-editor.is-expanded) .pdf-dock { top: var(--pdf-dock-t
 html.doc-expanded #a11y-widget,
 body.doc-expanded #a11y-widget,
 body.doc-expanded #chat-widget { display: none !important; }
+/* The footer and the breadcrumb strip are at 902 on this page (in front of Corpus, and
+   of the PDF panel while it is docked), and the box is at 800. So a footer on screen
+   when a section was opened lay across the bottom of the box and of the panel beside
+   it, and Step 2 is short enough to show its footer the moment a PDF arrives and the
+   panel opens. Scrolled up first, it was out of sight and all seemed well. While a box
+   is up they are hidden under it, as is the one-time theme card. visibility, not
+   display: the page behind is held still, and its height must not change under it. */
+html.doc-expanded:has(.doc-editor.is-expanded) .site-footer,
+html.doc-expanded:has(.doc-editor.is-expanded) .crumb-bar,
+html.doc-expanded:has(.doc-editor.is-expanded) #themeWelcome { visibility: hidden; }
 /* Their reserved space goes with them, so the box gets the full width. The
    inset the navbar reads is released with it: see --chat-inset-* below. */
 body.doc-expanded.chat-docked-left  { padding-left: 0;  --chat-inset-left: 0px; }
 body.doc-expanded.chat-docked-right { padding-right: 0; --chat-inset-right: 0px; }
+/* The page behind holds still while a box fills the window: no scrollbar down the right,
+   and a wheel or a swipe at the end of the box's own text no longer scrolls the form
+   underneath it. Keyed on a box really being expanded, as the panel's rule above is. */
+/* On <html> only. Set on <body> as well, the body became a scroll box of its own and the
+   navbar, which sticks to the top of the window, went off with the page under the box. */
+html.doc-expanded:has(.doc-editor.is-expanded) { overflow: hidden; }
+/* The page's own dialog sets overflow:hidden on <body> while it is up (the explanation
+   opens over the full view the first time a section is written in). With <html> already
+   holding still that only made <body> a scroll box, the navbar slid away under the box,
+   and the edge pdf_dock.php measured from it went to 0 and stayed there. */
+html.doc-expanded:has(.doc-editor.is-expanded) > body { overflow: visible !important; }
+.doc-editor.is-expanded .doc-surface { overscroll-behavior: contain; }
 /* Holds the page's height so nothing jumps while a box is lifted out of flow. */
 .doc-editor-spacer { margin-bottom: 1.25rem; }
 .doc-expand { color: var(--grey); }
 .doc-expand:hover { color: var(--maroon); }
 
-/* Section tabs, along the bottom the way a spreadsheet names its sheets.
-   They exist only while a section is expanded, because that is the only time
-   the other four are out of sight, on the form itself they are all just
-   there, one under the other. */
+/* Section tabs, down the left like the contents of a document. They exist only
+   while a section is expanded, because that is the only time the others are out of
+   sight; on the form itself they are all just there, one under the other. The box
+   becomes two columns, the tabs and the section, and the tabs scroll on their own
+   when a paper has more sections than fit. */
 .doc-tabs { display: none; }
+.doc-editor.is-expanded {
+  display: grid;
+  grid-template-columns: 14rem minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.doc-editor.is-expanded > * { grid-column: 2; }
+.doc-editor.is-expanded .doc-surface { grid-row: 2; }
 .doc-editor.is-expanded .doc-tabs {
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
   gap: .25rem;
-  flex: 0 0 auto;
-  padding: .4rem .75rem 0;
-  border-top: 1px solid var(--border);
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  padding: .75rem .5rem;
+  border-right: 1px solid var(--border);
   background: var(--cream);
-  overflow-x: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   scrollbar-width: thin;
 }
+.doc-tabs-title {
+  margin: 0 .5rem .35rem;
+  font-size: .6875rem; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--grey);
+}
 .doc-tab {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: .4rem;
-  position: relative;
-  top: 1px;                       /* sits on the border, like a real tab */
-  padding: .4rem .85rem;
-  border: 1px solid var(--border);
-  border-bottom: none;
-  border-radius: var(--r-control, 4px) var(--r-control, 4px) 0 0;
-  background: #fdf4f3;
+  gap: .5rem;
+  width: 100%;
+  padding: .45rem .65rem;
+  border: 1px solid transparent;
+  border-radius: var(--r-control, 4px);
+  background: transparent;
   color: var(--ink);
   font-family: inherit;
-  font-size: .75rem;
-  line-height: 1.4;
-  white-space: nowrap;
+  font-size: .8125rem;
+  line-height: 1.35;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
   cursor: pointer;
   transition: background .15s, color .15s;
 }
+.doc-tab-name { flex: 1 1 auto; min-width: 0; }
 .doc-tab:hover { background: var(--white); color: var(--maroon); }
 .doc-tab:focus-visible { outline: 2px solid var(--maroon); outline-offset: -2px; }
 .doc-tab.is-active {
   background: var(--white);
   color: var(--maroon);
   font-weight: 500;
-  border-color: var(--maroon);
-  box-shadow: 0 -2px 0 var(--maroon) inset;
+  border-color: var(--border);
 }
 /* A section still to be written carries a dot: the form needs all five, and
    this is the only view where the empty ones are otherwise invisible. */
@@ -1640,8 +1706,22 @@ body.doc-expanded.chat-docked-right { padding-right: 0; --chat-inset-right: 0px;
 }
 .doc-tab.is-active .doc-tab-dot { opacity: .7; }
 
+/* On a phone a column of names would leave no room to write in, so the tabs are a row
+   across the top instead, scrolled sideways. */
 @media (max-width: 700px) {
-  .doc-tab { padding: .4rem .6rem; }
+  .doc-editor.is-expanded { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr); }
+  .doc-editor.is-expanded > * { grid-column: 1; }
+  .doc-editor.is-expanded .doc-editor-head { grid-row: 2; }
+  .doc-editor.is-expanded .doc-surface { grid-row: 3; }
+  .doc-editor.is-expanded .doc-tabs {
+    grid-row: 1; flex-direction: row; overflow-x: auto; overflow-y: hidden;
+    padding: .4rem .5rem; border-right: 0; border-bottom: 1px solid var(--border);
+    /* Swiped, not dragged by a bar: the site's thick maroon scrollbar read as a rule under the tabs. */
+    scrollbar-width: none;
+  }
+  .doc-editor.is-expanded .doc-tabs::-webkit-scrollbar { display: none; }
+  .doc-tabs-title { display: none; }
+  .doc-tab { width: auto; flex: 0 0 auto; white-space: nowrap; padding: .4rem .6rem; }
 }
 
 /* Section label, toolbar and word count share one row. Keeping them on
@@ -2075,9 +2155,7 @@ body.doc-expanded.chat-docked-right { padding-right: 0; --chat-inset-right: 0px;
   color: var(--dark-maroon);
 }
 
-/* The third way out of the leave dialog, sitting in the corner of the header
-   rather than among the buttons. It is neither the safe choice nor the
-   recommended one, so it stays out of the row where those two live. */
+/* Closes a question that has a third answer, from the corner of the header. */
 .papel-dialog-x {
   margin-left: auto;          /* the far corner, whatever the title's length */
   display: inline-flex;
@@ -2361,8 +2439,39 @@ hr {
 .chat-nudge-x:hover { color: var(--maroon); border-color: var(--soft-maroon); }
 .chat-nudge-x .material-symbols-outlined { font-size: 14px; }
 
+/* Where the side card is, Corpus's button is at the end of its tabs (or at the foot
+   of its rail) and the floating widget is hidden, so the card is taken out to the
+   page and placed against that button instead (place(), in chatNudge): under it,
+   pointing up, or beside the rail, pointing across. The notch is the same square,
+   showing the two edges that face the button. */
+.chat-nudge.is-fixed {
+    position: fixed;
+    left: auto;
+    bottom: auto;
+    z-index: 910;
+}
+.chat-nudge.is-fixed[data-at="below"] { transform: translateY(-6px); }
+.chat-nudge.is-fixed[data-at="left"]  { transform: translateX(6px); }
+.chat-nudge.is-fixed[data-at="right"] { transform: translateX(-6px); }
+.chat-nudge.is-fixed.is-on { transform: none; }
+.chat-nudge.is-fixed[data-at="below"]::after {
+    top: -6px; bottom: auto; left: auto; right: var(--notch, 14px);
+    border: 0; border-left: 1px solid var(--border); border-top: 1px solid var(--border);
+}
+.chat-nudge.is-fixed[data-at="left"]::after {
+    right: -6px; left: auto; bottom: auto; top: calc(50% - 5px);
+    border: 0; border-top: 1px solid var(--border); border-right: 1px solid var(--border);
+}
+.chat-nudge.is-fixed[data-at="right"]::after {
+    left: -6px; bottom: auto; top: calc(50% - 5px);
+    border: 0; border-left: 1px solid var(--border); border-bottom: 1px solid var(--border);
+}
+.chat-nudge.is-fixed:hover::after { border-color: var(--soft-maroon); }
+
 /* No slide: the card fades in and out and stays where it is. */
 @media (prefers-reduced-motion: reduce) {
+    .chat-nudge.is-fixed,
+    .chat-nudge.is-fixed.is-on { transform: none; }
     .chat-nudge,
     .chat-nudge.is-on { transform: none; }
     .chat-nudge { transition: opacity .2s ease, visibility 0s linear .2s; }
@@ -2721,6 +2830,552 @@ body > .site-footer {
     margin-left:  calc(-1 * var(--chat-inset-left, 0px));
     margin-right: calc(-1 * var(--chat-inset-right, 0px));
     width: calc(100% + var(--chat-inset-left, 0px) + var(--chat-inset-right, 0px));
+}
+
+/* ----- Docked panels as cards beside the form -----
+   Docked, the PDF preview and Corpus are cards the way the form is: the form's cream
+   frame (.upload-shell: its ground, its padding and its corners) with the panel
+   inside it, the frame's top level with the form's, and the same gap (--dock-gap)
+   between every two of them and between each and the window's edge. So while either
+   is docked the form fills the room between them instead of staying centred, which
+   left a far wider gap beside a panel than the one at the window's edge. Only where
+   they share the screen; below 901px they cover the page as before.
+
+   The room on a docked side is the panel's width and two gaps (one at the window's
+   edge, one beside the form); on a free side it is one gap. Both go into the same
+   --chat-inset-* and --pdf-dock-room figures the bands are let out by, so the
+   navbar, the strip and the footer still run the full width of the window. */
+:root { --dock-gap: 6px; }
+/* The PDF panel's own gap is this one (html:root outweighs pdf_dock.php's :root, which comes later). */
+html:root { --pdf-dock-gap: var(--dock-gap); }
+/* The card's width is the PDF panel's usual one (pdf_dock.php), as on every paper page. */
+@media (min-width: 901px) {
+    body.chat-docked-left {
+        padding-left: calc(var(--chat-dock-w, 380px) + 2 * var(--dock-gap));
+        --chat-inset-left: calc(var(--chat-dock-w, 380px) + 2 * var(--dock-gap));
+    }
+    body.chat-docked-right {
+        padding-right: calc(var(--chat-dock-w, 380px) + 2 * var(--dock-gap));
+        --chat-inset-right: calc(var(--chat-dock-w, 380px) + 2 * var(--dock-gap));
+    }
+    /* :root for weight: the plain figure further down comes later in the sheet. */
+    :root body.pdf-docked { --pdf-dock-room: calc(var(--pdf-dock-w) + 2 * var(--dock-gap)); }
+    /* The side with nothing docked on it: one gap, so the form does not touch the edge. */
+    body.pdf-docked:not(.chat-docked-left),
+    body.chat-docked-right {
+        padding-left: var(--dock-gap);
+        --chat-inset-left: var(--dock-gap);
+    }
+    body.chat-docked-left:not(.pdf-docked) {
+        padding-right: var(--dock-gap);
+        --chat-inset-right: var(--dock-gap);
+    }
+    /* Folded away: the room is the rail's. Set as the room the PDF panel's rules
+       use too, so the bands are let out by the same figure. */
+    :root { --side-rail-w: 44px; }
+    :root body.side-collapsed { --pdf-dock-room: calc(var(--side-rail-w) + 2 * var(--dock-gap)); }
+    body.side-open.side-collapsed {
+        padding-right: calc(var(--side-rail-w) + 2 * var(--dock-gap));
+        --chat-inset-right: calc(var(--side-rail-w) + 2 * var(--dock-gap));
+    }
+    body.side-collapsed #pdfDock,
+    body.side-collapsed #chat-widget.is-docked,
+    body.side-collapsed #sideToc { visibility: hidden !important; pointer-events: none !important; }
+    /* The viewer's hint makes itself visible, which beats a hidden inherited from the
+       panel: it showed over the form with the card folded away, or behind another tab. */
+    body.side-collapsed #pdfDock .papel-pdf-toast,
+    .side-hidden .papel-pdf-toast { visibility: hidden !important; }
+    /* A section in full view takes the window: no PDF beside it while the card is folded away. */
+    body.side-collapsed.pdf-docked .doc-editor.is-expanded { right: 0; }
+    /* On the left (papelSide's side): every panel, the contents and the rail there
+       instead, the room made on the left, a gap on the right, and the bands let out
+       by the same figures. The PDF panel's room, which pads the right, is one gap. */
+    :root body.side-left.pdf-docked { --pdf-dock-room: var(--dock-gap); }
+    html body.side-open.side-left {
+        padding-left: calc(var(--pdf-dock-w) + 2 * var(--dock-gap));
+        --chat-inset-left: calc(var(--pdf-dock-w) + 2 * var(--dock-gap));
+        padding-right: var(--dock-gap);
+        --chat-inset-right: var(--dock-gap);
+    }
+    html body.side-open.side-left.side-collapsed {
+        padding-left: calc(var(--side-rail-w) + 2 * var(--dock-gap));
+        --chat-inset-left: calc(var(--side-rail-w) + 2 * var(--dock-gap));
+    }
+    body.side-left .pdf-dock.as-card:not(.is-inline),
+    body.side-left #chat-widget.is-docked,
+    body.side-left .side-toc,
+    body.side-left .side-rail { right: auto; left: var(--dock-gap); }
+    /* Corpus's round button goes to the other corner, off the card. */
+    body.side-left #chat-widget:not(.is-docked) { left: auto; right: 1.5rem; align-items: flex-end; }
+    /* A section in full view: the PDF flush with the left edge, the box beside it. */
+    body.side-left.pdf-docked .doc-editor.is-expanded { right: 0; left: var(--pdf-dock-w); }
+    body.side-left.side-collapsed.pdf-docked .doc-editor.is-expanded { left: 0; }
+    body.side-left.doc-expanded:has(.doc-editor.is-expanded) .pdf-dock.as-card:not(.is-inline) { left: 0; right: auto; }
+    /* The side card, whatever tab is on view (papelSide): the same room. */
+    body.side-open {
+        padding-right: calc(var(--pdf-dock-w) + 2 * var(--dock-gap));
+        --chat-inset-right: calc(var(--pdf-dock-w) + 2 * var(--dock-gap));
+        padding-left: var(--dock-gap);
+        --chat-inset-left: var(--dock-gap);
+    }
+    /* The form fills what is left, so its edge is a gap from each panel. */
+    body:is(.pdf-docked, .chat-docked-left, .chat-docked-right, .side-open) .upload-page {
+        max-width: none;
+        margin: 0;
+        padding-left: 0;
+        padding-right: 0;
+    }
+    body:is(.pdf-docked, .chat-docked-left, .chat-docked-right, .side-open) .upload-row { margin-left: 0; margin-right: 0; }
+    body:is(.pdf-docked, .chat-docked-left, .chat-docked-right, .side-open) .upload-row > .upload-shell {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+
+    /* Corpus, docked: the frame, its top worked out by placeChatDockTop(). */
+    #chat-widget.is-docked {
+        bottom: calc(var(--chat-lift, 0px) + var(--dock-gap));
+        padding: var(--dock-gap);
+        background: var(--cream);
+        border-radius: var(--r-card, 8px);
+    }
+    #chat-widget.is-docked.dock-left  { left: var(--dock-gap); }
+    #chat-widget.is-docked.dock-right { right: var(--dock-gap); }
+    #chat-widget.is-docked #chat-window,
+    #chat-widget.is-docked.dock-left #chat-window,
+    #chat-widget.is-docked.dock-right #chat-window {
+        border: 1px solid rgba(177,125,125,.22);     /* the form's own card */
+        border-radius: var(--r-card, 8px);
+        box-shadow: none;
+    }
+
+    /* The PDF preview, docked: the same frame round its header and pages. */
+    body .pdf-dock.as-card:not(.is-inline) {
+        padding: var(--dock-gap);
+        background: var(--cream);
+        border: 0;
+        box-shadow: none;
+    }
+    body .pdf-dock.as-card:not(.is-inline) .pdf-dock-head { border-radius: var(--r-card, 8px) var(--r-card, 8px) 0 0; }
+    body .pdf-dock.as-card:not(.is-inline) .pdf-dock-stage { border-radius: 0 0 var(--r-card, 8px) var(--r-card, 8px); overflow: hidden; }
+}
+
+/* ----- The side card's tabs (papelSide) -----
+   A strip across the top of the card, on its cream frame: each open panel a tab
+   with its icon and name, the one on view white with its close button, the other
+   plain until hovered. The strip is moved into whichever panel is on view. */
+/* The tab on view is joined to its page, as an editor's is: no gap under the
+   strip, the tab rounded only at the top, in its page's own colour and frame, and
+   laid 1px over the page's top edge so the line under it goes. */
+.side-tabs {
+    display: flex;
+    align-items: flex-end;
+    gap: .125rem;
+    flex: 0 0 auto;
+    margin-bottom: 0;
+    padding: 0 .25rem;
+    min-width: 0;
+    position: relative;
+    z-index: 2;
+    /* The card's width, so the tabs shrink to fit it. Corpus's widget lines its
+       children up at its end (for the floating button), and there the strip was only
+       as wide as its tabs: the third ran off the card and out of the window. */
+    align-self: stretch;
+    /* One height whichever tab is on view: the tabs differ by a pixel or two (the PDF's
+       is not laid over the page's edge), and the panels under them moved with it. */
+    height: 38px;
+    flex: 0 0 38px;
+}
+.side-tabs .side-tab.is-active {
+    border-radius: var(--r-card, 8px) var(--r-card, 8px) 0 0;
+    box-shadow: none;
+    margin-bottom: -1px;
+    border: 1px solid rgba(177,125,125,.22);
+    border-bottom: 0;
+    padding-bottom: 1px;
+}
+/* Each in its page's colour: the contents is white, Corpus's header cream, and the
+   PDF's header the maroon band, with white type on it. */
+.side-tabs[data-on="toc"] .side-tab.is-active { background: var(--white); }
+.side-tabs[data-on="corpus"] .side-tab.is-active { background: var(--white); }
+/* In the card, Corpus's header is white like its tab, so the two read as one. */
+#chat-widget.is-docked #chat-header { background: var(--white); }
+.side-tabs[data-on="pdf"] .side-tab.is-active {
+    background: var(--maroon-surface-hover);
+    border-color: var(--maroon-surface-hover);
+    color: #fff;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+.side-tabs[data-on="pdf"] .side-tab.is-active .side-tab-ico,
+.side-tabs[data-on="pdf"] .side-tab.is-active .side-tab-x { color: #fff; }
+.side-tabs[data-on="pdf"] .side-tab.is-active .side-tab-x:hover { background: rgba(255,255,255,.14); }
+.side-tab:not(.is-active) { margin-bottom: 3px; border: 1px solid transparent; }
+/* Folding it away, at the left end of the tabs. */
+.side-hide {
+    display: inline-flex; align-items: center; justify-content: center;
+    flex: 0 0 auto;
+    width: 30px; height: 30px; margin: 0 .25rem 3px 0;
+    border: 0; border-radius: var(--r-control, 4px);
+    background: none; color: var(--grey);
+    cursor: pointer;
+}
+.side-hide .material-symbols-outlined { font-size: 20px; }
+.side-move { margin-left: -.25rem; }
+.side-hide:hover { background: rgba(177,125,125,.12); color: var(--maroon); }
+.side-hide:focus-visible { outline: 2px solid var(--maroon); outline-offset: -2px; }
+
+/* The rail the card folds into (papelSide). */
+.side-rail {
+    position: fixed;
+    right: var(--dock-gap);
+    width: var(--side-rail-w);
+    z-index: 899;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: .25rem;
+    padding: var(--dock-gap) 0;
+    background: var(--cream);
+    border-radius: var(--r-card, 8px);
+}
+body.side-collapsed .side-rail { display: flex; }
+body.doc-expanded .side-rail { display: none !important; }
+.side-rail-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px;
+    border: 0; border-radius: var(--r-control, 4px);
+    background: none; color: var(--grey);
+    cursor: pointer;
+}
+.side-rail-btn:first-child { margin-bottom: .35rem; }
+.side-rail-btn .material-symbols-outlined { font-size: 20px; }
+.side-rail-btn .side-tab-ico { margin: 0; }
+.side-rail-btn:hover { background: var(--white); color: var(--maroon); }
+.side-rail-btn.is-on { background: var(--white); }
+.side-rail-btn:focus-visible { outline: 2px solid var(--maroon); outline-offset: -2px; }
+
+/* The resize handle on the card's inner edge, placed from script. */
+.side-grip {
+    position: fixed;
+    width: 10px;
+    z-index: 905;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: col-resize;
+    touch-action: none;
+}
+.side-grip[hidden] { display: none; }
+.side-grip::before {
+    content: '';
+    position: absolute;
+    top: 8px; bottom: 8px; left: 4px;
+    width: 2px;
+    border-radius: 1px;
+    background: var(--soft-maroon);
+    opacity: 0;
+    transition: opacity .15s;
+}
+.side-grip:hover::before, .side-grip:focus-visible::before, body.side-resizing .side-grip::before { opacity: 1; }
+.side-grip:focus-visible { outline: none; }
+/* While dragging, the pages and the form do not take the pointer, and nothing is selected. */
+body.side-resizing, body.side-resizing * { cursor: col-resize !important; user-select: none !important; }
+body.side-resizing #pdfDockScroll, body.side-resizing .col-lg-11.upload-shell { pointer-events: none; }
+/* The PDF's own handle gives way to the card's. */
+#pdfDock .pdf-dock-grip { display: none !important; }
+/* The contents has no close: it is the side card's own page, there whatever else is. */
+.side-tab.is-fixed .side-tab-x { display: none; }
+.side-tab.is-fixed .side-tab-main { padding-right: .65rem; }
+
+/* ----- The contents (papelSide) -----
+   The side card's first tab: every step and what is in it, the one being shown
+   marked, and a click going there. Placed and framed as the other two are. */
+.side-toc {
+    position: fixed;
+    right: var(--dock-gap);
+    width: var(--pdf-dock-w);
+    z-index: 899;
+    display: none;
+    flex-direction: column;
+    padding: var(--dock-gap);
+    background: var(--cream);
+    border-radius: var(--r-card, 8px);
+}
+body.side-open .side-toc { display: flex; }
+body.doc-expanded .side-toc { display: none !important; }   /* the full view has its own tabs */
+.side-toc-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    background: var(--white);
+    border: 1px solid rgba(177,125,125,.22);
+    border-radius: var(--r-card, 8px);
+    padding: .75rem .5rem 1rem;
+}
+.side-toc-title {
+    margin: .25rem .75rem .5rem;
+    font-size: .6875rem; letter-spacing: .04em; text-transform: uppercase;
+    color: var(--grey);
+}
+.side-toc-list, .side-toc-list ul { list-style: none; margin: 0; padding: 0; }
+.side-toc-step + .side-toc-step { margin-top: .35rem; }
+.side-toc-link {
+    display: flex; align-items: center; gap: .5rem;
+    width: 100%;
+    padding: .35rem .75rem;
+    border: 0; border-radius: var(--r-control, 4px);
+    background: none; color: var(--ink);
+    font-family: inherit; font-size: .8125rem; line-height: 1.35; text-align: left;
+    cursor: pointer;
+}
+.side-toc-link:hover { background: var(--cream); color: var(--maroon); }
+.side-toc-link:focus-visible { outline: 2px solid var(--maroon); outline-offset: -2px; }
+.side-toc-link[data-depth="0"] { font-weight: 500; }
+.side-toc-link[data-depth="1"] { padding-left: 2.35rem; color: var(--grey); }
+.side-toc-link[data-depth="2"] { padding-left: 3.35rem; color: var(--grey); font-size: .78rem; }
+.side-toc-link[data-depth="3"] { padding-left: 4.35rem; color: var(--grey); font-size: .78rem; }
+.side-toc-link[data-depth="1"]:hover, .side-toc-link[data-depth="2"]:hover, .side-toc-link[data-depth="3"]:hover { color: var(--maroon); }
+.side-toc-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    flex: 0 0 auto; width: 1.35rem; height: 1.35rem; border-radius: 50%;
+    border: 1px solid var(--border); font-size: .6875rem; color: var(--grey);
+}
+.side-toc-step.is-current > .side-toc-link { color: var(--maroon); }
+.side-toc-step.is-current .side-toc-num { background: var(--maroon); border-color: var(--maroon); color: #fff; }
+.side-toc-step.is-done .side-toc-num { background: var(--cream); color: var(--maroon); }
+.side-toc-link.is-here { background: var(--cream); color: var(--maroon); }
+.side-tab {
+    display: flex;
+    align-items: center;
+    flex: 0 1 auto;
+    min-width: 0;
+    border-radius: var(--r-control, 4px);
+    background: transparent;
+    color: var(--grey);
+    transition: background .15s, color .15s;
+}
+.side-tab:hover { background: rgba(177,125,125,.12); color: var(--ink); }
+.side-tab.is-active { background: var(--white); color: var(--ink); box-shadow: 0 1px 2px rgba(51,0,0,.08); }
+.side-tab-main {
+    display: flex; align-items: center; gap: .45rem;
+    min-width: 0;
+    padding: .4rem .25rem .4rem .65rem;
+    border: 0; background: none; color: inherit;
+    font-family: inherit; font-size: .8125rem; line-height: 1.3;
+    cursor: pointer;
+}
+.side-tab-main:focus-visible, .side-tab-x:focus-visible { outline: 2px solid var(--maroon); outline-offset: -2px; border-radius: var(--r-control, 4px); }
+/* A name too long for its room fades out at its end rather than being cut with
+   an ellipsis (fadeNames() sets .is-faded only on one that does not fit); the whole
+   name is the tab's tooltip. The PDF's name has a limit of its own, so a long file
+   name does not crowd out the other tabs. */
+.side-tab-name { overflow: hidden; text-overflow: clip; white-space: nowrap; }
+.side-tab[data-key="pdf"] { max-width: 15rem; }
+.side-tab-name.is-faded,
+#pdfDock .pdf-dock-name.is-faded {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 2.25rem), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 2.25rem), transparent);
+}
+#pdfDock .pdf-dock-name { text-overflow: clip; max-width: 18rem; }
+
+/* Corpus, closed: his round button at the far end of the tabs (and at the foot of the
+   rail), not floating in the window's corner, where it lay over the form. */
+.side-corpus {
+    display: inline-flex; align-items: center; justify-content: center;
+    flex: 0 0 auto;
+    width: 30px; height: 30px; margin: 0 0 3px auto;
+    padding: 0;
+    border: 0; border-radius: 50%;
+    background: var(--maroon);
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(51,0,0,.18);
+    transition: transform .15s;
+}
+.side-corpus img { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; }
+.side-corpus:hover { transform: scale(1.06); }
+.side-corpus:focus-visible { outline: 2px solid var(--maroon); outline-offset: 2px; }
+.side-rail .side-rail-corpus { margin-top: auto; }
+@media (min-width: 901px) {
+    /* Where the side card is, it holds Corpus's button, so the floating one goes. */
+    body.side-open #chat-widget:not(.is-docked) { display: none; }
+}
+.side-tab-ico { flex: 0 0 auto; font-size: 18px; color: var(--maroon); }
+.side-tab-puppy { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; }
+.side-tab-x {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; margin-right: .2rem;
+    border: 0; background: none; color: var(--grey);
+    border-radius: var(--r-control, 4px);
+    cursor: pointer;
+}
+.side-tab-x .material-symbols-outlined { font-size: 16px; }
+.side-tab-x:hover { background: var(--cream); color: var(--maroon); }
+/* Only the tab on view shows its close button, as in the picture this follows. */
+.side-tab:not(.is-active) .side-tab-x { display: none; }
+.side-tab:not(.is-active) .side-tab-main { padding-right: .65rem; }
+
+/* ----- Two panes with tabs (papelSide) -----
+   The form's card is the main pane and the side card the other; every panel is laid
+   over its pane's body (.in-pane, at the box the script measures), so one panel shows
+   in either pane without being moved in the page. */
+.main-tabs { display: none; }
+@media (min-width: 901px) {
+    /* The room, worked out by the script for whichever side the side pane is on. */
+    html body.panes {
+        padding-left: var(--room-l, 6px) !important;
+        padding-right: var(--room-r, 6px) !important;
+        --chat-inset-left: var(--room-l, 6px) !important;
+        --chat-inset-right: var(--room-r, 6px) !important;
+        --pdf-dock-room: var(--room-r, 6px) !important;
+    }
+    body.panes .upload-page { max-width: none; margin: 0; padding-left: 0; padding-right: 0; }
+    body.panes .upload-row { margin-left: 0; margin-right: 0; }
+    body.panes .upload-row > .upload-shell { flex: 0 0 100%; max-width: 100%; }
+    body.panes .main-tabs { display: flex; }
+    /* The main pane: its tabs, then its body, a white page that scrolls on its own. */
+    html.side-locked .col-lg-11.upload-shell { display: flex; flex-direction: column; overflow: hidden !important; }
+    html.side-locked .main-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        scrollbar-width: thin;
+        padding: 0 var(--dock-gap) var(--dock-gap);
+        background: var(--white);
+        border: 1px solid rgba(177,125,125,.22);
+        border-radius: 0 var(--r-card, 8px) var(--r-card, 8px) var(--r-card, 8px);
+    }
+    /* Another tab on view in the main pane: the form is under it, out of sight. */
+    #mainBody.is-covered > * { visibility: hidden; }
+}
+.side-pane {
+    position: fixed;
+    z-index: 870;
+    right: var(--dock-gap);
+    width: var(--pdf-dock-w);
+    display: flex;
+    flex-direction: column;
+    padding: var(--dock-gap);
+    background: var(--cream);
+    border-radius: var(--r-card, 8px);
+}
+.side-pane[hidden] { display: none; }
+body.side-left .side-pane { left: var(--dock-gap); right: auto; }
+.side-pane .pane-body { flex: 1 1 auto; min-height: 0; }
+/* A phone: the side pane covers the page while the PDF or Corpus is open. */
+@media (max-width: 900px) {
+    body.side-cover .side-pane { top: var(--pdf-dock-top, 57px); left: 0; right: 0; bottom: 0; width: auto; border-radius: 0; }
+}
+/* A panel over its pane's body. !important: the panels place themselves too (the PDF's
+   edges are written onto it on every scroll), and the box here is the one that counts. */
+.in-pane {
+    position: fixed !important;
+    top: var(--pane-t) !important;
+    left: var(--pane-l) !important;
+    width: var(--pane-w) !important;
+    height: var(--pane-h) !important;
+    right: auto !important;
+    bottom: auto !important;
+    max-width: none !important;
+    max-height: none !important;
+    margin: 0 !important;
+    z-index: 899 !important;
+    visibility: visible;      /* over the form, whose body is hidden under it */
+}
+/* The pane is their frame now, so they keep none of their own. */
+#pdfDock.in-pane,
+body #chat-widget.in-pane,
+#sideToc.in-pane { padding: 0 !important; background: transparent !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
+#sideToc.in-pane { display: flex !important; }
+body #chat-widget.in-pane { display: flex !important; }
+html body .doc-editor.is-expanded.in-pane {
+    border: 1px solid rgba(177,125,125,.22);
+    border-radius: 0 0 var(--r-card, 8px) var(--r-card, 8px);
+    box-shadow: none;
+}
+#pdfDock.in-pane.side-hidden, #chat-widget.in-pane.side-hidden, #sideToc.in-pane.side-hidden,
+.doc-editor.is-expanded.in-pane.side-hidden { visibility: hidden !important; pointer-events: none !important; }
+/* Each tab in its page's colour: the form's page is white, the Writing View's head cream. */
+.side-tabs[data-on="form"] .side-tab.is-active { background: var(--white); }
+.side-tabs[data-on="write"] .side-tab.is-active { background: var(--cream); }
+/* A very tight PDF tab still shows seven letters of its name. */
+.side-tab[data-key="pdf"] .side-tab-name { min-width: 7ch; }
+
+/* Dragging a tab (papelSide): it follows the pointer, a bar marks where it will go. */
+.side-tab.is-movable .side-tab-main { cursor: grab; }
+body.tab-dragging, body.tab-dragging * { cursor: grabbing !important; user-select: none !important; }
+body.tab-dragging #pdfDockScroll, body.tab-dragging .doc-surface, body.tab-dragging #chat-messages { pointer-events: none; }
+.side-tab.is-dragged { opacity: .4; }
+.side-tab-ghost {
+    position: fixed;
+    z-index: 20001;
+    pointer-events: none;
+    display: flex; align-items: center; gap: .45rem;
+    max-width: 16rem;
+    padding: .4rem .7rem;
+    background: var(--white);
+    color: var(--ink);
+    border: 1px solid var(--border);
+    border-radius: var(--r-control, 4px);
+    box-shadow: var(--shadow-md);
+    font-size: .8125rem;
+    white-space: nowrap; overflow: hidden;
+}
+.side-tab-ghost .side-tab-puppy { width: 18px; height: 18px; border-radius: 50%; }
+.side-tab-marker {
+    position: fixed;
+    z-index: 20000;
+    width: 3px;
+    border-radius: 2px;
+    background: var(--maroon);
+    pointer-events: none;
+}
+.side-tab-marker[hidden] { display: none; }
+
+/* The panel not on view: kept, only hidden (its pages, its conversation). */
+.side-hidden { visibility: hidden !important; pointer-events: none !important; }
+/* Beside a section in full view only the PDF has a place (Corpus steps out there),
+   so it shows whichever tab was on view. */
+body.doc-expanded .pdf-dock.side-hidden { visibility: visible !important; pointer-events: auto !important; }
+
+/* The tabs close the panels, and the side card is the only place either goes. */
+#pdfDock #pdfDockClose,
+#chatDockBtn, #chatSideBtn, #chatCloseBtn { display: none !important; }
+
+/* Corpus in the card: as wide as the PDF, so switching tabs keeps the card's size,
+   and a column, the tabs over its window. */
+#chat-widget.is-docked { display: flex; flex-direction: column; }
+#chat-widget.is-docked #chat-window { flex: 1 1 auto; min-height: 0; height: auto; }
+@media (min-width: 901px) {
+    body.chat-docked-right { --chat-dock-w: var(--pdf-dock-w, 460px); }
+
+    /* The form's card held in place beside it (lockForm). */
+    html.side-locked { overflow: hidden; }
+    /* Below the held form only the footer was left, out of sight. A page taller
+       than the window can still be scrolled by script (scrollIntoView scrolls every
+       box round its target, the window too), which slid the form under the bars for
+       a frame; without the footer the page is no taller than the window, so there is
+       nothing for anything to scroll. */
+    html.side-locked .site-footer { display: none; }
+    /* Its top a gap under the bars, like the side card's, and nothing under it. */
+    /* !important: the container's own py-4 is Bootstrap's, and that is !important. */
+    html.side-locked .upload-page { padding-top: var(--dock-gap) !important; padding-bottom: 0 !important; }
+    /* The white card a gap in from the frame, as in the side card. */
+    html.side-locked .upload-shell .upload-shell { padding: 0; }
+    html.side-locked .upload-steps { margin: .75rem 0 !important; }
+    html.side-locked > body { overflow: visible !important; }
+    html.side-locked .col-lg-11.upload-shell {
+        /* The frame as a border, not padding: padding scrolls away with the form,
+           which then ran up to the card's very edge; a border stays put, the same
+           cream all round as the side card's, with the scrollbar inside it. */
+        padding: 0;
+        border: var(--dock-gap) solid var(--cream);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        scrollbar-width: thin;
+    }
 }
 
 /* Too narrow to share the screen: overlay instead of squeezing the form. */
@@ -3589,18 +4244,22 @@ body > .site-footer {
    and under it: the same correction the chat's inset gets above. Without it
    each band stops short at the panel's edge, and the campus photo shows bare
    in the corner over the panel where the strip should be. */
-body.pdf-docked { padding-right: var(--pdf-dock-w); }
+/* Docked, the panel is a card a gap in from the window's edge (see $PDF_DOCK_CARD at
+   the include, and "Docked panels as cards" above, which sets the room with its gaps
+   where the panel shares the screen). */
+body.pdf-docked { --pdf-dock-room: var(--pdf-dock-w); }
+body.pdf-docked { padding-right: var(--pdf-dock-room); }
 body.pdf-docked > .site-header,
 body.pdf-docked > .crumb-bar {
-    margin-right: calc(-1 * var(--pdf-dock-w));
-    width: calc(100% + var(--chat-inset-left, 0px) + var(--pdf-dock-w));
+    margin-right: calc(-1 * var(--pdf-dock-room));
+    width: calc(100% + var(--chat-inset-left, 0px) + var(--pdf-dock-room));
 }
 body.pdf-docked > .site-footer {
-    margin-right: calc(-1 * var(--pdf-dock-w));
+    margin-right: calc(-1 * var(--pdf-dock-room));
     /* The chat's inset too, as the bars above: with the chat docked left as well
        the footer's left edge is let out by the rule above, and without this its
        right edge fell that far short of the window's. */
-    width: calc(100% + var(--chat-inset-left, 0px) + var(--pdf-dock-w));
+    width: calc(100% + var(--chat-inset-left, 0px) + var(--pdf-dock-room));
 }
 
 /* With the chat docked left and the preview right, the form is squeezed from
@@ -3638,7 +4297,7 @@ body.pdf-docked > .site-footer {
    question on this page, so the head, the rule under it and the footer are the
    ones the rest already use; it is only a little wider than the narrow notices,
    so six rows and their hints sit on one line each. */
-.papel-dialog.is-choose { max-width: 520px; display: flex; flex-direction: column; max-height: calc(100vh - 3rem); }
+.papel-dialog.is-choose { max-width: 640px; display: flex; flex-direction: column; max-height: calc(100vh - 3rem); }
 /* With sections of their own the question can run taller than a short screen: the
    head and the buttons stay put and the body between them scrolls. */
 .papel-dialog.is-choose .papel-dialog-head,
@@ -3687,9 +4346,44 @@ body.pdf-docked > .site-footer {
 .scope-opt-name { font-weight: 500; color: var(--ink); }
 .scope-opt-hint { margin-left: auto; padding-left: .5rem; font-size: .75rem; color: var(--grey); text-align: right; }
 .scope-pick-sum { margin: .75rem 0 0; padding-bottom: 1rem; font-size: .8125rem; color: var(--maroon); }
+/* "Click for preview" sits at the end of that line, as a link would. */
+.scope-preview-link {
+    display: inline; margin-left: .35rem; padding: 0;
+    border: 0; background: none;
+    font: inherit; font-weight: 600; color: var(--maroon);
+    text-decoration: underline; text-underline-offset: 2px; cursor: pointer;
+}
+.scope-preview-link:hover { color: var(--dark-maroon); }
+.scope-preview-link:focus-visible { outline: 2px solid var(--maroon); outline-offset: 2px; border-radius: 2px; }
+/* A sketch of the written part of the paper's page, drawn the way that page draws it. */
+.scope-preview {
+    margin: -.25rem 0 1rem;
+    padding: .875rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--r-card, 8px);
+    background: var(--cream);
+}
+.scope-preview[hidden] { display: none; }
+.scope-preview-note { margin: 0 0 .625rem; font-size: .75rem; color: var(--grey); }
+.scope-preview-title { margin: 0 0 .75rem; font-family: var(--font-head); font-size: 1rem; font-weight: 600; color: var(--maroon); line-height: 1.35; }
+.scope-preview-card { padding: .75rem .875rem; border: 1px solid var(--border); border-radius: var(--r-card, 8px); background: var(--white); }
+.scope-preview-card > h4 { margin: 0 0 .5rem; font-family: var(--font-head); font-size: .875rem; font-weight: 600; color: var(--ink); }
+.scope-preview-sec + .scope-preview-sec { margin-top: .625rem; padding-top: .625rem; border-top: 1px solid var(--border); }
+.scope-preview-sec h5 { margin: 0 0 .2rem; font-size: .8125rem; font-weight: 600; color: var(--maroon); }
+.scope-preview-sec p {
+    margin: 0; font-size: .75rem; line-height: 1.5; color: var(--grey);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.scope-preview-sec p.is-empty { font-style: italic; }
 
 /* Sections the author names themselves, under the six. */
 .scope-custom { margin-top: 1rem; padding-top: .875rem; border-top: 1px solid var(--border); }
+.scope-custom[hidden] { display: none; }
+.scope-pick-list[hidden] { display: none; }
+/* In Custom their list is the only one, so nothing above it to be ruled off from. */
+.scope-pick.is-custom .scope-custom { margin-top: 0; padding-top: 0; border-top: 0; }
+.scope-pick > .scope-custom-msg:empty { display: none; }
+.scope-crow-input[readonly] { background: var(--cream); cursor: default; }
 .scope-custom-head { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; margin: 0 0 .25rem; }
 .scope-custom-title { font-weight: 600; color: var(--ink); }
 .scope-custom-count { font-size: .75rem; color: var(--grey); }
@@ -3699,6 +4393,29 @@ body.pdf-docked > .site-footer {
 .scope-crows { list-style: none; margin: 0 0 .5rem; padding: 0; }
 .scope-crow { display: flex; align-items: center; gap: .5rem; margin: 0 0 .375rem; }
 .scope-crow-n { flex: 0 0 1.25rem; text-align: right; font-size: .75rem; color: var(--grey); }
+/* The handle a row is dragged by. touch-action: none, or a finger on it scrolls the list
+   instead of moving the row. The Abstract has none: it is always first on the page. */
+.scope-crow-grip {
+    flex: 0 0 auto;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 1.5rem; height: 2rem; padding: 0;
+    border: 0; border-radius: var(--r-control, 4px);
+    background: transparent; color: var(--grey);
+    cursor: grab; touch-action: none;
+}
+.scope-crow-grip:hover { color: var(--maroon); background: var(--cream); }
+.scope-crow-grip:focus-visible { outline: 2px solid var(--maroon); outline-offset: 1px; }
+.scope-crow-grip .material-symbols-outlined { font-size: 18px; }
+.scope-crow-grip.is-fixed { visibility: hidden; cursor: default; }
+/* The row being moved lifts off the list, and the rest make room around it. */
+.scope-crow.is-dragging {
+    position: relative; z-index: 1;
+    background: var(--white);
+    border-radius: var(--r-control, 4px);
+    box-shadow: var(--shadow-md, 0 6px 18px rgba(51,0,0,.14));
+}
+.scope-crow.is-dragging .scope-crow-grip { cursor: grabbing; color: var(--maroon); }
+.scope-crows.is-sorting { user-select: none; }
 .scope-crow-input,
 .scope-add-input {
     flex: 1 1 auto;
@@ -3776,6 +4493,19 @@ body.pdf-docked > .site-footer {
 /* A button label is a phrase, not a paragraph: without this "Leave without
    saving" broke onto three lines the moment a third action joined the row. */
 .papel-dialog-foot .btn { white-space: nowrap; }
+/* The third answer, as words rather than a button's shape, at the start of the row.
+   Room for all three on one line: in the narrow box the confirming button wrapped
+   onto a row of its own. */
+.papel-dialog.has-alt { max-width: 560px; }
+.papel-dialog-foot .papel-dialog-alt {
+    margin-right: auto;
+    padding-left: 0; padding-right: 0;
+    color: var(--grey);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+.papel-dialog-foot .papel-dialog-alt:hover,
+.papel-dialog-foot .papel-dialog-alt:focus-visible { color: var(--maroon); }
 </style>
 </head>
 <body>
@@ -3813,8 +4543,8 @@ body.pdf-docked > .site-footer {
   </div>
 </div>
 
-<div class="container py-4">
-  <div class="row justify-content-center">
+<div class="container py-4 upload-page">
+  <div class="row justify-content-center upload-row">
     <div class="col-lg-11 col-xl-10 upload-shell">
       
       <!-- Progress Steps -->
@@ -3889,7 +4619,9 @@ body.pdf-docked > .site-footer {
                       <input type="hidden" name="program_category" id="programSelect" value="Faculty Member">
                       <small class="text-muted">Papers you upload are filed under the faculty, not a programme.</small>
                     <?php else: ?>
-                    <select class="form-select" name="program_category" id="programSelect" required>
+                    <?php /* data-type-in: the student can type to find their programme as well as
+                             pick it (includes/select_skin.php). Only a listed one is an answer. */ ?>
+                    <select class="form-select" name="program_category" id="programSelect" required data-type-in>
                       <option value="">Select Program...</option>
                       <?php /* Read from programs_map() and written the way the
                                Manage Students console writes it: "BSIT: Bachelor
@@ -3910,12 +4642,23 @@ body.pdf-docked > .site-footer {
 
                   <div class="col-md-6">
                     <label class="form-label">Paper / Research Type <span class="text-danger">*</span></label>
-                    <select class="form-select" name="paper_type" required>
+                    <?php /* Typed in as well as picked: a name that is not on the list is kept as
+                             Other, with the name in paper_type_other below (includes/select_skin.php). */ ?>
+                    <select class="form-select" name="paper_type" required
+                            data-type-in data-type-in-other="<?= e(PAPER_TYPE_OTHER) ?>" data-type-in-field="paperTypeOther">
                       <option value="">Select paper type...</option>
                       <?php foreach (paper_types() as $ptCode => $ptLabel): ?>
                         <option value="<?= e($ptCode) ?>"><?= e($ptLabel) ?></option>
                       <?php endforeach; ?>
+                      <option value="<?= e(PAPER_TYPE_OTHER) ?>">Other</option>
                     </select>
+                    <?php /* The name for Other. The dropdown above is typed in directly and fills
+                             this itself, so it is only shown where that script has not run.
+                             What is typed is the paper's type everywhere (paper_type_label()). */ ?>
+                    <input type="text" class="form-control paper-type-other" id="paperTypeOther"
+                           name="paper_type_other" maxlength="<?= (int)PAPER_TYPE_OTHER_MAX ?>"
+                           placeholder="Type your paper type, for example Case Study"
+                           aria-label="Your paper type" autocomplete="off" hidden>
                   </div>
 
                   <div class="col-md-6">
@@ -3936,6 +4679,8 @@ body.pdf-docked > .site-footer {
                             <dd>Introduction, Methodology, Results and Discussion, written straight through with no numbered chapters. Your adviser is not asked about chapters when reviewing one.</dd>
                             <dt>Full Manuscript</dt>
                             <dd>The complete write-up, with its numbered chapters.</dd>
+                            <dt>Other</dt>
+                            <dd>Something neither of these describes. Type what it is called, and that is the one file you hand in.</dd>
                           </dl>
                         </span>
                       </span>
@@ -3950,6 +4695,14 @@ body.pdf-docked > .site-footer {
                         <input class="form-check-input js-manuscript" type="checkbox"
                                name="manuscript_type[]" id="mt_full" value="Full Manuscript">
                         <label class="form-check-label" for="mt_full">Full Manuscript</label>
+                      </div>
+                      <div class="form-check mb-0 other-check">
+                        <input class="form-check-input js-manuscript" type="checkbox"
+                               name="manuscript_type[]" id="mt_other" value="<?= e(MANUSCRIPT_OTHER) ?>">
+                        <label class="form-check-label" for="mt_other">Other:</label>
+                        <input type="text" class="form-control other-input" id="manuscriptTypeOther"
+                               name="manuscript_type_other" maxlength="<?= (int)MANUSCRIPT_OTHER_MAX ?>"
+                               aria-label="What your manuscript is called" autocomplete="off">
                       </div>
                     </div>
                   </div>
@@ -4019,7 +4772,7 @@ body.pdf-docked > .site-footer {
                          are told what was chosen, so changing it later is safe. */ ?>
                 <div class="scope-bar" id="scopeBar">
                   <span class="material-symbols-outlined" aria-hidden="true">segment</span>
-                  <span class="scope-bar-text">Sections you are submitting: <strong id="scopeBarValue">All sections</strong></span>
+                  <span class="scope-bar-text">Sections you are submitting: <strong id="scopeBarValue">IMRAD format (all six sections)</strong></span>
                   <button type="button" class="scope-preset" id="btnChangeScope">Change</button>
                 </div>
 
@@ -4033,7 +4786,8 @@ body.pdf-docked > .site-footer {
                            novalidate, and a hidden required input could never be
                            satisfied. The step's own check and the server ask instead. */ ?>
                   <div class="pdf-slots" id="pdfSlots">
-                    <?php foreach (['imrad' => 'IMRAD', 'full' => 'Full Manuscript'] as $slotKey => $slotLabel): ?>
+                    <?php /* The Other box is named after what was typed in step 1 (syncPdfSlots). */ ?>
+                    <?php foreach (['imrad' => 'IMRAD', 'full' => 'Full Manuscript', 'other' => 'Other'] as $slotKey => $slotLabel): ?>
                     <div class="pdf-slot" data-format="<?= e($slotKey) ?>" hidden>
                       <div class="pdf-slot-label"><?= e($slotLabel) ?> PDF</div>
                       <div class="upload-zone">
@@ -4499,10 +5253,31 @@ function currentPaperType() {
     const el = document.querySelector('select[name="paper_type"]');
     return el ? el.value.trim().toLowerCase() : '';
 }
+// What was typed beside Other, for the paper type and for the manuscript type.
+function otherPaperTypeName() {
+    const el = document.getElementById('paperTypeOther');
+    return el ? el.value.replace(/\s+/g, ' ').trim() : '';
+}
+function otherManuscriptName() {
+    const el = document.getElementById('manuscriptTypeOther');
+    return el ? el.value.replace(/\s+/g, ' ').trim() : '';
+}
+/* The box to type a paper type in is there while Other is chosen. Run on a change of
+   the dropdown and when a saved draft puts the answers back. */
+function syncPaperTypeOther() {
+    const box = document.getElementById('paperTypeOther');
+    if (!box) return;
+    const on = currentPaperType() === 'other';
+    // Typed straight into the dropdown where it can be; this box is the fallback.
+    const typedIn = !!document.querySelector('select[name="paper_type"].is-typein');
+    box.hidden = !on || typedIn;
+    box.required = on;
+}
 function supportingDocsRequired() {
     return DOCS_REQUIRED_FOR.indexOf(currentPaperType()) !== -1;
 }
 function paperTypeLabel() {
+    if (currentPaperType() === 'other') return otherPaperTypeName() || 'paper of this type';
     return PAPER_TYPE_LABELS[currentPaperType()] || 'paper of this type';
 }
 
@@ -5622,9 +6397,18 @@ const papelDoc = (function () {
         bar.setAttribute('role', 'tablist');
         bar.setAttribute('aria-label', 'Paper sections');
 
+        const head = document.createElement('p');
+        head.className = 'doc-tabs-title';
+        head.textContent = 'Sections you are submitting';
+        bar.appendChild(head);
+
         document.querySelectorAll('.doc-editor').forEach(function (root) {
             const other = editors[root.getAttribute('data-section')];
             if (!other) return;
+            /* Only the sections being submitted. One left out is hidden on the form,
+               so expanding it showed nothing at all, and the full view seemed to have
+               closed itself when its tab was pressed. */
+            if (!inScope(other.key) || root.classList.contains('is-out-of-scope')) return;
 
             const isCurrent = other.key === ed.key;
             const tab = document.createElement('button');
@@ -5633,7 +6417,10 @@ const papelDoc = (function () {
             tab.setAttribute('role', 'tab');
             tab.setAttribute('aria-selected', isCurrent ? 'true' : 'false');
             tab.dataset.target = other.key;
-            tab.appendChild(document.createTextNode(sectionTitle(other)));
+            const name = document.createElement('span');
+            name.className = 'doc-tab-name';
+            name.textContent = sectionTitle(other);
+            tab.appendChild(name);
 
             if (plainText(other) === '') {
                 const dot = document.createElement('span');
@@ -5675,14 +6462,24 @@ const papelDoc = (function () {
                 btn.querySelector('.material-symbols-outlined').textContent = 'open_in_full';
             }
         });
-        document.body.classList.remove('doc-expanded');
-        document.documentElement.classList.remove('doc-expanded');
+        document.body.classList.remove('doc-expanded', 'doc-writing');
+        document.documentElement.classList.remove('doc-expanded', 'doc-writing');
+        // Heard by the panes (papelSide), whichever way the full view ended.
+        document.dispatchEvent(new CustomEvent('papel-full-state'));
     }
 
-    function toggleExpand(ed) {
+    /* The browser's history keeps the full view as a place of its own, so Back
+       leaves it and Forward goes into it again (see "The browser's Back and
+       Forward" below). A person opening or closing it says so; the history putting
+       it back passes `quiet`, or every Back would make a new entry. */
+    function notifyFull() {
+        document.dispatchEvent(new CustomEvent('papel-fullview'));
+    }
+
+    function toggleExpand(ed, quiet) {
         const wasExpanded = ed.root.classList.contains('is-expanded');
         collapseExpanded();
-        if (wasExpanded) return;
+        if (wasExpanded) { if (!quiet) notifyFull(); return; }
 
         // A spacer keeps the page the same height while the box is lifted out
         // of the flow, so nothing shifts underneath it.
@@ -5692,9 +6489,14 @@ const papelDoc = (function () {
         ed.root.parentNode.insertBefore(spacer, ed.root);
 
         ed.root.classList.add('is-expanded');
-        document.body.classList.add('doc-expanded');
+        /* Where the screen is shared by the two panes the section is a tab of the
+           main one (Writing View) and covers nothing else, so it is not the full
+           view's "doc-expanded", which hides the bars and the side panels for a box
+           over the whole window. */
+        const view = document.body.classList.contains('panes') ? 'doc-writing' : 'doc-expanded';
+        document.body.classList.add(view);
         // The accessibility widget lives on <html>, outside <body>.
-        document.documentElement.classList.add('doc-expanded');
+        document.documentElement.classList.add(view);
         buildTabs(ed);       // the way across to the other four sections
         reflowToolbar(ed);   // far more room now: bring the tools back out
 
@@ -5705,12 +6507,22 @@ const papelDoc = (function () {
             btn.querySelector('.material-symbols-outlined').textContent = 'close_fullscreen';
         }
         ed.surface.focus();
+        if (!quiet) notifyFull();
+        document.dispatchEvent(new CustomEvent('papel-full-state'));
     }
 
     document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape' && document.body.classList.contains('doc-expanded')) {
-            collapseExpanded();
-        }
+        if (e.key !== 'Escape') return;
+        if (!document.body.classList.contains('doc-expanded') && !document.body.classList.contains('doc-writing')) return;
+        /* A dialog over the full view takes the Escape that closes it: closing the
+           one-time explanation also closed the section under it. */
+        const dlg = document.getElementById('papelDialog');
+        if (dlg && dlg.classList.contains('open')) return;
+        /* Taken: the PDF panel closes on Escape too, after this, unless the key
+           says it has been used. One Escape closed the section and the panel. */
+        e.preventDefault();
+        collapseExpanded();
+        notifyFull();
     });
 
     function closePopovers() {
@@ -6839,6 +7651,20 @@ const papelDoc = (function () {
             });
         },
         inScope: inScope,
+        // The section in full view, if one is, and the history's way to change it.
+        expanded: function () {
+            const root = document.querySelector('.doc-editor.is-expanded');
+            return root ? root.getAttribute('data-section') : null;
+        },
+        expand: function (key) {
+            const ed = editors[key];
+            if (!ed || !inScope(key) || ed.root.classList.contains('is-out-of-scope')) return false;
+            if (!ed.root.classList.contains('is-expanded')) toggleExpand(ed, true);
+            return true;
+        },
+        collapse: function () { collapseExpanded(); },
+        // Closed by the person (the Writing View tab's close): history hears it, as Escape's.
+        exitFull: function () { collapseExpanded(); notifyFull(); },
         /* A box for a section the author added: a copy of the template the page carries,
            named and registered like the six. */
         addEditor: function (key, label) {
@@ -6901,7 +7727,10 @@ const papelDoc = (function () {
    ========================================================================= */
 const PDF_FORMATS = [
     { key: 'imrad', label: 'IMRAD',           tick: 'mt_imrad' },
-    { key: 'full',  label: 'Full Manuscript', tick: 'mt_full'  }
+    { key: 'full',  label: 'Full Manuscript', tick: 'mt_full'  },
+    /* Named after what the student typed in step 1, read each time it is asked for,
+       so every message about this file uses their word for it. */
+    { key: 'other', get label() { return otherManuscriptName() || 'Other'; }, tick: 'mt_other' }
 ];
 // The most one request may carry, for adding the files up before they are sent. 0 means no limit.
 const POST_MAX       = <?= (int)max_post_bytes() ?>;
@@ -6938,6 +7767,11 @@ function syncPdfSlots() {
         const slot = input ? input.closest('.pdf-slot') : null;
         const on = pdfTicked(f.key);
         if (slot) slot.hidden = !on;
+        if (f.key === 'other' && slot) {
+            const name = slot.querySelector('.pdf-slot-label');
+            if (name) name.textContent = f.label + ' PDF';
+            input.setAttribute('aria-label', f.label + ' PDF');
+        }
         if (!on && pdfFileOf(f.key)) {
             /* Unticked after its file was chosen. The file goes with the box, and
                the student is told, rather than finding the box empty or, worse,
@@ -6960,7 +7794,7 @@ function syncPdfSlots() {
    so the IMRAD PDF is the one to read when there is one; otherwise it is
    whichever file is attached. */
 function extractionSource() {
-    const order = ['imrad', 'full'];
+    const order = ['imrad', 'full', 'other'];
     for (let i = 0; i < order.length; i++) {
         const file = pdfTicked(order[i]) ? pdfFileOf(order[i]) : null;
         if (file) return { key: order[i], label: pdfLabelOf(order[i]), file: file };
@@ -7036,7 +7870,7 @@ const papelPdfPreview = (function () {
             const file = currentFile(key);
             if (!d || !file) return;
             if (d.isOpen() && shown === key) {
-                d.minimise();
+                d.minimise();          // put away with its pages drawn, so it comes back at once
             } else {
                 d.openFile(file, title(key));
                 shown = key;
@@ -7268,6 +8102,7 @@ const papelDraft = (function () {
         if (typeof syncSupportingDocs === 'function') syncSupportingDocs();
         // The ticks are back, so are the boxes that go with them.
         if (typeof syncPdfSlots === 'function') syncPdfSlots();
+        if (typeof syncPaperTypeOther === 'function') syncPaperTypeOther();
         // The choice of sections is back in its field; the boxes follow it.
         if (typeof syncSectionScope === 'function') syncSectionScope();
         if (typeof updateReview === 'function') updateReview();
@@ -7301,6 +8136,8 @@ const papelDraft = (function () {
         // Set while the form is being submitted, so leaving the page as a
         // result of a successful upload does not raise a warning.
         beginSubmit: function () { submitting = true; },
+        // A page left by Back and brought back whole by Forward is being written again.
+        endSubmit: function () { submitting = false; },
         isSubmitting: function () { return submitting; },
         dirty: function () {
             if (submitting) return false;
@@ -7548,6 +8385,13 @@ function goToStep(step) {
                 papelAlert('Please select a paper type');
                 return;
             }
+            if (paperType === 'other' && !otherPaperTypeName()) {
+                papelAlert('Please type your paper type.');
+                const box = document.getElementById('paperTypeOther');
+                const typeIn = document.querySelector('select[name="paper_type"] ~ .sel-type');
+                if (box && !box.hidden) box.focus(); else if (typeIn) typeIn.focus();
+                return;
+            }
             /* By name, not by tag. A student picks a programme from a select;
                staff belong to the faculty rather than to a degree, so for them
                the field is a read-only box with a hidden input behind it. This
@@ -7566,6 +8410,12 @@ function goToStep(step) {
                 papelAlert('Please choose at least one manuscript type');
                 return;
             }
+            if (pdfTicked('other') && !otherManuscriptName()) {
+                papelAlert('Please type what your manuscript is called, in the box beside Other.');
+                const box = document.getElementById('manuscriptTypeOther');
+                if (box) box.focus();
+                return;
+            }
             /* Marked required on the form, so it is asked for here too. One is
                ticked to begin with, but all three can be cleared. */
             if (!document.querySelectorAll('input[name="paper_status[]"]:checked').length) {
@@ -7579,7 +8429,8 @@ function goToStep(step) {
             const active = pdfActive();
             const lacking = active.filter(function (f) { return !pdfFileOf(f.key); });
             if (lacking.length) {
-                papelAlert(active.length > 1
+                // Named when there are two to tell apart, or when it is one the student named.
+                papelAlert(active.length > 1 || lacking[0].key === 'other'
                     ? 'Please upload your ' + lacking[0].label + ' PDF.'
                     : 'Please upload a PDF file');
                 return;
@@ -7672,10 +8523,15 @@ function goToStep(step) {
         updateReview();
     }
     
+    const moved = step !== currentStep;
     currentStep = step;
+    // For the browser's history: each step is a place Back and Forward go to.
+    if (moved) document.dispatchEvent(new CustomEvent('papel-step'));
     
     // Scroll to top
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Beside the side card the page is held still and the form scrolls in its own card.
+    if (window.papelSide) window.papelSide.toTop();
 }
 
 /* Why the sections have to be typed out.
@@ -7722,6 +8578,8 @@ const CUSTOM_MAX_LABEL = <?= (int)PAPER_CHECKLIST_MAX_LABEL ?>;
 const CUSTOM_PRESETS = <?= json_encode(paper_custom_presets(), JSON_HEX_TAG | JSON_UNESCAPED_UNICODE) ?>;
 
 function scopeField() { return document.getElementById('sectionScope'); }
+// None of the six: sections of the author's own and no Abstract (SECTION_SCOPE_NONE).
+const SCOPE_NONE = <?= json_encode(SECTION_SCOPE_NONE) ?>;
 function customField() { return document.getElementById('customSections'); }
 function isCustomKey(k) { return /^custom_([1-9]|1[0-9]|2[0-4])$/.test(String(k)); }
 
@@ -7785,25 +8643,31 @@ function currentScope() {
     const field = scopeField();
     const raw = field ? String(field.value || '').trim() : '';
     if (!raw) return null;
+    /* The Abstract is left out only by an author with sections of their own (Custom);
+       the server holds to the same rule (section_scope_for()). */
+    const own = currentCustom().length > 0;
+    if (raw === SCOPE_NONE) return own ? [] : ['abstract'];
     const picked = raw.split(',').map(function (s) { return s.trim(); })
         .filter(function (k) { return SECTION_KEYS.indexOf(k) !== -1; });
     if (!picked.length) return null;
-    if (picked.indexOf('abstract') === -1) picked.push('abstract');      // never optional
+    if (picked.indexOf('abstract') === -1 && !own) picked.push('abstract');
     return SECTION_KEYS.filter(function (k) { return picked.indexOf(k) !== -1; });
 }
 
-// The choice in words: "All sections", "Abstract only", or the names, and any the author added.
+// The choice in words: "IMRAD format" for all six, "Abstract only", or the names, and any the author added.
 function scopeWords(scope, custom) {
     const list = scope || SECTION_KEYS;
     const own = custom || customLabels();
-    if (list.length === SECTION_KEYS.length) return own.length ? 'All sections and ' + joinNames(own) : 'All sections';
+    if (list.length === SECTION_KEYS.length) return own.length ? 'IMRAD format and ' + joinNames(own) : 'IMRAD format (all six sections)';
     if (list.length === 1 && !own.length) return 'Abstract only';
     return joinNames(list.map(function (k) { return SECTION_LABELS[k]; }).concat(own));
 }
 
 // The notice above the boxes, which depends on what was chosen.
 function scopeNoticeText(scope) {
-    const lead = 'Only the Abstract is taken from your PDF, copied word-for-word so you can check it against your paper.';
+    const lead = (scope || SECTION_KEYS).indexOf('abstract') === -1
+        ? 'You are submitting sections of your own, without an Abstract.'
+        : 'Only the Abstract is taken from your PDF, copied word-for-word so you can check it against your paper.';
     const others = (scope || SECTION_KEYS).filter(function (k) { return k !== 'abstract'; })
         .map(function (k) { return SECTION_LABELS[k]; }).concat(customLabels());
     return lead + (others.length
@@ -7826,7 +8690,7 @@ function syncSectionScope() {
 function setSectionScope(list) {
     const field = scopeField();
     if (!field) return;
-    field.value = list ? list.join(',') : '';
+    field.value = list ? (list.length ? list.join(',') : SCOPE_NONE) : '';
     syncSectionScope();
     /* Deliberately not saved here. The autosave runs on typing and writes every
        field, this one included; the leave-page guard saves it when the form is
@@ -7885,13 +8749,31 @@ async function askSectionScope(force) {
                     return { key: c.key, label: c.label, hasText: papelDoc.text(c.key) !== '' };
                 }),
                 presets: CUSTOM_PRESETS,
+                stdText: SECTION_KEYS.reduce(function (m, k) { m[k] = papelDoc.text(k) !== ''; return m; }, {}),
                 max: CUSTOM_MAX,
                 keyMax: CUSTOM_KEY_MAX,
                 maxLen: CUSTOM_MAX_LABEL
             },
-            describe: function (keys, custom) { return 'On your paper\'s page: ' + scopeWords(keys, custom) + '.'; }
+            describe: function (keys, custom) { return 'On your paper\'s page: ' + scopeWords(keys, custom) + '.'; },
+            /* For "Click for preview": the standard sections first, then their own, which is
+               the order the paper's page uses (paper_sections_for_display()). */
+            preview: function (keys, custom) {
+                const title = document.getElementById('titleField');
+                const has = papelDoc.keys();
+                return {
+                    title: title ? title.value.trim() : '',
+                    sections: keys.map(function (k) {
+                        return { label: SECTION_LABELS[k], text: papelDoc.text(k) };
+                    }).concat(custom.map(function (c) {
+                        return { label: c.label, text: has.indexOf(c.key) !== -1 ? papelDoc.text(c.key) : '' };
+                    }))
+                };
+            }
         });
-        if (picked && Array.isArray(picked.keys) && picked.keys.length) {
+        if (picked && Array.isArray(picked.keys)) {
+            /* Custom with every row taken out leaves nothing to submit: the Abstract is
+               asked for then, as it would be by the server. */
+            if (!picked.keys.length && !(picked.custom || []).length) picked.keys = ['abstract'];
             setCustomList(picked.custom || []);
             setSectionScope(picked.keys);
         }
@@ -7970,8 +8852,9 @@ function updateReview() {
     const authors = document.getElementById('authorsField');
     const year = document.getElementById('yearField');
     
-    document.getElementById('reviewPaperType').textContent = 
-        paperType.options[paperType.selectedIndex].text;
+    document.getElementById('reviewPaperType').textContent =
+        paperType.value === 'other' ? (otherPaperTypeName() || 'Other')
+                                    : paperType.options[paperType.selectedIndex].text;
     document.getElementById('reviewPDF').textContent = 
         reviewPdfText();
     document.getElementById('reviewTitle').textContent = title.value || '-';
@@ -8199,15 +9082,23 @@ document.getElementById('btnExtract').addEventListener('click', function(){
     'Almost done...'
   ];
   let aiIdx = 0;
+  /* While waiting the bar creeps towards 90%, a little less each time, so a long read
+     never looks stuck at one figure; the last tenth is the answer arriving, and only
+     then does it show 100%. It used to stop at 58% and close from there. */
+  let pct = 10;
+  let finished = false;
   const aiTimer = setInterval(function() {
+    if (finished) return;
     aiIdx = Math.min(aiIdx + 1, aiMessages.length - 1);
-    const pct = 10 + aiIdx * 16;
+    pct = Math.min(90, Math.round(pct + (90 - pct) * 0.22));
+    const shown = pct;
     statusEl.style.opacity = '0';
     setTimeout(function() {
+      if (finished) return;          // the answer came in while this was fading
       statusEl.textContent = aiMessages[aiIdx];
       statusEl.style.opacity = '1';
-      fillEl.style.width  = pct + '%';
-      labelEl.textContent = pct + '%';
+      fillEl.style.width  = shown + '%';
+      labelEl.textContent = shown + '%';
     }, 250);
   }, 3000);
 
@@ -8221,14 +9112,37 @@ document.getElementById('btnExtract').addEventListener('click', function(){
 
   papelExtractMetadata(pdfFile, fd)
   .then(data => {
-    if(data.success){
-      document.getElementById('titleField').value = data.data.title || '';
-      document.getElementById('yearField').value = data.data.year || '';
-      document.getElementById('authorsField').value = data.data.authors || '';
-      document.getElementById('keywordsField').value = data.data.keywords || '';
-      // Only the Abstract is filled from the PDF; the other three stay blank
-      // for the student to write.
-      papelDoc.setText('abstract', data.data.abstract || '');
+    finished = true;
+    clearInterval(aiTimer);
+    if (!data || !data.success) return data;
+    // Done: the bar is seen to reach the end before the box closes.
+    statusEl.style.opacity = '1';
+    statusEl.textContent = 'Extraction complete';
+    fillEl.style.width  = '100%';
+    labelEl.textContent = '100%';
+    return new Promise(function (resolve) { setTimeout(function () { resolve(data); }, 700); });
+  })
+  .then(data => {
+    if(data && data.success){
+      /* The details the AI found are filled in; one it did not find leaves its box as
+         it was, rather than emptying what the student may already have typed there. */
+      const put = function (id, value) {
+        const v = String(value == null ? '' : value).trim();
+        if (v) document.getElementById(id).value = v;
+      };
+      put('titleField', data.data.title);
+      put('yearField', data.data.year);
+      put('authorsField', data.data.authors);
+      put('keywordsField', data.data.keywords);
+      /* The Abstract, only when the paper has one and it is being submitted: copied
+         from the PDF word for word, never written by the AI. With none found, only the
+         details above are filled and the Abstract box keeps what it had. In Custom
+         without an Abstract nothing is put in it at all. */
+      const scopeNow = currentScope();
+      const abstractWanted = !scopeNow || scopeNow.indexOf('abstract') !== -1;
+      const foundAbstract = String(data.data.abstract || '').trim();
+      const abstractFilled = !!(foundAbstract && abstractWanted);
+      if (abstractFilled) papelDoc.setText('abstract', foundAbstract);
       document.getElementById('aiSummaryField').value = data.data.ai_summary || '';
       document.getElementById('aiMethodologyField').value = data.data.ai_methodology || '';
       document.getElementById('aiStatsField').value = data.data.ai_statistical_methods || '';
@@ -8256,11 +9170,18 @@ document.getElementById('btnExtract').addEventListener('click', function(){
          abstract. Names come from the section list, never from the paper. */
       const stillToWrite = (currentScope() || SECTION_KEYS).filter(function (k) { return k !== 'abstract'; })
         .map(function (k) { return SECTION_LABELS[k]; }).concat(customLabels()).map(escHtml);
-      successMsg.innerHTML = (papelDoc.text('abstract')
-        ? '<strong>Extraction complete' + readNote + '.</strong> Review the Abstract and edit if needed'
-          + (stillToWrite.length ? ', then write your ' + joinNames(stillToWrite) + '.' : '.')
-        : '<strong>Extraction complete' + readNote + '.</strong> No abstract could be found in ' + sourceNote + ', so '
-          + 'please write the Abstract' + (stillToWrite.length ? ' and the other sections you chose' : '') + ' yourself.')
+      const then = stillToWrite.length ? ' Then write your ' + joinNames(stillToWrite) + '.' : '';
+      let said;
+      if (!abstractWanted) {
+        said = 'The title, authors, year and keywords were filled in. You are submitting without an Abstract, so none was copied.';
+      } else if (abstractFilled) {
+        said = 'The title, authors, year and keywords were filled in, and the Abstract was copied from ' + sourceNote
+             + ' word for word. Check it against your paper.';
+      } else {
+        said = 'The title, authors, year and keywords were filled in. No abstract was found in ' + sourceNote + ', so '
+             + (papelDoc.text('abstract') ? 'the Abstract you wrote was left as it is.' : 'please write the Abstract yourself.');
+      }
+      successMsg.innerHTML = '<strong>Extraction complete' + readNote + '.</strong> ' + said + then
         + '<button type="button" class="alert-close" aria-label="Dismiss">'
         + '<span class="material-symbols-outlined mi-18">close</span></button>';
       successMsg.querySelector('.alert-close').addEventListener('click', function () {
@@ -8299,6 +9220,7 @@ document.getElementById('btnExtract').addEventListener('click', function(){
       + ' Please try again, or choose "Fill Manually" to type the details in yourself.');
   })
   .finally(() => {
+    finished = true;
     clearInterval(aiTimer);
     overlay.classList.remove('active');
     fillEl.style.width  = '0%';
@@ -8471,9 +9393,58 @@ const chatNudge = (function () {
        is open. Whatever it is, the button is no longer the topmost thing at its
        own centre. A line that would have played into that is held back, not
        spent, so "Hello!" is not used up under the splash. */
+    /* Where Corpus's button is: at the end of the side card's tabs, at the foot of
+       its rail when it is folded away, or floating in the corner (a phone). */
+    function anchor() {
+        // Seen, not only laid out: a card folded away keeps its tabs, hidden.
+        function seen(el) { return !!el && el.getBoundingClientRect().width > 0 && getComputedStyle(el).visibility === 'visible'; }
+        const inStrip = document.querySelector('.side-tabs .side-corpus');
+        if (seen(inStrip)) return inStrip;
+        const inRail = document.querySelector('#sideRail .side-rail-corpus');
+        if (seen(inRail)) return inRail;
+        return document.getElementById('chat-button');
+    }
+
+    /* The card against that button. Floating, it is the widget's own, as it always
+       was; elsewhere it goes out to the page, since the widget is hidden there, and
+       is placed under the button (in the tabs) or beside it (on the rail). */
+    function place() {
+        const n = bubble(), btn = anchor();
+        if (!n || !btn) return;
+        const widget = document.getElementById('chat-widget');
+        if (btn.id === 'chat-button') {
+            if (n.parentNode !== widget) widget.appendChild(n);
+            n.classList.remove('is-fixed');
+            n.removeAttribute('data-at');
+            n.style.top = n.style.right = n.style.left = '';
+            return;
+        }
+        if (n.parentNode !== document.body) document.body.appendChild(n);
+        n.classList.add('is-fixed');
+        const r = btn.getBoundingClientRect();
+        const W = document.documentElement.clientWidth;
+        const gap = 12;
+        n.style.left = n.style.right = n.style.top = '';
+        if (btn.closest('#sideRail')) {
+            // Beside the rail, towards the form, level with the button.
+            const onLeft = document.body.classList.contains('side-left');
+            n.dataset.at = onLeft ? 'right' : 'left';
+            const h = n.offsetHeight;
+            n.style.top = Math.max(8, Math.round(r.top + r.height / 2 - h / 2)) + 'px';
+            if (onLeft) n.style.left = Math.round(r.right + gap) + 'px';
+            else n.style.right = Math.round(W - r.left + gap) + 'px';
+        } else {
+            // Under the button, its right edge in line with the button's.
+            n.dataset.at = 'below';
+            n.style.top = Math.round(r.bottom + gap) + 'px';
+            n.style.right = Math.max(8, Math.round(W - r.right)) + 'px';
+            n.style.setProperty('--notch', Math.round(r.width / 2 - 5) + 'px');
+        }
+    }
+
     function canShow() {
         if (document.hidden) return false;
-        const btn = document.getElementById('chat-button');
+        const btn = anchor();
         const r = btn ? btn.getBoundingClientRect() : null;
         if (!r || !r.width) return false;
         const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
@@ -8495,6 +9466,7 @@ const chatNudge = (function () {
         if (stopped) return;
         if (!canShow()) { later(step, CHAT_NUDGE.recheck); return; }
         document.getElementById('chat-nudge-text').textContent = CHAT_NUDGE.lines[index];
+        place();
         bubble().classList.add('is-on');
         later(leave, CHAT_NUDGE.showFor);
     }
@@ -8523,11 +9495,13 @@ const chatNudge = (function () {
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape' && showing()) stop();
         });
+        // A line that is up keeps to its button when the window, or the card, changes size.
+        window.addEventListener('resize', function () { if (showing()) place(); });
 
         later(step, CHAT_NUDGE.firstDelay);
     }
 
-    return { start: start, stop: stop };
+    return { start: start, stop: stop, place: place };
 })();
 
 // Chatbot Logic
@@ -8543,6 +9517,7 @@ function toggleChat() {
         chatNudge.stop();      // they have found Corpus; no more lines
         win.style.display = 'flex';
         btn.style.display = 'none';
+        applyChatDock(true, 'right');     // into the side card, as a tab
         setPuppyState('welcome');
         document.getElementById('chat-input').focus();
     }
@@ -8553,18 +9528,13 @@ function toggleChat() {
 // The PDF preview owns the right edge while it is open; two panels stacked
 // there would sit on top of each other.
 function pdfPreviewOpen() {
-    return !!(window.papelPdfDock && window.papelPdfDock.isOpen());
+    return !!(window.papelPdfDock && window.papelPdfDock.place() === 'right');
 }
 
 /* The panel says when it takes the right edge and when it gives it back. A chat
    docked there moves to the left rather than being closed, so the conversation
    is kept; the side switch is greyed out until the edge is free again. */
-document.addEventListener('papel:pdf-dock-open', function () {
-    const widget = document.getElementById('chat-widget');
-    if (widget && widget.classList.contains('dock-right')) applyChatDock(true, 'left');
-    else syncChatSideAvailability();
-});
-document.addEventListener('papel:pdf-dock-close', function () { syncChatSideAvailability(); });
+// Both now share the right, as tabs of one card, so neither has to make way.
 
 // Greys out the chat's "move to the other side" control while the right edge
 // is taken, so the restriction is visible rather than a click that does nothing.
@@ -8592,9 +9562,10 @@ function applyChatDock(docked, side) {
     const sideIcon = document.getElementById('chatSideIcon');
     if (!widget) return;
 
-    side = (side === 'right') ? 'right' : 'left';
-    // Anything asking for the right while the preview holds it goes left.
-    if (side === 'right' && pdfPreviewOpen()) side = 'left';
+    /* The right, always: Corpus opens in the side card it shares with the PDF
+       preview, as a tab beside it (see "The side card"). There is no floating
+       window and no left side any more. */
+    side = 'right';
     widget.classList.toggle('is-docked', docked);
     widget.classList.toggle('dock-left',  docked && side === 'left');
     widget.classList.toggle('dock-right', docked && side === 'right');
@@ -8606,6 +9577,8 @@ function applyChatDock(docked, side) {
     // Docking implies the panel is open: otherwise the floating button is
     // hidden while the window is still closed and nothing is visible at all.
     if (docked) {
+        // Its top from the form as it is now, not from the last scroll.
+        placeChatDockTop();
         const win = document.getElementById('chat-window');
         const btn = document.getElementById('chat-button');
         if (win) win.style.display = 'flex';
@@ -8625,9 +9598,7 @@ function applyChatDock(docked, side) {
     }
     syncChatSideAvailability();
 
-    // Only the preferred side is remembered; the panel always starts closed
-    // so it never takes over the page on load.
-    try { localStorage.setItem('papel_chat_side', side); } catch (err) {}
+    if (window.papelSide) window.papelSide.changed(docked ? 'corpus' : null);
 }
 
 /* Where the top band currently ends.
@@ -8644,6 +9615,8 @@ function applyChatDock(docked, side) {
  * frame: a scroll handler that measures on every event is a scroll handler
  * that stutters.
  */
+// --dock-gap, read from the stylesheet.
+function dockGap() { return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dock-gap')) || 6; }
 function placeChatDockTop() {
     const bar    = document.getElementById('siteHeader');
     const crumb  = document.querySelector('.crumb-bar');
@@ -8651,6 +9624,13 @@ function placeChatDockTop() {
     if (!bar || !widget) return;
     let edge = bar.getBoundingClientRect().bottom;
     if (crumb) edge = Math.max(edge, crumb.getBoundingClientRect().bottom);
+    /* Sharing the screen, it is a card beside the form (see "Docked panels as cards"):
+       a gap under the bars, and its top no higher than the form's own, as the PDF
+       preview's is. */
+    const shell = document.querySelector('.col-lg-11.upload-shell');
+    if (shell && window.innerWidth > 900) {
+        edge = Math.max(edge + dockGap(), shell.getBoundingClientRect().top);
+    }
     /* On the panel itself, not on <html>: a custom property on the root is
        inherited by every element, so each change made the browser re-check the
        style of the whole page, and with a thesis open in the PDF panel that was
@@ -8696,7 +9676,8 @@ function placeChatDockTop() {
         const widget = document.getElementById('chat-widget');
         const footer = document.querySelector('.site-footer');
         if (!widget || !footer) return;
-        const lift = Math.max(0, Math.round(window.innerHeight - footer.getBoundingClientRect().top)) + 'px';
+        // A footer taken out of the page (the form held in place) is no footer: its top reads 0.
+        const lift = (footer.getClientRects().length ? Math.max(0, Math.round(window.innerHeight - footer.getBoundingClientRect().top)) : 0) + 'px';
         // This runs on every scroll; nothing is written unless the figure has moved.
         if (widget.style.getPropertyValue('--chat-lift') === lift) return;
         widget.style.setProperty('--chat-lift', lift);
@@ -8716,6 +9697,835 @@ function currentChatSide() {
     return widget && widget.classList.contains('dock-right') ? 'right' : 'left';
 }
 
+/* ----- The side card -----
+   The PDF preview and Corpus share one card on the right, as tabs, the way an
+   editor keeps two files open in one pane: a tab for each that is open, the one on
+   view a white tab with its close button, and a click on the other switches to it.
+   Each keeps placing itself exactly where the card is (both are a card level with
+   the form, a gap from every edge), so switching only shows one and hides the
+   other: nothing is closed or drawn again, the PDF keeps its page and Corpus its
+   conversation, and the room made for the card stays put. The tab strip is one
+   element, moved to the top of whichever is on view.
+
+   While the card is up, beside the form on a screen wide enough to share, the form's
+   own card is held in place the same way: its top level with the side card's and its
+   foot a gap above the window's, with the form scrolling inside it rather than the
+   page. Locked on <html> (see "Lock the page on <html>" in CLAUDE.md), and the page's
+   place carried into the card and back, so locking and unlocking move nothing. */
+window.papelSide = (function () {
+    /* Two panes with tabs, like an editor's: the main one, which is the form's card,
+       and the side one beside it.
+
+         main   Upload Paper (the form: it is the page, so it never leaves) and, while
+                a section is open for writing, Writing View
+         side   Contents, the PDF when a file is attached, Corpus when he is opened
+
+       Any tab but Upload Paper can be dragged to the other pane or along its own,
+       and where each goes is kept on this device. A pane shows its tab on view and
+       hides the rest (visibility only: the PDF keeps its page, Corpus his
+       conversation, a section its text). Every panel is laid exactly over its pane's
+       body (.in-pane, placed from the pane's measured box), so one panel can be
+       shown in either pane without being moved in the page.
+
+       Where there is no room to share the screen (a phone) there is no main strip and
+       no Writing View tab: the side pane covers the page while the PDF or Corpus is
+       open, and a section opens in the full view as it always did. */
+    const KEYS_KEY = 'papel.paneTabs';
+    let collapsed = false;
+    try { collapsed = localStorage.getItem('papel.sideCollapsed') === '1'; } catch (err) {}
+    // The left by default: kept on this device once moved.
+    let side = 'left';
+    try { side = localStorage.getItem('papel.sideSide') === 'right' ? 'right' : 'left'; } catch (err) {}
+
+    // Which pane each tab belongs to, and the order along it.
+    let order = { main: ['form', 'write'], side: ['toc', 'pdf', 'corpus'] };
+    try {
+        const kept = JSON.parse(localStorage.getItem(KEYS_KEY) || 'null');
+        const all = ['write', 'toc', 'pdf', 'corpus'];
+        if (kept && Array.isArray(kept.main) && Array.isArray(kept.side)) {
+            const m = kept.main.filter(function (k) { return all.indexOf(k) !== -1; });
+            const s = kept.side.filter(function (k) { return all.indexOf(k) !== -1 && m.indexOf(k) === -1; });
+            all.forEach(function (k) { if (m.indexOf(k) === -1 && s.indexOf(k) === -1) (k === 'write' ? m : s).push(k); });
+            order = { main: ['form'].concat(m), side: s };
+        }
+    } catch (err) {}
+    const active = { main: 'form', side: 'toc' };
+    let latest = [];         // the tabs in the order they were opened, the newest last
+
+    const pdfEl  = function () { return document.getElementById('pdfDock'); };
+    const chatEl = function () { return document.getElementById('chat-widget'); };
+    function writeEl() { return document.querySelector('.doc-editor.is-expanded'); }
+    function pdfOpen()  { return !!(window.papelPdfDock && window.papelPdfDock.isOpen()); }
+    function chatOpen() { const w = chatEl(); return !!w && w.classList.contains('is-docked'); }
+    function writeOpen() { return wide() && !!writeEl(); }
+    function shell()    { return document.querySelector('.col-lg-11.upload-shell'); }
+    function wide()     { return window.innerWidth > 900; }
+    // The form's own scroller: the main pane's body while the page is held, else the page.
+    function scroller() {
+        const b = document.getElementById('mainBody');
+        return document.documentElement.classList.contains('side-locked') && b ? b : null;
+    }
+    function isOpen(k) {
+        return k === 'form' ? true : k === 'write' ? writeOpen() : k === 'pdf' ? pdfOpen()
+             : k === 'corpus' ? chatOpen() : k === 'toc' ? (wide() || pdfOpen() || chatOpen()) : false;
+    }
+    function paneOf(k) { return order.main.indexOf(k) !== -1 ? 'main' : 'side'; }
+    function elOf(k) {
+        return k === 'pdf' ? pdfEl() : k === 'corpus' ? chatEl() : k === 'toc' ? toc : k === 'write' ? writeEl() : null;
+    }
+    function keep() {
+        try { localStorage.setItem(KEYS_KEY, JSON.stringify({ main: order.main.filter(function (k) { return k !== 'form'; }), side: order.side })); } catch (err) {}
+    }
+
+    /* ----- The panes' frames and strips ----- */
+    const sidePane = document.createElement('div');
+    sidePane.className = 'side-pane';
+    sidePane.id = 'sidePane';
+    const sideStrip = document.createElement('div');
+    sideStrip.className = 'side-tabs';
+    sideStrip.setAttribute('role', 'tablist');
+    sideStrip.setAttribute('aria-label', 'Side panels');
+    sideStrip.dataset.pane = 'side';
+    const sideBody = document.createElement('div');
+    sideBody.className = 'pane-body';
+    sidePane.appendChild(sideStrip);
+    sidePane.appendChild(sideBody);
+
+    const mainStrip = document.createElement('div');
+    mainStrip.className = 'side-tabs main-tabs';
+    mainStrip.setAttribute('role', 'tablist');
+    mainStrip.setAttribute('aria-label', 'Form panels');
+    mainStrip.dataset.pane = 'main';
+    const strips = { main: mainStrip, side: sideStrip };
+
+    /* The form's card becomes the main pane: its strip on top, everything that was in
+       it in a body under it that scrolls on its own. Moved once, on load; moving a
+       form keeps what is typed and chosen in it, files included. */
+    let mainBody = null;
+    function buildMain() {
+        const sh = shell();
+        if (!sh || mainBody) return;
+        mainBody = document.createElement('div');
+        mainBody.className = 'main-body';
+        mainBody.id = 'mainBody';
+        while (sh.firstChild) mainBody.appendChild(sh.firstChild);
+        sh.appendChild(mainStrip);
+        sh.appendChild(mainBody);
+    }
+
+    /* ----- The contents panel ----- */
+    const toc = document.createElement('aside');
+    toc.className = 'side-toc';
+    toc.id = 'sideToc';
+    toc.setAttribute('aria-label', 'Contents of the form');
+    const tocBody = document.createElement('nav');
+    tocBody.className = 'side-toc-body';
+    toc.appendChild(tocBody);
+
+    const LABEL = { form: 'Upload Paper', write: 'Writing View', toc: 'Contents', pdf: 'PDF', corpus: 'Corpus' };
+    function labelOf(k) {
+        if (k === 'pdf') { const n = document.getElementById('pdfDockName'); return (n && n.textContent) || 'PDF'; }
+        return LABEL[k];
+    }
+    function iconOf(k) {
+        if (k === 'corpus') return corpusIcon();
+        return symbol(k === 'form' ? 'upload_file' : k === 'write' ? 'edit_note' : k === 'toc' ? 'toc' : 'picture_as_pdf');
+    }
+    function closerOf(k) {
+        if (k === 'pdf') return { label: 'Close the PDF', fn: function () { window.papelPdfDock.close(); } };
+        if (k === 'corpus') return { label: 'Close Corpus', fn: function () { toggleChat(); } };
+        if (k === 'write') return { label: 'Close the Writing View', fn: function () { papelDoc.exitFull(); } };
+        return null;
+    }
+
+    function tab(pane, key) {
+        const isOn = key === active[pane];
+        const t = document.createElement('div');
+        const close = closerOf(key);
+        t.className = 'side-tab' + (isOn ? ' is-active' : '') + (close ? '' : ' is-fixed') + (key === 'form' ? '' : ' is-movable');
+        t.dataset.key = key;
+        const main = document.createElement('button');
+        main.type = 'button';
+        main.className = 'side-tab-main';
+        main.setAttribute('role', 'tab');
+        main.setAttribute('aria-selected', isOn ? 'true' : 'false');
+        const label = labelOf(key);
+        // The whole name, which a long one needs; the grab cursor says it can be moved.
+        main.title = label;
+        main.appendChild(iconOf(key));
+        const name = document.createElement('span');
+        name.className = 'side-tab-name';
+        name.textContent = label;
+        main.appendChild(name);
+        main.addEventListener('click', function () {
+            if (dragJustEnded) return;
+            show(key);
+        });
+        if (key !== 'form') main.addEventListener('pointerdown', function (e) { pressTab(e, key, t); });
+        t.appendChild(main);
+        if (close) {
+            const x = document.createElement('button');
+            x.type = 'button';
+            x.className = 'side-tab-x';
+            x.setAttribute('aria-label', close.label);
+            x.title = close.label;
+            x.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">close</span>';
+            x.addEventListener('click', close.fn);
+            t.appendChild(x);
+        }
+        return t;
+    }
+    function symbol(name) {
+        const i = document.createElement('span');
+        i.className = 'material-symbols-outlined side-tab-ico';
+        i.setAttribute('aria-hidden', 'true');
+        i.textContent = name;
+        return i;
+    }
+    function corpusIcon() {
+        const src = document.getElementById('puppyHeader');
+        const i = document.createElement('img');
+        i.className = 'side-tab-ico side-tab-puppy';
+        i.alt = '';
+        i.src = src ? src.getAttribute('src') : '';
+        return i;
+    }
+    function corpusButton() {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'side-corpus';
+        b.title = 'Ask Corpus, the AI chatbot of PAPEL';
+        b.setAttribute('aria-label', 'Open Corpus, the AI chatbot');
+        const img = corpusIcon();
+        img.className = '';
+        b.appendChild(img);
+        b.addEventListener('click', function () { toggleChat(); });
+        return b;
+    }
+    function toolButton(icon, label, fn, extra) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'side-hide' + (extra ? ' ' + extra : '');
+        b.title = label;
+        b.setAttribute('aria-label', label);
+        b.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">' + icon + '</span>';
+        b.addEventListener('click', fn);
+        return b;
+    }
+
+    /* ----- Drawing both panes ----- */
+    function openIn(pane) { return order[pane].filter(isOpen); }
+
+    function render() {
+        buildMain();
+        const W = wide();
+        document.body.classList.toggle('panes', W);
+        const mainTabs = W ? openIn('main') : [];
+        const sideTabs = openIn('side').filter(function (k) { return W || k !== 'write'; });
+        // On a phone everything but the form is the side pane's, the full view aside.
+        if (!W) order.main.forEach(function (k) { if (k !== 'form' && k !== 'write' && isOpen(k) && sideTabs.indexOf(k) === -1) sideTabs.push(k); });
+        latest = latest.filter(isOpen);
+        ['pdf', 'corpus', 'write'].forEach(function (k) { if (isOpen(k) && latest.indexOf(k) === -1) latest.push(k); });
+
+        // The tab on view in each pane: kept, or the newest opened there, or its first.
+        [['main', mainTabs], ['side', sideTabs]].forEach(function (p) {
+            const pane = p[0], tabs = p[1];
+            if (tabs.indexOf(active[pane]) === -1) {
+                const newest = latest.filter(function (k) { return tabs.indexOf(k) !== -1; }).pop();
+                active[pane] = newest || tabs[0] || null;
+            }
+        });
+        const sideOn = sideTabs.length > 0 && (W || pdfOpen() || chatOpen());
+        document.body.classList.toggle('side-open', W && sideOn);
+        document.body.classList.toggle('side-collapsed', W && sideOn && collapsed);
+        document.body.classList.toggle('side-left', W && side === 'left');
+        document.body.classList.toggle('side-cover', !W && sideOn);
+
+        if (!sidePane.parentNode) document.body.appendChild(sidePane);
+        if (!toc.parentNode) document.body.appendChild(toc);
+        sidePane.hidden = !sideOn || (W && collapsed);
+
+        drawStrip('side', sideOn ? sideTabs : []);
+        drawStrip('main', mainTabs);
+        drawRail(sideOn ? sideTabs : []);
+        room();
+        lockForm(W);
+        layout();
+        if (whereOnView('toc')) drawToc();
+        fadeNames();
+        requestAnimationFrame(function () { try { chatNudge.place(); } catch (err) {} });
+    }
+
+    function drawStrip(pane, tabs) {
+        const strip = strips[pane];
+        strip.textContent = '';
+        strip.dataset.on = active[pane] || '';
+        if (pane === 'side' && tabs.length && wide()) {
+            strip.appendChild(toolButton(side === 'left' ? 'left_panel_close' : 'right_panel_close', 'Hide the side panel', function () { setCollapsed(true); }));
+            const to = side === 'left' ? 'right' : 'left';
+            strip.appendChild(toolButton(to === 'left' ? 'dock_to_left' : 'dock_to_right', 'Move the side panel to the ' + to, function () { setSide(to); }, 'side-move'));
+        }
+        tabs.forEach(function (k) { strip.appendChild(tab(pane, k)); });
+        // Corpus closed: his round button at the end of the side tabs, or of the main
+        // ones when the side pane has nothing in it.
+        /* In the side pane when it is shown; in the main one only when there is no side
+           pane at all. Folded away, the rail has his button, and one is enough. */
+        const sideShown = document.body.classList.contains('side-open') && !collapsed;
+        const here = pane === 'side' ? sideShown : !document.body.classList.contains('side-open');
+        if (wide() && !chatOpen() && here && (pane === 'main' || tabs.length)) strip.appendChild(corpusButton());
+    }
+
+    // Which pane a tab is on view in, if it is.
+    function whereOnView(k) {
+        if (active.main === k && wide()) return 'main';
+        if (active.side === k && document.body.classList.contains('side-open') && !collapsed) return 'side';
+        if (active.side === k && document.body.classList.contains('side-cover')) return 'side';
+        return null;
+    }
+
+    /* Every panel over its pane's body, or hidden. Measured boxes, written on the
+       panel itself (never on :root): this runs on a change of layout, not a scroll. */
+    function layout() {
+        const W = wide();
+        const gap = dockGap();
+        const sh = shell();
+        // The side pane's frame: level with the form's card, a gap from every edge.
+        // Its side and width are the stylesheet's (--pdf-dock-w, whatever unit it is in).
+        if (W && sh && !sidePane.hidden) {
+            sidePane.style.top = Math.round(sh.getBoundingClientRect().top) + 'px';
+            sidePane.style.bottom = gap + 'px';
+        } else if (!W) {
+            sidePane.style.top = sidePane.style.bottom = '';
+        }
+        const boxes = {
+            main: mainBody && W ? mainBody.getBoundingClientRect() : null,
+            side: !sidePane.hidden ? sideBody.getBoundingClientRect() : null
+        };
+        mainBody && mainBody.classList.toggle('is-covered', W && active.main !== 'form');
+        /* A section given up for another in the Writing View is no longer the panel:
+           left in place, it stayed pinned over the pane, under the one taken up. */
+        document.querySelectorAll('.doc-editor.in-pane:not(.is-expanded)').forEach(function (el) {
+            el.classList.remove('in-pane', 'side-hidden');
+        });
+        ['toc', 'pdf', 'corpus', 'write'].forEach(function (k) {
+            const el = elOf(k);
+            if (!el) return;
+            const where = isOpen(k) ? whereOnView(k) : null;
+            const box = where ? boxes[where] : null;
+            if (k === 'write' && !W) { el.classList.remove('in-pane', 'side-hidden'); return; }
+            if (!isOpen(k)) { el.classList.remove('in-pane', 'side-hidden'); return; }
+            el.classList.add('in-pane');
+            el.dataset.pane = where || paneOf(k);
+            el.classList.toggle('side-hidden', !box);
+            if (box) {
+                el.style.setProperty('--pane-t', Math.round(box.top) + 'px');
+                el.style.setProperty('--pane-l', Math.round(box.left) + 'px');
+                el.style.setProperty('--pane-w', Math.round(box.width) + 'px');
+                el.style.setProperty('--pane-h', Math.round(box.height) + 'px');
+            }
+        });
+        // The room the page makes for the side pane (or its rail), on its side.
+        placeGrip();
+    }
+    /* The room the page makes for the side pane (or its rail), on its side, and a gap
+       on the other. Set first: it moves the form's card, which the panels are placed by. */
+    function room() {
+        const W = wide(), gap = dockGap();
+        const roomSide = !W ? 0 : !document.body.classList.contains('side-open') ? gap
+                       : collapsed ? railWidth() + 2 * gap : sidePaneWidth() + 2 * gap;
+        const L = side === 'left' ? roomSide : gap, R = side === 'left' ? gap : roomSide;
+        const l = (W ? L : 0) + 'px', r = (W ? R : 0) + 'px';
+        if (document.body.style.getPropertyValue('--room-l') !== l) document.body.style.setProperty('--room-l', l);
+        if (document.body.style.getPropertyValue('--room-r') !== r) document.body.style.setProperty('--room-r', r);
+    }
+    // Measured: --pdf-dock-w can be min(46vw, 46rem), which is not a number to read.
+    function sidePaneWidth() { return Math.round(sidePane.getBoundingClientRect().width) || 460; }
+    function railWidth() { return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--side-rail-w')) || 44; }
+
+    /* ----- Showing, folding, moving ----- */
+    function show(key) {
+        if (key === 'form') { active.main = 'form'; render(); return; }
+        const pane = wide() ? paneOf(key) : 'side';
+        active[pane] = key;
+        if (pane === 'side') { collapsed = false; remember(); }
+        render();
+    }
+    function setCollapsed(on) { collapsed = !!on; remember(); render(); }
+    function setSide(to) {
+        side = to === 'left' ? 'left' : 'right';
+        try { localStorage.setItem('papel.sideSide', side); } catch (err) {}
+        render();
+        // The panels measure their edges on a scroll or a resize; this is neither.
+        window.dispatchEvent(new Event('resize'));
+    }
+    function remember() { try { localStorage.setItem('papel.sideCollapsed', collapsed ? '1' : '0'); } catch (err) {} }
+    // A tab to a pane, at a place along it.
+    function moveTab(key, pane, index) {
+        if (key === 'form') return;
+        const from = paneOf(key);
+        order[from] = order[from].filter(function (k) { return k !== key; });
+        const list = order[pane];
+        // The index counts only the tabs shown; turn it into a place in the whole list.
+        const shown = list.filter(isOpen);
+        let at = list.length;
+        if (index < shown.length) at = list.indexOf(shown[index]);
+        if (pane === 'main' && at === 0) at = 1;          // Upload Paper stays first
+        list.splice(at, 0, key);
+        active[pane] = key;
+        if (pane === 'side') { collapsed = false; remember(); }
+        keep();
+        render();
+    }
+
+    /* ----- Dragging a tab -----
+       Pressed and moved a few pixels, a tab follows the pointer; over either strip a
+       marker shows where it will go, and over a pane's body it goes to the end of
+       that pane. Let go anywhere else and it stays where it was. Followed on the
+       document, not by capture on the tab: the strips are redrawn as it moves. */
+    let drag = null, dragJustEnded = false;
+    const ghost = document.createElement('div');
+    ghost.className = 'side-tab-ghost';
+    const marker = document.createElement('div');
+    marker.className = 'side-tab-marker';
+    function pressTab(e, key, el) {
+        if (e.button !== 0 || !wide()) return;
+        drag = { key: key, x: e.clientX, y: e.clientY, moving: false, el: el, to: null };
+        document.addEventListener('pointermove', moveDrag);
+        document.addEventListener('pointerup', endTabDrag);
+        document.addEventListener('pointercancel', endTabDrag);
+    }
+    function targetAt(x, y) {
+        const panes = [];
+        if (document.body.classList.contains('side-open') && !collapsed) panes.push('side');
+        panes.push('main');
+        for (let i = 0; i < panes.length; i++) {
+            const pane = panes[i];
+            const strip = strips[pane];
+            const frame = pane === 'main' ? shell() : sidePane;
+            const fr = frame && frame.getBoundingClientRect();
+            if (!fr || x < fr.left || x > fr.right || y < fr.top || y > fr.bottom) continue;
+            const tabs = Array.prototype.slice.call(strip.querySelectorAll('.side-tab')).filter(function (t) { return t.dataset.key !== drag.key; });
+            let index = tabs.length;
+            const sr = strip.getBoundingClientRect();
+            if (y <= sr.bottom + 8) {
+                for (let j = 0; j < tabs.length; j++) {
+                    const r = tabs[j].getBoundingClientRect();
+                    if (x < r.left + r.width / 2) { index = j; break; }
+                }
+            }
+            if (pane === 'main' && index === 0) index = 1;     // never before Upload Paper
+            return { pane: pane, index: index, tabs: tabs, strip: strip };
+        }
+        return null;
+    }
+    function moveDrag(e) {
+        if (!drag) return;
+        if (!drag.moving) {
+            if (Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) < 6) return;
+            drag.moving = true;
+            ghost.textContent = '';
+            ghost.appendChild(iconOf(drag.key));
+            const n = document.createElement('span');
+            n.textContent = labelOf(drag.key);
+            ghost.appendChild(n);
+            document.body.appendChild(ghost);
+            document.body.appendChild(marker);
+            document.body.classList.add('tab-dragging');
+            drag.el.classList.add('is-dragged');
+        }
+        ghost.style.left = Math.round(e.clientX + 10) + 'px';
+        ghost.style.top = Math.round(e.clientY + 10) + 'px';
+        const t = targetAt(e.clientX, e.clientY);
+        drag.to = t;
+        if (!t) { marker.hidden = true; return; }
+        marker.hidden = false;
+        const sr = t.strip.getBoundingClientRect();
+        let x;
+        if (t.index < t.tabs.length) x = t.tabs[t.index].getBoundingClientRect().left - 2;
+        else if (t.tabs.length) x = t.tabs[t.tabs.length - 1].getBoundingClientRect().right + 1;
+        else x = sr.left + 8;
+        marker.style.left = Math.round(x) + 'px';
+        marker.style.top = Math.round(sr.top + 4) + 'px';
+        marker.style.height = Math.round(Math.max(24, sr.height - 8)) + 'px';
+    }
+    function endTabDrag() {
+        document.removeEventListener('pointermove', moveDrag);
+        document.removeEventListener('pointerup', endTabDrag);
+        document.removeEventListener('pointercancel', endTabDrag);
+        if (!drag) return;
+        const d = drag;
+        drag = null;
+        if (!d.moving) return;
+        ghost.remove();
+        marker.remove();
+        document.body.classList.remove('tab-dragging');
+        d.el.classList.remove('is-dragged');
+        // The click that ends a drag is not a click on the tab.
+        dragJustEnded = true;
+        setTimeout(function () { dragJustEnded = false; }, 0);
+        if (d.to) moveTab(d.key, d.to.pane, d.to.index);
+    }
+
+    /* ----- The rail: the side pane folded away ----- */
+    const rail = document.createElement('div');
+    rail.className = 'side-rail';
+    rail.id = 'sideRail';
+    rail.setAttribute('role', 'toolbar');
+    rail.setAttribute('aria-label', 'Side panel, hidden');
+    rail.setAttribute('aria-orientation', 'vertical');
+    function railButton(label, icon, onClick, isOn) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'side-rail-btn' + (isOn ? ' is-on' : '');
+        b.title = label;
+        b.setAttribute('aria-label', label);
+        b.appendChild(icon);
+        b.addEventListener('click', onClick);
+        return b;
+    }
+    function drawRail(keys) {
+        if (!rail.parentNode) document.body.appendChild(rail);
+        rail.textContent = '';
+        if (!keys.length) return;
+        rail.appendChild(railButton('Show the panel', symbol(side === 'left' ? 'left_panel_open' : 'right_panel_open'), function () { setCollapsed(false); }, false));
+        keys.forEach(function (k) {
+            rail.appendChild(railButton('Show ' + (k === 'pdf' ? 'PDF' : LABEL[k]), iconOf(k), function () { show(k); }, k === active.side));
+        });
+        if (keys.indexOf('corpus') === -1) {
+            const b = railButton('Open Corpus, the AI chatbot', corpusIcon(), function () { toggleChat(); }, false);
+            b.classList.add('side-rail-corpus');
+            rail.appendChild(b);
+        }
+    }
+
+    /* A name that does not fit fades out at its end (see .is-faded). */
+    function fadeNames() {
+        requestAnimationFrame(function () {
+            document.querySelectorAll('.side-tab-name, #pdfDock .pdf-dock-name').forEach(function (n) {
+                n.classList.toggle('is-faded', n.scrollWidth > n.clientWidth + 1);
+            });
+            const name = document.getElementById('pdfDockName');
+            if (name) name.title = name.textContent;
+        });
+    }
+
+    /* ----- Resizing the side pane -----
+       One handle on its inner edge: the width is the PDF panel's own
+       (--pdf-dock-w), kept where the PDF keeps it. Mouse, finger, pen or the arrow keys. */
+    const WIDTH_KEY = 'papel.pdfDockWidth';
+    const MIN_W = 280;
+    const grip = document.createElement('button');
+    grip.type = 'button';
+    grip.className = 'side-grip';
+    grip.id = 'sideGrip';
+    grip.setAttribute('role', 'separator');
+    grip.setAttribute('aria-orientation', 'vertical');
+    grip.setAttribute('aria-label', 'Resize the side panel');
+    grip.title = 'Drag to resize, or use the arrow keys';
+    function maxW() { return Math.max(MIN_W, Math.min(window.innerWidth * 0.5, window.innerWidth - 420)); }
+    function setWidth(px, keepIt) {
+        px = Math.round(Math.min(Math.max(px, MIN_W), maxW()));
+        document.documentElement.style.setProperty('--pdf-dock-w', px + 'px');
+        grip.setAttribute('aria-valuenow', String(px));
+        if (keepIt) { try { localStorage.setItem(WIDTH_KEY, String(px)); } catch (err) {} }
+        requestAnimationFrame(function () { room(); sizeForm(); fadeNames(); });
+    }
+    (function () {
+        let saved = 0;
+        try { saved = parseInt(localStorage.getItem(WIDTH_KEY), 10) || 0; } catch (err) {}
+        if (saved && window.innerWidth > 900) document.documentElement.style.setProperty('--pdf-dock-w', Math.round(Math.min(Math.max(saved, MIN_W), maxW())) + 'px');
+    })();
+    function placeGrip() {
+        const on = wide() && document.body.classList.contains('side-open') && !collapsed && !sidePane.hidden;
+        grip.hidden = !on;
+        if (!on) return;
+        if (!grip.parentNode) document.body.appendChild(grip);
+        const r = sidePane.getBoundingClientRect();
+        grip.style.left = Math.round((side === 'left' ? r.right : r.left) - 5) + 'px';
+        grip.style.top = Math.round(r.top) + 'px';
+        grip.style.height = Math.round(r.height) + 'px';
+    }
+    let resizing = null;
+    grip.addEventListener('pointerdown', function (e) {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        resizing = { x: e.clientX, w: sidePane.getBoundingClientRect().width };
+        document.body.classList.add('side-resizing');
+        try { grip.setPointerCapture(e.pointerId); } catch (err) {}
+    });
+    grip.addEventListener('pointermove', function (e) {
+        if (!resizing) return;
+        setWidth(resizing.w + (side === 'left' ? e.clientX - resizing.x : resizing.x - e.clientX), false);
+    });
+    function endResize(e) {
+        if (!resizing) return;
+        resizing = null;
+        document.body.classList.remove('side-resizing');
+        try { grip.releasePointerCapture(e.pointerId); } catch (err) {}
+        setWidth(sidePane.getBoundingClientRect().width, true);
+    }
+    grip.addEventListener('pointerup', endResize);
+    grip.addEventListener('pointercancel', endResize);
+    grip.addEventListener('keydown', function (e) {
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+        e.preventDefault();
+        const out = side === 'left' ? 'ArrowRight' : 'ArrowLeft';
+        setWidth(sidePane.getBoundingClientRect().width + (e.key === out ? 24 : -24), true);
+    });
+
+    /* ----- The form's card held in place -----
+       Wherever the screen is wide enough: its top a gap under the bars, its foot a
+       gap above the window's, its body scrolling and the page not at all. */
+    function lockForm(on) {
+        const html = document.documentElement, sh = shell();
+        if (!sh || !mainBody) return;
+        on = on && wide();
+        const was = html.classList.contains('side-locked');
+        if (on) {
+            if (!was) {
+                const y = window.scrollY;
+                html.classList.add('side-locked');
+                window.scrollTo(0, 0);
+                sizeForm(true);
+                mainBody.scrollTop = y;
+            } else {
+                sizeForm(true);
+            }
+        } else if (was) {
+            const y = mainBody.scrollTop;
+            html.classList.remove('side-locked');
+            sh.style.height = '';
+            mainBody.scrollTop = 0;
+            window.scrollTo(0, y);
+        }
+    }
+    function sizeForm(skipLayout) {
+        const sh = shell();
+        if (!sh || !document.documentElement.classList.contains('side-locked')) return;
+        const gap = dockGap();
+        const top = Math.round(sh.getBoundingClientRect().top);
+        const h = Math.max(200, Math.round(window.innerHeight - top - gap)) + 'px';
+        if (sh.style.height !== h) sh.style.height = h;
+        rail.style.top = top + 'px';
+        rail.style.bottom = gap + 'px';
+        if (typeof placeChatDockTop === 'function') placeChatDockTop();
+        if (!skipLayout) layout();
+    }
+    window.addEventListener('scroll', function () {
+        if (document.documentElement.classList.contains('side-locked') && window.scrollY !== 0) window.scrollTo(0, 0);
+    }, { passive: true });
+
+    /* ----- The contents itself -----
+       Read from the form as it stands, so it lists what this paper has. */
+    const STEP_PARTS = {
+        1: '.form-label',
+        2: '#scopeBar, .pdf-slot, .ai-extract-question, #metadataFieldsHeader, #metadataFields .form-label, .doc-editor',
+        3: 'h4, .form-label',
+        4: '.review-label, #btnSaveDraft, #btnUpload'
+    };
+    function shownIn(el, step) {
+        for (let n = el; n && n !== step; n = n.parentElement) {
+            if (n.hidden || n.classList.contains('is-out-of-scope')) return false;
+            if (getComputedStyle(n).display === 'none') return false;
+        }
+        return true;
+    }
+    function textOf(el) {
+        if (el.classList.contains('doc-editor')) {
+            const t = el.querySelector('.doc-editor-title');
+            return t ? t.textContent.replace('*', '').trim() : '';
+        }
+        if (el.classList.contains('pdf-slot')) {
+            const l = el.querySelector('.pdf-slot-label');
+            const multi = el.closest('.pdf-slots') && el.closest('.pdf-slots').classList.contains('is-multi');
+            return multi && l ? l.textContent.trim() : 'Your PDF';
+        }
+        if (el.id === 'scopeBar') return 'Sections you are submitting';
+        if (el.classList.contains('ai-extract-question')) return 'Enter your paper details';
+        const c = el.cloneNode(true);
+        c.querySelectorAll('.text-danger, .field-note, .material-symbols-outlined, .step-badge').forEach(function (x) { x.remove(); });
+        return c.textContent.replace(/[:*]\s*$/, '').replace(/\s+/g, ' ').trim();
+    }
+    function depthOf(el, stepNo) {
+        if (el.classList.contains('doc-editor')) return 3;      // under "Abstract & IMRAD"
+        if (stepNo === 3 && el.classList.contains('form-label')) return 2;
+        if (stepNo === 2 && el.matches('#metadataFields .form-label')) return 2;
+        return 1;
+    }
+
+    let drawn = '';
+    let tocParts = [];
+    function drawToc() {
+        if (!whereOnView('toc')) return;
+        const steps = [];
+        for (let n = 1; n <= 4; n++) {
+            const step = document.getElementById('step' + n);
+            const head = step && step.querySelector('.section-title');
+            const item = document.querySelector('.upload-steps .step-item[data-step="' + n + '"] .step-label');
+            const parts = [];
+            if (step) {
+                step.querySelectorAll(STEP_PARTS[n]).forEach(function (el) {
+                    if (!shownIn(el, step)) return;
+                    const label = textOf(el);
+                    if (label) parts.push({ el: el, label: label, depth: depthOf(el, n) });
+                });
+            }
+            steps.push({ n: n, label: (item && item.textContent.trim()) || (head && head.textContent.trim()) || ('Step ' + n), parts: parts });
+        }
+        const sig = currentStep + '|' + steps.map(function (s) { return s.label + ':' + s.parts.map(function (p) { return p.depth + p.label; }).join(','); }).join('/');
+        if (sig === drawn && tocBody.childNodes.length) { spy(); return; }
+        drawn = sig;
+        tocBody.textContent = '';
+        const title = document.createElement('p');
+        title.className = 'side-toc-title';
+        title.textContent = 'Upload Paper';
+        tocBody.appendChild(title);
+        const list = document.createElement('ul');
+        list.className = 'side-toc-list';
+        steps.forEach(function (s) {
+            const li = document.createElement('li');
+            li.className = 'side-toc-step' + (s.n === currentStep ? ' is-current' : '') + (s.n < currentStep ? ' is-done' : '');
+            const a = link(s.n, null, 0);
+            const num = document.createElement('span');
+            num.className = 'side-toc-num';
+            num.textContent = String(s.n);
+            a.appendChild(num);
+            const name = document.createElement('span');
+            name.textContent = s.label;
+            a.appendChild(name);
+            li.appendChild(a);
+            if (s.parts.length) {
+                const ul = document.createElement('ul');
+                s.parts.forEach(function (p, i) {
+                    const item = document.createElement('li');
+                    const b = link(s.n, i, p.depth);
+                    b.textContent = p.label;
+                    item.appendChild(b);
+                    ul.appendChild(item);
+                });
+                li.appendChild(ul);
+            }
+            list.appendChild(li);
+        });
+        tocBody.appendChild(list);
+        tocParts = steps;
+        spy();
+    }
+    function link(stepNo, part, depth) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'side-toc-link';
+        b.dataset.depth = String(depth);
+        b.dataset.step = String(stepNo);
+        if (part !== null) b.dataset.part = String(part);
+        b.addEventListener('click', function () { go(stepNo, part); });
+        return b;
+    }
+    /* To a step, as its number in the progress bar takes you there, then to the part,
+       at the top of the form. The form's tab is put on view first if another was. */
+    function go(stepNo, part) {
+        if (wide() && active.main !== 'form') { active.main = 'form'; render(); }
+        let guard = 8;
+        while (currentStep !== stepNo && guard-- > 0) {
+            const before = currentStep;
+            goToStep(stepNo < currentStep ? stepNo : currentStep + 1);
+            if (currentStep === before) break;
+        }
+        if (currentStep !== stepNo) { drawToc(); return; }
+        const s = tocParts[stepNo - 1];
+        const el = part !== null && s ? s.parts[part] && s.parts[part].el : null;
+        const sc = scroller();
+        requestAnimationFrame(function () {
+            if (!sc) { if (el) el.scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
+            if (!el) { sc.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+            const top = el.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - 16;
+            sc.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+            const field = el.matches('.form-label') ? (el.htmlFor ? document.getElementById(el.htmlFor) : el.parentElement.querySelector('input, select, textarea'))
+                        : el.classList.contains('doc-editor') ? el.querySelector('.doc-surface') : null;
+            if (field && field.focus) { try { field.focus({ preventScroll: true }); } catch (err) {} }
+        });
+        drawToc();
+    }
+    function spy() {
+        const sc = scroller();
+        if (!sc || !tocParts.length) return;
+        const s = tocParts[currentStep - 1];
+        let here = -1;
+        if (s) {
+            const line = sc.getBoundingClientRect().top + 40;
+            s.parts.forEach(function (p, i) { if (p.el.getBoundingClientRect().top <= line) here = i; });
+        }
+        tocBody.querySelectorAll('.side-toc-link.is-here').forEach(function (b) { b.classList.remove('is-here'); });
+        if (here >= 0) {
+            const b = tocBody.querySelector('.side-toc-link[data-step="' + currentStep + '"][data-part="' + here + '"]');
+            if (b) b.classList.add('is-here');
+        }
+    }
+    const queued = {};
+    function soon(name, fn) {
+        if (queued[name]) return;
+        queued[name] = true;
+        requestAnimationFrame(function () { queued[name] = false; fn(); });
+    }
+
+    window.addEventListener('resize', function () { soon('render', render); });
+    if (window.ResizeObserver) {
+        const bar = document.querySelector('.site-header');
+        if (bar) new ResizeObserver(function () { requestAnimationFrame(function () { sizeForm(); }); }).observe(bar);
+        new ResizeObserver(function () { fadeNames(); }).observe(sidePane);
+    }
+    document.addEventListener('papel:pdf-dock-open', function () { show('pdf'); });
+    document.addEventListener('papel:pdf-dock-close', function () { soon('render', render); });
+    document.addEventListener('papel-step', function () { soon('toc', drawToc); });
+    /* A section opened for writing, or closed, or another one taken up in its place:
+       the Writing View tab follows the section editor, whichever way it changed. */
+    let wasWriting = null;      // the section in the Writing View, if one is
+    document.addEventListener('papel-full-state', function () {
+        soon('write', function () {
+            const now = writeOpen() ? papelDoc.expanded() : null;
+            if (now && now !== wasWriting) show('write');
+            else render();
+            wasWriting = now;
+        });
+    });
+    document.addEventListener('DOMContentLoaded', function () {
+        buildMain();
+        const n = document.getElementById('pdfDockName');
+        if (n && window.MutationObserver) {
+            new MutationObserver(function () { if (pdfOpen()) soon('render', render); })
+                .observe(n, { childList: true, characterData: true, subtree: true });
+        }
+        const form = document.getElementById('uploadForm');
+        if (form && window.MutationObserver) {
+            new MutationObserver(function (records) {
+                const real = records.some(function (r) {
+                    const el = r.target.nodeType === 1 ? r.target : r.target.parentElement;
+                    return !(el && el.closest && el.closest('.doc-surface, .doc-pop'));
+                });
+                if (real) soon('toc', drawToc);
+            }).observe(form, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'hidden', 'style'] });
+        }
+        if (mainBody) mainBody.addEventListener('scroll', function () { if (whereOnView('toc')) soon('spy', spy); }, { passive: true });
+        render();
+    });
+
+    return {
+        side: function () { return side; },
+        // Corpus opened or closed (applyChatDock): opened, it is the tab on view in its pane.
+        changed: function (key) { if (key) show(key); else render(); },
+        show: show,
+        // The tab on view in the side pane, or Corpus's if he is on view anywhere.
+        active: function () { return whereOnView('corpus') ? 'corpus' : active.side; },
+        onView: whereOnView,
+        move: moveTab,
+        layout: function () { render(); },
+        toTop: function () {
+            const sc = scroller();
+            if (sc) sc.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    };
+})();
+
 function toggleChatDock() {
     const widget = document.getElementById('chat-widget');
     applyChatDock(!widget.classList.contains('is-docked'), currentChatSide());
@@ -8726,10 +10536,8 @@ function toggleChatSide() {
 }
 
 function restoreChatDock() {
-    let side = 'left';
-    try { side = localStorage.getItem('papel_chat_side') || 'left'; } catch (err) {}
-    // Start floating and closed; only the side preference carries over.
-    applyChatDock(false, side);
+    // Closed on load, so it never takes over the page; it opens into the side card.
+    applyChatDock(false, 'right');
 }
 
 document.getElementById('chat-input').addEventListener('keypress', function(e) {
@@ -9145,7 +10953,7 @@ document.addEventListener('DOMContentLoaded', function() {
             + 'your dashboard, ready to finish later.',
             { title: 'Leave this page?', icon: 'save',
               confirmText: 'Save draft and leave', cancelText: 'Stay here',
-              altText: 'Discard this draft and leave' }
+              altText: 'Discard draft and leave' }
         ).then(async function (answer) {
             if (!answer) return;                       // stayed here
 
@@ -9186,41 +10994,88 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    /* ----- The browser's Back button -----
-       Back is a navigation the page can actually intervene in, unlike closing
-       the tab: an extra history entry is pushed on arrival, so pressing Back
-       lands here first and we can ask in the site's own dialog rather than
-       leaving silently. Pressing Back again from the answer is what really
-       leaves.
+    /* ----- The browser's Back and Forward -----
+       Each step of the form is a place in the browser's history, and so is a
+       section in full view: Back goes to the step before (or out of the full
+       view), Forward to the one after, the way they do between pages. Back from
+       the first place is leaving, and that is where the question is asked.
 
-       (Closing or reloading the tab is a different matter: browsers show
-       their own fixed wording there and ignore any text a page supplies, so
-       that one cannot be replaced, only triggered.) */
-    let backGuardArmed = false;
+       History entries, all on this page's address:
+         { papelUpload: 1, base: true }      where the page was arrived at
+         { papelUpload: 1, step, full, idx }  one for each place visited since
 
-    function armBackGuard() {
-        if (backGuardArmed || !window.history || !history.pushState) return;
-        history.pushState({ papelUploadGuard: true }, '', window.location.href);
-        backGuardArmed = true;
+       The page used to leave by setting location.href to the page it came from.
+       That is a new visit, not a step back: the dashboard went on the history a
+       second time, Back from it came straight back here, and Forward had nothing
+       left to go to. Leaving now moves back through the history itself.
+
+       (Closing or reloading the tab is a different matter: browsers show their
+       own fixed wording there and ignore any text a page supplies, so that one
+       cannot be replaced, only triggered.) */
+    const canHistory = !!(window.history && history.pushState);
+    let histIdx = 0;            // the idx of the entry the page is showing
+    let applyingHistory = false;
+    let askingLeave = false;
+
+    function viewNow() {
+        return { step: currentStep, full: papelDoc.expanded() };
+    }
+    function histState(v, idx) {
+        return { papelUpload: 1, step: v.step, full: v.full || null, idx: idx };
+    }
+    function pushView() {
+        histIdx++;
+        history.pushState(histState(viewNow(), histIdx), '', window.location.href);
+    }
+    function replaceView() {
+        history.replaceState(histState(viewNow(), histIdx), '', window.location.href);
     }
 
-    window.addEventListener('popstate', function () {
-        backGuardArmed = false;
+    // Where to go when there is nothing behind this page to go back to.
+    function leaveTo() {
+        const from = document.referrer;
+        const sameSite = from && from.indexOf(window.location.origin) === 0
+                         && from.indexOf('student_upload_ai.php') === -1;
+        return sameSite ? from : 'student_dashboard.php';
+    }
+    /* Back past the page's first entry, to whatever came before it. A tab opened
+       on this page has nothing before it, and Back does nothing at all: then the
+       page goes to where it came from in place of this entry, so Back from there
+       still goes where it went before. */
+    let leftByBack = false;
+    function leaveBack(steps) {
+        leftByBack = true;
+        history.go(-steps);
+        const fallback = setTimeout(function () { window.location.replace(leaveTo()); }, 600);
+        /* Gone: the timer must not outlive the page. A page kept whole for Forward
+           (the browser's back/forward cache) runs its timers again when it comes
+           back, and this one would then send it away a second time. */
+        window.addEventListener('pagehide', function () { clearTimeout(fallback); }, { once: true });
+    }
+    /* Back again by Forward, the page as it was left: it is a form being written
+       again, so the guards come back, and it stands on one of its places, not on
+       the entry that leads out. */
+    window.addEventListener('pageshow', function (e) {
+        if (!e.persisted || !leftByBack || !canHistory) return;
+        leftByBack = false;
+        askingLeave = false;
+        papelDraft.endSubmit();
+        const st = history.state;
+        if (!st || !st.papelUpload || st.base) { histIdx = 0; pushView(); }
+    });
 
-        // Nothing worth keeping, or already on the way out: let Back do its job.
-        if (!CAN_DRAFT) return;
-        if (papelDraft.isSubmitting() || !papelDraft.dirty()) return;
-
-        // Stay put while the question is on screen.
-        armBackGuard();
-
+    function askLeave() {
+        // Stay put while the question is on screen: a second Back finds it up.
+        pushView();
+        askingLeave = true;
         window.papelConfirm(
             'Save this paper as a draft before going back? It will appear under Drafts '
             + 'on your dashboard, ready to finish later.',
             { title: 'Leave this page?', icon: 'save',
               confirmText: 'Save draft and leave', cancelText: 'Stay here',
-              altText: 'Discard this draft and leave' }
+              altText: 'Discard draft and leave' }
         ).then(async function (answer) {
+            askingLeave = false;
             if (!answer) return;                       // stayed here
             // Discards the device copy as well; see the note in the link guard.
             if (answer === 'alt') {
@@ -9229,17 +11084,109 @@ document.addEventListener('DOMContentLoaded', function() {
                 await papelDraft.saveToServer();
             }
             papelDraft.beginSubmit();
-
-            // Somewhere definite rather than history arithmetic: the guard
-            // entries make a plain history.back() land back on this page.
-            const from = document.referrer;
-            const sameSite = from && from.indexOf(window.location.origin) === 0
-                             && from.indexOf('student_upload_ai.php') === -1;
-            window.location.href = sameSite ? from : 'student_dashboard.php';
+            leaveBack(2);                              // the entry just pushed, and the first
         });
-    });
+    }
 
-    armBackGuard();
+    /* Puts the page where an entry says, without making new entries. Forward runs
+       the same checks the Next button does, one step at a time: Forward to a step
+       that cannot be reached yet stops where the checks stop, says why, and the
+       entry is changed to say where the page really is. */
+    function applyView(st) {
+        const now = viewNow();
+        const full = st.full || null;
+        if (now.step === st.step && now.full === full) return;
+        applyingHistory = true;
+        try {
+            // The page under a question is changing, so the question goes too.
+            if (!askingLeave && typeof window.papelDialogDismiss === 'function') window.papelDialogDismiss();
+            if (now.full && (st.step !== now.step || !full)) papelDoc.collapse();
+            if (st.step < currentStep) {
+                goToStep(st.step);
+            } else {
+                let guard = 8;
+                while (currentStep < st.step && guard-- > 0) {
+                    const before = currentStep;
+                    goToStep(currentStep + 1);
+                    if (currentStep === before) break;   // a check stopped it
+                }
+            }
+            if (full && currentStep === st.step && papelDoc.expanded() !== full) papelDoc.expand(full);
+            const v = viewNow();
+            if (v.step !== st.step || v.full !== full) replaceView();
+        } finally {
+            applyingHistory = false;
+        }
+    }
+
+    if (canHistory) {
+        /* Arriving, the entry is made the page's first, and the first step is put
+           on top of it. Reloaded, the entry is already one of this page's places:
+           it says step 1 now, and the entries before it are still there to go
+           back through. */
+        const st0 = history.state;
+        if (st0 && st0.papelUpload && !st0.base) {
+            histIdx = st0.idx || 1;
+            replaceView();
+        } else {
+            history.replaceState({ papelUpload: 1, base: true, idx: 0 }, '', window.location.href);
+            histIdx = 0;
+            pushView();
+        }
+
+        document.addEventListener('papel-step', function () { if (!applyingHistory) pushView(); });
+        document.addEventListener('papel-fullview', function () {
+            if (applyingHistory) return;
+            const st = history.state || {};
+            const full = papelDoc.expanded();
+            if (full && st.full) { replaceView(); return; }     // another tab, the same place
+            if (!full && st.full && st.step === currentStep && histIdx > 0) {
+                // Closed by its own button or Escape: the entry under it is the form.
+                applyingHistory = true;
+                history.back();
+                return;
+            }
+            pushView();
+        });
+
+        window.addEventListener('popstate', function (e) {
+            const st = e.state;
+            const isOurs = st && st.papelUpload;
+            // The history.back() above, landing where the page already is.
+            if (applyingHistory && isOurs && !st.base) {
+                histIdx = st.idx || 0;
+                applyingHistory = false;
+                replaceView();
+                return;
+            }
+            applyingHistory = false;
+            if (!isOurs || st.base) {
+                histIdx = 0;
+                if (askingLeave) { pushView(); return; }      // already asking
+                // Nothing worth keeping, or already on the way out: Back does its job.
+                if (!CAN_DRAFT || papelDraft.isSubmitting() || !papelDraft.dirty()) {
+                    leaveBack(1);
+                    return;
+                }
+                askLeave();
+                return;
+            }
+            const back = (st.idx || 0) < histIdx;
+            histIdx = st.idx || 0;
+            /* Left over from before a reload: a step ahead of the page, met going
+               back. Passed over, so Back never walks the form forward. */
+            if (back && st.step > currentStep) { history.back(); return; }
+            /* An entry for what is already on screen (a Forward that stopped at an
+               unfinished step leaves one) is passed over too: a Back that changes
+               nothing reads as a Back that does not work. */
+            const v = viewNow();
+            if (v.step === st.step && v.full === (st.full || null)) {
+                if (back) history.back(); else history.forward();
+                return;
+            }
+            applyView(st);
+        });
+    }
 
     // Offer any earlier draft back, once the page has settled.
     if (CAN_DRAFT) setTimeout(function () { papelDraft.offerRestore(); }, 400);
@@ -9281,9 +11228,45 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     // The boxes follow the manuscript types ticked in step 1.
     document.querySelectorAll('.js-manuscript').forEach(function (box) {
-        box.addEventListener('change', syncPdfSlots);
+        box.addEventListener('change', function () {
+            /* Other is instead of the others, not as well as them: ticking it clears
+               IMRAD and Full Manuscript, and ticking either of those clears Other. The
+               server holds to the same rule (manuscript_types_posted()). */
+            if (box.checked) {
+                document.querySelectorAll('.js-manuscript').forEach(function (other) {
+                    if (other !== box && (box.id === 'mt_other' || other.id === 'mt_other')) other.checked = false;
+                });
+            }
+            syncPdfSlots();
+        });
+    });
+    // Typing a name beside Other ticks it, as a Google Form does; the box's label follows.
+    const otherName = document.getElementById('manuscriptTypeOther');
+    if (otherName) otherName.addEventListener('input', function () {
+        const tick = document.getElementById('mt_other');
+        if (tick && !tick.checked && otherName.value.trim() !== '') {
+            tick.checked = true;
+            tick.dispatchEvent(new Event('change', { bubbles: true }));
+        } else {
+            syncPdfSlots();
+        }
     });
     syncPdfSlots();
+
+    const paperTypeSel = document.querySelector('select[name="paper_type"]');
+    if (paperTypeSel) paperTypeSel.addEventListener('change', function () {
+        syncPaperTypeOther();
+        if (currentPaperType() === 'other') {
+            const box = document.getElementById('paperTypeOther');
+            if (box && !box.hidden && !box.value) box.focus();
+        }
+    });
+    const paperTypeOther = document.getElementById('paperTypeOther');
+    // Step 3's banner names the type, so it follows the typing too.
+    if (paperTypeOther) paperTypeOther.addEventListener('input', function () {
+        if (typeof syncSupportingDocs === 'function') syncSupportingDocs();
+    });
+    syncPaperTypeOther();
 
     document.getElementById('ethics_clearance').addEventListener('change', function() { updateFileIndicator(this, 'ethics-indicator'); });
     document.getElementById('consent_form').addEventListener('change', function() { updateFileIndicator(this, 'consent-indicator'); });
@@ -9309,14 +11292,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const openDialog = document.getElementById('papelDialog');
         if (openDialog && openDialog.classList.contains('open')) return;
 
-        /* The PDF preview is the most recently opened surface, so Escape belongs
-           to it: includes/pdf_dock.php closes it. Nothing else moves on the same
-           key, the chat included. */
-        if (pdfPreviewOpen()) return;
+        /* Escape closes the tab on view in the side card, and only that one. The
+           PDF's is closed by includes/pdf_dock.php, which leaves a panel that is
+           only a hidden tab alone; Corpus's here. */
         const widget = document.getElementById('chat-widget');
-        if (widget && widget.classList.contains('is-docked')) {
+        if (widget && widget.classList.contains('is-docked')
+            && window.papelSide && window.papelSide.active() === 'corpus') {
             e.preventDefault();
-            applyChatDock(false, currentChatSide());
+            toggleChat();
         }
     });
     document.getElementById('chat-button').addEventListener('click', toggleChat);
@@ -9356,10 +11339,13 @@ document.addEventListener('DOMContentLoaded', () => {
     <div class="papel-dialog-head">
       <span class="material-symbols-outlined" id="papelDialogIcon">info</span>
       <h2 id="papelDialogTitle">Notice</h2>
-      <!-- Only appears when a caller offers a third answer, so every other
-           dialog keeps a header with nothing in the corner. -->
-      <button type="button" class="papel-dialog-x" id="papelDialogAlt" hidden
-              aria-label="Leave without saving" title="Leave without saving">
+      <!-- Closes the question, the same as its safe answer. Only on a question
+           with a third answer, so every other dialog keeps a header with nothing in
+           the corner. It used to *be* that third answer ("Discard this draft and
+           leave"), and an X in a corner reads as "close" to everyone: pressed to
+           dismiss the leave question, it threw the draft away and left the page. -->
+      <button type="button" class="papel-dialog-x" id="papelDialogX" hidden
+              aria-label="Close" title="Close">
         <span class="material-symbols-outlined">close</span>
       </button>
     </div>
@@ -9368,6 +11354,7 @@ document.addEventListener('DOMContentLoaded', () => {
       <input type="text" class="form-control" id="papelDialogInput" autocomplete="off">
     </div>
     <div class="papel-dialog-foot">
+      <button type="button" class="btn btn-link papel-dialog-alt" id="papelDialogAlt" hidden></button>
       <button type="button" class="btn btn-outline-secondary" id="papelDialogCancel" hidden>Cancel</button>
       <button type="button" class="btn btn-primary" id="papelDialogOk">OK</button>
     </div>
@@ -9387,6 +11374,7 @@ document.addEventListener('DOMContentLoaded', () => {
     var okBtn    = document.getElementById('papelDialogOk');
     var cancelBtn = document.getElementById('papelDialogCancel');
     var altBtn    = document.getElementById('papelDialogAlt');
+    var xBtn      = document.getElementById('papelDialogX');
     var inputWrap = document.getElementById('papelDialogInputWrap');
     var inputEl   = document.getElementById('papelDialogInput');
     var lastFocus = null;
@@ -9407,17 +11395,35 @@ document.addEventListener('DOMContentLoaded', () => {
     function resetMode() {
         isChoose = false;
         picker = null;
-        dialogEl.classList.remove('is-choose');
+        plainBox();
     }
 
-    function close(value) {
-        backdrop.classList.remove('open');
+    /* The box's own shape: its width, the buttons it shows and their words. Each
+       opener starts from this and adds what it needs. It is not done on closing:
+       the box takes .2s to fade out, and taking its width and buttons away at the
+       start of that showed the text reflowing to the narrow box, without its
+       ground, over the page (the sections question and "Why you type the sections
+       out" both did it on every close). */
+    function plainBox() {
         dialogEl.classList.remove('is-wide');
         dialogEl.classList.remove('is-choose');
-        document.body.style.overflow = '';
+        dialogEl.classList.remove('has-alt');
         inputWrap.hidden = true;
         cancelBtn.hidden = true;
         altBtn.hidden = true;
+        xBtn.hidden = true;
+        okBtn.textContent = 'OK';
+        cancelBtn.textContent = 'Cancel';
+    }
+    var fadeTimer = null;
+
+    function close(value) {
+        backdrop.classList.remove('open');
+        clearTimeout(fadeTimer);
+        fadeTimer = setTimeout(function () {
+            if (!backdrop.classList.contains('open')) plainBox();
+        }, 260);
+        document.body.style.overflow = '';
         // preventScroll, then the recorded position: the first stops focus from
         // dragging the page to the restored element, the second undoes anything
         // that moved while the dialog was up.
@@ -9433,8 +11439,6 @@ document.addEventListener('DOMContentLoaded', () => {
         isConfirm = false;
         isChoose = false;
         picker = null;
-        okBtn.textContent = 'OK';
-        cancelBtn.textContent = 'Cancel';
     }
 
     window.papelAlert = function (message, opts) {
@@ -9503,15 +11507,16 @@ document.addEventListener('DOMContentLoaded', () => {
         cancelBtn.textContent = opts.cancelText || 'Cancel';
         cancelBtn.hidden = false;
 
-        /* A third answer, for questions that have one, shown as an X in the
-           header. Resolves the string 'alt' rather than a boolean so a caller
-           cannot mistake it for yes: `if (leave)` would otherwise treat it as
-           the confirming button. The text becomes the tooltip and the label a
-           screen reader announces, since the button itself is only an icon. */
+        /* A third answer, for questions that have one, written out at the far end
+           of the buttons, away from the two that matter most. Resolves the string
+           'alt' rather than a boolean so a caller cannot mistake it for yes:
+           `if (leave)` would otherwise treat it as the confirming button. The X in
+           the header then only closes, which is what an X is taken to do. */
         if (opts.altText) {
-            altBtn.setAttribute('aria-label', opts.altText);
-            altBtn.setAttribute('title', opts.altText);
+            altBtn.textContent = opts.altText;
             altBtn.hidden = false;
+            xBtn.hidden = false;
+            dialogEl.classList.add('has-alt');
         }
         inputWrap.hidden = true;
         isPrompt = false;
@@ -9560,21 +11565,41 @@ document.addEventListener('DOMContentLoaded', () => {
         var rows = [];            // the sections of their own: { key, label, orig, hasText, removed }
         var addInput = null;      // set below when the question has a custom block
         var customUi = null;
+        var block = null;
+        /* Custom: the paper is written in sections of its author's own. Then only that list
+           is shown, the six tick boxes are not, and the Abstract is its first row, which
+           may be taken out like any other (it is optional only here; section_scope_for()
+           on the server holds to the same rule). The other quick choices are the six. */
+        var customOn = false;
+        var warn = null;
+        var ABSTRACT = 'abstract';
 
         function fold(s) { return String(s == null ? '' : s).replace(/\s+/g, ' ').trim().toLowerCase(); }
         function clean(s) { return String(s == null ? '' : s).replace(/\s+/g, ' ').trim().slice(0, cfg ? cfg.maxLen : 80); }
         function liveRows() { return rows.filter(function (r) { return !r.removed; }); }
+        // Their own, without the Abstract row: what the limit of twelve counts.
+        function ownRows() { return liveRows().filter(function (r) { return r.key !== 'abstract'; }); }
         function tickedKeys() {
             return boxes.filter(function (b) { return b.checked; }).map(function (b) { return b.value; });
+        }
+        function abstractLabel() {
+            var s = sections.filter(function (x) { return x.key === ABSTRACT; })[0];
+            return s ? s.label : 'Abstract';
+        }
+        // The Abstract as a row of the list, filed as the real Abstract, not one of their own.
+        function abstractRow() {
+            var has = !!(cfg && cfg.stdText && cfg.stdText[ABSTRACT]);
+            return { key: ABSTRACT, label: abstractLabel(), orig: abstractLabel(), hasText: has, removed: false };
         }
 
         var lockedKeys = sections.filter(function (s) { return s.locked; }).map(function (s) { return s.key; });
         var presetDefs = [
-            { name: 'Abstract only', keys: lockedKeys, lit: function () { return !liveRows().length; } },
-            { name: 'All sections',  keys: sections.map(function (s) { return s.key; }), lit: function () { return true; } }
+            { name: 'Abstract only', keys: lockedKeys, lit: function () { return !customOn; } },
+            // The six together are the IMRAD format, which is what students call it.
+            { name: 'IMRAD Format',  keys: sections.map(function (s) { return s.key; }), lit: function () { return !customOn; } }
         ];
-        // "Custom" leaves the Abstract and takes the person to the block where they name the rest.
-        if (cfg) presetDefs.push({ name: 'Custom', keys: lockedKeys, lit: function () { return liveRows().length > 0; }, focus: true });
+        // "Custom" swaps the six for the list where they name their own, the Abstract first.
+        if (cfg) presetDefs.push({ name: 'Custom', keys: lockedKeys, lit: function () { return customOn; }, custom: true });
 
         var presets = document.createElement('div');
         presets.className = 'scope-pick-presets';
@@ -9586,9 +11611,16 @@ document.addEventListener('DOMContentLoaded', () => {
             b.className = 'scope-preset';
             b.textContent = p.name;
             b.addEventListener('click', function () {
-                boxes.forEach(function (box) { box.checked = p.keys.indexOf(box.value) !== -1; });
+                if (p.custom) {
+                    if (!customOn && !liveRows().length) rows.unshift(abstractRow());
+                    customOn = true;
+                    renderRows();
+                } else {
+                    boxes.forEach(function (box) { box.checked = p.keys.indexOf(box.value) !== -1; });
+                    customOn = false;
+                }
                 refresh();
-                if (p.focus && addInput) {
+                if (p.custom && addInput) {
                     addInput.scrollIntoView({ block: 'nearest' });
                     addInput.focus();
                 }
@@ -9597,6 +11629,12 @@ document.addEventListener('DOMContentLoaded', () => {
             return { el: b, def: p };
         });
         root.appendChild(presets);
+
+        // Leaving Custom with something typed in a section of their own: said before it is lost.
+        warn = document.createElement('p');
+        warn.className = 'scope-custom-msg';
+        warn.setAttribute('aria-live', 'polite');
+        root.appendChild(warn);
 
         var list = document.createElement('fieldset');
         list.className = 'scope-pick-list';
@@ -9634,8 +11672,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 rows.push({ key: c.key, label: c.label, orig: c.label, hasText: !!c.hasText, removed: false });
             });
 
-            var block = document.createElement('div');
+            block = document.createElement('div');
             block.className = 'scope-custom';
+            /* Reopened on a paper already in sections of its own (or without an Abstract,
+               which only Custom allows): Custom again, the Abstract first if it is in. */
+            var selected = opts.selected || [];
+            customOn = rows.length > 0 || selected.indexOf(ABSTRACT) === -1;
+            if (customOn && selected.indexOf(ABSTRACT) !== -1) rows.unshift(abstractRow());
 
             var head = document.createElement('div');
             head.className = 'scope-custom-head';
@@ -9650,8 +11693,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             var help = document.createElement('p');
             help.className = 'scope-custom-help';
-            help.textContent = 'For a paper written in chapters or aspects rather than Introduction and Methodology. '
-                + 'Each one gets a box of its own on the next page and is required. They come after the sections above.';
+            help.textContent = 'Name the sections your paper is written in, or start from a list. Each one gets a box of '
+                + 'its own on the next page and is required. The Abstract is optional here: take it out if your paper has none.';
             block.appendChild(help);
 
             var lists = document.createElement('div');
@@ -9701,7 +11744,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Which standard sections are ticked, by name: a section of your own cannot repeat one of those.
             var tickedNames = function () {
-                var keys = tickedKeys(), out = {};
+                var keys = customOn ? [] : tickedKeys(), out = {};
                 sections.forEach(function (s) { if (keys.indexOf(s.key) !== -1) out[fold(s.label)] = true; });
                 return out;
             };
@@ -9721,6 +11764,29 @@ document.addEventListener('DOMContentLoaded', () => {
                     li.className = 'scope-crow' + (r.removed ? ' is-removed' : '');
                     var num = document.createElement('span');
                     num.className = 'scope-crow-n';
+                    li._row = r;
+                    /* Dragged by its handle. The Abstract's handle is there but hidden, so
+                       every name box still lines up with the others. */
+                    var grip = document.createElement('button');
+                    grip.type = 'button';
+                    var fixed = r.key === ABSTRACT || r.removed;      // a struck-out row is on its way out
+                    grip.className = 'scope-crow-grip' + (fixed ? ' is-fixed' : '');
+                    grip.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">drag_indicator</span>';
+                    if (fixed) {
+                        grip.tabIndex = -1;
+                        grip.setAttribute('aria-hidden', 'true');
+                    } else {
+                        grip.title = 'Drag to move, or use the arrow keys';
+                        grip.setAttribute('aria-label', 'Move ' + (clean(r.label) || 'this section') + ' (arrow keys)');
+                        grip.addEventListener('pointerdown', function (e) { startDrag(e, li); });
+                        grip.addEventListener('keydown', function (e) {
+                            if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                            e.preventDefault();
+                            e.stopPropagation();
+                            moveRow(r, e.key === 'ArrowUp' ? -1 : 1, 'grip');
+                        });
+                    }
+                    li.appendChild(grip);
                     li.appendChild(num);
                     r.li = li;
                     if (r.removed) {
@@ -9744,9 +11810,20 @@ document.addEventListener('DOMContentLoaded', () => {
                         input.maxLength = cfg.maxLen;
                         input.setAttribute('aria-label', 'Section ' + n + ' name');
                         input.setAttribute('autocomplete', 'off');
+                        if (r.key === ABSTRACT) {
+                            input.readOnly = true;
+                            input.title = 'The Abstract can be taken out, but not renamed.';
+                        }
                         input.addEventListener('input', function () { r.label = input.value; refresh(); });
                         // Enter here moves on; it must not answer the whole question over the field's head.
                         input.addEventListener('keydown', function (e) {
+                            // Alt and an arrow moves the row while typing in it.
+                            if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown') && r.key !== ABSTRACT) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                moveRow(r, e.key === 'ArrowUp' ? -1 : 1, 'input');
+                                return;
+                            }
                             if (e.key !== 'Enter') return;
                             e.preventDefault();
                             e.stopPropagation();
@@ -9775,12 +11852,100 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     ul.appendChild(li);
                 });
-                var live = liveRows().length;
+                var live = ownRows().length;
                 count.textContent = live + ' of ' + cfg.max;
                 /* Only the button is disabled at the limit. The box stays, so the cursor stays in it:
                    a disabled field gives up focus, and the next Enter would then land on the page
                    and answer the whole question. Enter in the box says why nothing was added. */
                 addBtn.disabled = live >= cfg.max;
+            };
+
+            /* The Abstract keeps the top: it is always first on the paper's page whatever
+               order this list is in, so a list that put something above it would be a
+               promise the page does not keep. */
+            var firstMovable = function () {
+                return rows.length && rows[0].key === ABSTRACT ? 1 : 0;
+            };
+
+            // One place up or down, then the focus goes back to what moved it.
+            var moveRow = function (r, step, focusOn) {
+                var at = rows.indexOf(r);
+                var to = at + step;
+                if (at < 0 || to < firstMovable() || to >= rows.length) return;
+                rows.splice(at, 1);
+                rows.splice(to, 0, r);
+                renderRows();
+                refresh();
+                var el = r.li && r.li.querySelector(focusOn === 'grip' ? '.scope-crow-grip' : '.scope-crow-input');
+                if (el) el.focus();
+                say('\u201c' + clean(r.label) + '\u201d moved to place ' + (rows.indexOf(r) + 1) + '.');
+            };
+
+            /* Dragged with a pointer: mouse, finger or pen alike. The row follows the
+               pointer, the others are reordered in the page as it passes them, and the
+               order is read back from the page when it is let go. The dialog's body
+               scrolls itself when the row is held near its top or bottom edge. */
+            var startDrag = function (e, li) {
+                if (e.button !== undefined && e.button !== 0) return;
+                e.preventDefault();
+                var body = li.closest('#papelDialogMessage') || ul;
+                var startY = e.clientY;
+                var shift = 0;
+                li.classList.add('is-dragging');
+                ul.classList.add('is-sorting');
+                /* Followed on the document, not by capturing the pointer on the handle:
+                   moving the row in the page takes its handle out and puts it back, and
+                   that ends a capture, so the drag stopped after the first place. */
+                var pid = e.pointerId;
+
+                var move = function (ev) {
+                    if (ev.pointerId !== pid) return;
+                    ev.preventDefault();
+                    var y = ev.clientY;
+                    // Edge scroll inside the dialog, so a long list can be crossed in one drag.
+                    var br = body.getBoundingClientRect();
+                    if (y < br.top + 28) body.scrollTop -= 8;
+                    else if (y > br.bottom - 28) body.scrollTop += 8;
+
+                    li.style.transform = '';
+                    var mine = li.getBoundingClientRect();
+                    var mid = mine.top + mine.height / 2 + (y - startY - shift);
+                    var siblings = Array.prototype.slice.call(ul.children).filter(function (x) { return x !== li; });
+                    var before = null;
+                    for (var i = 0; i < siblings.length; i++) {
+                        var sr = siblings[i].getBoundingClientRect();
+                        if (mid < sr.top + sr.height / 2) { before = siblings[i]; break; }
+                    }
+                    // Never above the Abstract: a place before it is the place just after it.
+                    var abs = ul.firstChild && ul.firstChild._row && ul.firstChild._row.key === ABSTRACT ? ul.firstChild : null;
+                    if (abs && before === abs) before = abs.nextSibling;
+                    var oldTop = li.getBoundingClientRect().top;
+                    if (before !== li && before !== li.nextSibling) ul.insertBefore(li, before);
+                    var newTop = li.getBoundingClientRect().top;
+                    shift += newTop - oldTop;
+                    li.style.transform = 'translateY(' + (y - startY - shift) + 'px)';
+                };
+                var end = function (ev) {
+                    if (ev && ev.pointerId !== pid) return;
+                    document.removeEventListener('pointermove', move, true);
+                    document.removeEventListener('pointerup', end, true);
+                    document.removeEventListener('pointercancel', end, true);
+                    li.style.transform = '';
+                    li.classList.remove('is-dragging');
+                    ul.classList.remove('is-sorting');
+                    var order = Array.prototype.map.call(ul.children, function (x) { return x._row; })
+                        .filter(Boolean);
+                    var moved = order.some(function (r, i) { return rows[i] !== r; });
+                    if (moved) {
+                        rows = order;
+                        renderRows();
+                        refresh();
+                        say('\u201c' + clean(li._row.label) + '\u201d moved to place ' + (rows.indexOf(li._row) + 1) + '.');
+                    }
+                };
+                document.addEventListener('pointermove', move, true);
+                document.addEventListener('pointerup', end, true);
+                document.addEventListener('pointercancel', end, true);
             };
 
             var addFromInput = function () {
@@ -9795,7 +11960,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     say('\u201c' + label + '\u201d is already ticked above.');
                     return;
                 }
-                var key = liveRows().length < cfg.max ? nextKey() : null;
+                if (customOn && folded === fold(abstractLabel())) {
+                    var struck = rows.filter(function (r) { return r.key === ABSTRACT; })[0];
+                    if (struck) struck.removed = false; else rows.unshift(abstractRow());
+                    addInput.value = '';
+                    renderRows();
+                    refresh();
+                    addInput.focus();
+                    return;
+                }
+                var key = ownRows().length < cfg.max ? nextKey() : null;
                 if (!key) { say('You can add up to ' + cfg.max + ' sections of your own.'); return; }
                 rows.push({ key: key, label: label, orig: label, hasText: false, removed: false });
                 addInput.value = '';
@@ -9823,15 +11997,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 var want = {};
                 items.forEach(function (label) { want[fold(label)] = true; });
                 rows.slice().forEach(function (r) {
-                    if (r.removed || want[fold(r.label)]) return;
+                    if (r.removed || r.key === ABSTRACT || want[fold(r.label)]) return;
                     if (r.hasText) r.removed = true; else rows.splice(rows.indexOf(r), 1);
                 });
-                var ordered = [];
+                // The Abstract stays where it is, at the top, if it is in.
+                var ordered = rows.filter(function (r) { return r.key === ABSTRACT && !r.removed; });
                 items.forEach(function (label) {
                     // A section taken out a moment ago, and still holding its text, comes back with it.
                     var existing = rows.filter(function (r) { return fold(r.label) === fold(label); })[0];
                     if (existing) { existing.removed = false; ordered.push(existing); return; }
-                    var key = ordered.length < cfg.max ? nextKey() : null;
+                    var key = ordered.filter(function (r) { return r.key !== ABSTRACT; }).length < cfg.max ? nextKey() : null;
                     if (!key) return;
                     var fresh = { key: key, label: clean(label), orig: clean(label), hasText: false, removed: false };
                     rows.push(fresh);
@@ -9857,15 +12032,71 @@ document.addEventListener('DOMContentLoaded', () => {
                         ? '\u201c' + dups[0] + '\u201d is ticked above or listed twice, so it is not added again.'
                         : '');
                 },
-                labels: function () { return readCustom(tickedKeys()).map(function (c) { return c.label; }); }
+                labels: function () { return read().custom.map(function (c) { return c.label; }); }
             };
             renderRows();
+        }
+
+        /* What the written part of the paper's page will look like, on request: the
+           title, then each section in the order the page gives them, with the start of
+           whatever has been typed. Built by opts.preview(keys, custom), and redrawn on
+           every change while it is open. Set as text throughout. */
+        var preview = null, previewOpen = false, previewBtn = null;
+        function drawPreview(keys, custom) {
+            if (!preview) return;
+            var data = opts.preview(keys, custom) || {};
+            preview.textContent = '';
+            var note = document.createElement('p');
+            note.className = 'scope-preview-note';
+            note.textContent = 'A sketch of the written part of your paper\'s page. Your PDF goes with it in full.';
+            preview.appendChild(note);
+            var title = document.createElement('p');
+            title.className = 'scope-preview-title';
+            title.textContent = data.title || 'Your paper\'s title';
+            preview.appendChild(title);
+            var card = document.createElement('div');
+            card.className = 'scope-preview-card';
+            var h = document.createElement('h4');
+            h.textContent = 'The Paper';
+            card.appendChild(h);
+            (data.sections || []).forEach(function (sec) {
+                var box = document.createElement('div');
+                box.className = 'scope-preview-sec';
+                var name = document.createElement('h5');
+                name.textContent = sec.label;
+                var text = document.createElement('p');
+                var words = String(sec.text || '').replace(/\s+/g, ' ').trim();
+                text.textContent = words || 'Nothing written yet. You write this on the next page.';
+                if (!words) text.className = 'is-empty';
+                box.appendChild(name);
+                box.appendChild(text);
+                card.appendChild(box);
+            });
+            if (!(data.sections || []).length) {
+                var none = document.createElement('p');
+                none.className = 'scope-preview-note';
+                none.textContent = 'No written sections chosen yet.';
+                card.appendChild(none);
+            }
+            preview.appendChild(card);
         }
 
         var sum = document.createElement('p');
         sum.className = 'scope-pick-sum';
         sum.setAttribute('aria-live', 'polite');
         root.appendChild(sum);
+        /* The words go in a span of their own, so rewriting them on every change leaves the
+           link beside them where it is: replacing the whole line took the link out and put
+           it back, and someone who had reached it by keyboard lost their place. */
+        var sumText = document.createElement('span');
+        sum.appendChild(sumText);
+        if (typeof opts.preview === 'function') {
+            preview = document.createElement('div');
+            preview.className = 'scope-preview';
+            preview.hidden = true;
+            preview.setAttribute('aria-live', 'polite');
+            root.appendChild(preview);
+        }
 
         /* Their sections as they will be kept: the names tidied, an empty one dropped, a
            repeat dropped, and one that is the name of a ticked standard section dropped
@@ -9884,19 +12115,51 @@ document.addEventListener('DOMContentLoaded', () => {
             return out;
         }
         function read() {
-            var keys = tickedKeys();
-            return cfg ? { keys: keys, custom: readCustom(keys) } : keys;
+            if (!cfg) return tickedKeys();
+            if (!customOn) return { keys: tickedKeys(), custom: [] };
+            /* Custom: the Abstract if its row is in, and the rest as their own. */
+            var keys = liveRows().some(function (r) { return r.key === ABSTRACT; }) ? [ABSTRACT] : [];
+            return { keys: keys, custom: readCustom(keys) };
         }
         function refresh() {
-            var keys = tickedKeys();
+            var ans = read();
+            var keys = cfg ? ans.keys : ans;
+            var ticked = tickedKeys();
             boxes.forEach(function (b) { b.parentNode.classList.toggle('is-on', b.checked); });
             // A quick choice is lit while it describes exactly what is ticked.
             presetButtons.forEach(function (p) {
-                var same = p.def.keys.length === keys.length && p.def.keys.every(function (k) { return keys.indexOf(k) !== -1; });
+                var same = p.def.custom || (p.def.keys.length === ticked.length
+                    && p.def.keys.every(function (k) { return ticked.indexOf(k) !== -1; }));
                 p.el.classList.toggle('is-on', same && p.def.lit());
             });
+            // One list or the other: the six, or theirs.
+            list.hidden = customOn;
+            root.classList.toggle('is-custom', customOn);
+            if (block) block.hidden = !customOn;
+            var lose = !customOn && liveRows().filter(function (r) { return r.key !== ABSTRACT && r.hasText; }).length;
+            warn.textContent = lose
+                ? 'Your sections of your own are set aside. Continue now and they are dropped, with what you typed in them; Custom brings them back.'
+                : '';
             if (customUi) customUi.refresh();
-            sum.textContent = opts.describe ? opts.describe(keys, cfg ? customUi.labels() : []) : '';
+            sumText.textContent = opts.describe ? opts.describe(keys, cfg ? ans.custom.map(function (c) { return c.label; }) : []) : '';
+            if (preview) {
+                if (!previewBtn) {
+                    previewBtn = document.createElement('button');
+                    previewBtn.type = 'button';
+                    previewBtn.className = 'scope-preview-link';
+                    previewBtn.setAttribute('aria-expanded', 'false');
+                    previewBtn.addEventListener('click', function () {
+                        previewOpen = !previewOpen;
+                        refresh();
+                        if (previewOpen) preview.scrollIntoView({ block: 'nearest' });
+                    });
+                }
+                previewBtn.textContent = previewOpen ? 'Hide preview' : 'Click for preview';
+                previewBtn.setAttribute('aria-expanded', previewOpen ? 'true' : 'false');
+                if (previewBtn.parentNode !== sum) sum.appendChild(previewBtn);
+                preview.hidden = !previewOpen;
+                if (previewOpen) drawPreview(keys, cfg ? ans.custom : []);
+            }
         }
         refresh();
 
@@ -9908,7 +12171,7 @@ document.addEventListener('DOMContentLoaded', () => {
         picker = buildPicker(opts);
         msgEl.textContent = '';
         msgEl.appendChild(picker.root);
-        dialogEl.classList.remove('is-wide');
+        plainBox();
         dialogEl.classList.add('is-choose');
         titleEl.textContent = opts.title || 'Choose';
         iconEl.textContent = opts.icon || 'checklist';
@@ -9947,6 +12210,12 @@ document.addEventListener('DOMContentLoaded', () => {
     okBtn.addEventListener('click', function () { close(answer()); });
     cancelBtn.addEventListener('click', function () { close(isConfirm ? false : null); });
     altBtn.addEventListener('click', function () { close('alt'); });
+    xBtn.addEventListener('click', function () { close(dismiss()); });
+    /* Closes whatever the box is asking, as Escape would. For the browser's Back
+       and Forward: the page under the box changes, so the question about it goes. */
+    window.papelDialogDismiss = function () {
+        if (backdrop.classList.contains('open')) close(dismiss());
+    };
     backdrop.addEventListener('click', function (e) {
         if (e.target === backdrop) close(dismiss());
     });
@@ -9968,11 +12237,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
 <?php
 /* The PDF panel every paper page uses (see "PDF preview" in the script above).
-   After the page's own dialog, so the dialog's Escape is handled first. It
-   docks on the right only: this page has no section to give it a home, and a
-   home would leave it in Step 2 while the student is on Step 3 or 4. The tab on
-   the right edge brings it back from any step instead. */
-$PDF_DOCK_MINIMISE = true;
+   After the page's own dialog, so the dialog's Escape is handled first. No home: it
+   opens docked on the right and only there, in the side card it shares with Corpus
+   (see "The side card" in the script above), and stays beside the form on every
+   step. A card level with the form's own, not a strip down the window's edge. */
+$PDF_DOCK_CARD      = '.col-lg-11.upload-shell';
 require ROOT_PATH.'/includes/pdf_dock.php';
 ?>
 <?php require ROOT_PATH.'/includes/site_footer.php'; ?>

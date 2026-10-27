@@ -26,24 +26,40 @@
  * its header, or by dragging the header to a side. Every paper page gives it a
  * home: the public view, the review desk's paper and the student's own paper.
  * Without one the panel simply opens docked on the right.
+ *   $PDF_DOCK_SIDES = ['right'];                      // default ['left', 'right']
+ * limits the sides it may be docked to, by button or by drag. The upload page
+ * keeps the left for its Corpus chat, which docks there.
+ *   $PDF_DOCK_CARD = '.some-card';                    // a selector
+ * makes a docked panel a card beside the page instead of a strip down the
+ * window's edge: its top level with that element's, a gap (--pdf-dock-gap) from
+ * the bars, the footer and the window's edge, and the cards' rounded corners. As
+ * the page scrolls it keeps that gap under the bars. Only where the panel shares
+ * the screen; on a phone it covers the page as ever.
  *
  * A file the reader has on their own machine, not uploaded yet, opens in the
  * same panel from script, drawn straight from memory: nothing is fetched to
  * show it, and nothing reaches the server or Google Drive.
  *     window.papelPdfDock.openFile(file, 'name for the header');
  *     window.papelPdfDock.close() / .minimise() / .restore() / .forget() / .isOpen()
+ *     window.papelPdfDock.place()   'inline', 'left' or 'right' while open, else null
+ *     window.papelPdfDock.dockTo(where)   moves an open panel with a home
  * Calls made before the page has finished loading are held until it has.
  *
  * Optional, before the include:
  *   $PDF_DOCK_MINIMISE = true;
- * adds a Minimise button and, while the panel is put away, a tab on the right
- * edge of the window that brings it back. Only without a home: a panel with
- * one already has its section to go back to. The upload page uses it, so the
- * paper being handed in stays one click away from every step of the form.
+ * adds a tab on the right edge of the window that brings the panel back after
+ * it is closed or put away (.minimise(), from the page's own script). Only
+ * without a home: a panel with one already has its section to go back to. The
+ * upload page uses it, so the paper being handed in stays one click away from
+ * every step of the form. There is no Minimise button in the header: next to
+ * Close it was a second way of doing the same thing, since the tab brings a
+ * closed panel back just the same.
  */
 $PDF_DOCK_HOME      = $PDF_DOCK_HOME ?? null;
 $PDF_DOCK_HOME_NAME = $PDF_DOCK_HOME_NAME ?? 'the page';
 $PDF_DOCK_MINIMISE  = !empty($PDF_DOCK_MINIMISE) && !$PDF_DOCK_HOME;
+$PDF_DOCK_CARD      = $PDF_DOCK_CARD ?? null;
+$PDF_DOCK_SIDES     = array_values(array_intersect(['left', 'right'], (array)($PDF_DOCK_SIDES ?? ['left', 'right'])));
 ?>
 <?php /* Versioned, so a change to the viewer reaches browsers holding the old copy. */ ?>
 <link rel="stylesheet" href="<?= e(asset_url('assests/css/papel-pdf-view.css')) ?>">
@@ -88,6 +104,27 @@ $PDF_DOCK_MINIMISE  = !empty($PDF_DOCK_MINIMISE) && !$PDF_DOCK_HOME;
     box-shadow: -4px 0 24px rgba(51, 0, 0, .10);
 }
 .pdf-dock.is-open { display: flex; }
+
+/* ----- As a card ($PDF_DOCK_CARD) --------------------------------------
+   Docked, a card beside the page rather than a strip down the window's edge.
+   Its top and bottom are written by placeTop(), like the strip's; only the
+   side, the frame and the corners are here. The frame is the cards' own
+   hairline: the edge never meets the maroon bars (there is always the gap),
+   so the seam that ruled a border out for the strip does not arise. */
+:root { --pdf-dock-gap: 16px; }
+@media (min-width: 901px) {
+    .pdf-dock.as-card:not(.is-inline) {
+        right: var(--pdf-dock-gap);
+        border: 1px solid var(--border);
+        border-radius: var(--r-card, 8px);
+        overflow: hidden;           /* the header and the pages take the corners too */
+        box-shadow: 0 6px 24px rgba(51, 0, 0, .10);
+    }
+    .pdf-dock.as-card.is-left:not(.is-inline) { right: auto; left: var(--pdf-dock-gap); }
+    /* Inside the frame now, or the corner would clip it. */
+    .pdf-dock.as-card:not(.is-inline) .pdf-dock-grip { left: 0; }
+    .pdf-dock.as-card.is-left:not(.is-inline) .pdf-dock-grip { left: auto; right: 0; }
+}
 .pdf-dock-head {
     display: flex; align-items: center; gap: .5rem;
     padding: .625rem .875rem;
@@ -401,13 +438,12 @@ body.pdf-dragging, body.pdf-dragging * {
 .pdf-dock-restore:focus-visible { outline: 2px solid #fff; outline-offset: -4px; }
 .pdf-dock-restore .material-symbols-outlined { font-size: 20px; }
 .pdf-dock-restore-label { writing-mode: vertical-rl; text-orientation: mixed; }
-/* Full screen has nothing to minimise to. */
-.pdf-dock:fullscreen #pdfDockMin { display: none !important; }
 @media print { .pdf-dock-restore { display: none !important; } }
 </style>
 
-<div class="pdf-dock<?= $PDF_DOCK_HOME ? ' has-home' : '' ?>" id="pdfDock" role="region" aria-label="Document preview"
-     <?php if ($PDF_DOCK_HOME): ?>data-home="<?= e($PDF_DOCK_HOME) ?>" data-home-name="<?= e($PDF_DOCK_HOME_NAME) ?>"<?php endif; ?>>
+<div class="pdf-dock<?= $PDF_DOCK_HOME ? ' has-home' : '' ?><?= $PDF_DOCK_CARD ? ' as-card' : '' ?>" id="pdfDock" role="region" aria-label="Document preview"
+     <?php if ($PDF_DOCK_CARD): ?>data-card="<?= e($PDF_DOCK_CARD) ?>"<?php endif; ?>
+     <?php if ($PDF_DOCK_HOME): ?>data-home="<?= e($PDF_DOCK_HOME) ?>" data-home-name="<?= e($PDF_DOCK_HOME_NAME) ?>" data-sides="<?= e(implode(' ', $PDF_DOCK_SIDES)) ?>"<?php endif; ?>>
     <div class="pdf-dock-head">
         <?php if ($PDF_DOCK_HOME): ?>
             <span class="material-symbols-outlined pdf-dock-grab" aria-hidden="true"
@@ -431,20 +467,20 @@ body.pdf-dragging, body.pdf-dragging * {
         <?php if ($PDF_DOCK_HOME): ?>
             <?php /* The button for where the panel already is is hidden, so
                      each one always means "move it there". */ ?>
+            <?php if (in_array('left', $PDF_DOCK_SIDES, true)): ?>
             <button type="button" class="pdf-dock-btn pdf-dock-to" data-dock-to="left"
                     title="Dock on the left" aria-label="Dock the preview on the left of the window"><span class="material-symbols-outlined">dock_to_left</span></button>
+            <?php endif; ?>
             <button type="button" class="pdf-dock-btn pdf-dock-to" data-dock-to="inline"
                     title="Put back in <?= e($PDF_DOCK_HOME_NAME) ?>" aria-label="Put the preview back in <?= e($PDF_DOCK_HOME_NAME) ?>"><span class="material-symbols-outlined">dock_to_bottom</span></button>
+            <?php if (in_array('right', $PDF_DOCK_SIDES, true)): ?>
             <button type="button" class="pdf-dock-btn pdf-dock-to" data-dock-to="right"
                     title="Dock on the right" aria-label="Dock the preview on the right of the window"><span class="material-symbols-outlined">dock_to_right</span></button>
+            <?php endif; ?>
         <?php endif; ?>
         <?php /* No download or print, and the Drive link is deliberately not on
                  the page. "Open in a new tab" is PAPEL's own full-window viewer
                  (app/student/pdf_viewer.php), under the same rules. */ ?>
-        <?php if ($PDF_DOCK_MINIMISE): ?>
-        <button type="button" class="pdf-dock-btn" id="pdfDockMin"
-                title="Minimise (bring it back from the tab on the right)" aria-label="Minimise preview"><span class="material-symbols-outlined">remove</span></button>
-        <?php endif; ?>
         <button type="button" class="pdf-dock-btn" id="pdfDockClose"
                 title="Close preview" aria-label="Close preview"><span class="material-symbols-outlined">close</span></button>
     </div>
@@ -493,7 +529,10 @@ window.papelPdfDock = {
     minimise: later('minimise'),
     restore:  later('restore'),
     forget:   later('forget'),
-    isOpen:   function () { return !!impl && impl.isOpen(); }
+    isOpen:   function () { return !!impl && impl.isOpen(); },
+    // Questions, answered now: before load there is no panel, so nowhere and no move.
+    place:    function () { return impl ? impl.place() : null; },
+    dockTo:   function (to) { return !!impl && impl.dockTo(to); }
 };
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -712,6 +751,14 @@ document.addEventListener('DOMContentLoaded', function () {
     var homeSel  = dock.getAttribute('data-home');
     var home     = homeSel ? document.querySelector(homeSel) : null;
     var homeName = dock.getAttribute('data-home-name') || 'the page';
+    // The sides it may be docked to ($PDF_DOCK_SIDES).
+    var sides    = (dock.getAttribute('data-sides') || 'left right').split(' ');
+    // What a docked card lines its top up with ($PDF_DOCK_CARD), and its gap.
+    var cardSel  = dock.getAttribute('data-card');
+    var cardEl   = cardSel ? document.querySelector(cardSel) : null;
+    // --pdf-dock-gap, read from the stylesheet so a page can set its own.
+    var GAP      = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--pdf-dock-gap')) || 16;
+    function asCard() { return !!cardEl && window.innerWidth > 900; }
     // 'right' is the only place a panel without a home ever goes.
     var mode = home ? 'inline' : 'right';
 
@@ -757,12 +804,22 @@ document.addEventListener('DOMContentLoaded', function () {
         written.top = null;
     }
     function decideOver() {
-        var next = !!crumbs && beside() && mode === 'right' && wide()
+        // A card keeps a gap under the bars, so it never sits over the strip.
+        var next = !asCard() && !!crumbs && beside() && mode === 'right' && wide()
                 && clearOfCrumbs(dock.getBoundingClientRect().width);
         if (next === over) return;
         over = next;
         document.body.classList.toggle('pdf-over-strip', over);
         written.top = null;           // the top edge is about to move, so it is written again
+    }
+
+    /* The panel's own edges: the bars' band, or, as a card, the gap inside it
+       and a top no higher than the card it lines up with. One more measurement
+       on a scroll, of a box the browser has just laid out anyway. */
+    function cardEdges() {
+        if (!asCard()) return { top: band.top, bottom: band.bottom };
+        var cardTop = Math.round(cardEl.getBoundingClientRect().top);
+        return { top: Math.max(band.top + GAP, cardTop), bottom: band.bottom + GAP };
     }
 
     function placeTop(measure) {
@@ -773,7 +830,8 @@ document.addEventListener('DOMContentLoaded', function () {
             if (crumbs && !over) top = Math.max(top, crumbs.getBoundingClientRect().bottom);
             band.top = Math.max(0, Math.round(top));
         }
-        band.bottom = footer
+        // A footer a page has hidden is no footer: its top would read 0, the whole window.
+        band.bottom = footer && footer.getClientRects().length
             ? Math.max(0, Math.round(window.innerHeight - footer.getBoundingClientRect().top))
             : 0;
         /* The two edges go onto the panel itself as plain top and bottom, and only
@@ -785,13 +843,14 @@ document.addEventListener('DOMContentLoaded', function () {
            panel trailed the bars by several hundred milliseconds. Written only
            when changed: this runs on every scroll. */
         if (mode !== 'inline') {
-            if ((header || crumbs) && band.top !== written.top) {
-                written.top = band.top;
-                dock.style.top = band.top + 'px';
+            var edge = cardEdges();
+            if ((header || crumbs || edge) && edge.top !== written.top) {
+                written.top = edge.top;
+                dock.style.top = edge.top + 'px';
             }
-            if (band.bottom !== written.bottom) {
-                written.bottom = band.bottom;
-                dock.style.bottom = band.bottom + 'px';
+            if (edge.bottom !== written.bottom) {
+                written.bottom = edge.bottom;
+                dock.style.bottom = edge.bottom + 'px';
             }
         }
         /* What is left on <html> is the navbar's own edge, which a panel in its
@@ -960,7 +1019,37 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // The tab is up only while the panel is not, and only with something to bring back.
     function syncRestoreTab() {
-        if (restoreTab) restoreTab.hidden = dock.classList.contains('is-open') || !last;
+        if (!restoreTab) return;
+        restoreTab.hidden = dock.classList.contains('is-open') || !last;
+        clearOfA11y();
+    }
+
+    /* Both tabs are parked half way down the right edge by default, and the
+       Accessibility one is in front, so it covered this one completely: a click
+       on "PDF" opened the accessibility menu, and with the panel closed there
+       was no way back to it. This one stands just above that one (or below it,
+       with no room above) whenever the two would meet, wherever it has been
+       dragged to; anywhere else it keeps its own place. */
+    function clearOfA11y() {
+        if (!restoreTab || restoreTab.hidden) return;
+        var st = restoreTab.style;
+        st.top = ''; st.transform = '';
+        var other = document.getElementById('a11y-toggle');
+        var a = other ? other.getBoundingClientRect() : null;
+        // The page's width, not the window's: that one includes the scrollbar.
+        if (!a || !a.width || !a.height || a.right < document.documentElement.clientWidth - 2) return;
+        var t = restoreTab.getBoundingClientRect(), gap = 8;
+        if (t.bottom + gap <= a.top || t.top >= a.bottom + gap) return;
+        var top = a.top - gap - t.height;
+        if (top < gap) top = a.bottom + gap;
+        st.top = Math.round(top) + 'px';
+        st.transform = 'none';
+    }
+    if (restoreTab) {
+        window.addEventListener('resize', clearOfA11y);
+        document.addEventListener('papel:a11y-tab', clearOfA11y);
+        // After the Accessibility tab is let go: its own handler places it first.
+        document.addEventListener('pointerup', function () { setTimeout(clearOfA11y, 50); });
     }
 
     document.addEventListener('click', function (e) {
@@ -1012,6 +1101,8 @@ document.addEventListener('DOMContentLoaded', function () {
            whose handler runs after this one is still open. */
         if (e.defaultPrevented) return;
         if (document.querySelector('.ad-backdrop.open, .papel-dialog-backdrop.open, .modal.show')) return;
+        // Open but out of sight, behind another tab of the page's side card: not this key's.
+        if (dock.classList.contains('side-hidden')) return;
         close();
     });
 
@@ -1076,7 +1167,9 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!dragging) return;
         // On the right the width is what is left of the window from the
         // cursor across; on the left it is where the cursor is.
-        setWidth(mode === 'left' ? e.clientX : viewW() - e.clientX, false);
+        // A card stands the gap off the window's edge, so its width is measured from there.
+        var off = asCard() ? GAP : 0;
+        setWidth(mode === 'left' ? e.clientX - off : viewW() - off - e.clientX, false);
     });
 
     function endDrag(e) {
@@ -1163,8 +1256,6 @@ document.addEventListener('DOMContentLoaded', function () {
         syncRestoreTab();
     }
 
-    var minBtn = document.getElementById('pdfDockMin');
-    if (minBtn) minBtn.addEventListener('click', minimise);
     if (restoreTab) restoreTab.addEventListener('click', restore);
 
     impl = {
@@ -1176,7 +1267,19 @@ document.addEventListener('DOMContentLoaded', function () {
         minimise: minimise,
         restore:  restore,
         forget:   forget,
-        isOpen:   function () { return dock.classList.contains('is-open'); }
+        isOpen:   function () { return dock.classList.contains('is-open'); },
+        // Where an open panel is: in its section ('inline') or docked to a side.
+        place:    function () { return dock.classList.contains('is-open') ? mode : null; },
+        /* For a page that moves the panel itself (the upload page lends it to
+           the right while a section fills the window). Only an open panel with a
+           home, only to a side it may have, and only to a side on a screen wide
+           enough to share: below that the panel would cover the page. */
+        dockTo:   function (to) {
+            if (!home || !dock.classList.contains('is-open') || to === mode) return false;
+            if (to !== 'inline' && (sides.indexOf(to) === -1 || !wide())) return false;
+            setMode(to);
+            return true;
+        }
     };
     queue.splice(0).forEach(function (call) { impl[call[0]].apply(impl, call[1]); });
 
@@ -1202,10 +1305,11 @@ document.addEventListener('DOMContentLoaded', function () {
     var LABELS    = { left: 'Dock on the left', right: 'Dock on the right', inline: 'Put back in ' + homeName };
     var pull      = null;
 
+    // A side it may not be docked to is the section, as the middle of the window is.
     function zoneAt(x) {
         var w = viewW();
-        if (x < w * 0.25) return 'left';
-        if (x > w * 0.75) return 'right';
+        if (x < w * 0.25 && sides.indexOf('left') !== -1) return 'left';
+        if (x > w * 0.75 && sides.indexOf('right') !== -1) return 'right';
         return 'inline';
     }
 
@@ -1229,8 +1333,15 @@ document.addEventListener('DOMContentLoaded', function () {
         var stripEdge  = crumbs ? Math.max(headerEdge, Math.round(crumbs.getBoundingClientRect().bottom)) : headerEdge;
         var top  = (zone === 'right' && crumbs && wide() && clearOfCrumbs(w)) ? headerEdge : stripEdge;
         var tall = window.innerHeight - top - band.bottom;
-        var box = zone === 'left'  ? [0, top, w, tall]
-                : zone === 'right' ? [W - w, top, w, tall]
+        var off  = 0;
+        // Where a card would land: inside the gap, and no higher than its card.
+        if (asCard() && zone !== 'inline') {
+            top  = Math.max(stripEdge + GAP, Math.round(cardEl.getBoundingClientRect().top));
+            tall = window.innerHeight - top - band.bottom - GAP;
+            off  = GAP;
+        }
+        var box = zone === 'left'  ? [off, top, w, tall]
+                : zone === 'right' ? [W - w - off, top, w, tall]
                 :                    [W * 0.25 + 16, top + 16, W * 0.5 - 32, tall - 32];
         drop.style.left   = box[0] + 'px';
         drop.style.top    = box[1] + 'px';

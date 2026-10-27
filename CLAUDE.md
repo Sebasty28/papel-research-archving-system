@@ -112,6 +112,78 @@ PDF panel's edges are now plain `top`/`bottom` written on the panel itself
 never on `:root`. Test it with a long PDF open: a one-line test PDF has no text
 layer to restyle and hides the problem entirely.
 
+A section in full view on the upload page is at 800, under all of these, so while one is
+open the footer, the breadcrumb strip and the theme card are hidden (`visibility`, so the
+locked page keeps its height). Without that, a footer on screen when the section was opened
+lay across its bottom, which is what a short Step 2 shows the moment a PDF arrives.
+
+**The upload page's side card.** On a screen wider than 900px a card is always on the right
+(`window.papelSide` in `student_upload_ai.php`), with tabs like an editor's: **Contents** (always,
+with no close), the PDF when a file is attached, and **Corpus** when opened (its tab white, and its
+header in the card white too, so the two read as one). **The card goes on either side**: a button
+beside the hide button moves it (`setSide()`, `body.side-left`, kept as `papel.sideSide`), and on the
+left every panel, the contents, the rail and the handle (on its right edge, the inner one) are mirrored,
+the room is made on the left (the PDF panel's own room, which pads the right, is one gap there), and
+Corpus's round button moves to the bottom-right, off the card. Corpus measures its top on a scroll or a
+resize; holding the form is neither, so `sizeForm()` and `applyChatDock()` call `placeChatDockTop()`
+(without it Corpus started 18px below the form). The card is the PDF panel's usual width.
+Closed, Corpus is his round button at the right end of the tabs (`.side-corpus`) and at the foot of
+the rail; where the card is, the floating widget is hidden (on a phone it floats as ever). His
+greeting lines (`chatNudge`) rise from whichever button is in sight (`anchor()`: the tabs', the
+rail's, or the floating one): `place()` takes `#chat-nudge` out to `<body>` as `.is-fixed` and sets it
+under the tabs' button or beside the rail's, towards the form, with the notch turned to face it.
+`anchor()` asks for a button that is *seen* (computed visibility), since a folded card keeps its tabs
+laid out but hidden. A name too long for its room fades out at its end instead of an ellipsis (`fadeNames()`
+measures it and sets `.is-faded`, a mask); the PDF's name is limited to 15rem in its tab and 18rem in
+the viewer's header, and the whole name is the tooltip.
+The one on view is white with its close button; a click on another switches to it. Both panels open
+there and only there: the PDF has no home and no dock buttons (attaching a file opens it docked), and
+Corpus has no floating window and no left side (its round button opens it into the card). Switching
+only hides the others (`.side-hidden`, visibility), so the PDF keeps its page and Corpus its
+conversation; the strip is one element moved into whichever is on view. Their own close, dock and side
+buttons are hidden, since the tabs do that, and Escape closes the tab on view only (`pdf_dock.php`
+leaves a `.side-hidden` panel alone). All three are `--pdf-dock-w` wide (`min(38vw, 38rem)` here), so
+the card keeps its size. On a phone there is no card until the PDF or Corpus is opened.
+
+The tab on view is **joined to its page** (rounded at the top only, laid 1px over the page's top
+edge, in the page's colour: white for the contents, cream for Corpus's header, the maroon band for
+the PDF's). The strip stretches to the card (`align-self: stretch`): Corpus's widget lines its children
+up at its end, and without it the third tab ran off the window. **One handle resizes the card**
+(`#sideGrip`, on its inner edge, whichever tab is on view; mouse, finger, pen or the arrow keys),
+writing `--pdf-dock-w` and keeping it under `papel.pdfDockWidth`, so the PDF opens at that width; the
+PDF's own grip is hidden here. **The hide button** at the left of the tabs folds the card into a rail
+at the window's edge (`#sideRail`, `body.side-collapsed`, remembered on the device as
+`papel.sideCollapsed`): a button to unfold it and one per tab, the form taking the room. Opening a PDF
+or Corpus unfolds it. Folded, nothing of the panels shows (the PDF viewer's toast sets its own
+`visibility: visible`, so it is hidden by name), and a section in full view takes the whole window.
+
+The contents (`#sideToc`) is read from the form as it stands (`STEP_PARTS`): each step's labels,
+the sections being submitted, the PDF boxes ticked, the supporting documents that apply, redrawn on a
+change of step or of the form's classes and hidden attributes, never for typing in a section. A step
+is reached as its number in the progress bar is (forward through the Next button's checks); a part is
+scrolled to inside the form's card and given the cursor. The current step is marked, and the part being
+read (`spy()`).
+
+**Sizes, from the picture they follow:** a gap (`--dock-gap`, 6px) between the two cards, at the
+window's edges and under the bars, and the cream frame of each card is that gap thick, so the white
+card inside is a gap in from its edge. `pdf_dock.php` reads its own gap from `--pdf-dock-gap`, which
+the page sets to the same. Each panel's edges are worked out on every scroll (`cardEdges()` in
+`placeTop()`, `placeChatDockTop()`), on the panel itself, never on `:root`.
+
+**The form's card is held in place** whenever the card is there (`lockForm()`, `html.side-locked`):
+its top a gap under the bars, its foot a gap above the window's, the form scrolling inside it and the
+page not at all. The frame is a cream *border* there, not padding, which would scroll away with the
+form; the container's `py-4` is overridden with `!important`, as Bootstrap's is. **The footer is hidden
+while it is held**: a page taller than the window can still be scrolled by script (`scrollIntoView`
+scrolls every box round its target, the window too), and with nothing below the form the page is no
+taller than the window. Anything that reads how much of the footer is showing must treat a hidden
+footer as none (`getClientRects().length`): its top reads 0, which once lifted Corpus's button out of
+the window and would have pulled the PDF's foot up to the bars. Locking carries the page's place into
+the card and unlocking carries it back; `goToStep()` scrolls the card to its top (`papelSide.toTop()`).
+Beside a section in full view the PDF shows, flush and square, whichever tab was on view, and the
+contents steps out. The page no longer sets `$PDF_DOCK_MINIMISE`; `$PDF_DOCK_SIDES`, `.place()` and
+`.dockTo()` stay in `pdf_dock.php` for a page with a home.
+
 Put a new fixed element on that ladder instead of reaching for a bigger number.
 Corpus follows the footer's visible height (`--chat-lift`, set by
 `watchChatLift()`): floating, he is lifted by it, so he rests above the footer
@@ -125,6 +197,35 @@ measured bottom edge that `pdf_dock.php` keeps on `<html>`, and never a number.
 The expanded section used `60px` against a bar of 37px, so 23px of the
 breadcrumb strip showed above it as a gap; on a phone the bar is 61px, and a
 `top: 0` override left the box's own toolbar underneath it.
+
+**Lock the page on `<html>`, never on `<body>`.** A section in full view on the upload page
+holds the form behind it still with `overflow: hidden` on `<html>`. Put on `<body>` too, the
+body becomes a scroll box of its own, and the navbar, which is `position: sticky`, scrolls away
+under the box; `pdf_dock.php` then measures its edge as 0 and keeps that. The page's own dialog
+sets `body.style.overflow` while it is open, so the full view also forces `<body>` back to
+`visible`. In full view the section tabs run down the left (a row along the top on a phone), and
+only sections being submitted have one: a tab for a section left out "expanded" a hidden box,
+which looked like the full view closing itself.
+
+### Back and Forward on the upload page go through the history, never `location.href`
+
+Each step of `student_upload_ai.php` is an entry in the browser's history, and so is a section
+in full view (`{papelUpload: 1, step, full, idx}`, on top of a `base` entry for the arrival).
+Back goes to the step before or out of the full view, Forward to the next one (running the
+Next button's checks, and stopping at an unfinished step), and Back from the first place is
+leaving: asked only when there is work on the page, and done with `history.go()`. It used to
+leave by setting `location.href` to the referrer, which is a new visit: the dashboard went on
+the history twice, Back from it came straight back to the form, and Forward had nothing left.
+`goToStep()` raises `papel-step` and the full view `papel-fullview`; the history listens, and
+the popstate handler changes the page without making new entries. Test it with
+`Page.navigateToHistoryEntry` over CDP, which is the browser's own Back and Forward.
+
+The page's dialog keeps its width and buttons until it has faded out (`plainBox()` runs on the
+next open, or 260ms after a close). Stripping them at the start of the fade showed the text
+reflowing into the narrow box over the page. A question with a third answer (the leave
+question) shows it as a labelled button ("Discard draft and leave"), and the X in the corner
+only closes. The X used to *be* the discard, and anyone pressing it to dismiss the question
+lost their draft and left.
 
 ### One wheel event is not one notch
 
@@ -306,6 +407,24 @@ step 1 skipped itself, and step 2 was refused with `#1044 Access denied ... to d
 End such a script with a statement that reads no table (the catch-up file's closing
 `SELECT CONCAT(...)` of session variables). Test a pasted script in phpMyAdmin itself, not
 only with `mysql < file.sql`.
+
+### Text cut by bytes is not text
+
+`substr()` counts bytes. Cutting a PDF's text at a fixed length splits an "ñ", a "₱" or a
+curly quote whenever one falls on the line, and the whole string is then invalid UTF-8:
+every `/u` pattern reading it fails silently, and `json_encode()` returns **false**, so the
+request to the AI went out with no body and the student read "The AI could not identify the
+details in this document" (one in sixteen of the papers on file). Cut with `pdf_text_clip()`
+(`config/groq_config.php`: scrubs invalid bytes, then `mb_strcut()`), and send JSON with
+`JSON_INVALID_UTF8_SUBSTITUTE`.
+
+**Extract with AI** fills the title, authors, year and keywords from the AI, and the Abstract
+from `extract_abstract_from_text()`, which copies it word for word or returns null. Null means
+only the metadata is filled: the Abstract box keeps what the student typed (and in Custom
+without an Abstract nothing goes in it). A wrong abstract is worse than none, so the finder
+skips table-of-contents lines, takes off a thesis page's Title / Researcher / Adviser block and
+its running head, stops at the next heading, and gives up on a heading with no prose under it.
+Each rule is a real paper it once got wrong; `tests/_abstract_unit.php` holds them.
 
 ### `bind_param` type-string length
 
@@ -526,13 +645,49 @@ attaches both again; withdrawing keeps them, and resubmitting deletes the ones
 it replaced. Extract with AI reads the IMRAD file when both are attached, since
 the form's editors are IMRAD-shaped.
 
+### "Other", for the paper type and the manuscript type
+
+Both Step 1 lists end in **Other**, the way a Google Form does: the student picks it and
+types what their paper is. Paper type Other (a "Case Study") has its supporting documents
+optional, like a thesis. Manuscript type Other (a "Policy Brief") stands **instead of** IMRAD
+and Full Manuscript, never beside them: ticking it clears the other two and the reverse, and
+`manuscript_types_posted()` holds to the same rule. It is one PDF, `pdf_other`, filed as
+format `other`, and named in the student's words wherever the file is mentioned.
+
+- **No column.** The typed name rides in the VARCHARs already there, behind a marker:
+  `paper_type = 'other:Case Study'` (40 characters at most, the column is 50) and
+  `manuscript_type = 'Other: Policy Brief'` (commas taken out: that column is a comma list).
+  A draft with nothing typed yet keeps `other:` or `Other`; submit refuses it in words.
+- **Never print either column.** Go through `paper_type_label()` and `manuscript_type_label()`,
+  which take the marker off. Analytics and `archive/home.php` printed the raw codes
+  (`undergrad_thesis`) until this.
+- **Never build a path from a paper type.** Files are filed by type on disk and on Drive, and a
+  typed name is not a safe folder name: a colon is illegal in a Windows path (the first Other
+  paper failed moving its PDF into `other:Case Study`), and a slash or `..` would walk out of
+  `uploads/`. `paper_type_folder()` files every typed type under `other`.
+- **Filters**: `paper_type_filter_options()` (the form's types, then Other) and
+  `paper_type_filter_sql()`, where `other` matches every typed one. The desk and the student
+  dashboard offered the retired Research Paper and Thesis and no Feasibility Study before this.
+- The adviser's checklist starts on the **Blank** list for a manuscript of Other.
+- **The paper type and the Academic Program are typed in** (`data-type-in` on the `<select>`,
+  `includes/select_skin.php`): typing narrows the list, Up/Down and Enter pick, Escape puts the
+  answer back, and the select stays the control the form posts. On the paper type a name that
+  matches nothing is offered as `Use "..."` and chosen as Other, its name written into
+  `paper_type_other` (`data-type-in-other` / `data-type-in-field`), so the separate name box is
+  only the fallback where the script has not run. The programme takes only a listed answer: it
+  decides the filing folder and every report.
+- Ask `config/core.php`: `paper_type_from_post()`, `paper_type_other_name()`,
+  `manuscript_other_name()`, `other_name_clean()`. Tested by `tests/m15_other_types.py` (one
+  real Drive submission) and the "other" cases in `tests/_checklist_unit.php`.
+
 ### Which written sections a paper was filed with
 
 A paper has six written sections (`paper_section_labels()`): the Abstract and five
 more. On arriving at Step 2 the author chooses which to submit: the Abstract only,
 or any combination (`askSectionScope()` in `student_upload_ai.php`, in the shared
 dialog, with a Change button to ask again). The Abstract is always included,
-because the cards, the search and the AI read the `abstract` column.
+because the cards, the search and the AI read the `abstract` column, **except in
+Custom** (below), where an author with sections of their own may leave it out.
 
 The choice is stored **inside `imrad_content`**, under the reserved key `_scope`
 (a list of section keys), and **not in a column**. `ArchiveRepository` copies a
@@ -570,8 +725,18 @@ boxes named Methodology and Results and Discussion help neither. In the same que
 the author can add **sections of their own name** (up to 12), typed or started from a ready-made
 list: Full Manuscript, Undergraduate Thesis (the same chapters) or Feasibility Study
 (`paper_custom_presets()`, which reads the lists the adviser's checklist uses, so a study is
-asked for the sections it is reviewed against). They sit **beside** the six, after them, not
-instead of them; the "Custom" quick choice leaves only the Abstract ticked and goes to the block.
+asked for the sections it is reviewed against; an **IMRAD** list fills the form's own five). They
+are shown **after** the six on every page.
+
+**Custom is its own mode.** Clicking it swaps the six tick boxes for the list of their own, whose
+first row is the Abstract, fixed in name but removable: in Custom, and only there, the Abstract
+is **optional**. The other quick choices go back to the six and drop their own (warning first if
+anything was typed in them). Only a row called Abstract is filed as the real Abstract; every other
+row, even one named like a standard section, stays one of theirs, so it keeps the author's order.
+The form posts `section_scope = '_none'` (`SECTION_SCOPE_NONE`) for "none of the six", and the
+server allows that, or any choice without the Abstract, only when there is at least one section
+of their own (`section_scope_for()`); otherwise the Abstract is asked for as ever. A stored
+`_scope` without the Abstract is read as it stands only on a paper with sections of its own.
 Each gets a box on Step 2 and is required like a ticked standard section. Plan:
 `docs/PLAN_custom_sections.md`.
 
@@ -603,6 +768,12 @@ Each gets a box on Step 2 and is required like a ticked standard section. Plan:
   only the Add button is disabled. A box made after load is not wired to the browser-copy autosave
   (a contenteditable raises no input event on the form), so `addEditor()` wires its own surface.
   `hasContent()` ignores `custom_sections`, as it does `section_scope`: choosing must not autosave.
+- **Rows are reordered by dragging their handle** (mouse, finger or pen: pointer events, with
+  `touch-action: none` on the handle so a finger does not scroll the list instead), or with the
+  arrow keys on a focused handle and Alt+arrows in a name box. The Abstract row has no handle and
+  nothing goes above it, since it is always first on the paper's page. The drag follows the pointer
+  on the **document**, not by `setPointerCapture()` on the handle: moving the row in the page takes
+  the handle out and puts it back, which ends a capture, and the first build stopped after one place.
 - **A name is a person's typing.** It is written with `textContent` and escaped with `escHtml()`
   wherever markup is built (the Step 4 explanation, the extraction notice). The dialog's body scrolls
   inside the box, so twelve rows fit a short screen.
