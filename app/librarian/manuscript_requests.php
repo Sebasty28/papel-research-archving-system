@@ -21,6 +21,18 @@ const MANUSCRIPT_MIN_HOURS  = 1;
 const MANUSCRIPT_MAX_HOURS  = 24;
 const MANUSCRIPT_ACTIVE_CAP = 3;
 
+/* A copy of the site whose database has no table for requests yet (see
+   manuscript_requests_ready()): the page opens empty, with a notice, instead of
+   ending in the error page on its first query. */
+$requestsReady = manuscript_requests_ready();
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$requestsReady) {
+    csrf_verify();
+    flash('error', 'There is nowhere to keep requests on this site yet. See Upload Diagnostics, under Database.');
+    header('Location: manuscript_requests.php');
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
     $action = $_POST['action'] ?? '';
@@ -162,6 +174,8 @@ $select    = "r.*, s.full_name AS student_name, s.student_id AS student_no,
    this default ORDER BY uses: the date that tab's own table already shows
    (Requested / Granted / decided). So the "Oldest first" chip that starts
    ticked always matches what the server actually sent, oldest first. */
+$pending = $granted = $history = [];
+if ($requestsReady) {
 $pending = $conn->query("SELECT $select FROM manuscript_requests r $paperJoin
                           WHERE r.status = 'pending' ORDER BY r.created_at ASC")
                 ->fetch_all(MYSQLI_ASSOC);
@@ -174,6 +188,7 @@ $history = $conn->query("SELECT $select FROM manuscript_requests r $paperJoin
                           ORDER BY COALESCE(r.denied_at, r.granted_at) ASC
                           LIMIT 200")
                 ->fetch_all(MYSQLI_ASSOC);
+}
 ?>
 <!doctype html>
 <html lang="en">
@@ -238,6 +253,14 @@ $history = $conn->query("SELECT $select FROM manuscript_requests r $paperJoin
         <p>Students asking to read the actual manuscript of a published paper. Grant a
            request to unlock it for a while, or turn it down.</p>
     </div>
+
+    <?php if (!$requestsReady): ?>
+        <div class="mgmt-empty">
+            <span class="material-symbols-outlined">database</span>
+            This site's database has no table for manuscript requests yet, so students cannot ask for one.
+            Upload Diagnostics, under Database, gives the statement that adds it.
+        </div>
+    <?php endif; ?>
 
     <section>
         <div class="mgmt-tabs" role="tablist">

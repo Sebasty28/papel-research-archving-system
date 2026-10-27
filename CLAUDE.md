@@ -288,6 +288,16 @@ not run it. So a migration ships with four things, not one:
   the old ENUM cannot hold (it files the document as `other` and logs why). Remove the
   tolerance only when nobody is behind.
 
+**`schema.sql` itself can be behind the live database.** `manuscript_requests` was made by
+`run_manuscript_requests_migration.php` and never exported into `schema.sql`, so staging, built
+from that file, never had it. The public paper page asks about a student's grant on every visit,
+so on staging every student who opened a paper in the repository got the error page, while
+staff, who skip that check, were fine and the dev box showed nothing. Now
+`manuscript_requests_ready()` makes the helpers answer "no requests" without the table, and
+`2026-10-27_manuscript_requests.sql` adds it. After any migration, compare the live database's
+tables and columns (`information_schema.COLUMNS`) with what `schema.sql` creates, not only the
+change you made.
+
 **phpMyAdmin looks at the last statement of a pasted script.** If that statement reads
 from a database (`FROM information_schema.COLUMNS`), it switches to that database before
 running *any* of the script, so every `DATABASE()` above it answered `information_schema`,
@@ -677,7 +687,9 @@ line per step saying what it did. It was checked against the PHP migrations (sam
 same rows) and by pasting it into phpMyAdmin itself. See "A copy of the database can be
 behind the code" under Traps before adding the next one.
 `scripts/migrations/sql/2026-10-23_checklist_items.sql` does the checklist column
-(`run_checklist_items_migration.php`, `paper_checklist.items_json`) the same way.
+(`run_checklist_items_migration.php`, `paper_checklist.items_json`) the same way, and
+`2026-10-27_manuscript_requests.sql` the `manuscript_requests` table and the `'manuscript'`
+notification type (`run_manuscript_requests_migration.php`), which were never in `schema.sql`.
 
 Papers deleted from `research_papers` leave rows behind in `approval_workflow`,
 `paper_checklist`, `supporting_documents` and `paper_manuscripts`. `papers_archive` is *meant* to
@@ -730,7 +742,7 @@ dozen sequential Drive calls and a slow connection makes that over a minute.
 
 `tests/m13_old_schema.py` is the companion for a database that is behind the code. It
 copies the live database into a scratch one (`papel_m13`), puts it back to its 14 October
-shape, and serves the same code from a second PHP server (`php -S 127.0.0.1:8093`) pointed
+shape (including no `manuscript_requests`, which `schema.sql` never had), and serves the same code from a second PHP server (`php -S 127.0.0.1:8093`) pointed
 at the copy with mysqli throwing as it does from PHP 8.1. It then fills the adviser's desk,
 files papers with the copyright document and a named extra one (three real Drive uploads in
 all, removed afterwards), runs the catch-up SQL, and files again. The live database is never
@@ -794,9 +806,10 @@ describe the dev box, not the cloud checkout.
 
 ## Known gaps
 
-- **Staging's database is behind the code until both files in `scripts/migrations/sql/`
-  (`2026-10-21_catch_up.sql` and `2026-10-23_checklist_items.sql`) have been run there.** The adviser's
-  checklist is limited to three fixed lists with no editing until the second one is. The pages work around the gaps (the adviser's desk no longer fails),
+- **Staging's database is behind the code until the three files in `scripts/migrations/sql/`
+  (`2026-10-21_catch_up.sql`, `2026-10-23_checklist_items.sql` and `2026-10-27_manuscript_requests.sql`)
+  have been run there.** The adviser's checklist is limited to three fixed lists with no editing until
+  the second one is, and students cannot ask a Librarian for a manuscript until the third one is. The pages work around the gaps (the adviser's desk no longer fails),
   but the copyright document is filed as "Other Document", a student's name for an extra
   document is lost, and a paper cannot be handed in as both IMRAD and Full Manuscript. Open
   `app/student/upload_diagnostics.php` as staff: "Database" reads "No gaps" once it is done.

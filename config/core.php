@@ -1204,6 +1204,28 @@ function support_console_for(string $requesterRole): string {
 }
 
 /**
+ * Whether this database has the manuscript_requests table.
+ *
+ * It was added by run_manuscript_requests_migration.php and never made it into
+ * database/schema.sql, so a copy of the site built from that file (staging) has
+ * no such table. From PHP 8.1 a query on a missing table throws, and the public
+ * paper page asks about a student's grant on every visit: every student who
+ * opened a paper in the repository there got the "Something Went Wrong" page.
+ * Until the table exists there are simply no requests and no grants, and the
+ * pages say that requests are not open yet. scripts/migrations/sql/2026-10-27_manuscript_requests.sql
+ * creates it from phpMyAdmin.
+ */
+function manuscript_requests_ready(): bool
+{
+    static $ready = null;
+    if ($ready === null) {
+        $r = db()->query("SHOW TABLES LIKE 'manuscript_requests'");
+        $ready = $r && $r->num_rows > 0;
+    }
+    return $ready;
+}
+
+/**
  * Whether a student currently holds an open grant on one paper's manuscript.
  *
  * Lazy expiry: a lapsed grant's row is left exactly as it was written and
@@ -1212,6 +1234,7 @@ function support_console_for(string $requesterRole): string {
  * student_expiry_date() both work the same way.
  */
 function student_manuscript_access(int $studentUserId, int $paperId): bool {
+    if (!manuscript_requests_ready()) return false;      // no table, so no grant can exist
     $conn = db();
     $stmt = $conn->prepare(
         "SELECT 1 FROM manuscript_requests
@@ -1355,6 +1378,7 @@ function paper_viewer_url(string $fileSrc): string {
 
 /** How many manuscripts a student currently holds open access to, across every paper. */
 function student_manuscript_active_count(int $studentUserId): int {
+    if (!manuscript_requests_ready()) return 0;
     $conn = db();
     $stmt = $conn->prepare(
         "SELECT COUNT(*) FROM manuscript_requests
@@ -1369,6 +1393,7 @@ function student_manuscript_active_count(int $studentUserId): int {
 
 /** The most recent request a student has made for one paper's manuscript, or null. */
 function student_manuscript_request(int $studentUserId, int $paperId): ?array {
+    if (!manuscript_requests_ready()) return null;
     $conn = db();
     $stmt = $conn->prepare(
         "SELECT * FROM manuscript_requests
@@ -3788,6 +3813,46 @@ function schema_gaps(): array
                       . "  PRIMARY KEY (manuscript_id),\n"
                       . "  UNIQUE KEY uq_paper_format (paper_id, format)\n"
                       . ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;",
+        ];
+    }
+
+    if (!manuscript_requests_ready()) {
+        $gaps[] = [
+            'key'    => 'manuscript_requests',
+            'what'   => 'The table manuscript_requests does not exist',
+            'effect' => 'Students cannot ask a Librarian for a manuscript, and the Librarian\'s Manuscript Requests page is empty. '
+                      . 'Before this was tolerated, every student who opened a paper in the public repository got the error page.',
+            'sql'    => "CREATE TABLE IF NOT EXISTS manuscript_requests (\n"
+                      . "  request_id      INT UNSIGNED NOT NULL AUTO_INCREMENT,\n"
+                      . "  paper_id        INT(11)      NOT NULL,\n"
+                      . "  student_user_id INT(11)      NOT NULL,\n"
+                      . "  status          ENUM('pending','granted','denied') NOT NULL DEFAULT 'pending',\n"
+                      . "  duration_hours  TINYINT UNSIGNED NULL,\n"
+                      . "  granted_by      INT(11)      NULL,\n"
+                      . "  granted_at      DATETIME     NULL,\n"
+                      . "  expires_at      DATETIME     NULL,\n"
+                      . "  denied_by       INT(11)      NULL,\n"
+                      . "  denied_at       DATETIME     NULL,\n"
+                      . "  created_at      DATETIME     NOT NULL,\n"
+                      . "  PRIMARY KEY (request_id),\n"
+                      . "  KEY idx_student (student_user_id),\n"
+                      . "  KEY idx_paper (paper_id),\n"
+                      . "  KEY idx_status_expires (status, expires_at),\n"
+                      . "  KEY idx_created (created_at)\n"
+                      . ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
+        ];
+    }
+
+    $nt  = db()->query("SHOW COLUMNS FROM notifications LIKE 'notification_type'");
+    $ntc = $nt ? $nt->fetch_assoc() : null;
+    if ($ntc && strpos((string)$ntc['Type'], "'manuscript'") === false) {
+        $gaps[] = [
+            'key'    => 'notification_manuscript',
+            'what'   => "notifications.notification_type does not list 'manuscript' (" . $ntc['Type'] . ')',
+            'effect' => 'A notice about a manuscript request is stored with no kind (an ENUM throws an unknown value away), '
+                      . 'or refused outright where the database runs in strict mode.',
+            'sql'    => "ALTER TABLE notifications MODIFY notification_type\n"
+                      . "  ENUM('submission','approval','decline','reminder','comment','security','support','account','manuscript') NOT NULL;",
         ];
     }
 

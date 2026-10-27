@@ -242,7 +242,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_manuscript'])
             || ($existing['status'] === 'granted' && strtotime($existing['expires_at']) > time())
         );
 
-        if ($blocked) {
+        if (!manuscript_requests_ready()) {
+            // A copy of the site whose database has no table for requests yet: say so, file nothing.
+            flash('error', 'Manuscript requests are not open on this site yet. Please ask a librarian in person.');
+        } elseif ($blocked) {
             flash('error', 'You already have a request in progress for this manuscript.');
         } elseif (!$msFiles) {
             flash('error', 'This paper has no manuscript file on record.');
@@ -525,7 +528,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_manuscript'])
                                   Everything the authors wrote is on this page either way.</span>
                         </div>
                     <?php endif; ?>
-                    <?php if (!$mr || $mr['status'] !== 'pending'): ?>
+                    <?php if (!manuscript_requests_ready()): ?>
+                        <?php /* No table for requests on this copy of the site yet, so no button
+                                 that could only fail. */ ?>
+                        <div class="pd-note pd-note--after">
+                            <span class="material-symbols-outlined">schedule</span>
+                            <span>Requests for manuscript access are not open on this site yet. Please ask a librarian in person.</span>
+                        </div>
+                    <?php elseif (!$mr || $mr['status'] !== 'pending'): ?>
                         <form method="post">
                             <?= csrf_field(); ?>
                             <input type="hidden" name="request_manuscript" value="1">

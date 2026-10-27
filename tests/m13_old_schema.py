@@ -57,7 +57,9 @@ PROBE = os.path.join(H.HERE, '_scope_probe.php')
 PROBE_OS = os.path.join(H.HERE, '_old_schema_probe.php')
 CATCH_UP = os.path.normpath(os.path.join(H.HERE, '..', 'scripts', 'migrations', 'sql', '2026-10-21_catch_up.sql'))
 CHECKLIST_SQL = os.path.normpath(os.path.join(H.HERE, '..', 'scripts', 'migrations', 'sql', '2026-10-23_checklist_items.sql'))
-SQL_FILES = [CATCH_UP, CHECKLIST_SQL]
+REQUESTS_SQL = os.path.normpath(os.path.join(H.HERE, '..', 'scripts', 'migrations', 'sql', '2026-10-27_manuscript_requests.sql'))
+SQL_FILES = [CATCH_UP, CHECKLIST_SQL, REQUESTS_SQL]
+T_PUBLIC = 'AUTOTEST Old Schema Published Paper'
 SERVER_LOG = os.path.join(tempfile.gettempdir(), 'papel_m13_server.log')
 COORDINATOR_ID = 151
 ALL = ['abstract', 'introduction', 'methodology', 'results_discussion', 'conclusion', 'references']
@@ -176,7 +178,14 @@ def build():
         "ALTER TABLE paper_checklist DROP COLUMN items_json;"
         "ALTER TABLE supporting_documents DROP COLUMN document_name;"
         "ALTER TABLE supporting_documents MODIFY document_type "
-        "ENUM('ethics_clearance','consent_form','data_collection','other') NOT NULL DEFAULT 'other';"))
+        "ENUM('ethics_clearance','consent_form','data_collection','other') NOT NULL DEFAULT 'other';"
+        # Never in database/schema.sql, so staging never had either. A copy of this database
+        # still names real librarians, and a request notifies (and emails) every active one:
+        # here none is active, so nothing this run does can reach a real inbox.
+        "DROP TABLE IF EXISTS manuscript_requests;"
+        "ALTER TABLE notifications MODIFY notification_type "
+        "ENUM('submission','approval','decline','reminder','comment','security','support','account') NOT NULL;"
+        "UPDATE users SET is_active = 0 WHERE user_role = 'librarian';"))
     if code != 0:
         raise RuntimeError('ageing the copy failed: %s' % err[:200])
     H.DB = SCRATCH
@@ -257,8 +266,9 @@ def shape():
         keys = json.loads(out.strip().splitlines()[-1])
     except (ValueError, IndexError):
         pass
-    check('OS-01', sorted(keys) == ['checklist_items', 'document_name', 'document_type', 'paper_manuscripts'],
-          'the application reports the three gaps in the copy: %s' % ', '.join(sorted(keys)),
+    check('OS-01', sorted(keys) == ['checklist_items', 'document_name', 'document_type', 'manuscript_requests',
+                                    'notification_manuscript', 'paper_manuscripts'],
+          'the application reports the gaps in the copy: %s' % ', '.join(sorted(keys)),
           'schema_gaps() said %s (exit %s) %s' % (keys, code, err[-120:]))
 
     # The control that makes every later pass mean something: the statement the desk used to
@@ -301,9 +311,9 @@ def diagnostics():
     a = adviser()
     page = a.get('/app/student/upload_diagnostics.php')
     words = strip(page)
-    check('OS-06', 'schema gaps: 4' in words and 'paper_manuscripts' in words and 'ALTER TABLE paper_checklist' in words
-          and 'ALTER TABLE supporting_documents' in words,
-          'staff see the four gaps and the SQL that closes them',
+    check('OS-06', 'schema gaps: 6' in words and 'paper_manuscripts' in words and 'ALTER TABLE paper_checklist' in words
+          and 'ALTER TABLE supporting_documents' in words and 'CREATE TABLE IF NOT EXISTS manuscript_requests' in words,
+          'staff see the six gaps and the SQL that closes them',
           'the Database section said: %s' % words[words.find('Database'):][:240])
     s = student()
     sw = strip(s.get('/app/student/upload_diagnostics.php'))
@@ -358,10 +368,71 @@ def submissions_old():
           'status %s, reply %s, rows %s -> %s' % (s2, j2, n_before, n_after))
 
 
+def public_old():
+    """A published paper in the public repository, with no manuscript_requests table (staging)."""
+    pid = F.seed_paper('approved', T_PUBLIC)
+    STATE['paper_ids'].append(pid)
+    # A manuscript on record (the request card is only for a paper that has one), and an AI
+    # summary already there, so opening the page does not set off an extraction from Drive.
+    H.q("UPDATE research_papers SET gdrive_file_id='GD-AUTOTEST-PUBLIC', file_path='uploads/x/autotest_public.pdf', "
+        "ai_summary='AUTOTEST summary' WHERE paper_id=%s" % pid)
+    STATE['public_paper'] = pid
+    s = student()
+    page = strip(s.get('/archive/view_paper.php?id=%s' % pid))
+    check('OS-31', s.last_status == 200 and 'Something Went Wrong' not in page and T_PUBLIC in page,
+          'a student opens a published paper instead of the error page (it used to throw on the missing table)',
+          'status %s, error page %s: %s' % (s.last_status, 'Something Went Wrong' in page, page[:200]))
+    check('OS-32', 'not open on this site yet' in page and 'Request manuscript access' not in page,
+          'and is told requests are not open yet, with no button that could only fail',
+          'manuscript card said: %s' % page[page.find('Manuscript'):][:240])
+
+    before = H.q("SHOW TABLES LIKE 'manuscript_requests'")
+    st, body, _ = s.raw('/archive/view_paper.php?id=%s' % pid,
+                        data={'_token': s.token(UPLOAD), 'request_manuscript': '1'})
+    after_page = strip(s.get('/archive/view_paper.php?id=%s' % pid))
+    check('OS-33', st in (200, 302, 303) and 'Something Went Wrong' not in strip(body) and not before
+          and 'not open on this site yet' in after_page,
+          'a request posted anyway is answered in words, and nothing is filed',
+          'status %s, page %s' % (st, strip(body)[:160]))
+
+    for who, client in (('adviser', adviser()), ('coordinator', minted(COORDINATOR_ID))):
+        w = strip(client.get('/archive/view_paper.php?id=%s' % pid))
+        check('OS-34-' + who, client.last_status == 200 and 'Something Went Wrong' not in w and T_PUBLIC in w,
+              'the %s opens it too' % who, 'status %s: %s' % (client.last_status, w[:160]))
+
+    co = minted(COORDINATOR_ID)
+    lib = strip(co.get('/app/librarian/manuscript_requests.php'))
+    check('OS-35', co.last_status == 200 and 'Something Went Wrong' not in lib and 'no table for manuscript requests' in lib,
+          "the Manuscript Requests desk opens, empty, and says why",
+          'status %s: %s' % (co.last_status, lib[:200]))
+
+    idx = strip(s.get('/archive/index.php'))
+    check('OS-36', s.last_status == 200 and 'Something Went Wrong' not in idx,
+          'and the repository listing itself opens for a student', 'status %s' % s.last_status)
+
+
+def public_new():
+    """Once the SQL has run, requests are open again."""
+    pid = STATE.get('public_paper')
+    s = student()
+    page = strip(s.get('/archive/view_paper.php?id=%s' % pid)) if pid else ''
+    check('OS-37', s.last_status == 200 and 'Request manuscript access' in page and 'not open on this site yet' not in page,
+          'with the table in place a student gets the request button back',
+          'status %s: %s' % (s.last_status, page[page.find('Manuscript'):][:200]))
+    s.raw('/archive/view_paper.php?id=%s' % pid,
+          data={'_token': s.token(UPLOAD), 'request_manuscript': '1'})
+    rows = H.q("SELECT status FROM manuscript_requests WHERE paper_id=%s" % pid) if pid else []
+    check('OS-38', rows == [['pending']], 'and a request is filed, pending, for a librarian',
+          'rows %s' % rows)
+    after = strip(s.get('/archive/view_paper.php?id=%s' % pid))
+    check('OS-39', 'waiting for a librarian' in after, 'which the page then says is waiting',
+          'page said: %s' % after[after.find('Manuscript'):][:200])
+
+
 def catch_up():
     """The SQL for phpMyAdmin repairs the copy, repairs the rows, and is safe to run twice."""
     runs = [mysql(SCRATCH, stdin_path=f) for f in SQL_FILES]
-    check('OS-13', all(r[0] == 0 for r in runs), 'both SQL files run clean',
+    check('OS-13', all(r[0] == 0 for r in runs), 'all three SQL files run clean',
           'exit %s: %s' % ([r[0] for r in runs], ' | '.join(r[2][:120] for r in runs)))
 
     cols = dict((r[0], r[1]) for r in H.q(
@@ -369,9 +440,14 @@ def catch_up():
         "AND table_name='supporting_documents' AND column_name IN ('document_type','document_name')" % SCRATCH))
     table = H.q("SHOW TABLES LIKE 'paper_manuscripts'")
     has_items = H.q("SHOW COLUMNS FROM paper_checklist LIKE 'items_json'")
-    check('OS-14', cols.get('document_type', '').startswith('varchar') and 'document_name' in cols and table and has_items,
-          'document_type is a VARCHAR, document_name exists, paper_manuscripts exists, paper_checklist has items_json',
-          'columns %s, table %s, items_json %s' % (cols, table, has_items))
+    requests = H.q("SHOW TABLES LIKE 'manuscript_requests'")
+    kind = H.one("SELECT column_type FROM information_schema.columns WHERE table_schema='%s' "
+                 "AND table_name='notifications' AND column_name='notification_type'" % SCRATCH) or ''
+    check('OS-14', cols.get('document_type', '').startswith('varchar') and 'document_name' in cols and table and has_items
+          and requests and "'manuscript'" in kind,
+          'document_type is a VARCHAR, document_name exists, paper_manuscripts exists, paper_checklist has items_json, '
+          "manuscript_requests exists and notifications take 'manuscript'",
+          'columns %s, table %s, items_json %s, requests %s, kind %s' % (cols, table, has_items, requests, kind))
 
     pid = paper_id(T_OLD)
     kinds = sorted(k for k, _ in docs_of(pid)) if pid else []
@@ -515,7 +591,9 @@ def submissions_new():
 
 # ----------------------------------------------------------------- run / clean
 STEPS = [('sql_file_shape', sql_file_shape), ('shape', shape), ('pages', pages), ('diagnostics', diagnostics), ('failure_page', failure_page),
+         ('public_old', public_old),
          ('checklist_old', checklist_old), ('submissions_old', submissions_old), ('catch_up', catch_up),
+         ('public_new', public_new),
          ('checklist_new', checklist_new), ('submissions_new', submissions_new)]
 
 

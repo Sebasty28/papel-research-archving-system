@@ -112,6 +112,32 @@ CREATE TABLE IF NOT EXISTS `login_attempts` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
+-- manuscript_requests
+--
+-- A student asking a Librarian to unlock one paper's manuscript for a while. Added by
+-- run_manuscript_requests_migration.php and missing from this file until 2026-10-27, which
+-- is why staging had no such table (see scripts/migrations/sql/2026-10-27_manuscript_requests.sql).
+--
+CREATE TABLE IF NOT EXISTS `manuscript_requests` (
+  `request_id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `paper_id` int(11) NOT NULL,
+  `student_user_id` int(11) NOT NULL,
+  `status` enum('pending','granted','denied') NOT NULL DEFAULT 'pending',
+  `duration_hours` tinyint(3) unsigned DEFAULT NULL,
+  `granted_by` int(11) DEFAULT NULL,
+  `granted_at` datetime DEFAULT NULL,
+  `expires_at` datetime DEFAULT NULL,
+  `denied_by` int(11) DEFAULT NULL,
+  `denied_at` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL,
+  PRIMARY KEY (`request_id`),
+  KEY `idx_student` (`student_user_id`),
+  KEY `idx_paper` (`paper_id`),
+  KEY `idx_status_expires` (`status`,`expires_at`),
+  KEY `idx_created` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
 -- notification_schedule
 --
 CREATE TABLE IF NOT EXISTS `notification_schedule` (
@@ -131,7 +157,7 @@ CREATE TABLE IF NOT EXISTS `notifications` (
   `notification_id` int(11) NOT NULL AUTO_INCREMENT,
   `user_id` int(11) NOT NULL,
   `paper_id` int(11) DEFAULT NULL,
-  `notification_type` enum('submission','approval','decline','reminder','comment','security','support','account') NOT NULL,
+  `notification_type` enum('submission','approval','decline','reminder','comment','security','support','account','manuscript') NOT NULL,
   `message` text NOT NULL,
   `is_read` tinyint(1) DEFAULT 0,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
