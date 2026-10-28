@@ -112,77 +112,129 @@ PDF panel's edges are now plain `top`/`bottom` written on the panel itself
 never on `:root`. Test it with a long PDF open: a one-line test PDF has no text
 layer to restyle and hides the problem entirely.
 
-A section in full view on the upload page is at 800, under all of these, so while one is
+A section in full view on the upload page (a phone only, now: see the two panes below) is at 800, under all of these, so while one is
 open the footer, the breadcrumb strip and the theme card are hidden (`visibility`, so the
 locked page keeps its height). Without that, a footer on screen when the section was opened
 lay across its bottom, which is what a short Step 2 shows the moment a PDF arrives.
 
-**The upload page's side card.** On a screen wider than 900px a card is always on the right
-(`window.papelSide` in `student_upload_ai.php`), with tabs like an editor's: **Contents** (always,
-with no close), the PDF when a file is attached, and **Corpus** when opened (its tab white, and its
-header in the card white too, so the two read as one). **The card goes on either side**: a button
-beside the hide button moves it (`setSide()`, `body.side-left`, kept as `papel.sideSide`), and on the
-left every panel, the contents, the rail and the handle (on its right edge, the inner one) are mirrored,
-the room is made on the left (the PDF panel's own room, which pads the right, is one gap there), and
-Corpus's round button moves to the bottom-right, off the card. Corpus measures its top on a scroll or a
-resize; holding the form is neither, so `sizeForm()` and `applyChatDock()` call `placeChatDockTop()`
-(without it Corpus started 18px below the form). The card is the PDF panel's usual width.
-Closed, Corpus is his round button at the right end of the tabs (`.side-corpus`) and at the foot of
-the rail; where the card is, the floating widget is hidden (on a phone it floats as ever). His
-greeting lines (`chatNudge`) rise from whichever button is in sight (`anchor()`: the tabs', the
-rail's, or the floating one): `place()` takes `#chat-nudge` out to `<body>` as `.is-fixed` and sets it
-under the tabs' button or beside the rail's, towards the form, with the notch turned to face it.
-`anchor()` asks for a button that is *seen* (computed visibility), since a folded card keeps its tabs
-laid out but hidden. A name too long for its room fades out at its end instead of an ellipsis (`fadeNames()`
-measures it and sets `.is-faded`, a mask); the PDF's name is limited to 15rem in its tab and 18rem in
-the viewer's header, and the whole name is the tooltip.
-The one on view is white with its close button; a click on another switches to it. Both panels open
-there and only there: the PDF has no home and no dock buttons (attaching a file opens it docked), and
-Corpus has no floating window and no left side (its round button opens it into the card). Switching
-only hides the others (`.side-hidden`, visibility), so the PDF keeps its page and Corpus its
-conversation; the strip is one element moved into whichever is on view. Their own close, dock and side
-buttons are hidden, since the tabs do that, and Escape closes the tab on view only (`pdf_dock.php`
-leaves a `.side-hidden` panel alone). All three are `--pdf-dock-w` wide (`min(38vw, 38rem)` here), so
-the card keeps its size. On a phone there is no card until the PDF or Corpus is opened.
+**The upload page's two panes** (`window.papelSide` in `student_upload_ai.php`, wider than 900px).
+The form's card is the **main pane** and a card beside it the **side pane**, each with a strip of tabs
+like an editor's. **Every tab opens in its home place** (`HOME` in `papelSide`, applied by `homeTab()`
+each time a tab opens): main, in this order, **Upload Paper** (the form; it is the page, so it never
+moves and cannot be closed), **Writing View** (while a section is open for writing), **Preview** (no
+close), the **PDF** (when a file is attached); side, **Contents** (no close), then **Corpus** (when he is
+opened). The owner asked for this order to hold whenever a tab opens. The side pane is on the **left
+by default** (`papel.sideSide` keeps a move to the right).
 
-The tab on view is **joined to its page** (rounded at the top only, laid 1px over the page's top
-edge, in the page's colour: white for the contents, cream for Corpus's header, the maroon band for
-the PDF's). The strip stretches to the card (`align-self: stretch`): Corpus's widget lines its children
-up at its end, and without it the third tab ran off the window. **One handle resizes the card**
-(`#sideGrip`, on its inner edge, whichever tab is on view; mouse, finger, pen or the arrow keys),
-writing `--pdf-dock-w` and keeping it under `papel.pdfDockWidth`, so the PDF opens at that width; the
-PDF's own grip is hidden here. **The hide button** at the left of the tabs folds the card into a rail
-at the window's edge (`#sideRail`, `body.side-collapsed`, remembered on the device as
-`papel.sideCollapsed`): a button to unfold it and one per tab, the form taking the room. Opening a PDF
-or Corpus unfolds it. Folded, nothing of the panels shows (the PDF viewer's toast sets its own
-`visibility: visible`, so it is hidden by name), and a section in full view takes the whole window.
+- **Any tab but Upload Paper can be dragged** to the other pane or along its own: pointer events
+  followed on the document (the strips are redrawn as it moves), a ghost under the pointer and a bar
+  where it will land; let go over nothing and it stays. A drag lasts while the tab is open: closed
+  and opened again, it is back in its home place. Where each was dragged used to be kept on the device
+  (`papel.paneTabs`) and is no longer; the page clears that key. A side pane with no tabs left is not
+  drawn, and the form takes its room.
+  **While a tab is dragged and there is no side pane on screen** (emptied, or folded into its rail),
+  a drop zone stands where it goes, below the main strip (from the card's top it covered Upload Paper
+  and the tabs after it) (`.side-drop-zone`, checked before the panes in `targetAt()`):
+  without it, a side pane emptied by dragging could never be given a tab again. Dropped there, the
+  tab makes the side pane (unfolded). The marker for a strip with no other tab stands where the tab is, or after the strip's
+  buttons, never at its left end before them. The floating Corpus button is hidden wherever the panes are
+  (`body.panes`), not only while the side pane is shown, or it came back once the pane was emptied.
+- **Every panel is laid over its pane's body** (`.in-pane`, at the box `layout()` measures, written as
+  `--pane-*` on the panel itself), so one panel shows in either pane without being moved in the page.
+  The form's card was split once, on load, into the strip and `#mainBody` (the form moved into it; a
+  form moved in the page keeps what is typed and chosen, files included). Another tab on view in the
+  main pane hides the form under it (`#mainBody.is-covered`). Switching tabs only hides
+  (`.side-hidden`), so the PDF keeps its page, Corpus his conversation, a section its text.
+- **Writing View is the section editor itself.** In panes, `toggleExpand()` sets `doc-writing` instead
+  of the full view's `doc-expanded`, so none of the full view's window-covering rules apply (bars,
+  chat and contents hidden, page padding taken away). It raises `papel-full-state` on every open and
+  close, and calls `papelSide.adopt()` **before** giving the section the cursor: placed a frame later,
+  the box was still in the form's body under the Writing View tab, and a hidden box cannot take focus.
+  A section given up for another loses `.in-pane` (`layout()`), or it stayed pinned over the pane.
+  **While its tab is not on view the section is parked**: put back in its place in the form
+  (`park()`, a quiet `papelDoc.collapse()`), editable there, the tab kept, and taken out again when the
+  tab is shown (`unpark()`, then the cursor once it is placed). It used to leave a blank box in the form
+  the whole time it had a tab. The history counts a parked section as open (`viewNow()` asks
+  `papelSide.parked()`) and closes it as one (`dropParked()`), or Back from it skipped a step. While the
+  Writing View is beside the form, the section's place says so (`.doc-spacer-note`, with a way there).
+  Folding the side pane hides only panels in it (`:not([data-pane="main"])`): a PDF moved to the main
+  pane went blank. The PDF's file name in the form brings a PDF open behind another tab to the front
+  and puts it away only when it is on view. A tab not on view keeps its close's room (`visibility`,
+  shown on hover), so a tab is one width either way and the close never appears under the pointer of a
+  double click. The
+  tab's close is `papelDoc.exitFull()`, which history hears as it hears Escape. Its list is headed
+  "Sections you are submitting". **On a phone** there are no panes: the full view covers the screen as
+  it always did, and the side pane covers the page while the PDF or Corpus is open.
+- **The room** is worked out in script (`room()`, `--room-l` / `--room-r` on `<body>`, applied with
+  `!important` under `body.panes`, and fed to `--chat-inset-*` and `--pdf-dock-room` so the bars still
+  run full width). The side pane's width is measured, not read: `--pdf-dock-w` can be
+  `min(46vw, 46rem)`, which is not a number. Both strips are one fixed height, or the panels under
+  them moved a few pixels with the tab on view.
+- **The strips are in front of the pages**, so the tab on view can lie over its page's top edge. The
+  panels are at 869, the main strip is raised to 875 (the form's card makes no stacking box of its own),
+  and the side pane is a *frame*: a cream border round an open middle, `pointer-events: none` but on its
+  strip, with the panels showing through from underneath. With the pages in front (at 899, as first
+  built) the page's edge ran across the foot of the tab, and at 125% and 150% a row of the frame showed
+  in the join wherever it fell between device pixels. Check a join by reading pixels at several zoom
+  levels (`ui34_tabjoin.py`), not by eye at 100%.
+- **No page in the panes has a border.** The white (or cream, or maroon) page against the cream
+  frame is its own edge, and a 1px `rgba(177,125,125,.22)` round each one read as a faint line under
+  the tabs and down the sides. `#mainBody`, `.side-toc-body`, the docked `#chat-window`, the Writing
+  View's `.doc-editor.is-expanded.in-pane`, `.side-preview` and `#pdfDock.in-pane` all carry `border: 0`.
+  Judge this by reading pixels across an edge, not by eye: a divider in the form's own content can
+  scroll to sit exactly on the page's top edge and is not a line round the panel.
+- **Pages keep the cards' corners all round**, the top as the foot: no tab meets one at a corner but
+  the main pane's first, Upload Paper, which is flush with its page's left edge (the main strip has no
+  padding before it), so that one corner is square only while Upload Paper is on view.
+- **Every tab is one box, on view or not** (as in an editor): a tab not on view has the same shape,
+  border and 2px overlap as the one on view, with a light fill, so pressing one changes only its colour.
+  It used to float 3px above the page's edge and the pressed one grew down to meet it.
+  The tab on view **flares into its page at its foot** (`::before`/`::after`, a quarter circle filled
+  outside its rim in `--tab-bg`, the rim a pixel of fade). **No outline** on the tab on view or its
+  feet: a line round it, however fine, read as harsh, and an editor's tab has none; its border is
+  1px and transparent so the box is the same. Upload Paper has no left foot: its page corner is square.
+- **Joined tabs**: the tab on view is rounded at the top only, laid **2px** over its page's edge (1px
+  left half a row of the edge showing at 150%), in the page's colour (white for the form and the contents and Corpus, cream for the Writing View, the maroon
+  band for the PDF). A name that does not fit fades out (`fadeNames()`, a mask), except the PDF's:
+  longer than its window, it runs through one like an LED sign: seven of its own letters wide in the
+  side pane, twelve in the main one (`data-letters`; `.is-marquee`, two copies on one track, sized
+  and paced by `sizeMarquee()`, the 7ch floor lifted so narrow letters do not widen it), stops under the
+  pointer, and takes its place in the loop from the clock, since the strip is redrawn on every drag
+  and every tab shown. The tooltip is the whole name.
+- **The side pane** resizes from one handle on its inner edge (`#sideGrip`; mouse, finger, pen or the
+  arrow keys; kept as `papel.pdfDockWidth`, which the PDF opens at), folds into a rail
+  (`papel.sideCollapsed`; a button per tab and one to unfold), and moves sides. Closed, Corpus is his
+  round button at the end of the side strip (the main strip's when there is no side pane, the rail's
+  when it is folded, never two), and his greeting lines (`chatNudge`) rise from whichever button is in
+  sight (`anchor()` asks for one that is *seen*). The PDF and Corpus open in the panes and nowhere else: no
+  dock buttons, no floating chat; their own close buttons are hidden since the tabs close them, and
+  Escape closes only the tab on view (`pdf_dock.php` leaves a `.side-hidden` panel alone).
+- **The form is held in place** (`lockForm()`, `html.side-locked`): its top a gap (`--dock-gap`, 6px)
+  under the bars, its foot a gap above the window's, `#mainBody` scrolling and the page not at all.
+  `goToStep()` scrolls the pane's body to its top (`papelSide.toTop()`). **The footer is hidden while
+  it is held**, so the page is no taller than the window and nothing (`scrollIntoView` scrolls every
+  box round its target) can slide the form under the bars. Anything that reads how much of the footer
+  is showing treats a hidden one as none (`getClientRects().length`).
+- **The contents** (`#sideToc`) is read from the form as it stands (`STEP_PARTS`), redrawn on a change
+  of step or of the form's classes and hidden attributes, never for typing in a section. A step is
+  reached as the progress bar reaches it; a part is scrolled to in the main pane's body (the form's
+  tab put on view first) and given the cursor.
+- **The preview** (`#papelPreview`) is the paper's page in the Public Repository as it will be once
+  published, drawn by **that page itself**: `app/student/paper_preview.php` builds the paper from the
+  posted form the way submit does (sections outside the choice left out) and requires
+  `archive/view_paper.php` with `PAPEL_PAPER_PREVIEW` defined, which skips the page's fetching,
+  access checks and post handling, draws the manuscript as a student reader sees it, hides the
+  site's extras and stops every link out. So a change to the public page shows in the preview with
+  no change here. The form's typed fields (never its PDFs) are posted by a form made for the moment,
+  700ms after the last change and whenever the tab comes into view, and only while it is on view.
+  **Each drawing goes into a new frame**, swapped in once loaded: posting into the same frame again
+  made every redraw a history entry, so Back stepped through old previews instead of the form's
+  steps (a new frame's first page replaces its blank one). It is drawn at 1280px and scaled to the
+  pane ("Desktop"), or at the pane's width ("Fit"), kept as `papel.previewSize`.
 
-The contents (`#sideToc`) is read from the form as it stands (`STEP_PARTS`): each step's labels,
-the sections being submitted, the PDF boxes ticked, the supporting documents that apply, redrawn on a
-change of step or of the form's classes and hidden attributes, never for typing in a section. A step
-is reached as its number in the progress bar is (forward through the Next button's checks); a part is
-scrolled to inside the form's card and given the cursor. The current step is marked, and the part being
-read (`spy()`).
-
-**Sizes, from the picture they follow:** a gap (`--dock-gap`, 6px) between the two cards, at the
-window's edges and under the bars, and the cream frame of each card is that gap thick, so the white
-card inside is a gap in from its edge. `pdf_dock.php` reads its own gap from `--pdf-dock-gap`, which
-the page sets to the same. Each panel's edges are worked out on every scroll (`cardEdges()` in
-`placeTop()`, `placeChatDockTop()`), on the panel itself, never on `:root`.
-
-**The form's card is held in place** whenever the card is there (`lockForm()`, `html.side-locked`):
-its top a gap under the bars, its foot a gap above the window's, the form scrolling inside it and the
-page not at all. The frame is a cream *border* there, not padding, which would scroll away with the
-form; the container's `py-4` is overridden with `!important`, as Bootstrap's is. **The footer is hidden
-while it is held**: a page taller than the window can still be scrolled by script (`scrollIntoView`
-scrolls every box round its target, the window too), and with nothing below the form the page is no
-taller than the window. Anything that reads how much of the footer is showing must treat a hidden
-footer as none (`getClientRects().length`): its top reads 0, which once lifted Corpus's button out of
-the window and would have pulled the PDF's foot up to the bars. Locking carries the page's place into
-the card and unlocking carries it back; `goToStep()` scrolls the card to its top (`papelSide.toTop()`).
-Beside a section in full view the PDF shows, flush and square, whichever tab was on view, and the
-contents steps out. The page no longer sets `$PDF_DOCK_MINIMISE`; `$PDF_DOCK_SIDES`, `.place()` and
-`.dockTo()` stay in `pdf_dock.php` for a page with a home.
+Tested by `ui31_panes.py` and `ui32_panes_more.py` (scratch scripts, not in the repository): the
+layout, every drag, the Writing View, resizing, folding, the sides, the contents and the phone.
+Several of ui31's checks compare the main strip's tabs exactly and predate Preview.
 
 Put a new fixed element on that ladder instead of reaching for a bigger number.
 Corpus follows the footer's visible height (`--chat-lift`, set by
@@ -679,6 +731,17 @@ format `other`, and named in the student's words wherever the file is mentioned.
 - Ask `config/core.php`: `paper_type_from_post()`, `paper_type_other_name()`,
   `manuscript_other_name()`, `other_name_clean()`. Tested by `tests/m15_other_types.py` (one
   real Drive submission) and the "other" cases in `tests/_checklist_unit.php`.
+
+### Date Completed, or the year only
+
+Date Completed is required on the upload form unless the author ticks **"No exact date: use the
+year only"** (`research_date_unknown`), which switches the date off (disabled, so not posted) and
+makes the Year box the answer: the paper is stored with its `year` and a NULL `research_date`, the
+shape every paper filed before the date was asked for already has. Every reader goes through
+`paper_date_display()`, so the year shows on its own, including the "Date Completed" fact on the
+public page, the review page and the author's page (it used to say "Not provided"). There is no
+column for the choice: a returned paper with no date comes back with the box ticked
+(`approval_workflow` says it was handed in); a draft that never had one does not.
 
 ### Which written sections a paper was filed with
 

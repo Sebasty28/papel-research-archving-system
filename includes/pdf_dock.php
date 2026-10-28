@@ -141,6 +141,10 @@ $PDF_DOCK_SIDES     = array_values(array_intersect(['left', 'right'], (array)($P
 .pdf-dock-name {
     flex: 1 1 auto; min-width: 0;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    /* The tools after it go to the header's right-hand end even when a page caps
+       the name's width (the upload page does, at 18rem): without this the spare
+       room fell after them, and they sat in the middle of the bar. */
+    margin-right: auto;
 }
 .pdf-dock-btn {
     display: inline-flex; align-items: center; justify-content: center;

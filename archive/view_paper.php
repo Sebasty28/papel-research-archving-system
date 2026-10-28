@@ -6,6 +6,27 @@ start_session_once();
 $conn=db();
 $u = current_user();
 
+/* The upload form's Preview tab (app/student/paper_preview.php) draws this page for a
+   paper that is not filed yet, from what is on the form at this moment. It hands the
+   paper over and sets the constant; everything below that fetches, checks access or
+   acts on a post is for a real record and is skipped. The page itself is the same
+   markup, so the preview cannot drift from what readers will actually see. */
+$isPreview = defined('PAPEL_PAPER_PREVIEW');
+if ($isPreview):
+    $paper         = $GLOBALS['papelPreviewPaper'];
+    $id            = 0;
+    $can_view      = true;
+    $isArchived    = false;
+    $canArchive    = false;
+    $can_full_access = false;
+    /* Shown as a student reader sees it, which is most readers: the record, and the
+       manuscript behind a librarian's grant. One "file" per format declared, with no
+       address, so the card speaks of one file or two as it will. */
+    $can_view_file = false;
+    $msFiles = array_map(function ($f) { return ['src' => '', 'label' => manuscript_format_label($f)]; },
+                         paper_declared_formats($paper['manuscript_type'] ?? '') ?: ['full']);
+else:
+
 // Check guest expiry
 if (isset($_SESSION['guest_login']) && isset($_SESSION['guest_expire'])) {
     if (time()> $_SESSION['guest_expire']) {
@@ -272,6 +293,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_manuscript'])
     header('Location: view_paper.php?id=' . $id . '#pd-sec-manuscript');
     exit;
 }
+endif;   // a real record, not the upload form's preview
 ?>
 <!doctype html>
 <html lang="en">
@@ -455,7 +477,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_manuscript'])
                     'Manuscript Type'       => manuscript_type_label($paper['manuscript_type'] ?? ''),
                     'Paper Status'          => $paper['publication_status'] ?? '',
                     'Published In'          => $paper['publication_location'] ?? '',
-                    'Date Completed'        => !empty($paper['research_date']) ? date('F j, Y', strtotime($paper['research_date'])) : '',
+                    /* The year alone for a paper with no full date (filed before the date was
+                       asked for, or by an author who knew only the year): it was "Not provided". */
+                    'Date Completed'        => paper_date_display($paper['research_date'] ?? null, $paper['year'] ?? null),
                 ];
                 foreach ($facts as $label => $value): ?>
                     <div>
@@ -1007,5 +1031,29 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 </script>
+<?php if ($isPreview): ?>
+<style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
+/* The site's own extras are not part of how the paper looks, and the upload page
+   around the frame already has them: a second accessibility tab, the one-time theme
+   card and the scroll button would only be clutter in the preview. The accessibility
+   widget moves itself to <html>, so the rule is not scoped to <body>. */
+#a11y-widget, #themeWelcome, #scrollJump { display: none !important; }
+</style>
+<script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
+/* A preview inside the upload form: it is to be looked at, not used. Every way out
+   of it (the navbar, Back, the crumbs, a form) would load another page into the
+   frame, so they are stopped; links within the page (the contents) still scroll. */
+(function () {
+    document.addEventListener('click', function (e) {
+        var a = e.target.closest && e.target.closest('a[href]');
+        if (!a) return;
+        var href = a.getAttribute('href') || '';
+        if (href.charAt(0) === '#') return;
+        e.preventDefault();
+    }, true);
+    document.addEventListener('submit', function (e) { e.preventDefault(); }, true);
+})();
+</script>
+<?php endif; ?>
 </body>
 </html>

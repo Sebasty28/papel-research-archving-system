@@ -328,7 +328,7 @@ $fill  = count($steps) > 1 ? max(0, min(100, ($done - 1) / (count($steps) - 1) *
                     'Manuscript Type'     => manuscript_type_label($paper['manuscript_type'] ?? ''),
                     'Paper Status'        => $paper['publication_status'] ?? '',
                     'Published In'        => $paper['publication_location'] ?? '',
-                    'Date Completed'      => !empty($paper['research_date']) ? date('F j, Y', strtotime($paper['research_date'])) : '',
+                    'Date Completed'      => paper_date_display($paper['research_date'] ?? null, $paper['year'] ?? null),   // the year when there is no full date
                     'Submitted'           => !empty($paper['upload_date']) ? date('F j, Y', strtotime($paper['upload_date'])) : '',
                 ];
                 foreach ($facts as $label => $value): ?>

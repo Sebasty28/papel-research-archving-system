@@ -1,5 +1,5 @@
 {
- "built": "2026-10-27 22:12",
+ "built": "2026-10-28 15:32",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -97,6 +97,9 @@
   "app/student/paper_details.php": {
    "lines": 688
   },
+  "app/student/paper_preview.php": {
+   "lines": 97
+  },
   "app/student/pdf_viewer.php": {
    "lines": 331
   },
@@ -119,7 +122,7 @@
    "lines": 435
   },
   "app/student/student_upload_ai.php": {
-   "lines": 12249
+   "lines": 12895
   },
   "app/student/upload_diagnostics.php": {
    "lines": 235
@@ -143,7 +146,7 @@
    "lines": 1081
   },
   "archive/view_paper.php": {
-   "lines": 1012
+   "lines": 1060
   },
   "config/config.php": {
    "lines": 176
@@ -251,7 +254,7 @@
    "lines": 124
   },
   "includes/pdf_dock.php": {
-   "lines": 1397
+   "lines": 1401
   },
   "includes/pdf_writer.php": {
    "lines": 416
