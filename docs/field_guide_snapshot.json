@@ -1,5 +1,5 @@
 {
- "built": "2026-10-28 15:32",
+ "built": "2026-10-29 13:58",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -110,7 +110,7 @@
    "lines": 104
   },
   "app/student/student_dashboard.php": {
-   "lines": 843
+   "lines": 886
   },
   "app/student/student_draft_delete.php": {
    "lines": 139
@@ -122,7 +122,7 @@
    "lines": 435
   },
   "app/student/student_upload_ai.php": {
-   "lines": 12895
+   "lines": 12992
   },
   "app/student/upload_diagnostics.php": {
    "lines": 235
@@ -152,7 +152,7 @@
    "lines": 176
   },
   "config/core.php": {
-   "lines": 4098
+   "lines": 4184
   },
   "config/error_handler.php": {
    "lines": 228
@@ -197,7 +197,7 @@
    "lines": 94
   },
   "includes/console_shell.php": {
-   "lines": 365
+   "lines": 370
   },
   "includes/docx_writer.php": {
    "lines": 230
@@ -473,7 +473,7 @@
    "lines": 85
   },
   "tests/_checklist_unit.php": {
-   "lines": 309
+   "lines": 321
   },
   "tests/_failure_unit.php": {
    "lines": 70
@@ -492,6 +492,9 @@
   },
   "tests/_old_schema_probe.php": {
    "lines": 42
+  },
+  "tests/_other_name_unit.php": {
+   "lines": 69
   },
   "tests/_scope_probe.php": {
    "lines": 146

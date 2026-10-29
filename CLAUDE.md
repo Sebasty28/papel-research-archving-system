@@ -176,7 +176,9 @@ by default** (`papel.sideSide` keeps a move to the right).
   strip, with the panels showing through from underneath. With the pages in front (at 899, as first
   built) the page's edge ran across the foot of the tab, and at 125% and 150% a row of the frame showed
   in the join wherever it fell between device pixels. Check a join by reading pixels at several zoom
-  levels (`ui34_tabjoin.py`), not by eye at 100%.
+  levels (`ui34_tabjoin.py`), not by eye at 100%. **A control that injects CSS must use the CSSOM**
+  (`styleSheets[n].insertRule`): the CSP has no `'unsafe-inline'` for styles, so a `<style>` element
+  added by script is ignored and the control silently proves nothing.
 - **No page in the panes has a border.** The white (or cream, or maroon) page against the cream
   frame is its own edge, and a 1px `rgba(177,125,125,.22)` round each one read as a faint line under
   the tabs and down the sides. `#mainBody`, `.side-toc-body`, the docked `#chat-window`, the Writing
@@ -188,9 +190,19 @@ by default** (`papel.sideSide` keeps a move to the right).
   padding before it), so that one corner is square only while Upload Paper is on view.
 - **Every tab is one box, on view or not** (as in an editor): a tab not on view has the same shape,
   border and 2px overlap as the one on view, with a light fill, so pressing one changes only its colour.
-  It used to float 3px above the page's edge and the pressed one grew down to meet it.
+  It used to float 3px above the page's edge and the pressed one grew down to meet it. **A tab not on
+  view fills only down to the strip's foot** (a gradient to `transparent` at `calc(100% - 2px)`): its
+  fill is translucent, so over the 2px it overlaps the page it tinted the page itself and hung a band
+  below the strip under every such tab, which reads as the strip seeping onto the page. The tab on
+  view needs no such care: its fill is the page's own colour.
   The tab on view **flares into its page at its foot** (`::before`/`::after`, a quarter circle filled
-  outside its rim in `--tab-bg`, the rim a pixel of fade). **No outline** on the tab on view or its
+  outside its rim in `--tab-bg`, the rim a pixel of fade), **only where no tab sits beside it**
+  (`.side-tab + .side-tab.is-active::before` and `.is-active:has(+ .side-tab)::after` are
+  `display: none`). A foot is the page's colour, so over a neighbour it bit a notch out of that
+  tab's bottom corner: white out of the pink tabs, maroon out of the one beside the PDF. Stacking
+  does not fix it, since a tab not on view is a translucent fill (8% over the strip) that the foot
+  shows straight through. Between two tabs the tab on view now meets its neighbour square, as in an
+  editor, and still flares at either end of the run. **No outline** on the tab on view or its
   feet: a line round it, however fine, read as harsh, and an editor's tab has none; its border is
   1px and transparent so the box is the same. Upload Paper has no left foot: its page corner is square.
 - **Joined tabs**: the tab on view is rounded at the top only, laid **2px** over its page's edge (1px
@@ -243,6 +255,12 @@ rather than being buried by it on a page short enough to show it all the time;
 docked, the panel's bottom edge is that figure, so it ends at the footer's top.
 The footer runs the full width in front of a docked chat, as the navbar and the
 strip do, and as it already did for the PDF panel.
+
+**`overflow-x` clips the other axis too.** `.dash-tabs` scrolls sideways when the tabs do not
+fit, and `overflow-y` then computes to `auto`, never `visible`: the Quick Settings panel that
+hangs out of that row was cut to the row's own height, so on every dashboard the gear opened a
+panel nobody could see or press. It does not clip while the panel is open
+(`.dash-tabs:has(.quick-settings-dropdown.open)`), having no need to scroll just then.
 
 Anything that must sit flush under the navbar reads `--pdf-dock-top`, the bar's
 measured bottom edge that `pdf_dock.php` keeps on `<html>`, and never a number.
@@ -728,9 +746,56 @@ format `other`, and named in the student's words wherever the file is mentioned.
   `paper_type_other` (`data-type-in-other` / `data-type-in-field`), so the separate name box is
   only the fallback where the script has not run. The programme takes only a listed answer: it
   decides the filing folder and every report.
+- **What may be typed there is ruled on** (`other_name_problem()`, with `other_name_filler()` and
+  `other_name_looks_random()`): at most four words, no greeting or filler as the whole of it, and
+  nothing shaped like mashing (one letter four times over; eight letters or more made of four
+  distinct ones, which is what "adasdadsaddsd" is; six consonants in a row, since English stops at
+  five in "strengths"; a run along the keyboard; a word of five letters or more with no vowel). The
+  box took anything before, so a greeting, mashing and a whole sentence were all filed and
+  published. **Only on a submission**: a draft keeps a name halfway through being typed. The page
+  says the same thing at Step 1 (`otherNameProblem()` in `student_upload_ai.php`, the same rules in
+  the same order), but the server is what decides.
 - Ask `config/core.php`: `paper_type_from_post()`, `paper_type_other_name()`,
-  `manuscript_other_name()`, `other_name_clean()`. Tested by `tests/m15_other_types.py` (one
-  real Drive submission) and the "other" cases in `tests/_checklist_unit.php`.
+  `manuscript_other_name()`, `other_name_clean()`, `other_name_problem()`. Tested by
+  `tests/m15_other_types.py` (one real Drive submission), the "other" cases in
+  `tests/_checklist_unit.php`, and `tests/_other_name_unit.php`, which is the list of what the
+  boxes must take and must refuse: every refusal there is something a student really typed in.
+
+### One height for every box on the upload form
+
+`#uploadForm` sets `--field-h` (30px) and every box a student types or chooses in takes it:
+`.form-control` that is not a file input, the skinned chooser's own button (`.sel-btn`,
+`includes/select_skin.php`) and a plain `<select>` where the skin has not run. The form had three
+heights (30px for the Other box beside Manuscript Type, 37.5 for the two choosers, 47.6 for the
+fields on Step 2) and side by side they read as different kinds of control. The padding and type
+size go with the height: setting height alone on a box padded for 47px clips the text. A file input
+keeps its own height, being a button and a drop area rather than a line to type in.
+
+### A draft's card on the student dashboard
+
+A draft that has never been submitted (`$isDraftOnly`, worked out before the card so the link
+below can be written first) is the one card with nothing on the approval track, so it does not
+draw one: **Continue editing and the bin take that row instead** (`.card-track.is-draft`), with
+the adviser's name still at its end. A draft that was sent back keeps its track, which has
+something on it, and keeps its buttons under the card.
+
+The row is three columns: Continue editing, who has it, then the bin at the far end, in the
+same 1.625rem gutter `.card-status` keeps so it sits under the fold chevron.
+
+**The card itself is a link** (`.card-open`): an `<a>` laid over it, so a click anywhere carries
+on where the student left off and a right-click offers the browser's own "Open in new tab" and
+"Open in split screen". The title stays plain text, since a draft has nothing filed to read. Three
+things the overlay has to respect:
+
+- it is the card's **first child**, before `.card-head`, because `browse_console_js.php` folds
+  everything after `.card-head` into `.paper-card-body` and would fold the link away with it;
+- everything there is to press (`.card-actions`, `.paper-card-toggle`, `.paper-action`) is raised
+  above it, or the bin and the fold chevron stop answering;
+- it is `tabindex="-1"` and `aria-hidden`, the Continue editing button beside it being the same
+  journey said properly, so the keyboard and a screen reader are not given the same link twice.
+
+Text on the card cannot be selected with the pointer while a link covers it. That is the price of
+a card that is a link, and `tests/` does not cover it; the checks are the scratch scripts.
 
 ### Date Completed, or the year only
 

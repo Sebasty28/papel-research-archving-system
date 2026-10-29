@@ -599,8 +599,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     if ($manuscriptType === '') {
         throw new UserFacingException('Please choose at least one manuscript type.');
     }
-    if (manuscript_other_name($manuscriptType) === '') {
+    $otherName = manuscript_other_name($manuscriptType);
+    if ($otherName === '') {
         throw new UserFacingException('Please type what your manuscript is called, in the box beside Other.');
+    }
+    if ($otherName !== null) {
+        // The same rules as the paper type's own Other box (other_name_problem()).
+        $problem = other_name_problem($otherName, 'manuscript');
+        if ($problem !== null) throw new UserFacingException($problem);
     }
     $formats = paper_declared_formats($manuscriptType);
     $dual    = count($formats) > 1;
@@ -1517,9 +1523,8 @@ body {
    in the box ticks it. */
 .check-row .form-check.other-check { display: flex; align-items: center; gap: .5rem; }
 .other-check .form-check-input { flex: 0 0 auto; }
-/* As tall as the row of boxes it sits in, not a full-size field: .form-control's own
-   height and padding are what made it stand a head taller than its neighbours. */
-.check-row .other-input { width: 13rem; max-width: 100%; height: 30px; min-height: 0; padding: .125rem .5rem; font-size: .875rem; line-height: 1.4; }
+/* Its height is every box's height now (--field-h, below); only its width is its own. */
+.check-row .other-input { width: 13rem; max-width: 100%; }
 .paper-type-other { margin-top: .5rem; }
 .paper-type-other[hidden] { display: none; }
 /* A journal name is a short thing; the full width of the card overstated it. */
@@ -1553,6 +1558,31 @@ body {
   box-shadow: 0 0 0 3px rgba(130, 7, 7, .10);
   outline: none;
   background: var(--white);
+}
+
+/* ===== One height for every box in the form =====
+   There were three: 30px for the Other box beside Manuscript Type, 37.5 for the two
+   choosers, 47.6 for the fields on Step 2. Side by side they read as different kinds of
+   control. The Other box's height is the measure, and its padding and type size come
+   with it: height alone, on a box padded for 47px, leaves the text no room and clips it.
+   A file input is left out, being a button and a drop area rather than a line to type in.
+   The skinned chooser is a button of its own (.sel-btn, includes/select_skin.php), so it
+   is named here too; the <select> behind it is 1px and hidden, and only the plain one a
+   page without script would show is given the height. */
+/* Bootstrap's own near-black (#212529) for a heading nobody gave a colour to, which in
+   dark mode is all but invisible against the dark surface: "Review & Edit Metadata" on
+   Step 2 is the one that shows. The token follows the theme. */
+#uploadForm h4 { color: var(--ink); }
+
+#uploadForm { --field-h: 30px; }
+#uploadForm .form-control:not([type="file"]),
+#uploadForm .form-select:not(.is-skinned),
+#uploadForm .sel-btn {
+  height: var(--field-h);
+  min-height: 0;
+  padding: .125rem .5rem;
+  font-size: .875rem;
+  line-height: 1.4;
 }
 
 /* ===== Section editors (Abstract / Introduction / Methodology / R&D) =====
@@ -3085,9 +3115,16 @@ body.panes .main-tabs { position: relative; z-index: 875; }
     border-radius: var(--r-card, 8px) var(--r-card, 8px) 0 0;
     margin-bottom: -2px;
     padding-bottom: 2px;
-    background: rgba(177,125,125,.08);
+    /* The fill stops at the strip's foot. The last 2px are the tab's overlap of the page, and a
+       translucent fill there tinted the page itself under every tab not on view: a band hanging
+       below the strip, which reads as the strip's colour seeping onto the page, and plainly so
+       zoomed in. The tab on view needs no such care, since its fill is the page's own colour.
+       The box is untouched, so a tab is still one size on view or not. */
+    background: linear-gradient(to bottom, rgba(177,125,125,.08) calc(100% - 2px), transparent calc(100% - 2px));
 }
-.side-tabs .side-tab:not(.is-active):hover { background: rgba(177,125,125,.16); }
+.side-tabs .side-tab:not(.is-active):hover {
+    background: linear-gradient(to bottom, rgba(177,125,125,.16) calc(100% - 2px), transparent calc(100% - 2px));
+}
 
 /* The tab on view flares into its page at its foot, as an editor's does: a curve on
    each side, outward, in the tab's own colour, so the tab and the page read as one
@@ -3098,9 +3135,18 @@ body.panes .main-tabs { position: relative; z-index: 875; }
    down the 2px the tab lies over the page, so it ends on the page. */
 .side-tabs .side-tab.is-active {
     position: relative;
-    z-index: 1;               /* the feet lie over the tabs either side */
+    z-index: 1;
     --tab-bg: var(--white);
 }
+/* A foot only where there is no tab beside it. A foot is the page's colour, and it was drawn
+   across the next tab's bottom corner: a notch bitten out of the neighbour, which is the bug
+   in the recording (white out of the pink tabs, maroon out of the one beside the PDF). Putting
+   the feet behind the neighbours does not help, because a tab not on view is a translucent
+   fill (8% over the strip) and they showed straight through it. Between two tabs the foot has
+   nothing to flare into anyway: the tab on view meets its neighbour square, as in an editor,
+   and still flares at either end of the run. */
+.side-tabs .side-tab + .side-tab.is-active::before { display: none; }
+.side-tabs .side-tab.is-active:has(+ .side-tab)::after { display: none; }
 .side-tabs[data-on="write"] .side-tab.is-active { --tab-bg: var(--cream); }
 .side-tabs[data-on="pdf"] .side-tab.is-active { --tab-bg: var(--maroon-surface-hover); }
 .side-tabs .side-tab.is-active::before,
@@ -5511,6 +5557,53 @@ function otherManuscriptName() {
     const el = document.getElementById('manuscriptTypeOther');
     return el ? el.value.replace(/\s+/g, ' ').trim() : '';
 }
+
+/* ----- What may be typed beside Other -----
+   The same rules as the server's (other_name_problem() in config/core.php), so the
+   student hears it at this step rather than at the last button. The server is still the
+   one that decides: this is only the earlier, kinder half of it. Keep the two together. */
+const OTHER_NAME_MAX_WORDS = 4;
+const OTHER_NAME_FILLER = ['hi', 'hii', 'hello', 'helo', 'hey', 'yo', 'hiya', 'good morning',
+    'good afternoon', 'good evening', 'good day', 'thanks', 'thank you', 'please', 'test',
+    'testing', 'tests', 'sample', 'example', 'none', 'na', 'n a', 'nil', 'null', 'idk', 'abc',
+    'xyz', 'dummy', 'blank', 'nothing', 'random', 'try', 'trial', 'lorem ipsum', 'asdf',
+    'qwerty', 'zxcvbn'];
+const OTHER_NAME_RUNS = ['asdf', 'sdfg', 'dfgh', 'fghj', 'ghjk', 'qwer', 'wert', 'erty',
+    'rtyu', 'tyui', 'zxcv', 'xcvb', 'cvbn'];
+
+function otherNameLooksRandom(text) {
+    const low = String(text || '').trim().toLowerCase();
+    const letters = low.replace(/[^a-z]/g, '');
+    if (!letters) return false;
+    if (/(.)\1{3,}/.test(letters)) return true;
+    // A long run of very few letters: "adasdadsaddsd" is three of them shuffled.
+    if (letters.length >= 8 && new Set(letters.split('')).size <= 4) return true;
+    if (/[bcdfghjklmnpqrstvwxz]{6,}/.test(letters)) return true;
+    if (OTHER_NAME_RUNS.some(function (run) { return letters.indexOf(run) !== -1; })) return true;
+    return low.split(/[^a-z]+/).some(function (w) { return w.length >= 5 && !/[aeiouy]/.test(w); });
+}
+
+function otherNameProblem(name, what) {
+    const text = String(name || '').trim();
+    if (!text) return 'Please type what your ' + what + ' is called.';
+    if (text.replace(/[^\p{L}]+/gu, '').length < 2) {
+        return 'Please write what your ' + what + ' is called, in words.';
+    }
+    if (text.split(/\s+/).length > OTHER_NAME_MAX_WORDS) {
+        return 'Please keep your ' + what + ' to ' + OTHER_NAME_MAX_WORDS
+             + ' words at most, the way "Policy Brief" and "Case Study" name one.';
+    }
+    const bare = text.toLowerCase().replace(/[^\p{L}\s]+/gu, ' ').replace(/\s+/g, ' ').trim();
+    if (bare && OTHER_NAME_FILLER.indexOf(bare) !== -1) {
+        return 'Please write what your ' + what + ' is called, not a greeting.';
+    }
+    if (otherNameLooksRandom(text)) {
+        return 'That does not look like a name. Please write what your ' + what
+             + ' is called, like "Policy Brief" or "Case Study".';
+    }
+    return null;
+}
+
 /* The box to type a paper type in is there while Other is chosen. Run on a change of
    the dropdown and when a saved draft puts the answers back. */
 function syncPaperTypeOther() {
@@ -8706,12 +8799,16 @@ function goToStep(step) {
                 papelAlert('Please select a paper type');
                 return;
             }
-            if (paperType === 'other' && !otherPaperTypeName()) {
-                papelAlert('Please type your paper type.');
-                const box = document.getElementById('paperTypeOther');
-                const typeIn = document.querySelector('select[name="paper_type"] ~ .sel-type');
-                if (box && !box.hidden) box.focus(); else if (typeIn) typeIn.focus();
-                return;
+            if (paperType === 'other') {
+                // Empty, a sentence, a greeting or mashing: the same answer the server gives.
+                const problem = otherNameProblem(otherPaperTypeName(), 'paper type');
+                if (problem) {
+                    papelAlert(problem);
+                    const box = document.getElementById('paperTypeOther');
+                    const typeIn = document.querySelector('select[name="paper_type"] ~ .sel-type');
+                    if (box && !box.hidden) box.focus(); else if (typeIn) typeIn.focus();
+                    return;
+                }
             }
             /* By name, not by tag. A student picks a programme from a select;
                staff belong to the faculty rather than to a degree, so for them
@@ -8731,8 +8828,8 @@ function goToStep(step) {
                 papelAlert('Please choose at least one manuscript type');
                 return;
             }
-            if (pdfTicked('other') && !otherManuscriptName()) {
-                papelAlert('Please type what your manuscript is called, in the box beside Other.');
+            if (pdfTicked('other') && otherNameProblem(otherManuscriptName(), 'manuscript')) {
+                papelAlert(otherNameProblem(otherManuscriptName(), 'manuscript'));
                 const box = document.getElementById('manuscriptTypeOther');
                 if (box) box.focus();
                 return;

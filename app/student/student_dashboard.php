@@ -241,15 +241,39 @@ ob_start();
 /* Delete sits apart from the actions, at the far end of the row, so it is never
    the button next to the one you meant to press. */
 .card-actions .draft-delete-form { margin-left: auto; }
-.btn-card-delete {
-    background: none; border: 1px solid transparent; border-radius: var(--r-control, 4px);
-    padding: .35rem; color: var(--grey); cursor: pointer;
-    display: inline-flex; align-items: center; transition: color .15s, background .15s, border-color .15s;
-}
-.btn-card-delete:hover { color: var(--maroon); background: #fdeaea; border-color: var(--soft-maroon); }
-.btn-card-delete:focus-visible { outline: 2px solid var(--maroon); outline-offset: 1px; }
+/* A button of the same make as Continue editing beside it, outlined rather than filled
+   because it is the one that cannot be undone: a bare icon read as decoration. */
+.btn-card-delete { cursor: pointer; }
 /* Withdraw control: plain for now, styling to follow. */
 .cancel-window { font-size: .6875rem; color: var(--grey); align-self: center; }
+
+/* ----- A draft card is itself the way back into the draft -----
+   A click anywhere on it carries on where the student left off, and a right-click offers
+   the browser's own "Open in new tab" and "Open in split screen", as any link does. Only
+   a real <a> gives that menu, and the title is deliberately not one (a draft has nothing
+   filed to read yet), so the link is laid over the card instead.
+
+   It is the card's first child, before .card-head: browse_console_js.php folds everything
+   after .card-head into .paper-card-body when the card is collapsed, and a link swept in
+   there would go with it. It is not in the tab order and not named to a screen reader,
+   because the Continue editing button beside it is the same journey said properly; this
+   is the mouse's way in, nothing more. */
+.paper-card .card-open { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
+/* Everything there is to press stays above it. */
+.paper-card .card-open ~ * .card-actions,
+.paper-card .card-open ~ .card-actions,
+.paper-card .card-open ~ * .draft-delete-form,
+.paper-card .card-open ~ * .paper-action { position: relative; z-index: 2; }
+/* The chevron is already placed, in the corner of .card-status: giving it position:
+   relative to lift it above the link dropped it out of that corner and 26px to the left
+   of where every other card has it. It is positioned, so a layer is all it needs. */
+.paper-card .card-open ~ * .paper-card-toggle { z-index: 2; }
+/* The track's three circles are empty on a draft that has never been submitted: they say
+   less than the two things there are to do with it, which take that row instead. The bin
+   is the row's own third column, at the far end under the chevron. */
+.card-track.is-draft .card-actions { margin-top: 0; }
+/* Delete sits beside Continue editing here, not pushed to the end of the row. */
+.card-track.is-draft .draft-delete-form { margin-left: 0; }
 </style>
 </head>
 <body>
@@ -380,8 +404,19 @@ ob_start();
                     foreach ($steps as $s) if ($s['state'] === 'done') $done++;
                     $fill   = count($steps) > 1 ? ($done > 0 ? (min($done, count($steps) - 1) / (count($steps) - 1)) * 100 : 0) : 0;
                     $rv     = $reviewers[$pid] ?? [];
+                    /* A draft that has never been submitted: nothing filed to read, so its
+                       title is plain text and the card itself is the way back in. Worked out
+                       here rather than inside .card-head, where it used to be, because the
+                       link over the card is written before that. */
+                    $isDraftOnly = ($status === 'draft' && !$fb);
                     ?>
                     <article class="paper-card">
+                        <?php if ($isDraftOnly): ?>
+                            <?php /* See .card-open: the mouse's way into the draft, and what gives
+                                     the right-click menu its "Open in new tab". */ ?>
+                            <a class="card-open" href="student_upload_ai.php?draft=<?= $pid ?>"
+                               tabindex="-1" aria-hidden="true"></a>
+                        <?php endif; ?>
                         <div class="card-head">
                             <div>
                                 <?php
@@ -393,9 +428,8 @@ ob_start();
                                    A returned paper carries the status 'draft' too, but it has a
                                    decline on record and plenty worth reading, so it links like
                                    the rest. Only a draft that has never been submitted stays as
-                                   plain text: there is nothing to show yet, and its Continue
-                                   editing button is the way in. */
-                                $isDraftOnly = ($status === 'draft' && !$fb);
+                                   plain text ($isDraftOnly, set above): there is nothing to show
+                                   yet, and its Continue editing button is the way in. */
                                 ?>
                                 <h2 class="paper-title">
                                     <?php if ($isDraftOnly): ?>
@@ -456,7 +490,36 @@ ob_start();
                             </div>
                         </div>
 
-                        <div class="card-track">
+                        <?php
+                        /* Built here and printed in one of two places: in the track's row for
+                           a draft that has never been submitted (which has no track worth
+                           drawing), under the card for everything else. */
+                        ob_start(); ?>
+                            <a class="btn-sm-maroon" href="student_upload_ai.php?draft=<?= $pid ?>">
+                                <span class="material-symbols-outlined mi-18">edit</span>
+                                <?= $fb ? 'Edit and Re-submit' : 'Continue editing' ?>
+                            </a>
+                        <?php $draftEdit = ob_get_clean(); ob_start(); ?>
+                            <form method="post" action="student_draft_delete.php" class="draft-delete-form"
+                                  data-title="<?= e($r['title']) ?>">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="paper_id" value="<?= $pid ?>">
+                                <?php /* So deleting from Needs Revision returns there, not to Drafts. */ ?>
+                                <input type="hidden" name="tab" value="<?= e($tab) ?>">
+                                <button type="submit" class="btn-sm-outline btn-card-delete" title="Delete this item"
+                                        aria-label="Delete &quot;<?= e($r['title']) ?>&quot;">
+                                    <span class="material-symbols-outlined mi-18">delete</span>
+                                    Delete
+                                </button>
+                            </form>
+                        <?php $draftDelete = ob_get_clean(); ?>
+
+                        <div class="card-track<?= $isDraftOnly ? ' is-draft' : '' ?>">
+                            <?php if ($isDraftOnly): ?>
+                                <?php /* The two things to do with a draft, together at the left of the
+                                         row the track used to have, with who has it at its end. */ ?>
+                                <div class="card-actions"><?= $draftEdit ?><?= $draftDelete ?></div>
+                            <?php else: ?>
                             <div class="track">
                                 <div class="track-line"><div class="track-line-fill" style="width: <?= (int)round($fill) ?>%"></div></div>
                                 <?php foreach ($steps as $s): ?>
@@ -472,6 +535,7 @@ ob_start();
                                     </div>
                                 <?php endforeach; ?>
                             </div>
+                            <?php endif; ?>
                             <div class="card-people">
                                 <?php $adviser = $rv['faculty'] ?? $adviser_name; ?>
                                 <?php if (!empty($adviser)): ?>
@@ -522,35 +586,14 @@ ob_start();
                             </div>
                         <?php endif; ?>
 
-                        <?php if ($status === 'draft'): ?>
-                            <?php /* No submit button here. Sending a paper for review is a
-                                     one-way step, and a card list is exactly where a stray
-                                     click happens: it is done deliberately from the upload
-                                     page instead, after the work has been reviewed. */ ?>
-                            <?php
-                            /* A paper carrying revision feedback was sent back by a
-                               reviewer, so the work ahead is correcting and returning
-                               it, not the same task as finishing a draft that has
-                               never been seen. The label says which. */
-                            $editLabel = $fb ? 'Edit and Re-submit' : 'Continue editing';
-                            ?>
-                            <div class="card-actions">
-                                <a class="btn-sm-maroon" href="student_upload_ai.php?draft=<?= $pid ?>">
-                                    <span class="material-symbols-outlined mi-18">edit</span>
-                                    <?= $editLabel ?>
-                                </a>
-                                <form method="post" action="student_draft_delete.php" class="draft-delete-form"
-                                      data-title="<?= e($r['title']) ?>">
-                                    <?= csrf_field() ?>
-                                    <input type="hidden" name="paper_id" value="<?= $pid ?>">
-                                    <?php /* So deleting from Needs Revision returns there, not to Drafts. */ ?>
-                                    <input type="hidden" name="tab" value="<?= e($tab) ?>">
-                                    <button type="submit" class="btn-card-delete" title="Delete this item"
-                                            aria-label="Delete &quot;<?= e($r['title']) ?>&quot;">
-                                        <span class="material-symbols-outlined mi-18">delete</span>
-                                    </button>
-                                </form>
-                            </div>
+                        <?php /* No submit button here. Sending a paper for review is a one-way
+                                 step, and a card list is exactly where a stray click happens:
+                                 it is done deliberately from the upload page instead, after the
+                                 work has been reviewed. A draft that was sent back keeps its
+                                 track (there is something on it), so its two controls go here;
+                                 one that has never been submitted has them in the track's row. */ ?>
+                        <?php if ($status === 'draft' && !$isDraftOnly): ?>
+                            <div class="card-actions"><?= $draftEdit ?><?= $draftDelete ?></div>
                         <?php endif; ?>
                     </article>
                 <?php endforeach; ?>

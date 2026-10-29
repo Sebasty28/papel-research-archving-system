@@ -75,6 +75,11 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
     scrollbar-width: none;
 }
 .dash-tabs::-webkit-scrollbar { display: none; }
+/* overflow-x on its own clips the other axis too (it computes to auto, never visible), so
+   the Quick Settings panel that hangs out of this row was cut to the row's own height: it
+   opened, and nothing of it could be seen or pressed, on every dashboard that has the bar.
+   While the panel is open the row does not clip; it has no need to scroll just then. */
+.dash-tabs:has(.quick-settings-dropdown.open) { overflow: visible; }
 .dash-tab {
     flex: 0 0 auto;
     display: inline-flex; align-items: center; gap: .3rem;

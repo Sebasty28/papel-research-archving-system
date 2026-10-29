@@ -255,7 +255,19 @@ t('other type: a typed paper type is kept with its marker, cleaned',
 t('other type: and read back as the name alone',
     paper_type_label('other:Case Study') === 'Case Study' && paper_type_other_name('other:Case Study') === 'Case Study');
 t('other type: a name is cut to the column, marker included',
-    strlen(paper_type_from_post('other', str_repeat('x', 500), true)) <= 50);
+    strlen(paper_type_from_post('other', str_repeat('Policybrief', 50), true)) <= 50);
+/* The 500 x's this case used to send are now refused outright (other_name_problem()), so
+   the cut is shown with a long name that is a name; the refusal has a case of its own. */
+t('other type: mashing, a greeting and a sentence are refused on submit; a name is kept',
+    (function () {
+        $refused = function ($name) {
+            try { paper_type_from_post('other', $name, true); return false; }
+            catch (UserFacingException $e) { return true; }
+        };
+        return $refused('sdfsdfdsfsd') && $refused(str_repeat('x', 500)) && $refused('hello')
+            && $refused('A study of the uses of bamboo trays')
+            && paper_type_from_post('other', 'Case Study', true) === 'other:Case Study';
+    })());
 t('other type: Other with nothing typed is refused on submit, in words',
     (function () { try { paper_type_from_post('other', '   ', true); return false; } catch (UserFacingException $e) { return strpos($e->getMessage(), 'beside Other') !== false; } })());
 t('other type: but a draft keeps it, name to come',

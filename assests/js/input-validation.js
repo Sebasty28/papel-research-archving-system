@@ -39,9 +39,12 @@
     }
     
     if (isGibberish(value)) {
-      // Show a subtle warning, not an aggressive red error
-      input.style.borderColor = '#fbbf24';
-      input.style.backgroundColor = '#fffbeb';
+      /* The site's own "needs attention" pair, not an amber of this file's own: the hex it
+         used (#fbbf24 on #fffbeb) belonged to no palette here, and being written inline it
+         beat the theme, so a dark page got a pale yellow box. These are custom properties,
+         so they follow light and dark as everything else does. */
+      input.style.borderColor = 'var(--bad-border)';
+      input.style.backgroundColor = 'var(--bad-bg)';
       return false;
     } else {
       input.style.borderColor = '';

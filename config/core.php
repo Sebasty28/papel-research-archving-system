@@ -2431,6 +2431,86 @@ function other_name_clean($raw, int $max): string {
     return trim(mb_substr(trim($text), 0, $max));
 }
 
+/** At most four words: these boxes name a kind of document, not a sentence about one. */
+const OTHER_NAME_MAX_WORDS = 4;
+
+/**
+ * Greetings and filler, refused when they are the whole of a name.
+ *
+ * Only when they are the whole of it: "Hi-Tech Study" is a name a student may really
+ * mean, and one word of it matching should not take it away from them.
+ */
+function other_name_filler(): array {
+    return ['hi', 'hii', 'hello', 'helo', 'hey', 'yo', 'hiya', 'good morning', 'good afternoon',
+            'good evening', 'good day', 'thanks', 'thank you', 'please', 'test', 'testing', 'tests',
+            'sample', 'example', 'none', 'na', 'n a', 'nil', 'null', 'idk', 'abc', 'xyz', 'dummy',
+            'blank', 'nothing', 'random', 'try', 'trial', 'lorem ipsum', 'asdf', 'qwerty', 'zxcvbn'];
+}
+
+/**
+ * Whether a name reads as something typed to get past the box rather than a name.
+ *
+ * Each rule is a shape a real name does not have, and the thresholds leave room for the
+ * ones that come close: English reaches five consonants in "strengths" but not six, and
+ * a short word with no vowel is an abbreviation rather than mashing. Letters only, so
+ * punctuation and digits ("Chapter 5 Report") decide nothing.
+ */
+function other_name_looks_random(string $text): bool {
+    $low     = mb_strtolower(trim($text), 'UTF-8');
+    $letters = preg_replace('/[^a-z]/', '', $low) ?? '';
+    if ($letters === '') return false;
+    // One letter four times over.
+    if (preg_match('/(.)\1{3,}/', $letters)) return true;
+    /* A long run of very few letters: "adasdadsaddsd" and "sdfsdfdsfsd" are three letters
+       shuffled, which nothing of that length that means anything is. */
+    if (strlen($letters) >= 8 && count(array_unique(str_split($letters))) <= 4) return true;
+    if (preg_match('/[bcdfghjklmnpqrstvwxz]{6,}/', $letters)) return true;
+    foreach (['asdf', 'sdfg', 'dfgh', 'fghj', 'ghjk', 'qwer', 'wert', 'erty', 'rtyu', 'tyui',
+              'zxcv', 'xcvb', 'cvbn'] as $run) {
+        if (strpos($letters, $run) !== false) return true;
+    }
+    // A word of five letters or more with no vowel in it.
+    foreach (preg_split('/[^a-z]+/', $low) ?: [] as $word) {
+        if (strlen($word) >= 5 && !preg_match('/[aeiouy]/', $word)) return true;
+    }
+    return false;
+}
+
+/**
+ * Why a name typed beside Other cannot be used, or null when it is fine.
+ *
+ * What goes in these boxes names a kind of document ("Policy Brief", "Case Study"), and
+ * it is then what every reader sees for that paper: on its card, on its page and in the
+ * filter. Left to itself the box took anything, so a greeting, keyboard mashing and a
+ * whole sentence all went in and were published. $what names the box in the answer
+ * ("paper type", "manuscript"), so the student is told which one to look at.
+ */
+function other_name_problem(string $name, string $what): ?string {
+    $name = trim($name);
+    if ($name === '') {
+        return 'Please type what your ' . $what . ' is called.';
+    }
+    $letters = preg_replace('/[^\p{L}]+/u', '', $name) ?? '';
+    if (mb_strlen($letters) < 2) {
+        return 'Please write what your ' . $what . ' is called, in words.';
+    }
+    $words = preg_split('/\s+/u', $name) ?: [];
+    if (count($words) > OTHER_NAME_MAX_WORDS) {
+        return 'Please keep your ' . $what . ' to ' . OTHER_NAME_MAX_WORDS
+             . ' words at most, the way "Policy Brief" and "Case Study" name one.';
+    }
+    $bare = preg_replace('/[^\p{L}\s]+/u', ' ', mb_strtolower($name, 'UTF-8')) ?? '';
+    $bare = trim(preg_replace('/\s+/u', ' ', $bare) ?? '');
+    if ($bare !== '' && in_array($bare, other_name_filler(), true)) {
+        return 'Please write what your ' . $what . ' is called, not a greeting.';
+    }
+    if (other_name_looks_random($name)) {
+        return 'That does not look like a name. Please write what your ' . $what
+             . ' is called, like "Policy Brief" or "Case Study".';
+    }
+    return null;
+}
+
 /** The name typed for a paper type of Other ("Case Study"), or null when the type is not Other. */
 function paper_type_other_name(?string $paperType): ?string {
     $type = (string)$paperType;
@@ -2453,6 +2533,12 @@ function paper_type_from_post($code, $otherRaw, bool $strict): ?string {
         $name = other_name_clean($otherRaw, PAPER_TYPE_OTHER_MAX);
         if ($name === '' && $strict) {
             throw new UserFacingException('Please type your paper type in the box beside Other.');
+        }
+        /* Only on a submission. A draft keeps whatever has been typed so far, and a
+           student stopping halfway through a word should not be told off for it. */
+        if ($strict) {
+            $problem = other_name_problem($name, 'paper type');
+            if ($problem !== null) throw new UserFacingException($problem);
         }
         return PAPER_TYPE_OTHER_PREFIX . $name;
     }
