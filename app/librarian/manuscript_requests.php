@@ -137,6 +137,20 @@ function manuscript_time_left(string $expiresAt): string {
 }
 
 /**
+ * What a row answers the search box with: the three things it shows in words,
+ * as one lower-cased string on the row itself.
+ *
+ * Folded here rather than compared column by column in script, because the
+ * three tables do not hold the same columns and the paper's title is a link
+ * whose textContent carries the markup's own indentation.
+ */
+function manuscript_row_search(array $r): string {
+    return mb_strtolower(trim(($r['student_name'] ?? '') . ' '
+                            . ($r['student_no'] ?? '') . ' '
+                            . ($r['paper_title'] ?? 'Untitled paper')));
+}
+
+/**
  * One tab's sort chips (oldest/newest, by whichever date that table shows)
  * and its bulk-delete bar, identical in every pane bar what they act on:
  * pulled out once rather than written three times over.
@@ -203,6 +217,7 @@ $PAGE_SKELETON = 'table';
 ?>
 <?php require_once ROOT_PATH.'/includes/site_head.php'; ?>
 <?php require_once ROOT_PATH.'/includes/manage_page.php'; ?>
+<?php require_once ROOT_PATH.'/includes/manage_search.php'; ?>
 <?php require_once ROOT_PATH.'/includes/flash_banner.php'; ?>
 <style nonce="<?= csp_nonce() ?>">
 /* .mgmt-sort, .mgmt-chip and .mgmt-bulk-bar's own contents (.mgmt-act) are
@@ -236,6 +251,35 @@ $PAGE_SKELETON = 'table';
    render in the browser's own default blue rather than the theme: the same
    fix .rc-check input (review_console.php) already applies elsewhere. */
 .js-select-all, .js-row-check { accent-color: var(--maroon); }
+
+/* ---- The tab row, with the search field at its end ----
+   The field itself, and the count it marks, are in the shared .mgmt-* sheet
+   (includes/manage_page.php); this is only the row it rides on, which this desk
+   has to build for itself: the three management consoles put the field inside
+   .mgmt-tabs beside their Sort chips, and this desk has no chips, so the field
+   would have been the only thing in a tablist besides its tabs.
+
+   .mgmt-tabs is wrapped rather than restyled: it keeps its own bottom border and
+   the -1px that lifts the tab on view over it, so moving the rule to the wrapper
+   would have left that underline floating a pixel short. The tabs sit at
+   flex-end against the wrapper's rule and the negative margin still laps over it
+   by the same pixel. */
+.mr-tabrow {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    gap: .75rem; flex-wrap: wrap;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: .875rem;
+}
+.mr-tabrow .mgmt-tabs { border-bottom: 0; margin-bottom: 0; }
+.mr-tabrow .mgmt-search { margin-bottom: .4rem; }
+
+@media (max-width: 768px) {
+    /* Two lines, with the field taking the second one whole: beside the tabs it
+       squeezed them into wrapping a word at a time. */
+    .mr-tabrow { align-items: stretch; }
+    .mr-tabrow .mgmt-search { width: 100%; margin-bottom: .5rem; }
+    .mr-tabrow .mgmt-search input { width: 100%; }
+}
 </style>
 </head>
 <body>
@@ -254,9 +298,28 @@ $PAGE_SKELETON = 'table';
     <?php flash_banner(); ?>
 
     <div class="mgmt-head">
-        <h1>Manuscript Requests</h1>
-        <p>Students asking to read the actual manuscript of a published paper. Grant a
-           request to unlock it for a while, or turn it down.</p>
+        <div class="mgmt-head-row">
+            <div>
+                <?php /* The pair of desks reads the same way from either side; a switcher that
+                         only went one way would leave this page a dead end but for the navbar. */ ?>
+                <div class="mgmt-head-title">
+                    <h1>Manuscript Requests</h1>
+                    <span class="mgmt-head-sep" aria-hidden="true">|</span>
+                    <a class="mgmt-head-switch"
+                       href="<?= e(BASE_URL) ?>/app/librarian/librarian_manage_guests.php">Library Passes</a>
+                </div>
+                <p>Students asking to read the actual manuscript of a published paper. Grant a
+                   request to unlock it for a while, or turn it down.</p>
+            </div>
+            <?php /* The same action as the other desk, in the same corner: a Librarian
+                     moving between the two should not find it has moved. */ ?>
+            <a class="btn-sm-outline mgmt-head-action"
+               href="<?= e(BASE_URL) ?>/app/student/student_upload_ai.php"
+               title="Add a paper of your own. It is published straight away, with no review">
+                <span class="material-symbols-outlined mi-20">upload_file</span>
+                <span>Upload Paper</span>
+            </a>
+        </div>
     </div>
 
     <?php if (!$requestsReady): ?>
@@ -268,19 +331,27 @@ $PAGE_SKELETON = 'table';
     <?php endif; ?>
 
     <section>
-        <div class="mgmt-tabs" role="tablist">
-            <button type="button" class="mgmt-tab is-on" data-pane="pendingPane" role="tab">
-                Pending
-                <span class="count"><?= count($pending) ?></span>
-            </button>
-            <button type="button" class="mgmt-tab" data-pane="grantedPane" role="tab">
-                Granted
-                <span class="count"><?= count($granted) ?></span>
-            </button>
-            <button type="button" class="mgmt-tab" data-pane="historyPane" role="tab">
-                History
-                <span class="count"><?= count($history) ?></span>
-            </button>
+        <div class="mr-tabrow">
+            <div class="mgmt-tabs" role="tablist">
+                <button type="button" class="mgmt-tab is-on" data-pane="pendingPane" role="tab">
+                    Pending
+                    <span class="count"><?= count($pending) ?></span>
+                </button>
+                <button type="button" class="mgmt-tab" data-pane="grantedPane" role="tab">
+                    Granted
+                    <span class="count"><?= count($granted) ?></span>
+                </button>
+                <button type="button" class="mgmt-tab" data-pane="historyPane" role="tab">
+                    History
+                    <span class="count"><?= count($history) ?></span>
+                </button>
+            </div>
+            <?php /* One field for all three tabs, not one per pane: a Librarian looking
+                     for a student does not know yet whether that request is still
+                     pending, granted or already decided, and the tab counts say which
+                     tab to open while they type. Outside the tablist, which owns tabs
+                     and nothing else. */ ?>
+            <?php mgmt_search_field('Search name, ID or paper'); ?>
         </div>
 
         <div id="pendingPane" class="js-pane">
@@ -311,7 +382,8 @@ $PAGE_SKELETON = 'table';
                         <?php endif; ?>
                         <?php foreach ($pending as $r): ?>
                             <?php $activeCount = student_manuscript_active_count((int)$r['student_user_id']); ?>
-                            <tr data-sort-time="<?= strtotime($r['created_at']) ?>">
+                            <tr data-sort-time="<?= strtotime($r['created_at']) ?>"
+                                data-search="<?= e(manuscript_row_search($r)) ?>">
                                 <td><input type="checkbox" class="js-row-check" value="<?= (int)$r['request_id'] ?>" aria-label="Select this request"></td>
                                 <td class="mgmt-name">
                                     <?= e($r['student_name']) ?>
@@ -398,7 +470,8 @@ $PAGE_SKELETON = 'table';
                             </tr>
                         <?php endif; ?>
                         <?php foreach ($granted as $r): ?>
-                            <tr data-sort-time="<?= strtotime($r['granted_at']) ?>">
+                            <tr data-sort-time="<?= strtotime($r['granted_at']) ?>"
+                                data-search="<?= e(manuscript_row_search($r)) ?>">
                                 <td><input type="checkbox" class="js-row-check" value="<?= (int)$r['request_id'] ?>" aria-label="Select this request"></td>
                                 <td class="mgmt-name">
                                     <?= e($r['student_name']) ?>
@@ -466,7 +539,8 @@ $PAGE_SKELETON = 'table';
                             $isDenied = $r['status'] === 'denied';
                             $whenAt   = $isDenied ? $r['denied_at'] : $r['granted_at'];
                             ?>
-                            <tr class="mgmt-row-off" data-sort-time="<?= strtotime($whenAt) ?>">
+                            <tr class="mgmt-row-off" data-sort-time="<?= strtotime($whenAt) ?>"
+                                data-search="<?= e(manuscript_row_search($r)) ?>">
                                 <td><input type="checkbox" class="js-row-check" value="<?= (int)$r['request_id'] ?>" aria-label="Select this request"></td>
                                 <td class="mgmt-name">
                                     <?= e($r['student_name']) ?>
@@ -550,7 +624,18 @@ document.addEventListener('DOMContentLoaded', function () {
         var deleteBtn  = deleteForm ? deleteForm.querySelector('button') : null;
         if (!bar || !deleteForm) return;
 
-        function rowChecks() { return pane.querySelectorAll('.js-row-check'); }
+        /* Only the rows the search is showing. Select all ticking a row the
+           search had taken out would have put it in Delete selected's payload,
+           which deletes a record nobody on the page can see. mgmtSearch.hidden()
+           answers for the search's own class as well as for `hidden`. */
+        function rowChecks() {
+            return [].slice.call(pane.querySelectorAll('.js-row-check'))
+                     .filter(function (b) {
+                         var row = b.closest('tr');
+                         if (!row) { return true; }
+                         return window.mgmtSearch ? !window.mgmtSearch.hidden(row) : !row.hidden;
+                     });
+        }
 
         function syncBulk() {
             var boxes   = [].slice.call(rowChecks());
@@ -587,6 +672,24 @@ document.addEventListener('DOMContentLoaded', function () {
             if (e.target.classList.contains('js-row-check')) syncBulk();
         });
         syncBulk();
+        pane.papelSync = syncBulk;
+    });
+
+    /* The search field is shared (includes/manage_search.php): it hides rows with
+       a class of its own and says so on the document, and a tick that outlives
+       the row it was on would be deleted unseen, so the bar is put right here. */
+    document.addEventListener('mgmt-search', function () {
+        document.querySelectorAll('.js-pane').forEach(function (pane) {
+            var cleared = false;
+            pane.querySelectorAll('.js-row-check').forEach(function (box) {
+                var row = box.closest('tr');
+                if (box.checked && row && window.mgmtSearch && window.mgmtSearch.hidden(row)) {
+                    box.checked = false;
+                    cleared = true;
+                }
+            });
+            if (cleared && typeof pane.papelSync === 'function') { pane.papelSync(); }
+        });
     });
 });
 </script>

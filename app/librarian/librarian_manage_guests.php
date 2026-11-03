@@ -252,26 +252,9 @@ $PAGE_SKELETON = 'table';
 }
 .mgmt-row-off .mgmt-pass { color: var(--grey); }
 
-/* The title and the page's one action, on a row that wraps rather than
-   squeezing the description on a narrow screen. */
-.mgmt-head-row {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 1rem;
-    flex-wrap: wrap;
-}
-.mgmt-head-action {
-    display: inline-flex;
-    align-items: center;
-    gap: .375rem;
-    flex: 0 0 auto;
-    text-decoration: none;
-    /* .btn-sm-outline's border reads as a second frame here: this sits
-       beside the plain page title rather than in a row of other buttons it
-       needs to be told apart from. */
-    border: none;
-}
+/* .mgmt-head-row and .mgmt-head-action live in includes/manage_page.php: the
+   Manuscript Requests desk carries the same row, and a copy here would have had
+   to be kept in step with it. */
 
 /* Both of these were style attributes until it turned out the page's CSP drops
    them: style-src carries no 'unsafe-inline', so a style attribute is ignored
@@ -306,7 +289,15 @@ $PAGE_SKELETON = 'table';
     <div class="mgmt-head">
         <div class="mgmt-head-row">
             <div>
-                <h1>Library Passes</h1>
+                <?php /* The other half of the Librarian's job, a click away. The h1 is
+                         still just this page's name: the link is its sibling, not part
+                         of the heading, so the page's outline reads as one title. */ ?>
+                <div class="mgmt-head-title">
+                    <h1>Library Passes</h1>
+                    <span class="mgmt-head-sep" aria-hidden="true">|</span>
+                    <a class="mgmt-head-switch"
+                       href="<?= e(BASE_URL) ?>/app/librarian/manuscript_requests.php">Manuscript Requests</a>
+                </div>
                 <p>Issue temporary, read-only access to the repository for visitors and external researchers.</p>
             </div>
             <?php /* This desk has no sidebar of links, so the one other thing a
@@ -314,7 +305,7 @@ $PAGE_SKELETON = 'table';
             <a class="btn-sm-outline mgmt-head-action"
                href="<?= e(BASE_URL) ?>/app/student/student_upload_ai.php"
                title="Add a paper of your own. It is published straight away, with no review">
-                <span class="material-symbols-outlined mi-18">upload_file</span>
+                <span class="material-symbols-outlined mi-20">upload_file</span>
                 <span>Upload Paper</span>
             </a>
         </div>

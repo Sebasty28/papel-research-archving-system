@@ -1,5 +1,5 @@
 {
- "built": "2026-11-03 17:22",
+ "built": "2026-11-04 02:12",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -26,7 +26,7 @@
    "lines": 240
   },
   "app/admin/admin_manage_faculty.php": {
-   "lines": 531
+   "lines": 541
   },
   "app/admin/admin_review_dashboard.php": {
    "lines": 139
@@ -35,7 +35,7 @@
    "lines": 368
   },
   "app/admin/super_admin_manage_admins.php": {
-   "lines": 508
+   "lines": 518
   },
   "app/admin/super_admin_review_dashboard.php": {
    "lines": 135
@@ -50,7 +50,7 @@
    "lines": 214
   },
   "app/faculty/faculty_manage_students.php": {
-   "lines": 1177
+   "lines": 1187
   },
   "app/faculty/faculty_review_dashboard.php": {
    "lines": 166
@@ -62,10 +62,10 @@
    "lines": 72
   },
   "app/librarian/librarian_manage_guests.php": {
-   "lines": 470
+   "lines": 461
   },
   "app/librarian/manuscript_requests.php": {
-   "lines": 597
+   "lines": 700
   },
   "app/models/AdminManagementService.php": {
    "lines": 183
@@ -140,7 +140,7 @@
    "lines": 954
   },
   "archive/index.php": {
-   "lines": 1284
+   "lines": 1281
   },
   "archive/login.php": {
    "lines": 1081
@@ -188,7 +188,7 @@
    "lines": 176
   },
   "includes/browse_console.php": {
-   "lines": 888
+   "lines": 977
   },
   "includes/browse_console_js.php": {
    "lines": 980
@@ -227,10 +227,13 @@
    "lines": 252
   },
   "includes/manage_page.php": {
-   "lines": 644
+   "lines": 772
   },
   "includes/manage_save_confirm.php": {
    "lines": 168
+  },
+  "includes/manage_search.php": {
+   "lines": 261
   },
   "includes/notif_actions.php": {
    "lines": 224
@@ -281,10 +284,10 @@
    "lines": 499
   },
   "includes/site_head.php": {
-   "lines": 1392
+   "lines": 1490
   },
   "includes/site_header.php": {
-   "lines": 564
+   "lines": 593
   },
   "includes/skeleton.php": {
    "lines": 602

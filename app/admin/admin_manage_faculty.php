@@ -258,6 +258,7 @@ $PAGE_SKELETON = 'table';
 <?php require_once ROOT_PATH.'/includes/site_head.php'; ?>
 <?php require_once ROOT_PATH.'/includes/manage_console.php'; ?>
 <?php require_once ROOT_PATH.'/includes/manage_page.php'; ?>
+<?php require_once ROOT_PATH.'/includes/manage_search.php'; ?>
 <?php require_once ROOT_PATH.'/includes/flash_banner.php'; ?>
 </head>
 <body>
@@ -276,8 +277,17 @@ $PAGE_SKELETON = 'table';
 <main class="wrap mgmt-wrap">
 
     <div class="mgmt-head">
-        <h1>Advisers &amp; Librarians</h1>
-        <p>Create and manage Research Adviser and Librarian accounts.</p>
+        <div class="mgmt-head-row">
+            <div>
+                <h1>Advisers &amp; Librarians</h1>
+                <p>Create and manage Research Adviser and Librarian accounts.</p>
+            </div>
+            <?php /* One field for every tab (includes/manage_search.php): the counts
+                     become what each tab holds of the matches, and Enter walks to a tab
+                     that has one. Up here rather than on the tab row, which has no room
+                     left for it: see .mgmt-head-row .mgmt-search in manage_page.php. */ ?>
+            <?php mgmt_search_field('Search name, ID or email'); ?>
+        </div>
     </div>
 
         <?php flash_banner(); ?>

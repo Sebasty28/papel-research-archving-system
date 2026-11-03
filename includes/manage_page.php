@@ -25,12 +25,67 @@
 
 /* ---- Page heading ---- */
 .mgmt-head { margin-bottom: 1.25rem; }
+/* The Librarian's two desks, as one line: the page you are on as the title, the
+   other as a link after a divider. That desk has no sidebar of links, and the two
+   belong together, so going between them should not mean a trip to the navbar.
+   Here rather than in either page, because both wear it.
+   Baseline, not centre, so the link sits on the title's own line of text whatever
+   the two font sizes are. */
+.mgmt-head-title {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: .55rem;
+}
+.mgmt-head-sep {
+    color: var(--border);
+    font-weight: 300;
+    /* The divider follows the title's size, so it stays the height of the text
+       beside it rather than the link's. */
+    font-size: 1.5rem;
+    line-height: 1;
+}
+/* Underlined only on hover: at rest it is a sibling of the title, not a link in
+   a paragraph. */
+.mgmt-head-switch {
+    color: var(--maroon);
+    font-family: var(--font-head);
+    font-size: 1rem;
+    font-weight: 500;
+    text-decoration: none;
+}
+.mgmt-head-switch:hover { text-decoration: underline; }
+.mgmt-head-switch:focus-visible { outline: 2px solid var(--maroon); outline-offset: 2px; }
 .mgmt-head h1 {
     font-family: var(--font-head);
     font-size: 1.375rem; font-weight: 600;
     color: var(--maroon); margin: 0 0 .2rem;
 }
 .mgmt-head p { font-size: .8125rem; color: var(--grey); margin: 0; }
+
+/* The title and the page's one action, on a row that wraps rather than squeezing
+   the description on a narrow screen. Both Librarian desks wear it: neither has a
+   sidebar of links, so the one other thing a Librarian can do lives here beside
+   the title. */
+.mgmt-head-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+.mgmt-head-action {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    flex: 0 0 auto;
+    text-decoration: none;
+    /* .btn-sm-outline is built for a row of buttons: beside a plain page title its
+       .75rem reads as fine print next to the h1, and its border as a second frame
+       round something that has nothing to be told apart from. */
+    font-size: .875rem;
+    border: none;
+}
 
 /* ---- Two columns: the form keeps its width, the roll takes the rest ---- */
 .mgmt-grid {
@@ -154,6 +209,75 @@
 .mgmt-tab.is-on { color: var(--maroon); border-bottom-color: var(--maroon); font-weight: 500; }
 .mgmt-tab .count { color: var(--grey); font-size: .625rem; }
 
+/* While a search is on, each tab's count is what that tab holds of the matches,
+   so the figure says which tab to open. Marked in the accent, or a tab reading 0
+   looks like a console that has lost its rows. */
+.mgmt-tab .count.is-filtered { color: var(--maroon); font-weight: 600; }
+
+/* ---- The search field on the tab row (includes/manage_search.php) ----
+   The same idiom as .search-form (includes/browse_console.php): the box shows
+   the focus, the magnifier takes the accent with it, and the field's own ring is
+   off, there being no sense in a second rectangle a few pixels inside the first.
+   Smaller, because that one is a dashboard's hero search and this rides in a tab
+   row. Written here rather than borrowed, because that stylesheet comes with the
+   whole browse console and no management page carries it. */
+.mgmt-search {
+    display: flex; align-items: center; gap: .4rem;
+    padding: .15rem .5rem;
+    background: var(--white);
+    border: 1px solid var(--border);
+    border-radius: var(--r-control, 4px);
+    transition: border-color .2s, box-shadow .2s;
+}
+/* ---- Where the field goes ----
+   On the heading's row, at the far end, standing on the line of the description
+   under the title. Not on the tab row, where the Manuscript Requests desk has
+   it: that desk's roll is the whole page and carries three short tabs, while
+   these three consoles share their width with the form panel beside them and
+   their row already holds up to four tabs and the Sort chips. Measured on Manage
+   Admins at 1440px: the roll's column is 846px and the tabs and chips come to
+   782 of it, so a 13rem field on that row overflowed the column and squeezed
+   Sort into two lines, which left the tab on view underlining nothing, eight
+   pixels clear of its own rule. The heading's row is the full width of the page
+   and holds the title and one line of prose, so there it fits with room to
+   spare. */
+.mgmt-head-row .mgmt-search { align-self: flex-end; }
+.mgmt-search:hover { border-color: var(--soft-maroon); }
+.mgmt-search:focus-within {
+    border-color: var(--maroon);
+    box-shadow: 0 0 0 3px rgba(177,125,125,.20);
+}
+.mgmt-search .material-symbols-outlined { color: var(--grey); transition: color .2s; }
+.mgmt-search:hover .material-symbols-outlined,
+.mgmt-search:focus-within .material-symbols-outlined { color: var(--maroon); }
+.mgmt-search input {
+    width: 13rem; padding: .2rem 0;
+    border: 0; background: transparent;
+    font-family: inherit; font-size: .75rem; color: var(--ink);
+}
+.mgmt-search input::placeholder { color: var(--grey); }
+/* The shared focus ring is !important, so switching it off for one control has
+   to be too. */
+.mgmt-search input:focus,
+.mgmt-search input:focus-visible { outline: none !important; }
+/* The browser's own clear button arrives bright blue and cannot be recoloured as
+   a control, so the glyph is redrawn as a mask and the colour comes from
+   background-color, which we do control. As .search-input's. */
+.mgmt-search input::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+            appearance: none;
+    width: .7rem; height: .7rem;
+    cursor: pointer;
+    background-color: var(--search-clear, #454545);
+    opacity: .7;
+    transition: opacity .15s ease;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M1.5 1.5l9 9M10.5 1.5l-9 9' stroke='%23000' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M1.5 1.5l9 9M10.5 1.5l-9 9' stroke='%23000' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.mgmt-search input::-webkit-search-cancel-button:hover { opacity: 1; }
+/* Light on a dark field, for the same reason it is dark on a light one. */
+html[data-mode="dark"] { --search-clear: #CFC3AE; }
+
 /* ---- Filter chips ---- */
 .mgmt-chips { display: flex; flex-wrap: wrap; align-items: center; gap: .375rem; margin-bottom: .875rem; }
 /* The section row is the second step, so it is set back from the first. */
@@ -178,6 +302,10 @@
        what looked broken, so that stays prevented. */
     .mgmt-tab { padding-left: .55rem; padding-right: .55rem; }
     .mgmt-sort { margin-left: 0; width: 100%; padding-bottom: .5rem; }
+    /* On a phone the heading's row is two lines and the field is the width of
+       the page. */
+    .mgmt-head-row .mgmt-search { width: 100%; }
+    .mgmt-search input { width: 100%; }
 }
 
 /* Why a row is in the second tab, said on the row itself. */

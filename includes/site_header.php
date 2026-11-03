@@ -158,6 +158,11 @@ $login_notif_popup_items = $show_login_notif_popup
         <?php if (app_env_badge() !== ''): ?>
             <span class="brand-env" aria-hidden="true"><?= e(app_env_badge()) ?></span>
         <?php endif; ?>
+        <?php /* Read before the nav, not inside .header-right as it used to be:
+                 the phone's menu sheet is this nav, and it carries the account
+                 block at its foot, so both need these. */ ?>
+        <?php if ($u): $display_name = (string)($u['full_name'] ?? $u['username']);
+                       $initial = strtoupper(substr($display_name, 0, 1)); endif; ?>
         <nav class="main-nav" id="mainNav">
             <?php foreach ($nav_links as $link): ?>
                 <?php $is_active = !empty($link['match']) && in_array($current_script, $link['match'], true); ?>
@@ -206,10 +211,34 @@ $login_notif_popup_items = $show_login_notif_popup
                     </div>
                 </div>
             <?php endif; ?>
+            <?php /* The avatar menu, folded into this sheet, and shown only where
+                     the sheet is (the stylesheet hides it above 900px). On a phone
+                     the bar has room for the mark, the bell and this button and no
+                     more, so the avatar came out of the row rather than being
+                     squeezed beside them; what it opened still has to be reachable,
+                     and this is where everything else that left the bar went.
+                     Settings and Logout are written out again rather than moved:
+                     the dropdown is still what a desktop uses. */ ?>
+            <?php if ($u): ?>
+                <div class="nav-account">
+                    <div class="nav-account-id">
+                        <span class="nav-account-avatar" aria-hidden="true"><?= e($initial) ?></span>
+                        <span class="nav-account-who">
+                            <span class="nav-account-name"><?= e($display_name) ?></span>
+                            <span class="nav-account-role"><?= e(role_label($u)) ?></span>
+                        </span>
+                    </div>
+                    <a href="<?= e(BASE_URL.'/pages/settings.php') ?>">
+                        <span class="material-symbols-outlined mi-20">settings</span> Settings
+                    </a>
+                    <a href="<?= e(BASE_URL.'/app/auth/logout.php') ?>">
+                        <span class="material-symbols-outlined mi-20">logout</span> Logout
+                    </a>
+                </div>
+            <?php endif; ?>
         </nav>
         <div class="header-right">
             <?php if ($u): ?>
-                <?php $display_name = (string)($u['full_name'] ?? $u['username']); $initial = strtoupper(substr($display_name, 0, 1)); ?>
                 <button class="nav-icon-btn" id="notifToggle" type="button" title="Notifications" aria-label="Notifications">
                     <span class="material-symbols-outlined mi-20">notifications</span>
                     <?php if ($unread_count > 0): ?>

@@ -562,6 +562,11 @@ body:has(.crumb-bar) .nav-photo { height: calc(var(--nav-h) + var(--crumb-h)); }
 /* The phone menu button. Hidden until the bar runs out of room for the links
    themselves; the rule that shows it lives with the rest of the narrow layout
    at the foot of this file. */
+/* The avatar menu's twin inside the phone's menu sheet (site_header.php). It is
+   part of the nav markup at every width, so it is switched off here and on again
+   in the phone's block below, where the sheet itself lives. */
+.nav-account { display: none; }
+
 .nav-burger {
     display: none;
     align-items: center;
@@ -569,14 +574,31 @@ body:has(.crumb-bar) .nav-photo { height: calc(var(--nav-h) + var(--crumb-h)); }
     width: 42px;
     height: 42px;
     flex-shrink: 0;
-    padding: 0;
-    border: 1px solid var(--border);
-    border-radius: var(--r-control, 4px);
+    /* Shaped like the bell beside it (.nav-icon-btn), down to the same trick:
+       no edge of its own, and the fill it takes when pointed at is a 28px
+       circle painted inside the touch target rather than a box the size of it.
+       The 1px border made it the one outlined control in a bar of plain glyphs,
+       and the square it framed held a cream fill twice the bell's. */
+    padding: 7px;
+    border: none;
+    border-radius: 50%;
     background: none;
+    background-clip: content-box;
     color: var(--maroon);
     cursor: pointer;
+    transition: background .2s, color .2s;
 }
-.nav-burger:hover { background: var(--cream); }
+.nav-burger:hover { background: var(--cream); background-clip: content-box; }
+/* A touch screen has no pointer to take away. Tapping either of these left
+   :hover on until something else was tapped, so the fill stayed behind on a
+   button nobody was pointing at, which on a phone reads as a control stuck
+   open. Both, so the two go on behaving alike. */
+@media (hover: none) {
+    /* background-color, not the background shorthand, which would reset the
+       background-clip that paints the circle inside the touch target. */
+    .nav-icon-btn:hover { background-color: transparent; color: var(--ink); }
+    .nav-burger:hover { background-color: transparent; }
+}
 .nav-burger .burger-open { display: none; }
 html.nav-open .nav-burger .burger-shut { display: none; }
 html.nav-open .nav-burger .burger-open { display: inline-flex; }
@@ -1267,6 +1289,74 @@ select.lf-input {
        a 48px bar leaves it almost no room either side. */
     .header-inner { gap: .75rem; height: 60px; }
 
+    /* The mark keeps the left edge and everything else goes to the right. The
+       nav is taken out of the flow at this width (it is the sheet below), so the
+       row is the mark, these, and the menu button, and with nothing claiming the
+       space between them the three sat bunched against the left with the rest of
+       the bar empty. */
+    .header-right { margin-left: auto; }
+
+    /* The avatar comes out of the bar altogether: three controls and the mark do
+       not fit a phone's row, and the notification bell is the one that has to be
+       in reach without opening anything. What it opened is in the sheet instead
+       (.nav-account), so nothing is lost. The dropdown goes with it, or it could
+       still be opened by a press on the space the button used to hold. */
+    .avatar-group,
+    .user-dropdown { display: none; }
+
+    .nav-account {
+        display: block;
+        margin-top: .375rem;
+        padding-top: .375rem;
+        border-top: 1px solid var(--border);
+    }
+    .nav-account-id {
+        display: flex;
+        align-items: center;
+        gap: .625rem;
+        /* The rows below are .main-nav a's 1.25rem, so the name lines up with
+           Settings and Logout under it. */
+        padding: .5rem 1.25rem .375rem;
+    }
+    .nav-account-avatar {
+        width: 34px; height: 34px;
+        flex-shrink: 0;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--maroon-surface);
+        color: #fff;
+        font-weight: 700;
+        font-size: .9375rem;
+    }
+    .nav-account-who { display: flex; flex-direction: column; min-width: 0; }
+    .nav-account-name {
+        font-family: var(--font-head);
+        font-size: .9375rem;
+        font-weight: 600;
+        color: var(--ink);
+        /* A full name can be longer than a phone is wide. */
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .nav-account-role { font-size: .8125rem; color: var(--grey); line-height: 1.3; }
+    /* The sheet's own links are styled as .main-nav > a, a direct child, and
+       these are a level deeper, so they had nothing at all on them and came out
+       as the browser's blue underlined default. Ink rather than maroon, and the
+       glyph and the word on one line, as in the avatar dropdown these two are
+       taken from: they are the sheet's quiet end, under the pages above. */
+    .nav-account a {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        color: var(--ink);
+        text-decoration: none;
+        font-size: .9375rem;
+    }
+    .nav-account a .material-symbols-outlined { color: var(--maroon); }
+
     .main-nav {
         display: none;
         position: absolute;
@@ -1303,6 +1393,7 @@ select.lf-input {
     .main-nav > a::after,
     .nav-more-label::after { display: none; }
     .main-nav > a:hover,
+    .nav-account a:hover,
     .nav-more-dropdown a:hover {
         background: none;
         text-decoration: underline;
@@ -1348,7 +1439,14 @@ select.lf-input {
 }
 @media (max-width: 600px) {
     .wrap, .wrap-wide { padding: 0 1rem; }
-    .notif-dropdown { width: 92vw; right: -2vw; }
+    /* The bell is at the right-hand end of the bar now, and a panel hanging off
+       it by its own right edge ran off the other side: measured at 390px it went
+       from -31 to 328, a third of it past the left edge. It spans the bar between
+       the page's own margins instead, which means hanging it off the header
+       rather than off the group the bell is in. Nothing else in that group is
+       positioned against it on a phone: the avatar menu is not shown at all. */
+    .header-right { position: static; }
+    .notif-dropdown { left: 1rem; right: 1rem; width: auto; }
     .panel-body { padding: .5rem 1.25rem 2rem; }
     .role-selector { gap: .5rem; }
     .role-card { width: 84px; }
@@ -1362,7 +1460,7 @@ select.lf-input {
     .wrap, .wrap-wide { padding: 0 .75rem; }
     .header-inner { gap: .5rem; }
     .header-right { gap: .375rem; }
-    .nav-burger { width: 38px; height: 38px; }
+    .nav-burger { width: 38px; height: 38px; padding: 5px; }
     .btn-login-nav { font-size: .8125rem; }
 }
 </style>

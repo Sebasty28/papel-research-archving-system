@@ -383,7 +383,7 @@ $PAGE_SKELETON = 'console';
                 </div>
 
                 <div class="toolbar-right">
-                    <span>Showing items <?= $total_papers ? $start_item : 0 ?>-<?= $end_item ?> of <?= number_format($total_papers) ?></span>
+                    <span><span class="count-words">Showing items </span><?= $total_papers ? $start_item : 0 ?>-<?= $end_item ?> of <?= number_format($total_papers) ?></span>
                     <?php if ($page > 1): ?>
                         <a class="toolbar-btn" href="student_dashboard.php?<?= dash_qs(['page' => $page - 1]) ?>" aria-label="Previous page"><span class="material-symbols-outlined">chevron_left</span></a>
                     <?php else: ?>

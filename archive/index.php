@@ -446,12 +446,9 @@ $PAGE_SKELETON = 'repository';
     width: 100%;
     position: relative;
 }
-/* The row under the search field. It held the banner eye as well once; the eye
-   lives in the crumb strip now, so all that is left here is the phone's
-   "Browse & Filters" button, and above 900px (where that button is hidden)
-   the row would be empty. It is taken out rather than left as a blank band,
-   and .layout's margin below is what makes up the difference. */
-.banner-toggle-col { display: none; }
+/* The row under the search field is gone: it held the banner eye once (that
+   lives in the crumb strip now) and then only the phone's "Browse & Filters"
+   button, which is now one of the tool buttons beside Quick Settings. */
 
 /* Banner visibility toggle, in the crumb strip, at the far right, on the
    maroon. It sat in the search row until the banner started running up under
@@ -604,31 +601,13 @@ $PAGE_SKELETON = 'repository';
     .search-row { grid-template-columns: 1fr; gap: .5rem; }
     :root { --hero-h: 190px; }
 
-    /* The row under the search field comes back here, to carry the
-       "Browse & Filters" button. It follows the field rather than being
-       pinned to a row number, so it can never land on top of it. */
-    .banner-toggle-col {
-        display: flex;
-        justify-content: flex-end;
-        grid-column: 1;
-        grid-row: auto;
-        align-items: center;
-        gap: .5rem;
-    }
-    .btn-tools-toggle {
-        display: inline-flex;
-        align-items: center;
-        gap: .35rem;
-        padding: .45rem .85rem;
-        border: 1px solid var(--border);
-        border-radius: var(--r-control, 4px);
-        background: var(--white);
-        color: var(--maroon);
-        font-family: var(--font-body);
-        font-size: .875rem;
-        cursor: pointer;
-    }
-    .btn-tools-toggle:hover { background: var(--cream); }
+    /* Everything else about it comes from .toolbar-btn, which it now is; all
+       this width decides is whether there is a drawer to open at all. */
+    .btn-tools-toggle { display: inline-flex; }
+    /* Marked while its drawer is open, the way a pressed tool button would be.
+       The drawer covers this button at a phone's width, so this is seen on the
+       way out rather than the way in, and on a tablet both are on screen. */
+    html.tools-open .btn-tools-toggle { background: var(--cream); color: var(--dark-maroon); }
 
     .sidebar-right {
         position: fixed;
@@ -690,6 +669,14 @@ $PAGE_SKELETON = 'repository';
     :root { --hero-h: 150px; --hero-overlap: 32px; }
     .section-heading { font-size: 1.375rem; }
     .paper-foot { grid-template-columns: 1fr; gap: .25rem; }
+}
+/* A phone, compact: the same notch down the result cards take at this width
+   (the block at the foot of includes/browse_console.php), for the three things
+   on this page that are not cards. The banner gives up height too: at 150px it
+   was a third of the screen before a single result. */
+@media (max-width: 480px) {
+    :root { --hero-h: 124px; --hero-overlap: 26px; }
+    .section-heading { font-size: 1.1875rem; }
 }
 </style>
 </head>
@@ -769,18 +756,6 @@ $PAGE_SKELETON = 'repository';
                 <div id="searchSuggestions" class="suggestions-dropdown"></div>
             </form>
         </div>
-        <div class="banner-toggle-col">
-            <?php /* Only ever seen on a narrow screen; the stylesheet hides
-                     this row the moment the sidebar is a column again. Worded
-                     for what it opens rather than drawn as a hamburger: a
-                     hamburger reads as "the site's menu", and this is the
-                     filters for the list underneath. */ ?>
-            <button type="button" class="btn-tools-toggle" id="toolsToggle"
-                    aria-controls="sidebarCol" aria-expanded="false">
-                <span class="material-symbols-outlined mi-18">tune</span>
-                <span>Browse &amp; Filters</span>
-            </button>
-        </div>
     </div>
 </div>
 
@@ -796,7 +771,11 @@ $PAGE_SKELETON = 'repository';
         <!-- Browse toolbar: same for guests and members -->
         <div class="browse-toolbar">
             <div class="toolbar-left">
-                <span>Showing items <?= $total_papers > 0 ? $start_item : 0 ?>-<?= $end_item ?> of <?= number_format($total_papers) ?></span>
+                <?php /* The words are their own element so the narrowest phones can drop
+                         them and keep the figures: "Showing items 1-3 of 3" and the pager
+                         came to 310px of a 296px row at 320px, and the three tool buttons
+                         fell to a second line. */ ?>
+                <span><span class="count-words">Showing items </span><?= $total_papers > 0 ? $start_item : 0 ?>-<?= $end_item ?> of <?= number_format($total_papers) ?></span>
                 <?php if ($page > 1): ?>
                     <a class="toolbar-btn" href="index.php?<?= $qs ?>&page=<?= $page - 1 ?>" aria-label="Previous page"><span class="material-symbols-outlined">chevron_left</span></a>
                 <?php else: ?>
@@ -811,6 +790,19 @@ $PAGE_SKELETON = 'repository';
             <div class="toolbar-right">
                 <a class="toolbar-btn" href="index.php?browse=1" title="Refresh (clears search and filters)"><span class="material-symbols-outlined">refresh</span></a>
                 <a class="toolbar-btn" href="../pages/help_center.php" title="Help"><span class="material-symbols-outlined">help</span></a>
+                <?php /* Only ever seen on a narrow screen; the stylesheet hides it the
+                         moment the sidebar is a column again and the filters are simply
+                         there. It used to be a worded button on a row of its own under
+                         the search field, which cost that row's whole height on the one
+                         screen with the least of it to spare. Here it is one more tool
+                         beside Quick Settings, and the drawer it opens is closed by its
+                         own X, the backdrop or Escape, since the drawer covers this
+                         button while it is open. */ ?>
+                <button type="button" class="toolbar-btn btn-tools-toggle" id="toolsToggle"
+                        aria-controls="sidebarCol" aria-expanded="false"
+                        title="Browse &amp; Filters" aria-label="Browse and Filters">
+                    <span class="material-symbols-outlined">tune</span>
+                </button>
                 <div class="quick-settings">
                     <button class="toolbar-btn" type="button" id="quickSettingsBtn" title="Quick Settings" aria-haspopup="true" aria-expanded="false"><span class="material-symbols-outlined">settings</span></button>
                     <div class="quick-settings-dropdown" id="quickSettingsDropdown">
@@ -1246,9 +1238,14 @@ window.addEventListener('popstate', function () {
 
     btn.addEventListener('click', function () { setOpen(!isOpen()); });
 
-    ['toolsBackdrop', 'toolsClose'].forEach(function (id) {
-        var el = document.getElementById(id);
-        if (el) { el.addEventListener('click', function () { setOpen(false); }); }
+    /* Delegated, not bound. This block runs where it stands, and both the
+       backdrop and the close button are printed *after* it, at the end of the
+       page: getElementById returned null for each of them, no listener was ever
+       attached, and the X and the backdrop did nothing at all. The toggle above
+       is earlier in the page, which is why that one worked and hid it. */
+    document.addEventListener('click', function (e) {
+        if (!isOpen() || !e.target.closest) { return; }
+        if (e.target.closest('#toolsClose, #toolsBackdrop')) { setOpen(false); }
     });
 
     document.addEventListener('keydown', function (e) {

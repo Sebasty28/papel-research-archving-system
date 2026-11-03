@@ -236,10 +236,35 @@ html[data-view="rows"] .paper-list .paper-item .paper-program { display: inline;
 /* Below this the three columns have nowhere to go, so a row is a block
    again rather than a line squeezed to nothing. */
 @media (max-width: 820px) {
-    html[data-view="rows"] .paper-list .paper-item { display: block; padding: .875rem 1.25rem; }
+    /* The same padding a card gets at this width, written out because the
+       rows selector outranks it: switching views should change how a result
+       reads, not where the page's text begins. */
+    html[data-view="rows"] .paper-list .paper-item { display: block; padding: .75rem .5rem; }
     html[data-view="rows"] .paper-list .paper-foot { display: grid; }
     html[data-view="rows"] .paper-list .paper-item .paper-info { display: block; }
     html[data-view="rows"] .paper-list .paper-item .paper-title { white-space: normal; }
+
+    /* Everything above that keeps a row on one line has to go with the row.
+       It did not: the authors kept their 10rem cap and their ellipsis and the
+       meta kept its nowrap and the fade over its last 1.75rem, so on a phone a
+       block of four lines' worth of room showed "Lilac Erica Begino, Justine..."
+       and a date that faded out at "Unpublished P". There is no line to protect
+       here, so they wrap like any other text. */
+    html[data-view="rows"] .paper-list .paper-item .paper-authors {
+        max-width: none;
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+    }
+    html[data-view="rows"] .paper-list .paper-item .paper-meta {
+        flex-wrap: wrap;
+        white-space: normal;
+        overflow: visible;
+        -webkit-mask-image: none;
+                mask-image: none;
+    }
+    html[data-view="rows"] .paper-list .paper-item .paper-side { white-space: normal; }
+    html[data-view="rows"] .paper-list .paper-item .paper-program { display: block; }
 }
 
 /* ===== The card behind a row =====
@@ -316,6 +341,19 @@ html[data-view="rows"] .paper-list .paper-item .paper-program { display: inline;
     transition: background .2s, color .2s;
 }
 .toolbar-btn:hover { background: var(--cream); color: var(--dark-maroon); }
+/* A touch screen has no pointer to take away: tapping one of these left :hover
+   on until something else was tapped, so the fill sat there on a button nobody
+   was pointing at, which reads as a control stuck open. (The same guard the
+   navbar's bell and menu button carry, in site_head.php.) A button marked by a
+   class while its panel is open - the filters toggle - keeps that mark: this is
+   only about the pointer. */
+@media (hover: none) {
+    .toolbar-btn:hover { background-color: transparent; color: var(--maroon); }
+    /* And the result itself. Now that an entry has no ground of its own, a
+       cream block left behind across a whole one is the most visible stuck
+       hover on the page. */
+    .paper-item:hover { background-color: transparent; }
+}
 /* --border is all but invisible against a dark surface (1.25:1 measured);
    a disabled control should read as muted, not absent. */
 .toolbar-btn.disabled { color: var(--grey); opacity: .65; pointer-events: none; }
@@ -809,63 +847,65 @@ html.sidebar-left .js-side-swap .side-icon-right { display: inline-flex; }
    The density rules further up carry an attribute selector, so these repeat it:
    otherwise they lose the cascade and silently do nothing. */
 @media (max-width: 900px) {
-    /* A result becomes a card you can hit with a thumb, rather than a row
-       separated from the next one by a hairline. */
+    /* The same list a desktop reads, smaller. It was a boxed card per result
+       for a while - a border, a radius, a white ground, a rule above its own
+       button - on the reasoning that a thumb wants something to hit. Four
+       pieces of chrome round every result is what the owner saw on a phone,
+       and next to the desktop's plain hairline list it read as a different
+       site. So the box goes and the list is the desktop's, with the padding
+       and the gaps taken in rather than the shapes changed.
+
+       The type is the desktop's too: 15px titles and 11px below them, which is
+       small but is what the same page shows on a laptop, and the point here is
+       that the two match. */
     [data-density] .paper-item,
     .paper-item {
-        margin: 0 0 .625rem;
-        padding: .875rem 1rem;
-        border: 1px solid var(--border-soft);
-        border-radius: var(--r-card, 8px);
-        background: var(--white);
+        margin: 0;
+        padding: .75rem .5rem;
+        border: 0;
+        border-radius: 0;
+        background: none;
     }
-    .paper-item::after { display: none; }   /* the card edge separates them now */
+    /* The hairline between results, inset to the item's own padding. */
+    .paper-item::after { left: .5rem; right: .5rem; }
 
     [data-density] .paper-item .paper-title,
-    .paper-item .paper-title {
-        font-size: 1rem;
-        line-height: 1.4;
-        margin-bottom: .45rem;
-    }
+    .paper-item .paper-title { line-height: 1.4; margin-bottom: .25rem; }
 
-    /* One column. Two columns of 11px text on a 360px screen left roughly
-       fourteen characters per line in each of them. */
+    /* Two columns, as on a desktop: what the paper is at the left, what you
+       can do about it at the right. The title is above both and keeps the
+       whole width. 38% is the desktop's share, so "BS Information Technology"
+       sits on one line at 390px and a longer programme wraps inside its own
+       column instead of pushing the row about. */
     .paper-foot {
-        grid-template-columns: 1fr;
-        gap: .5rem;
+        grid-template-columns: minmax(0, 1fr) 38%;
+        gap: .625rem;
+        align-items: start;
     }
 
-    /* 13px is the floor for body text on a phone; 11px was set for a screen
-       held at arm's length on a desk. */
-    [data-density] .paper-authors,
-    [data-density] .paper-meta,
-    [data-density] .paper-side,
-    .paper-authors, .paper-meta, .paper-side { font-size: .8125rem; }
-    .paper-authors { margin-bottom: .25rem; }
-    .paper-meta { gap: .3rem .5rem; }
+    .paper-authors { margin-bottom: .15rem; }
+    .paper-meta { gap: .15rem .3rem; }
 
-    /* The action was an 11px link in a line of other text: a target a finger
-       cannot reliably find. It becomes the card's own button. */
+    /* A plain link with the programme under it, which is the desktop's right
+       column. It was a bordered 40px button under a rule, which is the single
+       thing that made a result look like a form rather than an entry in a
+       list. */
     .paper-side {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: .25rem .75rem;
-        margin-top: .5rem;
-        padding-top: .625rem;
-        border-top: 1px solid var(--border-soft);
+        display: block;
+        text-align: left;
+        line-height: 1.6;
+        margin-top: 0;
+        padding-top: 0;
+        border-top: 0;
     }
     .paper-action {
-        display: inline-flex;
-        align-items: center;
-        min-height: 40px;
-        padding: 0 .875rem;
-        border: 1px solid var(--border);
-        border-radius: var(--r-control, 4px);
-        font-size: .8125rem;
+        display: inline;
+        min-height: 0;
+        padding: 0;
+        border: 0;
+        font-size: inherit;
     }
-    .paper-action:hover { background: var(--cream); text-decoration: none; }
-    .paper-program { display: inline; }
+    .paper-program { display: block; }
 
     /* Apple and Google both publish 44px as the smallest reliable target;
        these were 26. */
@@ -883,5 +923,54 @@ html.sidebar-left .js-side-swap .side-icon-right { display: inline-flex; }
     /* The magnifier is the form's submit button, so it has to be reachable in
        its own right and not only by the field beside it. */
     .btn-search-icon { padding: 0 .875rem; min-height: 44px; }
+}
+
+/* ===== A phone, compact =====
+   The list is the desktop's at every width below 900 (the block above); this
+   only takes the room in further, where there is least of it. Measured at 390px
+   before any of this: a result stood 237px tall, so three filled the screen,
+   titles ran to three lines and the date / type / status line broke after the
+   type and put "Unpublished Paper" on its own.
+
+   The sizes are measured rather than judged: a line fits when the text it
+   holds is narrower than the column it sits in, and that was checked at 320,
+   360 and 390px. */
+@media (max-width: 480px) {
+    [data-density] .paper-item,
+    .paper-item,
+    html[data-view="rows"] .paper-list .paper-item { padding: .625rem .25rem; }
+    .paper-item::after { left: .25rem; right: .25rem; }
+
+    [data-density] .paper-item .paper-title,
+    .paper-item .paper-title { line-height: 1.35; margin-bottom: .2rem; }
+
+    .paper-authors { margin-bottom: .1rem; line-height: 1.35; }
+    .paper-meta { gap: .1rem .2rem; line-height: 1.4; }
+
+    /* The two columns are 350px between them here, so the gap is what the
+       right-hand one can least afford to give up. */
+    .paper-foot { gap: .5rem; }
+    .paper-side { line-height: 1.5; }
+
+    .browse-toolbar { font-size: .75rem; gap: .375rem; padding: .25rem 0 .375rem; }
+    .toolbar-left, .toolbar-right { gap: .0625rem; }
+    .toolbar-btn { width: 34px; height: 34px; }
+    .toolbar-btn .material-symbols-outlined { font-size: 18px; }
+
+    /* The field's own padding was 12px over and 16px either side, which on a
+       phone is a tenth of the screen given to air around the placeholder. */
+    .search-form { padding: .4375rem .6875rem; gap: .5rem; }
+    .search-input { font-size: .8125rem; }
+    .btn-search-icon { padding: 0 .5rem 0 .0625rem; min-height: 38px; }
+    .btn-search-icon .material-symbols-outlined { font-size: 20px; }
+    .suggestion-item { padding: .55rem .75rem; font-size: .8125rem; }
+}
+
+/* The narrowest phones still in use. "1-3 of 3" is the figure the row is for,
+   and the words in front of it are what cost it the line: with them, the count
+   and its pager came to 310px of a 296px row at 320px and the tool buttons fell
+   below. Both consoles that print a count mark the words with this class. */
+@media (max-width: 400px) {
+    .count-words { display: none; }
 }
 </style>
