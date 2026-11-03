@@ -21,6 +21,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Stamp the commit into VERSION
+        # The footer prints VERSION (app_version_label() in config/config.php).
+        # Staging takes every push to main, not only the releases that get a
+        # tag, so the number on its own cannot say which build is actually up
+        # there. The commit goes after a '+', which is SemVer build metadata,
+        # and the footer shows it only on a copy of the site, never on
+        # production. The repository's own VERSION file is left alone: this
+        # runs on the throwaway checkout and is never committed back.
+        run: |
+          v=$(head -n 1 VERSION | tr -d ' \r\n')
+          echo "${v%%+*}+$(git rev-parse --short HEAD)" > VERSION
+          echo "Deploying $(cat VERSION)"
+
       - name: PHP, matching the host
         uses: shivammathur/setup-php@v2
         with:

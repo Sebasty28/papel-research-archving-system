@@ -89,6 +89,67 @@ define('APP_ENV', strtolower(trim((string)($_ENV['APP_ENV'] ?? 'production'))));
 function app_env_badge(): string {
     return APP_ENV === 'production' || APP_ENV === '' ? '' : strtoupper(APP_ENV);
 }
+
+/* Which build this is, for the line in the footer.
+ *
+ * The number lives in the VERSION file at the root of the repository, so it is
+ * the same on every copy of the site and travels with the code: staging is
+ * deployed by FTP with no git on the far side (.github/workflows/deploy-staging.yml
+ * excludes .git), so nothing on the server can work it out for itself.
+ *
+ * Semantic Versioning, MAJOR.MINOR.PATCH, as docs/PAPEL_System_Overview.md
+ * section 3 sets out: 0.y.z while the system is still being built, 1.0.0 at the
+ * first release accepted by its users. Raise it in that file when you cut a
+ * release, and tag the commit to match.
+ *
+ * The file may carry SemVer build metadata after a '+' (0.13.0+a1b2c3d). The
+ * staging deploy writes the commit there on every push, because staging gets
+ * every push and not only the tagged releases, so the number alone cannot say
+ * which build is actually up there.
+ *
+ * Read once per request and remembered: this is a file stat on a page that is
+ * already doing several, and the footer is on every page of the site.
+ */
+function app_version_raw(): string {
+    static $raw = null;
+    if ($raw !== null) return $raw;
+    $file = dirname(__DIR__) . '/VERSION';
+    $text = is_readable($file) ? (string)file_get_contents($file) : '';
+    /* First line only, so a file someone has added a note to still reads. An
+       unreadable or missing file gives '', and the footer then says nothing at
+       all rather than a number that might be wrong. */
+    $raw = trim(strtok($text, "\r\n") ?: '');
+    return $raw;
+}
+
+/** The number on its own: 0.13.0. */
+function app_version(): string {
+    return trim(strtok(app_version_raw(), '+') ?: '');
+}
+
+/** The build after the '+', if the deploy wrote one: a1b2c3d, else ''. */
+function app_version_build(): string {
+    $raw = app_version_raw();
+    $at  = strpos($raw, '+');
+    return $at === false ? '' : trim(substr($raw, $at + 1));
+}
+
+/**
+ * The whole line for the footer, or '' when there is no VERSION file.
+ *
+ * Production shows the number alone. A copy of the site adds which copy it is
+ * and, where the deploy stamped one, the commit: the same rule the chip beside
+ * the logo follows, so neither says anything on the live site.
+ */
+function app_version_label(): string {
+    $v = app_version();
+    if ($v === '') return '';
+    $badge = app_env_badge();
+    if ($badge === '') return 'Version ' . $v;
+    $build = app_version_build();
+    return 'Version ' . $v . ' (' . strtolower($badge)
+         . ($build !== '' ? " \u{00B7} " . $build : '') . ')';
+}
 define('BASE_URL', $_ENV['BASE_URL'] ?? 'http://localhost/capstone');
 
 /* The sign-in robot check. Blank until a site is registered at

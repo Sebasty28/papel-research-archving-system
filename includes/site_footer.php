@@ -12,6 +12,12 @@
         <nav class="footer-links">
             <a href="<?= e(BASE_URL) ?>/pages/terms_and_conditions.php">Terms &amp; Conditions</a>
             <a href="<?= e(BASE_URL) ?>/pages/privacy.php">Privacy</a>
+            <?php /* Which build this is. Last in the row, after the links, and quiet:
+                     it is for whoever is reporting a fault, not for a reader. Nothing
+                     is printed at all where there is no VERSION file to read. */ ?>
+            <?php if ($ver = app_version_label()): ?>
+            <span class="footer-version"><?= e($ver) ?></span>
+            <?php endif; ?>
         </nav>
     </div>
 </footer>

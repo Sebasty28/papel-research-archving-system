@@ -967,6 +967,9 @@ html.nav-open .nav-burger .burger-open { display: inline-flex; }
     transition: color .2s;
 }
 .footer-links a:hover { color: #fff; text-decoration: underline; }
+/* The build number sits in the same row as the links and must not read as one:
+   dimmer than they are, and no hover of its own. */
+.footer-version { color: rgba(255,255,255,.55); }
 
 /* ===== Login modal / slide-in panel =====
    This used to be called .modal-backdrop: the same class Bootstrap generates
