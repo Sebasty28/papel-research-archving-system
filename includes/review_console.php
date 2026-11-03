@@ -511,6 +511,12 @@ ob_start();
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?= e($RC['title']) ?> · <?= e(APP_NAME) ?></title>
+<?php
+/* The loading skeleton's shape (includes/skeleton.php): every desk that
+   shares this console settles into the same main column and rail, so the
+   default lives here and not in each of the four dashboards. */
+if (!isset($PAGE_SKELETON)) { $PAGE_SKELETON = 'console'; }
+?>
 <?php require_once ROOT_PATH.'/includes/site_head.php'; ?>
 <?php require_once ROOT_PATH.'/includes/browse_console.php'; ?>
 <?php require_once ROOT_PATH.'/includes/console_shell.php'; ?>

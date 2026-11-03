@@ -71,18 +71,10 @@
 .ad-btn-go { background: var(--maroon-surface); color: #fff; }
 .ad-btn-go:hover { background: var(--maroon-surface-hover); }
 
-/* A note about what just happened, shown where the eye already is. */
-.ad-toast {
-    position: fixed; left: 50%; bottom: 1.5rem; transform: translateX(-50%) translateY(8px);
-    z-index: 19000; max-width: min(32rem, calc(100vw - 2rem));
-    display: flex; align-items: flex-start; gap: .5rem;
-    padding: .75rem 1rem; border-radius: var(--r-card, 8px);
-    background: var(--white); border: 1px solid var(--border);
-    box-shadow: 0 10px 30px rgba(51, 0, 0, .18);
-    font-family: var(--font-body); font-size: .8125rem; color: var(--ink);
-    opacity: 0; visibility: hidden; transition: opacity .2s, transform .2s, visibility .2s;
-}
-.ad-toast.is-open { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }
+/* There was a second kind of note here, .ad-toast: its own card, at the bottom
+   of the window, 4 seconds, no way to dismiss it. The site's snackbar
+   (includes/flash_dismiss.php) is the one kind now, so this is papelSnack()
+   below and the styles it needed have gone with it. */
 .ad-match { padding-top: 0; }
 .ad-match-label {
     display: block; margin-bottom: .375rem;
@@ -100,8 +92,6 @@
 .ad-match input.is-wrong { border-color: var(--maroon); }
 .ad-btn-go[disabled] { opacity: .45; cursor: not-allowed; }
 
-.ad-toast .material-symbols-outlined { font-size: 18px; color: var(--maroon); flex: 0 0 auto; }
-.ad-toast.is-good .material-symbols-outlined { color: #1b5e35; }
 </style>
 
 <div class="ad-backdrop" id="adDialog" role="dialog" aria-modal="true" aria-labelledby="adTitle">
@@ -124,10 +114,6 @@
     </div>
 </div>
 
-<div class="ad-toast" id="adToast" role="status" aria-live="polite">
-    <span class="material-symbols-outlined" id="adToastIcon">info</span>
-    <span id="adToastText"></span>
-</div>
 
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 (function () {
@@ -306,15 +292,21 @@
         if (e.key === 'Escape') restore();
     });
 
-    /* A short note after the page comes back, so the result of what you just
-       did is visible without hunting for a banner. */
-    window.papelNote = function (message, good) {
-        var toast = document.getElementById('adToast');
-        document.getElementById('adToastText').textContent = message;
-        document.getElementById('adToastIcon').textContent = good ? 'check_circle' : 'info';
-        toast.classList.toggle('is-good', !!good);
-        toast.classList.add('is-open');
-        setTimeout(function () { toast.classList.remove('is-open'); }, 4000);
+    /* A short note after the page comes back, so the result of what you just did
+       is visible without hunting for a banner. It used to be a card of its own at
+       the foot of the window; it is the site's snackbar now, so a note raised by
+       script and a banner turned into a snackbar after a reload are the same card,
+       in the same place, dismissed the same way.
+
+       Looked up when it is called, not when this is defined: flash_dismiss.php is
+       pulled in by site_head.php and this by site_footer.php, so the order holds
+       today, and nothing here needs to depend on that. */
+    window.papelNote = function (message, kind) {
+        if (typeof window.papelSnack !== 'function') { return; }
+        /* true and false were the whole vocabulary here, so a failure came out
+           looking like a remark. 'bad' is understood as well, and the two older
+           values still mean what they always did. */
+        return window.papelSnack(message, kind === 'bad' ? 'bad' : kind ? 'good' : null);
     };
 
     /* The page's own flash banner is the message; echo it once as a note too.
@@ -336,7 +328,9 @@
         });
     if (flash) {
         var text = flash.textContent.replace(/\s+/g, ' ').trim();
-        if (text) window.papelNote(text, flash.classList.contains('alert-success'));
+        if (text) {
+            window.papelNote(text, flash.classList.contains('alert-success') ? 'good' : 'bad');
+        }
     }
 })();
 </script>

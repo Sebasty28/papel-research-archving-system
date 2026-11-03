@@ -324,6 +324,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
        standard section is in play, which only matters for which names are taken. */
     $custom = paper_custom_clean($_POST['custom_sections'] ?? '', $_POST, $scope ?? array_keys(paper_section_labels()), false);
     if ($custom) { $sections[PAPER_CUSTOM_KEY] = $custom; }
+    /* And the names of the rows the student added to Step 3. The files are never
+       part of a draft, so without this a draft reopened from the dashboard came
+       back with a blank Step 3 and the student had to name them all again. */
+    $draftDocNames = extra_doc_names_clean($_POST['extra_docs'] ?? null);
+    if ($draftDocNames) { $sections[PAPER_DOCS_KEY] = $draftDocNames; }
     $imradContent = json_encode($sections, JSON_UNESCAPED_UNICODE);
     $abstract     = rich_text_to_plain($sections['abstract']);
 
@@ -502,7 +507,7 @@ if ($draftRow) {
      else here is restored. The reserved key inside the stored object is not a
      field of the form, so it is taken out before the rest is merged in. */
   $draftScope = paper_section_scope($draftRow['imrad_content'] ?? null);
-  unset($sections[PAPER_SCOPE_KEY], $sections[PAPER_CUSTOM_KEY]);
+  unset($sections[PAPER_SCOPE_KEY], $sections[PAPER_CUSTOM_KEY], $sections[PAPER_DOCS_KEY]);
   /* The author's own sections go back the same way: their names as one field
      (custom_sections, a JSON list the page rebuilds the editors from) and each
      body as the field of its own name, which is how the editors are filled. */
@@ -511,6 +516,12 @@ if ($draftRow) {
       ? json_encode(array_map(function ($c) { return ['key' => $c['key'], 'label' => $c['label']]; }, $draftCustom), JSON_UNESCAPED_UNICODE)
       : ''];
   foreach ($draftCustom as $c) { $draftCustomFields[$c['key']] = $c['html']; }
+  /* Step 3's own rows go back the same way: their names as one JSON field, which
+     restoreExtraDocs() rebuilds the rows from before anything is put into them. */
+  $draftDocs = paper_extra_doc_names($draftRow['imrad_content'] ?? null);
+  $draftCustomFields['extra_docs'] = $draftDocs
+      ? json_encode($draftDocs, JSON_UNESCAPED_UNICODE)
+      : '';
   $draftPayload = [
     'id'     => (int)$draftRow['paper_id'],
     'fields' => array_merge([
@@ -575,21 +586,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
       throw new Exception('Invalid paper type');
     }
     
-    // Ethics clearance, consent and the data-collection tool are only
-    // demanded of the paper types that involve human participants and
-    // original data gathering. Any other type may still attach them, but is
-    // not held up waiting for paperwork it never needed.
-    $requiredDocs = ['ethics_clearance', 'consent_form', 'data_collection', 'copyright_doc'];
-    if (paper_type_needs_documents($paperType)) {
-      foreach ($requiredDocs as $doc) {
-        if (empty($_FILES[$doc]) || $_FILES[$doc]['error'] !== UPLOAD_ERR_OK) {
-          throw new UserFacingException(
-            'Please attach the ' . ucwords(str_replace('_', ' ', $doc)) .
-            '. It is required for a ' . paper_type_label($paperType) . '.'
-          );
-        }
-      }
-    }
+    /* No supporting document is demanded here. Which of them a paper needs is the
+       author's to judge, and Step 3 asks them once, on the way to Step 4, rather
+       than marking each row required or optional; refusing the submission as well
+       would turn that answer into a failure after a minute of uploading, which is
+       the one thing a question like that must never do.
+
+       paper_type_needs_documents() stays, and still says which types a paper of
+       this kind is normally filed with: the review desk and the author's own page
+       read it to show a missing document as missing. That is for a reviewer to
+       weigh and return the paper over, which is review rather than a gate. */
 
     /* The format or formats the paper is handed in as come first, because there
        is one PDF to find for each of them and none for a format that was not
@@ -741,6 +747,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
        there may be and what a body may hold are decided here. */
     $custom = paper_custom_clean($_POST['custom_sections'] ?? '', $_POST, $scope, true);
     if ($custom) { $sections[PAPER_CUSTOM_KEY] = $custom; }
+    /* Kept on the paper as well as on a draft: a paper returned for revision is
+       a draft again, and returning deletes the files, so the rows have to come
+       back with their names or the student names them all a second time. */
+    $postedDocNames = extra_doc_names_clean($_POST['extra_docs'] ?? null);
+    if ($postedDocNames) { $sections[PAPER_DOCS_KEY] = $postedDocNames; }
     $imradContent = json_encode($sections, JSON_UNESCAPED_UNICODE);
     $abstract     = rich_text_to_plain($sections['abstract']);
 
@@ -764,6 +775,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     
     $isPublished = in_array('Published Paper', $paperStatusArr);
     $pubLocation = $isPublished ? trim($_POST['publication_location'] ?? '') : null;
+
+    /* The rows of Step 3 the student named themselves. Read here, before a single
+       file has been moved or sent to Drive, so a row with a name and no file (or
+       the other way round) is answered in words rather than after a minute of
+       uploading. */
+    $extraDocs = supporting_docs_extra($_POST, $_FILES, true);
 
     // 1. Keyword Validation (At least 5)
     $kwArray = array_filter(array_map('trim', explode(',', $keywords)));
@@ -1010,11 +1027,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
 
     $finfo = new finfo(FILEINFO_MIME_TYPE);
 
-    // Store whatever was attached. This loop is unaffected by the gating
-    // above: an optional document that *was* provided is filed exactly like
-    // a required one, so nothing a student attaches is ever discarded.
-    $requiredDocs = ['ethics_clearance', 'consent_form', 'data_collection', 'copyright_doc'];
-    foreach ($requiredDocs as $docType) {
+    // Store whatever was attached. Nothing is demanded of a submission, so this
+    // loop is simply "file every one of the four named boxes that has a file in
+    // it"; the rows the student named themselves are filed below.
+    $namedDocs = ['ethics_clearance', 'consent_form', 'data_collection', 'copyright_doc'];
+    foreach ($namedDocs as $docType) {
       if (!empty($_FILES[$docType]) && $_FILES[$docType]['error'] === UPLOAD_ERR_OK) {
         if ($finfo->file($_FILES[$docType]['tmp_name']) === 'application/pdf') {
           $safe = safe_name(pathinfo($_FILES[$docType]['name'], PATHINFO_FILENAME));
@@ -1091,6 +1108,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
           if (is_file($dest)) { @unlink($dest); }
         }
       }
+    }
+
+    /* The documents the student named themselves, one row each. Filed exactly as
+       the optional one above is, under the kind 'other' with their own name beside
+       it; the names were checked at the top of this handler, so every row reaching
+       here has one. $_FILES['extra_doc'] is the array shape PHP gives a file input
+       named extra_doc[], so each field is indexed by the row's position. */
+    foreach ($extraDocs as $extraDoc) {
+      $ix = $extraDoc['index'];
+      if (($_FILES['extra_doc']['error'][$ix] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) { continue; }
+      $tmpPath = $_FILES['extra_doc']['tmp_name'][$ix];
+      if ($finfo->file($tmpPath) !== 'application/pdf') { continue; }
+
+      $extraName = $extraDoc['name'];
+      $safe = safe_name(pathinfo($_FILES['extra_doc']['name'][$ix], PATHINFO_FILENAME));
+      /* Filed under a cleaned copy of the typed name, never the name itself: a
+         colon or a slash in it is not a path (see "Never build a path from a
+         paper type"). */
+      $dest = $supDir . "/{$paper_id}_" . safe_name($extraName) . "_{$safe}.pdf";
+      if (!move_uploaded_file($tmpPath, $dest)) { continue; }
+      $stagedFiles[] = $dest;
+      $rel = "uploads/research/$programFolder/$typeFolder/$y/$m/$submissionFolder/supporting_documents/" . basename($dest);
+
+      $extraGdriveId = null;
+      if (function_exists('upload_supporting_doc_to_gdrive')) {
+          $extraGdriveId = upload_supporting_doc_to_gdrive($dest, $extraName . '.pdf', $programFolder,
+              (string)$year, $typeFolder, $title, $u['user_id']);
+      }
+      if (!$extraGdriveId) {
+          throw new Exception("Failed to upload supporting document ($extraName) to Google Drive.");
+      }
+      $driveMade[] = $extraGdriveId;
+
+      $extraStored = supporting_doc_type_for_storage('other');
+      if (supporting_documents_have_name()) {
+          $st = $conn->prepare("INSERT INTO supporting_documents (paper_id,document_type,document_name,file_path,gdrive_file_id) VALUES (?,?,?,?,?)");
+          $st->bind_param('issss', $paper_id, $extraStored, $extraName, $rel, $extraGdriveId);
+      } else {
+          // No document_name column yet on this server: filed without the name.
+          $st = $conn->prepare("INSERT INTO supporting_documents (paper_id,document_type,file_path,gdrive_file_id) VALUES (?,?,?,?)");
+          $st->bind_param('isss', $paper_id, $extraStored, $rel, $extraGdriveId);
+      }
+      if (!$st->execute()) throw new Exception('Database insert failed.');
+
+      if (is_file($dest)) { @unlink($dest); }
     }
 
     $conn->commit();
@@ -1192,7 +1254,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Upload · <?= e(APP_NAME) ?></title>
-<?php require_once ROOT_PATH.'/includes/site_head.php'; ?>
+<?php
+/* The loading skeleton's shape (includes/skeleton.php): this page's is the two
+   panes with their tab strips, since that is what it settles into. Set before
+   the shared head, which is where the skeleton reads it. */
+$PAGE_SKELETON = 'panes';
+require_once ROOT_PATH.'/includes/site_head.php';
+?>
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>"  src="../../assests/js/input-validation.js" defer></script>
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 /* Enhanced Smooth Animations */
@@ -1720,16 +1788,30 @@ html.doc-expanded:has(.doc-editor.is-expanded) > body { overflow: visible !impor
   font-size: .6875rem; letter-spacing: .04em; text-transform: uppercase;
   color: var(--grey);
 }
+/* A shell holding the name and the button that takes the section off the paper,
+   the shape the pane tabs already use (.side-tab): a button cannot hold another
+   button, and the row has to be two things to press. */
 .doc-tab {
   display: flex;
   align-items: center;
-  gap: .5rem;
   width: 100%;
-  padding: .45rem .65rem;
   border: 1px solid transparent;
   border-radius: var(--r-control, 4px);
   background: transparent;
   color: var(--ink);
+  transition: background .15s, color .15s;
+}
+.doc-tab-main {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: .45rem .65rem;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
   font-family: inherit;
   font-size: .8125rem;
   line-height: 1.35;
@@ -1737,17 +1819,38 @@ html.doc-expanded:has(.doc-editor.is-expanded) > body { overflow: visible !impor
   white-space: normal;
   overflow-wrap: anywhere;
   cursor: pointer;
-  transition: background .15s, color .15s;
 }
 .doc-tab-name { flex: 1 1 auto; min-width: 0; }
 .doc-tab:hover { background: var(--white); color: var(--maroon); }
-.doc-tab:focus-visible { outline: 2px solid var(--maroon); outline-offset: -2px; }
+.doc-tab-main:focus-visible { outline: 2px solid var(--maroon); outline-offset: -2px; }
 .doc-tab.is-active {
   background: var(--white);
   color: var(--maroon);
-  font-weight: 500;
   border-color: var(--border);
 }
+.doc-tab.is-active .doc-tab-main { font-weight: 500; }
+
+/* Taking a section off the paper. It keeps its room whether or not it is showing
+   (visibility), as the pane tabs' close does, so a name is the same width either
+   way and the X never appears under the pointer between the two halves of a double
+   click. A touch screen has no hover, so a long press puts .show-x on the row.
+   Shown on focus-within rather than on the X's own :focus-visible: a hidden box
+   cannot take focus at all, so a rule on the X itself could never fire. Reaching
+   the name with the keyboard reveals it, and the next Tab lands on it. */
+.doc-tab-x {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.5rem; height: 1.5rem; margin-right: .25rem;
+  padding: 0; border: 0; border-radius: var(--r-control, 4px);
+  background: none; color: var(--grey);
+  cursor: pointer; visibility: hidden;
+}
+.doc-tab-x .material-symbols-outlined { font-size: 16px; }
+.doc-tab:hover .doc-tab-x,
+.doc-tab:focus-within .doc-tab-x,
+.doc-tab.show-x .doc-tab-x { visibility: visible; }
+.doc-tab-x:hover { background: var(--cream); color: var(--maroon); }
+.doc-tab-x:focus-visible { outline: 2px solid var(--maroon); outline-offset: -2px; }
 /* A section still to be written carries a dot: the form needs all five, and
    this is the only view where the empty ones are otherwise invisible. */
 .doc-tab-dot {
@@ -1755,6 +1858,34 @@ html.doc-expanded:has(.doc-editor.is-expanded) > body { overflow: visible !impor
   background: var(--maroon); opacity: .4; flex: 0 0 auto;
 }
 .doc-tab.is-active .doc-tab-dot { opacity: .7; }
+/* Adding a section, at the foot of the list. Dashed and in the muted ink rather
+   than filled: it is an invitation at the end of the names, not one of them, and
+   it has to read as apart from them without a rule drawn across the column. */
+.doc-tab-add {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  width: 100%;
+  margin-top: .35rem;
+  padding: .45rem .65rem;
+  border: 1px dashed var(--border-soft);
+  border-radius: var(--r-control, 4px);
+  background: transparent;
+  color: var(--grey);
+  font-family: inherit;
+  font-size: .8125rem;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.doc-tab-add .material-symbols-outlined { font-size: 18px; flex: 0 0 auto; }
+.doc-tab-add:hover {
+  background: var(--white);
+  color: var(--maroon);
+  border-color: var(--soft-maroon);
+}
+.doc-tab-add:focus-visible { outline: 2px solid var(--maroon); outline-offset: -2px; }
 
 /* The list can be put away for more room to write, above all in the side pane, where it
    took half of a narrow column. Kept per pane on the device (papel.sectionsHidden.side and
@@ -1793,7 +1924,12 @@ html.doc-expanded:has(.doc-editor.is-expanded) > body { overflow: visible !impor
   }
   .doc-editor.is-expanded .doc-tabs::-webkit-scrollbar { display: none; }
   .doc-tabs-title { display: none; }
-  .doc-tab { width: auto; flex: 0 0 auto; white-space: nowrap; padding: .4rem .6rem; }
+  .doc-tab,
+  .doc-tab-add { width: auto; flex: 0 0 auto; white-space: nowrap; }
+  .doc-tab-add { padding: .4rem .6rem; }
+  .doc-tab-main { white-space: nowrap; padding: .4rem .6rem; }
+  /* In a row it follows the last name rather than sitting under it. */
+  .doc-tab-add { margin: 0 0 0 .25rem; }
 }
 
 /* Section label, toolbar and word count share one row. Keeping them on
@@ -3079,7 +3215,15 @@ html:root { --pdf-dock-gap: var(--dock-gap); }
    flush with its page's left edge (no padding before it there), so only while it is on
    view is that one corner square, the tab running straight down into the page's side. */
 body.panes .main-tabs { padding-left: 0; }
-html.side-locked .main-tabs[data-on="form"] + .main-body { border-top-left-radius: 0; }
+/* ~ and not +: the step bar's row is lifted in between the two in the panes.
+   Both corners, not only the left: that row is white too and carries the card's
+   rounded top, so the body runs straight on from it and is square where they
+   meet. Left alone, the form's page drew its own top corners a few pixels below
+   the row's, which read as the one card having been cut in two. */
+html.side-locked .main-tabs[data-on="form"] ~ .main-body {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+}
 /* Each in its page's colour: the contents is white, Corpus's header cream, and the
    PDF's header the maroon band, with white type on it. */
 .side-tabs[data-on="toc"] .side-tab.is-active { background: var(--white); }
@@ -3427,6 +3571,11 @@ body.doc-expanded .side-toc { display: none !important; }   /* the full view has
         overflow-y: auto;
         overscroll-behavior: contain;
         scrollbar-width: thin;
+        /* The gutter whether it scrolls or not: the step bar's row above it has
+           to reserve the same width to end where the card does, and a gutter
+           that came and went with the step would move the card's right edge out
+           from under the bar's every time the form grew or shrank. */
+        scrollbar-gutter: stable;
         padding: 0 var(--dock-gap) var(--dock-gap);
         background: var(--white);
         border: 0;                /* no line round it: the white page on the cream frame is its edge (a pale border on every page read as a faint line, under the tabs and down the sides) */
@@ -3525,6 +3674,15 @@ html body .doc-editor.is-expanded.in-pane {
 .side-preview-stage iframe { position: absolute; top: 0; left: 0; border: 0; transform-origin: 0 0; background: var(--white); }
 /* The next copy, drawn behind the one on show until it has loaded (previewNow()). */
 .side-preview-stage iframe.is-next { visibility: hidden; }
+/* The phone view: the page drawn at a phone's width and stood in the middle of
+   the pane, with the stage's own ground showing round it, so it reads as a device
+   rather than as a page that has run out of room. The hairline and the lift are
+   tokens, so the ground behind it goes dark with the rest on Old Night. */
+.side-preview-stage.is-phone { background: var(--cream); }
+.side-preview-stage.is-phone iframe {
+  border-radius: var(--r-card, 8px);
+  box-shadow: 0 0 0 1px var(--border), var(--shadow-md);
+}
 /* While a new copy is being drawn: the old one stays, a shade lighter, so the page
    does not flash white on every pause in typing. */
 .side-preview-wait { position: absolute; inset: 0; pointer-events: none; background: var(--white); opacity: 0; transition: opacity .2s; }
@@ -3789,6 +3947,23 @@ body.doc-expanded .pdf-dock.side-hidden { visibility: visible !important; pointe
    the shared ones, character for character. */
 
 /* Step-by-step progress bar */
+/* ----- The step bar -----
+   It stays at the top of the form, and once the form has moved under it, it
+   folds down to a single line in the same place and the same card: the circles
+   shrink, each step turns from a column into a row, and the connectors shorten
+   with them. Which step you are on is the one thing worth keeping on screen
+   through a long step, and a full-height card at the top of every scroll is too
+   much of the window to give it.
+
+   **In the panes it is a row of its own**, lifted out of the scrolling page by
+   papelSide and put between the tab strip and #mainBody. Sticky inside the page
+   was the first build and the form slid underneath it: the white card's top
+   edge, its title and its Step heading all disappeared behind the bar, which is
+   a bar covering the thing it labels. Out here the page simply starts below it
+   and nothing is ever hidden.
+
+   Where there are no panes the window is the scroller, there is no row to put
+   it in, and it stays sticky under the navbar. */
 .upload-steps {
     background: var(--cream);
     border-radius: 10px;
@@ -3798,13 +3973,96 @@ body.doc-expanded .pdf-dock.side-hidden { visibility: visible !important; pointe
     align-items: center;
     justify-content: center;
     gap: 0;
+    transition: padding .22s ease, box-shadow .22s ease;
 }
+/* Outside the panes the window scrolls and the navbar is what it has to clear.
+   Its measured bottom edge, never a number: the bar is 37px here and 61px on a
+   phone, and it grows as the web fonts arrive. The breadcrumb strip is
+   position: relative, so it scrolls away and is not part of the sum. */
+html:not(.side-locked) .upload-steps {
+    position: sticky;
+    top: var(--pdf-dock-top, 56px);
+    z-index: 5;
+}
+/* In the panes it is its own row between the strip and the page, so it needs no
+   position at all. It keeps its cream, and takes the form card's top edge: the
+   bar is the band across the top of that card, not a second card above it.
+
+   Lifted out of the page the bar had the pane's cream frame behind it and nothing
+   to stand on. Given a white card of its own instead, the form's card still drew
+   its own bordered top a few pixels below, so the white read as two cards with a
+   seam between them: one card split rather than the one page the form is. The
+   card's top is up here now and .upload-card has none, so the two are one box
+   however the page beneath scrolls. */
+html.side-locked .upload-steps {
+    position: static;
+    margin: 0 !important;
+    flex: 0 0 auto;
+    border: 1px solid rgba(177,125,125,.22);
+    border-bottom: 0;
+    border-radius: var(--r-card, 8px) var(--r-card, 8px) 0 0;
+}
+/* The row is the white page the card is inset in, the same gap all round it as
+   .main-body keeps below (papelSide's placeStepBar puts the bar in here). No gap
+   under it: that is where the card carries on.
+
+   --sb-w is the body's scrollbar, measured by placeStepBar. The row does not
+   scroll, so without it the row's content box was that much wider than the
+   card's and the bar overhung the card on the right by the width of the bar the
+   student scrolls with. .main-body keeps the gutter whether it scrolls or not,
+   so the figure is a constant and is read once. */
+html.side-locked .step-row {
+    flex: 0 0 auto;
+    background: var(--white);
+    padding: var(--dock-gap) calc(var(--dock-gap) + var(--sb-w, 0px)) 0 var(--dock-gap);
+}
+/* The card has no top of its own: the step bar above it is its top. */
+html.side-locked .step-row ~ .main-body .upload-card {
+    border-top: 0;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+}
+/* It belongs to the form, so it goes with it when another tab is on view. */
+html.side-locked .main-tabs:not([data-on="form"]) + .step-row { display: none; }
+
+.upload-steps.is-stuck {
+    padding: .3rem .5rem;
+    box-shadow: var(--shadow-sm);
+}
+.upload-steps.is-stuck .step-item {
+    flex-direction: row;
+    gap: .4rem;
+    padding: .15rem .4rem;
+}
+.upload-steps.is-stuck .step-number {
+    width: 24px;
+    height: 24px;
+    font-size: .75rem;
+    border-width: 1px;
+}
+.upload-steps.is-stuck .step-label { font-size: .6875rem; }
+.upload-steps.is-stuck .step-connector {
+    width: 32px;
+    /* On one line now, so it centres on the row rather than on a 44px circle. */
+    align-self: center;
+    margin-top: 0;
+}
+/* Folded down and still too wide for the pane (which can be narrow while the
+   window is not, so this is measured in script rather than asked of a media
+   query): the step you are on keeps its name and the rest are their numbers. */
+.upload-steps.is-stuck.is-tight .step-item:not(.active) .step-label { display: none; }
+.upload-steps.is-stuck.is-tight .step-connector { width: 20px; }
+/* Narrower still: the rules between the circles go, which always leaves room for
+   four circles and one name. */
+.upload-steps.is-stuck.is-min .step-connector { display: none; }
+.upload-steps.is-stuck.is-min .step-item { padding: .15rem .25rem; }
 
 .step-item {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 0.5rem;
+    transition: gap .22s ease, padding .22s ease;
     position: relative;
     z-index: 2;
     /* The indicator is also the navigation. */
@@ -3855,6 +4113,7 @@ body.doc-expanded .pdf-dock.side-hidden { visibility: visible !important; pointe
     font-weight: 400;
     color: var(--grey);
     white-space: nowrap;
+    transition: font-size .22s ease;
 }
 
 .step-item.active .step-label,
@@ -3886,6 +4145,42 @@ body.doc-expanded .pdf-dock.side-hidden { visibility: visible !important; pointe
 #btnNextToSupporting,
 #codeUploadCard {
     display: none;
+}
+
+/* The field a notice has just named (papelNeedsFill below). A wash over the
+   whole group, so the label is lit with the box: that group is what the
+   student is being sent to read, not the one control. Painted with box-shadow
+   rather than a border or padding, so nothing on the step moves when it goes
+   on, and mixed from --maroon rather than written as a colour, so it holds in
+   the dark theme.
+
+   Two layers, and both are doing a job. The wash runs --nf-room past the
+   group's own box, which is the only way it gets even room on all four sides:
+   the groups it lands on have no slack of their own to borrow, and what little
+   they have is different on each one (a form column has its label's leading
+   above and a 12px gutter at the sides and nothing below; the file row in
+   either table has nothing anywhere), so a group lit without it had the line
+   hard against the control on at least one side. Outside that sits the line,
+   1px and no thicker, the accent at full strength. Padding and a negative
+   margin would do the same work and change the box, which is what box-shadow
+   is here to avoid. */
+.needs-fill {
+    --nf-room: 6px;
+    /* Mixed into --white, not into transparent, and that is not a detail: a
+       spread shadow is a filled box, so the line's layer is a solid maroon
+       rectangle sitting under the band's. A translucent band let it through and
+       came out all but solid maroon, which is the line six times too thick
+       again. Opaque, the band covers it and only the 1px beyond its edge shows.
+       Mixed, not written out, so it still follows the theme. */
+    --nf-wash: color-mix(in srgb, var(--maroon) 14%, var(--white));
+    border-radius: 10px;
+    background: var(--nf-wash);
+    box-shadow: 0 0 0 var(--nf-room) var(--nf-wash),
+                0 0 0 calc(var(--nf-room) + 1px) var(--maroon);
+    transition: background .2s ease, box-shadow .2s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+    .needs-fill { transition: none; }
 }
 
 .section-header {
@@ -3968,8 +4263,6 @@ body.doc-expanded .pdf-dock.side-hidden { visibility: visible !important; pointe
     font-weight: 400;
     color: var(--ink);
 }
-/* Filled in by syncSupportingDocs(): the marker depends on the paper type. */
-.doc-req-mark { font-size: .75rem; }
 
 /* Date Completed owns the full row so its helper line can run the whole width
    of the form and wrap only once it genuinely runs out of room. The input
@@ -4055,148 +4348,46 @@ body.doc-expanded .pdf-dock.side-hidden { visibility: visible !important; pointe
    through, so it never stands between a student and the browser. */
 .ai-extraction-zone { text-align: center; }
 
-/* One box per manuscript format ticked in step 1: IMRAD, Full Manuscript, or
-   both. The column is spelled out (minmax(0, 1fr)) because an implicit one
-   sizes itself to its content, and a long file name then stretched the box
-   past the edge of the card instead of being cut short. */
-.pdf-slots { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
-.pdf-slot { display: grid; grid-template-columns: minmax(0, 1fr); gap: .75rem; }
-/* The display above would otherwise win over the hidden attribute. */
-.pdf-slot[hidden] { display: none; }
-/* A name, and the limit they share, only when there are two boxes to tell
-   apart. One box needs neither. */
-.pdf-slot-label {
-    display: none;
-    grid-column: 1 / -1;
-    text-align: left;
-    font-family: var(--font-head);
-    font-size: .875rem;
-    font-weight: 600;
-    color: var(--maroon);
+/* One row per manuscript format ticked in step 1: IMRAD, Full Manuscript, or
+   both. Step 3's table (.docs-table, below) does the work; this is what is
+   particular to the manuscript. The wrapper is left-aligned because
+   .ai-extraction-zone centres the buttons under it. */
+.pdf-slots { text-align: left; }
+/* .docs-table tr is display: block on a phone, which would win over the hidden
+   attribute, so the row says so itself. */
+.docs-table tr.pdf-slot[hidden] { display: none; }
+/* The name column holds its text on one line and gives the rest of the row to
+   the file: at a percentage the column was squeezed by a long file name beside
+   it (table-layout is auto, so a width there is a suggestion) and "Full
+   Manuscript" broke over two lines, making that row taller than the one above
+   it. 1% with nowrap is the column's minimum, which is the longest name in it. */
+.pdf-table tbody th { width: 1%; white-space: nowrap; }
+.pdf-table .pdf-slot-label { font-weight: 500; }
+.pdf-slots-size {
+    margin: 0;
+    font-size: .8125rem;
+    color: var(--grey);
 }
+/* The limit the two files share, only when there are two of them to share it. */
 .pdf-slots-note {
     display: none;
-    margin: 0;
-    text-align: left;
+    margin: .25rem 0 0;
     font-size: .8125rem;
     color: var(--grey);
 }
-.pdf-slots.is-multi .pdf-slot-label,
 .pdf-slots.is-multi .pdf-slots-note { display: block; }
 
-.upload-zone {
-    /* Named because the narrow layout lines the file row up under the text. */
-    --zone-icon: 2rem;
-    --zone-gap: .875rem;
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: var(--zone-gap);
-    padding: .875rem 1.25rem;
-    background: var(--cream);
-    border: 1px solid var(--maroon);
-    border-radius: var(--r-control, 4px);
-    text-align: left;
-    cursor: pointer;
-    transition: background .2s, border-color .2s;
-}
-
-.upload-zone:hover {
-    background: var(--white);
-    border-color: var(--dark-maroon);
-}
-/* The real control is the file input, at opacity 0 across the whole box, so
-   its focus ring is invisible with it: a keyboard user tabbed onto the drop
-   target and saw nothing happen. The ring goes on the box instead. */
-.upload-zone:has(.file-input:focus-visible) {
-    outline: 2px solid var(--focus-ring, var(--maroon));
-    outline-offset: 2px;
-}
-.upload-zone-icon {
-    flex-shrink: 0;
-    font-size: var(--zone-icon);
-    color: var(--maroon);
-}
-.upload-zone-text { flex: 1 1 0; min-width: 0; }
-.upload-zone h4 {
-    margin: 0;
-    font-size: 1rem;
-    font-weight: 600;
-    line-height: 1.35;
-    color: var(--ink);
-}
-.upload-zone p {
-    margin: .125rem 0 0;
-    font-size: .8125rem;
-    line-height: 1.4;
-}
-
-/* No file yet: "No PDF selected", at the right-hand end of the same box. Not a
-   .file-indicator: that is the bordered row the supporting documents use, and
-   this one has no box of its own to restyle. */
-.pdf-indicator {
-    flex: 0 1 auto;
-    margin: 0 0 0 auto;
-    max-width: 45%;
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    column-gap: .375rem;
-    padding: .25rem .5rem;
-    border-radius: var(--r-control, 4px);
-    font-size: .875rem;
-    font-weight: 500;
-    line-height: 1.35;
+/* The manuscript's row holds the file itself: its name and what it weighs, with
+   an X to take it off, the same bordered box the supporting documents use. The
+   difference is what a click does, since this file is the paper being read
+   against: it opens in the panel beside the form rather than a viewer of its
+   own (updatePdfIndicator and papelPdfPreview below). */
+.pdf-indicator .fi-size {
+    flex: 0 0 auto;
     color: var(--grey);
-    white-space: nowrap;
-    /* Nothing to press until a file is chosen, so until then a click here is
-       the file browser's, from the input underneath. */
-    pointer-events: none;
 }
-
-/* A file is chosen: the row is the file itself, its name over its size, in the
-   place the prompt was (the prompt is hidden, and the tick has taken the icon's
-   place: see updatePdfIndicator). It hugs its text, so the rest of the box stays
-   the file browser's, and it sits above the invisible input as the switch for the
-   preview panel. Nowrap, so a long name is cut short beside the tick instead of
-   dropping onto a row of its own. */
-.upload-zone.has-file { flex-wrap: nowrap; }
-.upload-zone.has-file .upload-zone-text { display: none; }
-.pdf-indicator.selected {
-    position: relative;
-    z-index: 1;
-    pointer-events: auto;
-    cursor: pointer;
-    display: block;
-    margin: 0;
-    max-width: 100%;
-    padding: 0;
-    font-size: 1rem;
-    font-weight: 400;
-    text-align: left;
-    color: var(--ink);
-}
-/* One line, cut with an ellipsis: the row may shrink below its own width (its
-   min-width), and the name is a block that clips. The whole name is the row's
-   tooltip. */
-.pdf-indicator .pdf-indicator-name {
-    display: block;
-    font-size: 1rem;
-    font-weight: 600;
-    line-height: 1.35;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.pdf-indicator.selected:hover .pdf-indicator-name { text-decoration: underline; }
-.pdf-indicator .pdf-indicator-size {
-    display: block;
-    margin-top: .125rem;
-    font-size: .8125rem;
-    font-weight: 400;
-    line-height: 1.4;
-}
+.pdf-indicator.selected .fi-name { font-weight: 500; }
+.pdf-indicator.selected:hover .fi-name { text-decoration: underline; }
 
 .ai-extract-button-container {
     margin-top: 1.25rem;
@@ -4211,21 +4402,6 @@ body.doc-expanded .pdf-dock.side-hidden { visibility: visible !important; pointe
 /* Step 2 only. Every step shares .section-header and its 2rem, and the other
    steps have the room; this one is the step that has to fit a laptop screen. */
 #step2 .section-header { margin-bottom: 1.25rem; }
-
-.upload-icon {
-    font-size: 2.25rem;
-    margin-bottom: 1rem;
-}
-
-.file-input {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    opacity: 0;
-    cursor: pointer;
-}
 
 .btn-ai {
     background: var(--maroon);
@@ -4341,6 +4517,221 @@ body.doc-expanded .pdf-dock.side-hidden { visibility: visible !important; pointe
     font-size: .875rem;
 }
 
+/* ----- Step 3's table of supporting documents -----
+   What is being asked for down the left, the file for it down the right. It was
+   three cards of stacked label-and-input pairs, which made four documents read
+   as three unrelated questions and left the student scrolling to see what was
+   still missing. One row each, and the whole list is one glance. */
+.docs-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .875rem;
+}
+.docs-table th,
+.docs-table td {
+    padding: .55rem .5rem;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+}
+.docs-table thead th {
+    font-family: var(--font-head);
+    font-size: .75rem;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--grey);
+    font-weight: 600;
+    padding-bottom: .35rem;
+}
+/* The left column takes a bit over a third: enough for "Copyright / IP Document"
+   and its marker on one line, without squeezing the file control beside it. */
+.docs-table tbody th { width: 42%; font-weight: 500; color: var(--ink); }
+.docs-table tbody tr:last-child th,
+.docs-table tbody tr:last-child td { border-bottom: 1px solid var(--border); }
+.docs-table tfoot td { border-bottom: 0; padding-top: .7rem; }
+.docs-table .form-label { margin: 0; font-weight: 500; }
+
+/* The control and the name of the file it holds, side by side rather than the
+   indicator sitting under the input as a second full-width row.
+
+   The native control is taken out of the layout entirely and a label stands in
+   for it. Two reasons, both seen on the page: it drew the browser's own "No
+   file chosen" beside a button that said the same thing as the indicator, and
+   the pair did not fit the cell, so the text was cut to "N...sen"; and its own
+   width answers to whatever it holds, so choosing a file made the button wider
+   and pushed the box beside it along. The label is one width whatever happens,
+   and a label with `for` opens the picker by itself, keyboard included. */
+.docs-file { display: flex; align-items: center; gap: .55rem; }
+.docs-input {
+    /* Off the page, not display:none: a hidden control cannot be focused, and
+       the label's own click would then have nothing to open. */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    border: 0;
+}
+.docs-choose {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    margin: 0;
+    padding: .4rem 1rem;
+    border-radius: var(--r-control, 4px);
+    /* #fff rather than a token, as every other maroon button on the site is
+       (.btn-sm-maroon in site_head.php): the ground is maroon in both themes. */
+    background: var(--maroon-surface);
+    color: #fff;
+    font-family: var(--font-body);
+    font-size: .8125rem;
+    font-weight: 400;
+    line-height: 1.4;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background .2s;
+}
+.docs-choose:hover { background: var(--maroon-surface-hover); }
+/* The ring belongs on what is seen, since the control itself is off the page. */
+.docs-input:focus-visible + .docs-choose {
+    outline: 2px solid var(--maroon);
+    outline-offset: 2px;
+}
+
+.docs-table .file-indicator {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: .35rem;
+    margin-top: 0;
+    /* One height whatever it holds: the padding and the 1px border never change
+       between the empty state and a file, so a row does not grow when one
+       arrives. */
+    padding: .35rem .5rem .35rem .6rem;
+    border-width: 1px;
+    font-size: .8125rem;
+    text-align: left;
+}
+.docs-table .file-indicator .fi-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    /* A PDF's name is often longer than the cell: one line, cut at the end,
+       with the whole of it in the tooltip. */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* A file that is there can be opened and taken off again, so the box is a
+   control rather than a label. */
+.docs-table .file-indicator.selected { cursor: pointer; }
+.docs-table .file-indicator.selected:hover { border-color: var(--maroon); }
+.fi-clear {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    color: var(--grey);
+    cursor: pointer;
+    /* Out of the way until it is wanted. visibility, not display, so the name
+       beside it is cut at the same place either way and nothing shifts when the
+       pointer arrives. */
+    visibility: hidden;
+}
+.file-indicator:hover .fi-clear,
+.fi-clear:focus-visible { visibility: visible; }
+.fi-clear:hover { color: var(--maroon); }
+/* A finger has no hover, so on a touch screen it is simply always there. */
+@media (hover: none) {
+    .fi-clear { visibility: visible; }
+}
+
+/* Right-clicking a file that is there: open it, open it in a new tab, remove it.
+   Built on the editor's own popover (.doc-pop) so there is one of these on the
+   page, not two. */
+.doc-menu-item {
+    display: flex;
+    align-items: center;
+    gap: .45rem;
+    width: 100%;
+    padding: .35rem .55rem;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: .8125rem;
+    text-align: left;
+    cursor: pointer;
+}
+.doc-menu-item:hover { background: var(--cream); }
+
+/* A row the student added: the name they type is the left-hand cell. */
+.docs-extra th .form-control { font-size: .8125rem; }
+.docs-row-remove {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--white);
+    color: var(--grey);
+    cursor: pointer;
+    transition: color .15s ease, border-color .15s ease;
+}
+.docs-row-remove:hover { color: var(--maroon); border-color: var(--soft-maroon); }
+.btn-add-doc {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    padding: .3rem .7rem;
+    border: 1px dashed var(--soft-maroon);
+    border-radius: 8px;
+    background: none;
+    color: var(--maroon);
+    font-size: .8125rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+.btn-add-doc:hover:not(:disabled) { background: var(--cream); }
+.btn-add-doc:disabled { opacity: .5; cursor: default; border-style: solid; }
+.docs-add-note { margin-left: .6rem; font-size: .75rem; color: var(--grey); }
+
+/* A phone has no room for two columns: the name becomes a heading over its
+   control, and the control and the file name stack under it. */
+@media (max-width: 575.98px) {
+    .docs-table, .docs-table tbody, .docs-table tfoot, .docs-table tr, .docs-table th, .docs-table td {
+        display: block;
+        width: auto;
+    }
+    .docs-table thead { display: none; }
+    .docs-table tbody th { border-bottom: 0; padding-bottom: .2rem; }
+    .docs-table tbody td { padding-top: 0; }
+    .docs-file { flex-wrap: wrap; }
+    .docs-file input[type="file"], .docs-table .file-indicator { flex: 1 1 100%; }
+    /* The manuscript's name is its own heading here, with the whole width to
+       itself, so it may wrap again: a name the student typed beside Other can
+       be longer than a phone is wide. */
+    .pdf-table tbody th { width: auto; white-space: normal; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .upload-steps, .upload-steps .step-item, .upload-steps .step-label,
+    .upload-steps .step-number { transition: none; }
+}
+
 /* File indicators */
 .file-indicator {
     margin-top: 0.75rem;
@@ -4391,17 +4782,6 @@ body.doc-expanded .pdf-dock.side-hidden { visibility: visible !important; pointe
     .step-number { width: 38px; height: 38px; font-size: .875rem; }
     .step-connector { width: 46px; margin-top: 18px; }
     .upload-card { padding: 1.5rem; }
-    /* Too narrow for "No PDF selected" to sit beside the prompt: under the
-       text, in the same box, lined up with it. A chosen file keeps its one row,
-       beside the tick (.has-file stays nowrap). */
-    .upload-zone { flex-wrap: wrap; row-gap: .375rem; }
-    .pdf-indicator:not(.selected) {
-        flex: 1 1 calc(100% - var(--zone-icon) - var(--zone-gap));
-        margin: 0 0 0 calc(var(--zone-icon) + var(--zone-gap));
-        max-width: none;
-        justify-content: flex-start;
-        padding: .125rem 0;
-    }
     .supporting-docs-grid { grid-template-columns: 1fr; }
     /* Paired fields stack rather than squeezing into unusable columns. */
     .row > [class*="col-md-"] { flex: 0 0 100%; max-width: 100%; }
@@ -4447,18 +4827,52 @@ body.doc-expanded .pdf-dock.side-hidden { visibility: visible !important; pointe
         grid-template-columns: 1fr;
     }
 
-    /* Same switch as the container query above, for a browser without them. */
-    .upload-zone { flex-wrap: wrap; row-gap: .375rem; }
-    .pdf-indicator:not(.selected) {
-        flex: 1 1 calc(100% - var(--zone-icon) - var(--zone-gap));
-        margin: 0 0 0 calc(var(--zone-icon) + var(--zone-gap));
-        max-width: none;
-        justify-content: flex-start;
-        padding: .125rem 0;
-    }
 }
 
 /* ===== In-page message dialog (replaces the browser's alert box) ===== */
+/* The upload pop-up Step 2 opens with: one drop zone for each manuscript type
+   ticked in Step 1. The zone is a <button>, not the <label for> the rows on the
+   page use: a label is not focusable, and in a dialog the input it points at is
+   off the page and behind the veil, so the keyboard would have nothing to land
+   on. A button is reached with Tab and opens the same picker. */
+.up-drops { display: flex; flex-direction: column; gap: .85rem; }
+.up-drop-head {
+  margin: 0 0 .35rem;
+  font-size: .6875rem; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--grey);
+}
+.up-drop-zone {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: .4rem;
+  width: 100%; min-height: 7.5rem;
+  padding: 1.15rem 1rem;
+  border: 1.5px dashed var(--border-soft);
+  border-radius: var(--r-card, 8px);
+  background: var(--cream);
+  color: var(--ink);
+  font-family: inherit; font-size: .8125rem; line-height: 1.5; text-align: center;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.up-drop-zone .material-symbols-outlined { font-size: 30px; color: var(--maroon); }
+.up-drop-zone:hover { border-color: var(--soft-maroon); background: var(--white); }
+.up-drop-zone:focus-visible { outline: 2px solid var(--maroon); outline-offset: 2px; }
+/* While a file is held over it, so there is no doubt which zone will take it. */
+.up-drop.is-over .up-drop-zone { border-color: var(--maroon); background: var(--white); }
+/* Filled. The success tokens, which carry their own dark-mode values, rather than
+   a green that only works on white. */
+.up-drop.has-file .up-drop-zone {
+  border-style: solid;
+  border-color: var(--ok-border);
+  background: var(--ok-bg);
+}
+.up-drop.has-file .up-drop-zone .material-symbols-outlined { color: var(--ok-text); }
+.up-drop-name { font-weight: 500; overflow-wrap: anywhere; }
+.up-drop.has-file .up-drop-name { color: var(--ok-text); }
+.up-drop.has-file .up-drop-text { color: var(--grey); font-size: .75rem; }
+.up-drop-error { margin: .35rem 0 0; font-size: .75rem; color: var(--bad-text); }
+.up-drop-hint { margin: .85rem 0 0; font-size: .75rem; color: var(--grey); }
+
 .papel-dialog-backdrop {
     position: fixed;
     inset: 0;
@@ -4873,7 +5287,27 @@ body.pdf-docked > .site-footer {
             <?php endif; ?>
 
 
-            <form id="uploadForm" enctype="multipart/form-data" method="post" novalidate>
+            <?php /* spellcheck inherits, so one attribute here covers every box a student
+                     types in across all four steps, including the rows built in script
+                     later (an added supporting document's name, a section of their own):
+                     a box made after load would otherwise have to remember to ask for
+                     itself. It is asked for explicitly rather than left to the default,
+                     which is the user agent's to decide and is off for a single-line
+                     field in some of them.
+
+                     What a browser will not do, and no page can make it do: it marks a
+                     form field only while that field has the cursor, and clears the
+                     marks when it leaves (the section editors below are contenteditable,
+                     which is a different path). It also does not check text put into a
+                     box by script, so what "Extract with AI" fills in is unmarked until
+                     the student types in that box. Toggling the attribute or the focus
+                     does not provoke a re-check; both were measured.
+
+                     The two type-in dropdowns opt out in select_skin.php: those are
+                     filters over a fixed list, not prose. An explicit attribute beats
+                     this inherited one. */ ?>
+            <form id="uploadForm" enctype="multipart/form-data" method="post" novalidate
+                  spellcheck="true">
               <?= csrf_field(); ?>
               <input type="hidden" name="action" value="upload_paper">
 
@@ -5071,33 +5505,62 @@ body.pdf-docked > .site-footer {
                            are not "required" for the browser to enforce: the form is
                            novalidate, and a hidden required input could never be
                            satisfied. The step's own check and the server ask instead. */ ?>
+                  <?php /* The same table as Step 3's supporting documents: what is
+                           being asked for down the left, the control and the file's
+                           name down the right. A paper handed in both ways is two
+                           rows of one table rather than two drop targets stacked up,
+                           so which file is still missing is one glance, and a paper
+                           handed in one way is the same row on its own. */ ?>
                   <div class="pdf-slots" id="pdfSlots">
-                    <?php /* The Other box is named after what was typed in step 1 (syncPdfSlots). */ ?>
-                    <?php foreach (['imrad' => 'IMRAD', 'full' => 'Full Manuscript', 'other' => 'Other'] as $slotKey => $slotLabel): ?>
-                    <div class="pdf-slot" data-format="<?= e($slotKey) ?>" hidden>
-                      <div class="pdf-slot-label"><?= e($slotLabel) ?> PDF</div>
-                      <div class="upload-zone">
-                        <span class="material-symbols-outlined upload-zone-icon" aria-hidden="true">upload_file</span>
-                        <div class="upload-zone-text">
-                          <h4>Drop your PDF here or click to browse</h4>
-                          <p class="text-muted">Maximum file size: <?= e(max_upload_label()) ?></p>
-                        </div>
-                        <?php /* The state of the file shares the box with the drop target. It
-                                 stays clear of the input's way until a file is chosen (see the
-                                 Step 2 note in the stylesheet). */ ?>
-                        <div class="pdf-indicator" id="pdf-indicator-<?= e($slotKey) ?>">
-                          <span class="material-symbols-outlined mi-18 text-muted">cancel</span> No PDF selected
-                        </div>
-                        <input type="file" class="form-control file-input js-pdf" id="pdfFile_<?= e($slotKey) ?>"
-                               name="pdf_<?= e($slotKey) ?>" data-format="<?= e($slotKey) ?>"
-                               accept="application/pdf" aria-label="<?= e($slotLabel) ?> PDF">
-                      </div>
-                    </div>
-                    <?php endforeach; ?>
-                    <?php /* Both files travel in one request, which PHP refuses outright
-                             when they pass post_max_size between them, however far each
-                             is under its own limit. */ ?>
-                    <p class="pdf-slots-note">Both files, with any supporting documents, have to fit within <?= e(max_post_label()) ?> in all.</p>
+                    <table class="docs-table pdf-table">
+                      <thead>
+                        <tr>
+                          <th scope="col">Manuscript</th>
+                          <th scope="col">File</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <?php /* The Other row is named after what was typed in step 1 (syncPdfSlots). */ ?>
+                        <?php foreach (['imrad' => 'IMRAD', 'full' => 'Full Manuscript', 'other' => 'Other'] as $slotKey => $slotLabel): ?>
+                        <tr class="pdf-slot" data-format="<?= e($slotKey) ?>" hidden>
+                          <th scope="row">
+                            <label class="form-label pdf-slot-label" for="pdfFile_<?= e($slotKey) ?>"><?= e($slotLabel) ?></label>
+                          </th>
+                          <td>
+                            <div class="docs-file">
+                              <?php /* The native control is off the page and the label opens it,
+                                       as on Step 3: left in the row it drew the browser's own
+                                       "No file chosen" beside a button saying the same thing, and
+                                       its width answered to what it held, so choosing a file
+                                       pushed the name along. Not "required" for the browser to
+                                       enforce either: the form is novalidate and a hidden
+                                       required input could never be satisfied, so the step's own
+                                       check and the server ask instead. */ ?>
+                              <input type="file" class="docs-input js-pdf" id="pdfFile_<?= e($slotKey) ?>"
+                                     name="pdf_<?= e($slotKey) ?>" data-format="<?= e($slotKey) ?>"
+                                     accept="application/pdf" aria-label="<?= e($slotLabel) ?> PDF">
+                              <label class="docs-choose" for="pdfFile_<?= e($slotKey) ?>">Choose file</label>
+                              <div class="file-indicator pdf-indicator" id="pdf-indicator-<?= e($slotKey) ?>">
+                                <span class="material-symbols-outlined mi-18 text-muted">cancel</span>
+                                <span class="fi-name">No PDF selected</span>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                        <?php endforeach; ?>
+                      </tbody>
+                      <tfoot>
+                        <tr>
+                          <td colspan="2">
+                            <p class="pdf-slots-size">PDF only, <?= e(max_upload_label()) ?> at most.</p>
+                            <?php /* Both files travel in one request, which PHP refuses outright
+                                     when they pass post_max_size between them, however far each
+                                     is under its own limit. */ ?>
+                            <p class="pdf-slots-note">Both files, with any supporting documents, have to fit within <?= e(max_post_label()) ?> in all.</p>
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
                   </div>
 
                   <div class="ai-extract-button-container text-center">
@@ -5237,8 +5700,23 @@ body.pdf-docked > .site-footer {
                             <span class="doc-editor-count" data-role="count">0 words</span>
                             <button type="button" class="doc-tool doc-expand" data-role="expand" title="Expand this section (Esc to exit)" aria-label="Expand this section" aria-pressed="false"><span class="material-symbols-outlined mi-18">open_in_full</span></button>
                           </div>
+                          <?php /* The browser's own spell checker, the red underline a
+                                   word processor draws under a word it does not know,
+                                   with its suggestions on a right-click. Asked for
+                                   explicitly rather than left to the default, which is
+                                   the user agent's to decide and is off in some of them.
+
+                                   Which words count as known is the reader's browser and
+                                   its dictionaries, not this page: a page cannot ship a
+                                   dictionary to the native checker or add a word to it,
+                                   and there is no API for either. Chrome checks against
+                                   every language enabled under Settings > Languages >
+                                   Spell check and marks only a word that none of them
+                                   knows, so a student writing in Filipino adds Filipino
+                                   there once and their own words stop being marked. */ ?>
                           <div class="doc-surface"
                                contenteditable="true"
+                               spellcheck="true"
                                role="textbox"
                                aria-multiline="true"
                                aria-label="<?= e($sec['label']) ?>"
@@ -5293,76 +5771,103 @@ body.pdf-docked > .site-footer {
                   </h3>
                 </div>
 
-                <div class="alert alert-warning mb-4">
+                <?php /* No document on this step is marked required or optional any more.
+                         The four below are the ones a paper is normally filed with; which of
+                         them this paper actually needs is the author's to judge, and they are
+                         asked once, on the way to Step 4 (confirmSupportingDocs()), rather
+                         than told row by row. */ ?>
+                <div class="alert alert-info mb-4">
                   <div id="docsRequirementNote">
-                    <strong>Required documents</strong>
-                    <p class="mb-0 mt-1">These are needed before the paper can be submitted.</p>
+                    <strong>What to attach</strong>
+                    <p class="mb-0 mt-1">Attach the documents your paper is filed with. You can
+                      come back to this step at any time before you submit.</p>
                   </div>
                 </div>
 
-                <!-- Ethics bundle -->
+                <?php /* One table rather than three cards of stacked pairs: what is being
+                         asked for down the left, the file for it down the right, so the whole
+                         list reads at a glance. The four named documents are fixed rows; under
+                         them the student adds and names as many of their own as they need, the
+                         way they add sections of their own at Step 2. */ ?>
                 <div class="docs-card">
                   <div class="docs-card-head">
-                    <span class="material-symbols-outlined mi-20">verified_user</span>
-                    <h4>Ethics Clearance Bundle</h4>
+                    <span class="material-symbols-outlined mi-20">folder_open</span>
+                    <h4>Supporting Documents</h4>
+                    <span class="docs-card-hint">PDF only</span>
                   </div>
                   <div class="docs-card-body">
                     <p class="docs-note">
-                      Each file must be a PDF. The clearance, the consent form and the instrument
-                      you used to gather data are reviewed together.
+                      Each file must be a PDF. The ethics clearance, the consent form and the
+                      instrument you used to gather data are reviewed together.
                     </p>
-                    <div class="row g-3">
-                      <div class="col-md-4">
-                        <label class="form-label" for="ethics_clearance">Ethics Clearance</label>
-                        <input type="file" name="ethics_clearance" id="ethics_clearance" class="form-control" accept="application/pdf">
-                        <div class="file-indicator" id="ethics-indicator"><span class="material-symbols-outlined mi-18 text-muted">cancel</span> No file selected</div>
-                      </div>
-                      <div class="col-md-4">
-                        <label class="form-label" for="consent_form">Consent Form</label>
-                        <input type="file" name="consent_form" id="consent_form" class="form-control" accept="application/pdf">
-                        <div class="file-indicator" id="consent-indicator"><span class="material-symbols-outlined mi-18 text-muted">cancel</span> No file selected</div>
-                      </div>
-                      <div class="col-md-4">
-                        <label class="form-label" for="data_collection">Data Collection Tool</label>
-                        <input type="file" name="data_collection" id="data_collection" class="form-control" accept="application/pdf">
-                        <div class="file-indicator" id="data-indicator"><span class="material-symbols-outlined mi-18 text-muted">cancel</span> No file selected</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Copyright -->
-                <div class="docs-card">
-                  <div class="docs-card-head">
-                    <span class="material-symbols-outlined mi-20">copyright</span>
-                    <h4>Copyright Documentation</h4>
-                  </div>
-                  <div class="docs-card-body">
-                    <label class="form-label" for="copyright_doc">Copyright / IP Document</label>
-                    <input type="file" name="copyright_doc" id="copyright_doc" class="form-control" accept="application/pdf">
-                    <div class="file-indicator" id="copyright-indicator"><span class="material-symbols-outlined mi-18 text-muted">cancel</span> No file selected</div>
-                  </div>
-                </div>
-
-                <!-- Anything else -->
-                <div class="docs-card">
-                  <div class="docs-card-head">
-                    <span class="material-symbols-outlined mi-20">attach_file</span>
-                    <h4>Other Document</h4>
-                    <span class="docs-card-hint">Optional</span>
-                  </div>
-                  <div class="docs-card-body">
-                    <div class="row g-3">
-                      <div class="col-md-5">
-                        <label class="form-label" for="other_doc_name">Document name</label>
-                        <input type="text" class="form-control" id="other_doc_name" name="other_doc_name" placeholder="What is this document?">
-                      </div>
-                      <div class="col-md-7">
-                        <label class="form-label" for="other_doc">File</label>
-                        <input type="file" name="other_doc" id="other_doc" class="form-control" accept="application/pdf">
-                        <div class="file-indicator" id="other-indicator"><span class="material-symbols-outlined mi-18 text-muted">do_not_disturb_on</span> Optional</div>
-                      </div>
-                    </div>
+                    <table class="docs-table">
+                      <thead>
+                        <tr>
+                          <th scope="col">Document</th>
+                          <th scope="col">File</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <th scope="row"><label class="form-label" for="ethics_clearance">Ethics Clearance</label></th>
+                          <td>
+                            <div class="docs-file">
+                              <input type="file" name="ethics_clearance" id="ethics_clearance" class="docs-input" accept="application/pdf">
+                              <label class="docs-choose" for="ethics_clearance">Choose file</label>
+                              <div class="file-indicator" id="ethics-indicator"><span class="material-symbols-outlined mi-18 text-muted">cancel</span> No file selected</div>
+                            </div>
+                          </td>
+                        </tr>
+                        <tr>
+                          <th scope="row"><label class="form-label" for="consent_form">Consent Form</label></th>
+                          <td>
+                            <div class="docs-file">
+                              <input type="file" name="consent_form" id="consent_form" class="docs-input" accept="application/pdf">
+                              <label class="docs-choose" for="consent_form">Choose file</label>
+                              <div class="file-indicator" id="consent-indicator"><span class="material-symbols-outlined mi-18 text-muted">cancel</span> No file selected</div>
+                            </div>
+                          </td>
+                        </tr>
+                        <tr>
+                          <th scope="row"><label class="form-label" for="data_collection">Data Collection Tool</label></th>
+                          <td>
+                            <div class="docs-file">
+                              <input type="file" name="data_collection" id="data_collection" class="docs-input" accept="application/pdf">
+                              <label class="docs-choose" for="data_collection">Choose file</label>
+                              <div class="file-indicator" id="data-indicator"><span class="material-symbols-outlined mi-18 text-muted">cancel</span> No file selected</div>
+                            </div>
+                          </td>
+                        </tr>
+                        <tr>
+                          <th scope="row"><label class="form-label" for="copyright_doc">Copyright / IP Document</label></th>
+                          <td>
+                            <div class="docs-file">
+                              <input type="file" name="copyright_doc" id="copyright_doc" class="docs-input" accept="application/pdf">
+                              <label class="docs-choose" for="copyright_doc">Choose file</label>
+                              <div class="file-indicator" id="copyright-indicator"><span class="material-symbols-outlined mi-18 text-muted">cancel</span> No file selected</div>
+                            </div>
+                          </td>
+                        </tr>
+                      </tbody>
+                      <?php /* The student's own rows keep their own tbody, so adding or
+                               removing one never touches the four above it. */ ?>
+                      <tbody id="docsExtraRows"></tbody>
+                      <tfoot>
+                        <tr>
+                          <td colspan="2">
+                            <button type="button" class="btn-add-doc" id="btnAddDoc">
+                              <span class="material-symbols-outlined mi-18">add</span>
+                              Add another document
+                            </button>
+                            <span class="docs-add-note" id="docsAddNote"></span>
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                    <?php /* The names of the rows the student added, so a saved draft can put
+                             the rows back before their values are restored into them: a box made
+                             after the page loaded is not there for the restore to find. */ ?>
+                    <input type="hidden" id="extraDocs" name="extra_docs" value="">
                   </div>
                 </div>
 
@@ -5377,6 +5882,12 @@ body.pdf-docked > .site-footer {
               </div>
 
               <!-- STEP 4: Review & Submit -->
+              <?php /* Where the Writing View's section lives while it is the pane's
+                       page: inside the form, so its hidden field still posts, and
+                       outside every step, so no hidden step can take it off the
+                       screen (papelSide's toHolder/fromHolder). */ ?>
+              <div id="docPaneHolder"></div>
+
               <div class="upload-section" id="step4">
                 <div class="section-header">
                   <h3 class="section-title">
@@ -5525,18 +6036,184 @@ body.pdf-docked > .site-footer {
 
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 
-/* ----- Supporting documents, by paper type -----
-   Ethics clearance, consent and a data-collection tool are only demanded of the
-   types that involve human participants and original data gathering. The list
-   mirrors paper_type_needs_documents() in config/core.php: the server decides,
-   this only keeps the form honest about what it is going to ask for. */
-const DOCS_REQUIRED_FOR = <?= json_encode(array_values(array_filter(
-    array_keys(paper_types() + paper_types_retired()),
-    'paper_type_needs_documents'))) ?>;
-/* Retired types are included so a draft filed under one still shows its name
-   rather than a bare code; only paper_types() is offered in the dropdown. */
-const PAPER_TYPE_LABELS = <?= json_encode(paper_types() + paper_types_retired(),
-    JSON_UNESCAPED_UNICODE) ?>;
+/* ----- Documents the student names themselves -----
+   Beyond the four named ones, Step 3 takes as many rows as the student adds,
+   each a name they type and one PDF. The names are mirrored into the hidden
+   extra_docs field so a saved draft can rebuild the rows before the restore
+   puts the values back, exactly as the sections they add for themselves do. */
+const EXTRA_DOC_MAX = <?= (int) SUPPORTING_DOC_EXTRA_MAX ?>;
+let extraDocSeq = 0;
+
+function extraDocBody()  { return document.getElementById('docsExtraRows'); }
+function extraDocRows()  { const b = extraDocBody(); return b ? Array.from(b.children) : []; }
+function extraDocName(tr) {
+    const box = tr.querySelector('input[name="extra_doc_name[]"]');
+    return box ? box.value.replace(/\s+/g, ' ').trim() : '';
+}
+function extraDocFile(tr) {
+    const box = tr.querySelector('input[type="file"]');
+    return (box && box.files && box.files[0]) ? box.files[0] : null;
+}
+
+/* The hidden field and the Add button both follow the rows, so they are kept in
+   one place rather than at each of the handlers that change them. */
+function syncExtraDocs() {
+    const rows = extraDocRows();
+    const field = document.getElementById('extraDocs');
+    if (field) { field.value = JSON.stringify(rows.map(extraDocName)); }
+    const btn = document.getElementById('btnAddDoc');
+    const note = document.getElementById('docsAddNote');
+    const full = rows.length >= EXTRA_DOC_MAX;
+    if (btn) { btn.disabled = full; }
+    if (note) {
+        note.textContent = full
+            ? 'That is as many as you may add (' + EXTRA_DOC_MAX + ').'
+            : (rows.length ? rows.length + ' of ' + EXTRA_DOC_MAX + ' added' : '');
+    }
+}
+
+function addExtraDocRow(name) {
+    const body = extraDocBody();
+    if (!body || body.children.length >= EXTRA_DOC_MAX) { return null; }
+    const id = 'extraDoc' + (++extraDocSeq);
+
+    const tr = document.createElement('tr');
+    tr.className = 'docs-extra';
+
+    const th = document.createElement('th');
+    th.setAttribute('scope', 'row');
+    const nameBox = document.createElement('input');
+    nameBox.type = 'text';
+    nameBox.className = 'form-control';
+    nameBox.name = 'extra_doc_name[]';
+    nameBox.maxLength = 80;
+    nameBox.placeholder = 'What is this document?';
+    // A person's typing, so it is assigned as a value and never as markup.
+    nameBox.value = name || '';
+    nameBox.setAttribute('aria-label', 'Name of this document');
+    nameBox.addEventListener('input', syncExtraDocs);
+    th.appendChild(nameBox);
+
+    const td = document.createElement('td');
+    const wrap = document.createElement('div');
+    wrap.className = 'docs-file';
+
+    const file = document.createElement('input');
+    file.type = 'file';
+    file.id = id;
+    file.className = 'docs-input';
+    file.name = 'extra_doc[]';
+    file.accept = 'application/pdf';
+    file.addEventListener('change', function () { updateFileIndicator(this, id + '-indicator'); });
+
+    const choose = document.createElement('label');
+    choose.className = 'docs-choose';
+    choose.setAttribute('for', id);
+    choose.textContent = 'Choose file';
+
+    const ind = document.createElement('div');
+    ind.className = 'file-indicator';
+    ind.id = id + '-indicator';
+    // The same empty state updateFileIndicator() paints, icon included.
+    ind.innerHTML = '<span class="material-symbols-outlined mi-18 text-muted">cancel</span> No file selected';
+
+    const bin = document.createElement('button');
+    bin.type = 'button';
+    bin.className = 'docs-row-remove';
+    bin.title = 'Remove this document';
+    bin.setAttribute('aria-label', 'Remove this document');
+    bin.innerHTML = '<span class="material-symbols-outlined mi-18">delete</span>';
+    bin.addEventListener('click', function () {
+        tr.remove();
+        syncExtraDocs();
+    });
+
+    wrap.appendChild(file);
+    wrap.appendChild(choose);
+    wrap.appendChild(ind);
+    wrap.appendChild(bin);
+    td.appendChild(wrap);
+    tr.appendChild(th);
+    tr.appendChild(td);
+    body.appendChild(tr);
+    syncExtraDocs();
+    return tr;
+}
+
+/* Puts the rows of a saved draft back. The files are not saved with a draft (see
+   "A draft lives in two places"), so this restores the names and leaves each row
+   waiting for its PDF again. */
+function restoreExtraDocs(raw) {
+    const body = extraDocBody();
+    if (!body) { return; }
+    let names = [];
+    try { const v = JSON.parse(raw || '[]'); if (Array.isArray(v)) { names = v; } }
+    catch (err) { names = []; }
+    body.textContent = '';
+    names.slice(0, EXTRA_DOC_MAX).forEach(function (n) { addExtraDocRow(String(n || '')); });
+    syncExtraDocs();
+}
+
+/* What is wrong with the name typed for a document, in the words the server
+   uses (supporting_doc_name_problem() in config/core.php). A paper type is
+   "Case Study" in two words; a document is often "Certificate of Originality
+   and Authorship", so the limit and the examples differ from otherNameProblem's.
+   Keep the two files together. */
+const DOC_NAME_MAX_WORDS = <?= (int) SUPPORTING_DOC_NAME_MAX_WORDS ?>;
+function docNameProblem(name) {
+    const text = String(name || '').trim();
+    if (!text) { return 'Please type what this document is called.'; }
+    if (text.replace(/[^\p{L}]+/gu, '').length < 2) {
+        return 'Please write what this document is called, in words.';
+    }
+    if (text.split(/\s+/).length > DOC_NAME_MAX_WORDS) {
+        return 'Please keep the name of a document to ' + DOC_NAME_MAX_WORDS
+             + ' words at most, the way "Certificate of Originality" names one.';
+    }
+    const bare = text.toLowerCase().replace(/[^\p{L}\s]+/gu, ' ').replace(/\s+/g, ' ').trim();
+    if (bare && OTHER_NAME_FILLER.indexOf(bare) !== -1) {
+        return 'Please write what this document is called, not a greeting.';
+    }
+    if (otherNameLooksRandom(text)) {
+        return 'That does not look like a name. Please write what the document is called, '
+             + 'like "Turnitin Report" or "Certificate of Originality".';
+    }
+    return null;
+}
+
+/* What is wrong with the rows the student added, in the words the server would
+   use (supporting_docs_extra() in config/core.php). Null when there is nothing
+   wrong. The server is still the one that decides; this is the earlier half. */
+function extraDocProblem() {
+    const seen = {};
+    const rows = extraDocRows();
+    for (let i = 0; i < rows.length; i++) {
+        const tr = rows[i];
+        const name = extraDocName(tr);
+        const file = extraDocFile(tr);
+        if (!name && !file) { continue; }        // a row left empty is not an answer
+        if (!name) {
+            return { message: 'One of the documents you attached has no name. Type what it is, or remove the row.',
+                     field: tr.querySelector('input[name="extra_doc_name[]"]') };
+        }
+        if (!file) {
+            return { message: 'There is no file attached for "' + name + '". Choose a PDF for it, or remove the row.',
+                     field: tr.querySelector('input[type="file"]') };
+        }
+        const bad = docNameProblem(name);
+        if (bad) {
+            return { message: bad, field: tr.querySelector('input[name="extra_doc_name[]"]') };
+        }
+        const key = name.toLowerCase();
+        if (seen[key]) {
+            return { message: 'Two of your documents are both called "' + name + '". Give them different names.',
+                     field: tr.querySelector('input[name="extra_doc_name[]"]') };
+        }
+        seen[key] = true;
+    }
+    return null;
+}
+
 const REQUIRED_DOCS = [
     { name: 'ethics_clearance', label: 'Ethics Clearance' },
     { name: 'consent_form',     label: 'Consent Form' },
@@ -5630,53 +6307,69 @@ function syncYearOnly() {
         ? 'Your paper card will show only the year, from the Year box above.'
         : 'When the research was finished. Shown on your paper card.';
 }
-function supportingDocsRequired() {
-    return DOCS_REQUIRED_FOR.indexOf(currentPaperType()) !== -1;
-}
-function paperTypeLabel() {
-    if (currentPaperType() === 'other') return otherPaperTypeName() || 'paper of this type';
-    return PAPER_TYPE_LABELS[currentPaperType()] || 'paper of this type';
-}
+/* Step 3 no longer grades its documents. A row used to carry " *" or " (optional)"
+   after its name, decided by the paper type, and the banner said the same thing in
+   a sentence. Both are gone: the step lists what a paper is filed with, and the one
+   question about whether this paper has everything it needs is asked on the way to
+   Step 4, where the author can answer it for their own work.
 
-/* Repaints Step 3 whenever the paper type changes: the required markers, the
-   browser's own `required` attributes and the explanatory banner all follow the
-   same rule, so the form never asks for something it will not enforce. */
+   This still runs on a change of paper type, to clear a mark left by a page that was
+   open across the change, and to keep the browser from enforcing anything of its own. */
 function syncSupportingDocs() {
-    const required = supportingDocsRequired();
-
     REQUIRED_DOCS.forEach(function (doc) {
         const input = document.querySelector('input[name="' + doc.name + '"]');
         if (!input) return;
-        input.required = required;
+        input.required = false;
 
-        /* The input's own label, found by its `for`, not "the first label in
-           some ancestor". Copyright/IP sits outside the grid the other three
-           are in, so climbing to a `col-` ancestor walked all the way up past
-           Step 3 and marked the first label it met on the page: Academic
-           Program, which then read "Academic Program * (optional)". */
-        const label = document.querySelector('label[for="' + doc.name + '"]');
-        if (!label) return;
-        let mark = label.querySelector('.doc-req-mark');
-        if (!mark) {
-            mark = document.createElement('span');
-            mark.className = 'doc-req-mark';
-            label.appendChild(mark);
-        }
-        mark.className = 'doc-req-mark ' + (required ? 'text-danger' : 'text-muted');
-        mark.textContent = required ? ' *' : ' (optional)';
+        /* The input's own label, found by its `for`, and scoped to the left-hand
+           cell: the "Choose file" label beside the control carries the same `for`,
+           and Copyright/IP sits outside the grid the other three are in, so a
+           looser query once marked Academic Program instead. */
+        const label = document.querySelector('.docs-table th label[for="' + doc.name + '"]');
+        const mark = label && label.querySelector('.doc-req-mark');
+        if (mark) mark.remove();
     });
+}
 
-    const banner = document.getElementById('docsRequirementNote');
-    if (banner) {
-        banner.innerHTML = required
-            ? '<strong>Required documents</strong>'
-              + '<p class="mb-0 mt-1">A ' + paperTypeLabel() + ' must be submitted with all four documents below.</p>'
-            : '<strong>Documents are optional for this paper type</strong>'
-              + '<p class="mb-0 mt-1">A ' + paperTypeLabel() + ' does not require ethics clearance or a consent form. '
-              + 'Attach anything you have; nothing here will hold up your submission.</p>';
-        banner.parentElement.classList.toggle('alert-warning', required);
-        banner.parentElement.classList.toggle('alert-info', !required);
+/* The one question Step 3 asks, on the way to Step 4. It names what is still empty
+   so the author can answer it, and then takes their answer: nothing here refuses to
+   go on. The submit does not demand these documents either, so an answer of "Yes"
+   cannot turn into a refusal after a minute of uploading.
+
+   docsConfirmed carries the answer back through goToStep, which is an ordinary
+   function and cannot be awaited: made async, every caller would have to be, and
+   the history walks it in a loop one step at a time. The flag is set, the step is
+   taken synchronously, and it is cleared again on the way out. */
+let docsConfirmed = false;
+async function confirmSupportingDocs() {
+    const empty = REQUIRED_DOCS.filter(function (d) {
+        const input = document.querySelector('input[name="' + d.name + '"]');
+        return !input || !input.files[0];
+    });
+    const mine = extraDocRows().filter(extraDocFile).length;
+    const got = (REQUIRED_DOCS.length - empty.length) + mine;
+
+    let message;
+    if (!empty.length) {
+        message = 'You have attached ' + got + (got === 1 ? ' document' : ' documents')
+            + ', and none of the boxes on this step is empty.';
+    } else if (empty.length === REQUIRED_DOCS.length && !mine) {
+        message = 'You have not attached any supporting documents yet.';
+    } else {
+        message = 'You have attached ' + got + (got === 1 ? ' document' : ' documents')
+            + '. Still empty: ' + joinNames(empty.map(function (d) { return d.label; })) + '.';
     }
+    message += ' You can come back to this step at any time before you submit.';
+
+    const go = await window.papelConfirm(message, {
+        title: 'Have you attached every document you need?',
+        icon: 'folder_open',
+        confirmText: 'Yes, continue',
+        cancelText: 'Not yet'
+    });
+    if (!go) return;
+    docsConfirmed = true;
+    try { goToStep(4); } finally { docsConfirmed = false; }
 }
 
 // Step navigation
@@ -5787,6 +6480,15 @@ function handleStatusChange(checkbox) {
    ========================================================================= */
 const papelDoc = (function () {
     const editors = {};                      // section key -> { root, surface, input, count }
+    /* The order the paper has them in: the six as the page writes them, then the
+       author's own. Kept here rather than read off the page, because at the moment
+       the list is built a box can be somewhere other than its place. A section open
+       in the Writing View is lifted out of its step into #docPaneHolder, which sits
+       at the end of the form, and the one just given up for it is still there until
+       papelSide puts it back a frame later: by document order both sorted last, so
+       switching section in the Writing View shuffled the list it was shown in (the
+       Abstract jumped to the bottom). */
+    const order = [];                        // section keys, in the paper's order
     /* The sections the author chose to submit, or null while no choice has been
        made, which means every one of them: what this page always asked for. A
        section outside the choice is hidden and is not asked for, but it is never
@@ -6748,6 +7450,11 @@ const papelDoc = (function () {
         return el.textContent.replace('*', '').trim();
     }
 
+    // The sections in the paper's order; see `order` above for why it is not the page's.
+    function sectionsInOrder() {
+        return order.filter(function (k) { return editors[k]; });
+    }
+
     function buildTabs(ed) {
         const bar = document.createElement('div');
         bar.className = 'doc-tabs';
@@ -6759,46 +7466,142 @@ const papelDoc = (function () {
         head.textContent = 'Sections you are submitting';
         bar.appendChild(head);
 
-        document.querySelectorAll('.doc-editor').forEach(function (root) {
-            const other = editors[root.getAttribute('data-section')];
+        sectionsInOrder().forEach(function (key) {
+            const other = editors[key];
             if (!other) return;
             /* Only the sections being submitted. One left out is hidden on the form,
                so expanding it showed nothing at all, and the full view seemed to have
                closed itself when its tab was pressed. */
-            if (!inScope(other.key) || root.classList.contains('is-out-of-scope')) return;
+            if (!inScope(key) || other.root.classList.contains('is-out-of-scope')) return;
 
             const isCurrent = other.key === ed.key;
-            const tab = document.createElement('button');
-            tab.type = 'button';
+            const label = sectionTitle(other);
+            const tab = document.createElement('div');
             tab.className = 'doc-tab' + (isCurrent ? ' is-active' : '');
-            tab.setAttribute('role', 'tab');
-            tab.setAttribute('aria-selected', isCurrent ? 'true' : 'false');
-            tab.dataset.target = other.key;
+            tab.dataset.section = other.key;
+
+            const main = document.createElement('button');
+            main.type = 'button';
+            main.className = 'doc-tab-main';
+            main.setAttribute('role', 'tab');
+            main.setAttribute('aria-selected', isCurrent ? 'true' : 'false');
+            main.dataset.target = other.key;
             const name = document.createElement('span');
             name.className = 'doc-tab-name';
-            name.textContent = sectionTitle(other);
-            tab.appendChild(name);
+            name.textContent = label;
+            main.appendChild(name);
 
             if (plainText(other) === '') {
                 const dot = document.createElement('span');
                 dot.className = 'doc-tab-dot';
                 dot.title = 'Nothing written here yet';
-                tab.appendChild(dot);
+                main.appendChild(dot);
             }
+            tab.appendChild(main);
+
+            const x = document.createElement('button');
+            x.type = 'button';
+            x.className = 'doc-tab-x';
+            x.dataset.target = other.key;
+            x.title = 'Take ' + label + ' off your paper';
+            x.setAttribute('aria-label', 'Take ' + label + ' off your paper');
+            const xi = document.createElement('span');
+            xi.className = 'material-symbols-outlined';
+            xi.setAttribute('aria-hidden', 'true');
+            xi.textContent = 'close';
+            x.appendChild(xi);
+            tab.appendChild(x);
+
             bar.appendChild(tab);
+        });
+
+        /* Adding a section from the list itself, which is where a student looking at
+           "Sections you are submitting" goes to change what is on it. It asks the same
+           question the Change button at the top of Step 2 asks, rather than growing a
+           second way in: that question is the one place a section of their own is named,
+           and the only one that can also put a standard section back. It is not a tab, so
+           it is left out of the run above and has no role of its own; the heading is a
+           plain child of this tablist already. */
+        const add = document.createElement('button');
+        add.type = 'button';
+        add.className = 'doc-tab-add';
+        add.title = 'Add a section to your paper';
+        const plus = document.createElement('span');
+        plus.className = 'material-symbols-outlined';
+        plus.setAttribute('aria-hidden', 'true');
+        plus.textContent = 'add';
+        const addName = document.createElement('span');
+        addName.className = 'doc-tab-name';
+        addName.textContent = 'Add a section';
+        add.appendChild(plus);
+        add.appendChild(addName);
+        bar.appendChild(add);
+
+        /* A touch screen has no hover, so a long press on a row stands in for it and
+           brings out that row's X. A move cancels it, because dragging along the list
+           is how it is scrolled on a phone, and the press that revealed the X does not
+           also change section. One row shows its X at a time, and a press anywhere
+           else puts it away. */
+        const LONG_PRESS = 450, MOVE_SLOP = 8;
+        let pressAt = null, pressTimer = null, longPressed = false;
+        function endPress() { clearTimeout(pressTimer); pressTimer = null; pressAt = null; }
+        function showX(row) {
+            bar.querySelectorAll('.doc-tab.show-x').forEach(function (t) {
+                if (t !== row) t.classList.remove('show-x');
+            });
+            if (!row) return;
+            row.classList.add('show-x');
+            /* Added while this press is still down, so what it hears is the next one.
+               It takes itself off with the row, and the bar is built afresh on every
+               change of section, so none of these is left behind. */
+            document.addEventListener('pointerdown', function away(e) {
+                if (e.target.closest && e.target.closest('.doc-tab') === row) return;
+                row.classList.remove('show-x');
+                document.removeEventListener('pointerdown', away, true);
+            }, true);
+        }
+        bar.addEventListener('pointerdown', function (e) {
+            if (e.pointerType !== 'touch') return;
+            const row = e.target.closest('.doc-tab');
+            if (!row) return;
+            pressAt = { x: e.clientX, y: e.clientY };
+            clearTimeout(pressTimer);
+            pressTimer = setTimeout(function () {
+                longPressed = true;
+                showX(row);
+            }, LONG_PRESS);
+        });
+        bar.addEventListener('pointermove', function (e) {
+            if (!pressAt) return;
+            if (Math.abs(e.clientX - pressAt.x) > MOVE_SLOP
+             || Math.abs(e.clientY - pressAt.y) > MOVE_SLOP) endPress();
+        });
+        ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (t) {
+            bar.addEventListener(t, endPress);
         });
 
         // Keep the caret where it is when a tab is pressed.
         bar.addEventListener('mousedown', function (e) { e.preventDefault(); });
         bar.addEventListener('click', function (e) {
-            const tab = e.target.closest('.doc-tab');
-            if (!tab) return;
-            const next = editors[tab.dataset.target];
+            const x = e.target.closest('.doc-tab-x');
+            if (x) {
+                if (typeof removeSectionFromPaper === 'function') removeSectionFromPaper(x.dataset.target);
+                return;
+            }
+            if (e.target.closest('.doc-tab-add')) {
+                if (typeof askSectionScope === 'function') askSectionScope(true);
+                return;
+            }
+            // The press that brought the X out is not also a change of section.
+            if (longPressed) { longPressed = false; return; }
+            const main = e.target.closest('.doc-tab-main');
+            if (!main) return;
+            const next = editors[main.dataset.target];
             if (next && next !== ed) toggleExpand(next);
         });
 
         ed.root.appendChild(bar);
-        const active = bar.querySelector('.doc-tab.is-active');
+        const active = bar.querySelector('.doc-tab.is-active .doc-tab-main');
         if (active && active.scrollIntoView) {
             active.scrollIntoView({ block: 'nearest', inline: 'nearest' });
         }
@@ -6858,8 +7661,6 @@ const papelDoc = (function () {
             root.classList.remove('is-expanded');
             const tabs = root.querySelector('.doc-tabs');
             if (tabs) tabs.remove();
-            const spacer = root.previousElementSibling;
-            if (spacer && spacer.classList.contains('doc-editor-spacer')) spacer.remove();
             const btn = root.querySelector('.doc-tool[data-role="expand"]');
             if (btn) {
                 btn.setAttribute('aria-pressed', 'false');
@@ -6867,6 +7668,18 @@ const papelDoc = (function () {
                 btn.querySelector('.material-symbols-outlined').textContent = 'open_in_full';
             }
         });
+        /* Every spacer in the page, rather than the one standing before each box.
+           In the panes a section open in the Writing View is moved out of its step
+           into #docPaneHolder, so by the time it is parked the spacer holding its
+           place is no longer its previous sibling and a positional lookup walked
+           straight past it. Each park left one behind and each unpark made another,
+           so the form filled up with "<section> is open in the Writing View" notes,
+           one more every time the student switched away from the tab and back.
+
+           A spacer exists only while a section is expanded, and this collapses all
+           of them, so afterwards there should be none left anywhere. Sweeping also
+           clears any that a page has already accumulated. */
+        document.querySelectorAll('.doc-editor-spacer').forEach(function (sp) { sp.remove(); });
         document.body.classList.remove('doc-expanded', 'doc-writing');
         document.documentElement.classList.remove('doc-expanded', 'doc-writing');
         // Heard by the panes (papelSide), whichever way the full view ended.
@@ -7570,6 +8383,7 @@ const papelDoc = (function () {
             count:   root.querySelector('[data-role="count"]')
         };
         editors[ed.key] = ed;
+        if (order.indexOf(ed.key) === -1) order.push(ed.key);
 
         // Produce tags (<b>, <i>) rather than inline styles, and <p> on Enter:
         // both keep the stored markup simple enough to sanitise server-side.
@@ -8058,6 +8872,22 @@ const papelDoc = (function () {
             Object.keys(editors).forEach(function (k) {
                 editors[k].root.classList.toggle('is-out-of-scope', !inScope(k));
             });
+            /* The Writing View's list is built once, as a section opens, so a change to
+               what is being submitted has to be carried to it: without this, adding a
+               section from the + at its foot left the list exactly as it was, which reads
+               as the button doing nothing. If the open section is itself no longer being
+               submitted, its box is hidden on the form and there is nothing left to write
+               in, so the view closes rather than showing an empty one. */
+            const open = document.querySelector('.doc-editor.is-expanded');
+            if (!open) return;
+            const key = open.getAttribute('data-section');
+            if (!inScope(key) || open.classList.contains('is-out-of-scope')) {
+                collapseExpanded();
+                return;
+            }
+            const old = open.querySelector('.doc-tabs');
+            if (old) old.remove();
+            buildTabs(editors[key]);
         },
         inScope: inScope,
         // The section in full view, if one is, and the history's way to change it.
@@ -8102,21 +8932,38 @@ const papelDoc = (function () {
             if (ed.root.classList.contains('is-expanded')) toggleExpand(ed);
             ed.root.remove();
             delete editors[key];
+            const at = order.indexOf(key);
+            if (at !== -1) order.splice(at, 1);
         },
         relabel: function (key, label) {
             const ed = editors[key]; if (!ed || !isCustom(key)) return;
             setEditorLabel(ed.root, label);
         },
-        // Puts the added boxes in the order of a list of keys.
+        /* Puts the added boxes in the order of a list of keys. Their own sections are
+           the only ones that move, so the six keep their places and the register's
+           tail is rewritten: a row dragged into a new place in the chooser has to
+           reach the Writing View's list as well as the form. */
         orderCustom: function (keys) {
             const host = document.getElementById('customEditors'); if (!host) return;
             keys.forEach(function (k) { if (editors[k]) host.appendChild(editors[k].root); });
+            const wanted = keys.filter(function (k) { return editors[k] && isCustom(k); });
+            const rest = order.filter(function (k) { return !isCustom(k); });
+            const left = order.filter(function (k) { return isCustom(k) && wanted.indexOf(k) === -1; });
+            order.length = 0;
+            rest.concat(wanted, left).forEach(function (k) { order.push(k); });
         },
         flag: function (key) {
             const ed = editors[key]; if (!ed) return;
             ed.root.classList.add('is-invalid');
             ed.root.scrollIntoView({ behavior: 'smooth', block: 'center' });
             ed.surface.focus();
+            /* As with .needs-fill on a field: the mark goes the moment they
+               start writing, or a section they have just answered still reads
+               as the one that is wrong. */
+            ed.surface.addEventListener('input', function off() {
+                ed.root.classList.remove('is-invalid');
+                ed.surface.removeEventListener('input', off);
+            });
         },
         label: function (key) {
             const ed = editors[key]; if (!ed) return key;
@@ -8177,8 +9024,9 @@ function syncPdfSlots() {
         const on = pdfTicked(f.key);
         if (slot) slot.hidden = !on;
         if (f.key === 'other' && slot) {
+            // The row's name is the column's, so no "PDF": the table says that once.
             const name = slot.querySelector('.pdf-slot-label');
-            if (name) name.textContent = f.label + ' PDF';
+            if (name) name.textContent = f.label;
             input.setAttribute('aria-label', f.label + ' PDF');
         }
         if (!on && pdfFileOf(f.key)) {
@@ -8439,7 +9287,12 @@ const papelDraft = (function () {
         return Object.keys(data.fields).some(function (name) {
             const v = data.fields[name];
             // "Year only" is an answer about a date, not work, like the year box itself.
-            if (Array.isArray(v)) return v.length > 0 && name !== 'research_date_unknown';
+            if (Array.isArray(v)) {
+                if (name === 'extra_doc_name[]' || name === 'extra_doc_name') {
+                    return v.some(function (x) { return String(x || '').trim() !== ''; });
+                }
+                return v.length > 0 && name !== 'research_date_unknown';
+            }
             if (typeof v !== 'string') return false;
             const text = v.replace(/<[^>]*>/g, '').trim();
             // The year box is pre-filled, so on its own it means nothing. Nor does
@@ -8447,7 +9300,8 @@ const papelDraft = (function () {
             // are answers to a question, not work, and counting them would raise
             // "Continue where you left off?" for a student who did nothing but
             // answer it. What they type inside those sections still counts.
-            return text !== '' && name !== 'year' && name !== 'section_scope' && name !== 'custom_sections';
+            return text !== '' && name !== 'year' && name !== 'section_scope'
+                && name !== 'custom_sections' && name !== 'extra_docs';
         });
     }
 
@@ -8470,6 +9324,9 @@ const papelDraft = (function () {
         /* The author's own sections first: their boxes have to exist before the
            loop below can give them their text. A copy with none removes any. */
         if (typeof restoreCustomSections === 'function') restoreCustomSections((data.fields || {}).custom_sections);
+        /* And the rows of Step 3 the student added, for the same reason: their
+           boxes have to exist before the loop below can put the names back. */
+        if (typeof restoreExtraDocs === 'function') restoreExtraDocs((data.fields || {}).extra_docs);
 
         Object.keys(data.fields).forEach(function (name) {
             const value = data.fields[name];
@@ -8577,7 +9434,8 @@ const papelDraft = (function () {
                ignores them anyway, and sending them would be two uploads of up to
                the file limit each, on every save, to be thrown away. */
             ['pdf_imrad', 'pdf_full', 'research_pdf',
-             'ethics_clearance', 'consent_form', 'data_collection', 'copyright_doc', 'other_doc']
+             'ethics_clearance', 'consent_form', 'data_collection', 'copyright_doc',
+             'extra_doc[]']
                 .forEach(function (n) { body.delete(n); });
 
             // Only ever run because the student asked to save, so it earns the
@@ -8734,61 +9592,338 @@ function fileSizeLabel(bytes) {
     return (bytes / 1048576).toFixed(1) + 'MB';
 }
 
-/* The box for one manuscript format has two faces. With no file it is the drop
-   target: the upload icon, the prompt, and "No PDF selected" beside it. Once a
-   PDF is chosen the prompt has nothing left to say, so the box shows the file
-   instead: a tick where the icon was, then its name over its size (the CSS hides
-   the prompt on .has-file). Choosing nothing, or clearing the choice, puts it
-   all back. */
+/* The manuscript's row in the table, beside its Choose file button: a tick and
+   the PDF's name and weight once there is one, and otherwise the empty state.
+   The same box the supporting documents use (updateFileIndicator below), and
+   built from elements for the same reason: the name is the file's, so it goes
+   in as text. A file name is whatever the student's disk allows, and on most
+   systems that includes < and >.
+
+   What a click does is the one difference, and it is why this is not that
+   function: this file is the paper being read against, so it opens in the panel
+   beside the form (papelPdfPreview, wired where the inputs are) rather than in
+   a viewer of its own. The X takes it off again, and stops the click there
+   reaching the box and opening the panel as well. */
 function updatePdfIndicator(input) {
-    const indicator = pdfIndicator(input.dataset.format);
-    const zone = indicator.closest('.upload-zone');
-    const icon = zone ? zone.querySelector('.upload-zone-icon') : null;
-    papelPdfPreview.reset(input.dataset.format);
-    if (input.files && input.files[0]) {
-        const file = input.files[0];
-        /* The name goes in by textContent, not into the HTML string: a file
-           name is whatever the student's disk allows, and on most systems that
-           includes < and >. It also gets an element of its own, so it can be cut
-           to one line. Wrapped, a typical manuscript file name ran to four lines
-           and stretched the box to twice its height. The full name is the row's
-           tooltip, and the preview panel's header shows it too. */
-        const name = document.createElement('span');
-        name.className = 'pdf-indicator-name';
-        name.textContent = file.name;
-        const size = document.createElement('span');
-        size.className = 'pdf-indicator-size text-muted';
-        size.textContent = fileSizeLabel(file.size);
-        indicator.textContent = '';
-        indicator.appendChild(name);
-        indicator.appendChild(size);
-        indicator.title = file.name + '\nClick to preview';
-        indicator.classList.add('selected');
-        if (zone) zone.classList.add('has-file');
-        if (icon) { icon.textContent = 'check_circle'; icon.classList.add('mi-fill'); }
+    const key = input.dataset.format;
+    const indicator = pdfIndicator(key);
+    if (!indicator) return;
+    const file = (input.files && input.files[0]) ? input.files[0] : null;
+    papelPdfPreview.reset(key);
+    indicator.textContent = '';
+
+    const icon = document.createElement('span');
+    icon.className = 'material-symbols-outlined mi-18' + (file ? ' mi-fill' : ' text-muted');
+    icon.textContent = file ? 'check_circle' : 'cancel';
+    indicator.appendChild(icon);
+
+    /* One line, cut at the end: a manuscript's file name is often longer than
+       the cell, and wrapped it ran to several lines and grew the row. The whole
+       of it is the tooltip, and the panel's header shows it too. */
+    const name = document.createElement('span');
+    name.className = 'fi-name';
+    name.textContent = file ? file.name : 'No PDF selected';
+    indicator.appendChild(name);
+
+    indicator.classList.toggle('selected', !!file);
+    if (!file) { indicator.removeAttribute('title'); return; }
+
+    const size = document.createElement('span');
+    size.className = 'fi-size';
+    size.textContent = fileSizeLabel(file.size);
+    indicator.appendChild(size);
+
+    const clear = document.createElement('button');
+    clear.type = 'button';
+    clear.className = 'fi-clear';
+    clear.title = 'Remove this file';
+    clear.setAttribute('aria-label', 'Remove ' + file.name);
+    const x = document.createElement('span');
+    x.className = 'material-symbols-outlined mi-18';
+    x.textContent = 'close';
+    clear.appendChild(x);
+    clear.addEventListener('click', function (e) {
+        e.stopPropagation();          // the box itself opens the panel
+        clearPdf(key);
+    });
+    indicator.appendChild(clear);
+
+    indicator.title = file.name + '\nClick to preview';
+}
+
+/* The box beside a Choose file button: a tick and the PDF's name once there is
+   one, and otherwise the empty state. Built from elements rather than written
+   as markup, because the name is the file's and has to go in as text.
+
+   With a file in it the box is a control: left-click opens the PDF in the
+   page's own viewer, right-click offers that, a new tab and removing it, and an
+   X appears at its end on hover (always, on a touch screen). */
+function updateFileIndicator(input, indicatorId) {
+    const indicator = document.getElementById(indicatorId);
+    if (!indicator) { return; }
+    const file = (input.files && input.files[0]) ? input.files[0] : null;
+    indicator.textContent = '';
+
+    const icon = document.createElement('span');
+    icon.className = 'material-symbols-outlined mi-18' + (file ? ' mi-fill' : ' text-muted');
+    icon.textContent = file ? 'check_circle' : 'cancel';
+    indicator.appendChild(icon);
+
+    const name = document.createElement('span');
+    name.className = 'fi-name';
+    /* Every box on Step 3 says the same thing when it is empty, a row the student
+       added included. No document on the step is marked required or optional, so
+       an empty box reports only that it is empty; whether this paper needs what
+       goes in it is asked once, on the way to Step 4. */
+    name.textContent = file ? file.name : 'No file selected';
+    indicator.appendChild(name);
+
+    indicator.classList.toggle('selected', !!file);
+    indicator.title = file ? file.name : '';
+    indicator.onclick = null;
+    indicator.oncontextmenu = null;
+    if (!file) { return; }
+
+    const clear = document.createElement('button');
+    clear.type = 'button';
+    clear.className = 'fi-clear';
+    clear.title = 'Remove this file';
+    clear.setAttribute('aria-label', 'Remove ' + file.name);
+    const x = document.createElement('span');
+    x.className = 'material-symbols-outlined mi-18';
+    x.textContent = 'close';
+    clear.appendChild(x);
+    clear.addEventListener('click', function (e) {
+        e.stopPropagation();          // the box itself opens the file
+        clearFileInput(input, indicatorId);
+    });
+    indicator.appendChild(clear);
+
+    indicator.onclick = function () { openPickedFile(file); };
+    indicator.oncontextmenu = function (e) {
+        e.preventDefault();
+        docFileMenu(e.clientX, e.clientY, file, input, indicatorId);
+    };
+}
+
+/* Taking a file off again. A file input cannot be given a different file from
+   script, but it can be emptied, which is all this needs to do. */
+function clearFileInput(input, indicatorId) {
+    input.value = '';
+    updateFileIndicator(input, indicatorId);
+    if (typeof syncExtraDocs === 'function') { syncExtraDocs(); }
+}
+
+/* A supporting document opens in a viewer of its own, in a new tab, and not in
+   the panel beside the form. The panel holds one PDF at a time and that one is
+   the manuscript: sending a consent form to it replaced the paper the student
+   was reading against, and opening a second document replaced the first. The
+   file never leaves the browser either way; the new tab is handed the File
+   itself over postMessage, same origin only. */
+function openPickedFile(file) {
+    if (window.papelPdfDock && window.papelPdfDock.popOut) {
+        window.papelPdfDock.popOut(file, file.name);
     } else {
-        indicator.innerHTML = '<span class="material-symbols-outlined mi-18 text-muted">cancel</span> No PDF selected';
-        indicator.removeAttribute('title');
-        indicator.classList.remove('selected');
-        if (zone) zone.classList.remove('has-file');
-        if (icon) { icon.textContent = 'upload_file'; icon.classList.remove('mi-fill'); }
+        openPickedFileInTab(file);
     }
 }
 
-function updateFileIndicator(input, indicatorId) {
-    const indicator = document.getElementById(indicatorId);
-    if (input.files && input.files[0]) {
-        const fileName = input.files[0].name;
-        indicator.innerHTML = `<span class="material-symbols-outlined mi-18 mi-fill">check_circle</span> ${fileName}`;
-        indicator.classList.add('selected');
-    } else {
-        const isOptional = indicatorId === 'other-indicator';
-        indicator.innerHTML = isOptional 
-            ? '<span class="material-symbols-outlined mi-18 text-muted">do_not_disturb_on</span> Optional' 
-            : '<span class="material-symbols-outlined mi-18 text-muted">cancel</span> No file selected';
-        indicator.classList.remove('selected');
-    }
+/* A new browser tab. The object URL is let go of afterwards, but not at once:
+   revoking it before the tab has read it leaves the tab with nothing. */
+function openPickedFileInTab(file) {
+    const url = URL.createObjectURL(file);
+    window.open(url, '_blank', 'noopener');
+    setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
 }
+
+/* The right-click menu on a file. One menu for the page, reused, built on the
+   editor's own popover so there is a single kind of these. */
+let docFileMenuEl = null;
+function docFileMenu(x, y, file, input, indicatorId) {
+    closeDocFileMenu();
+    const menu = document.createElement('div');
+    menu.className = 'doc-pop open doc-menu';
+    [
+        ['open_in_new',  'Open in the viewer',  function () { openPickedFile(file); }],
+        ['picture_as_pdf', 'Open the file itself', function () { openPickedFileInTab(file); }],
+        ['delete',       'Remove',            function () { clearFileInput(input, indicatorId); }]
+    ].forEach(function (row) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'doc-menu-item';
+        const i = document.createElement('span');
+        i.className = 'material-symbols-outlined mi-18';
+        i.textContent = row[0];
+        b.appendChild(i);
+        b.appendChild(document.createTextNode(row[1]));
+        b.addEventListener('click', function () { closeDocFileMenu(); row[2](); });
+        menu.appendChild(b);
+    });
+    document.body.appendChild(menu);
+    docFileMenuEl = menu;
+
+    /* Placed at the pointer, then pulled back inside the window: it is fixed, so
+       nothing else will do that for it (the same as the help cards above). */
+    const r = menu.getBoundingClientRect();
+    const vw = document.documentElement.clientWidth;
+    const vh = document.documentElement.clientHeight;
+    menu.style.left = Math.max(8, Math.min(x, vw - r.width - 8)) + 'px';
+    menu.style.top  = Math.max(8, Math.min(y, vh - r.height - 8)) + 'px';
+
+    setTimeout(function () {
+        document.addEventListener('pointerdown', closeDocFileMenu, { once: true });
+        document.addEventListener('keydown', docFileMenuKey);
+        window.addEventListener('scroll', closeDocFileMenu, { once: true, capture: true });
+    }, 0);
+}
+function docFileMenuKey(e) { if (e.key === 'Escape') { closeDocFileMenu(); } }
+function closeDocFileMenu() {
+    if (docFileMenuEl) { docFileMenuEl.remove(); docFileMenuEl = null; }
+    document.removeEventListener('keydown', docFileMenuKey);
+}
+
+/* ---- The step bar folds down once the form scrolls ----------------------
+   Which of the two scrollers is live depends on whether the form is held in the
+   main pane (html.side-locked, #mainBody) or the page is scrolling itself, and
+   that changes with the window's width, so both are listened to and the live one
+   is asked at the time.
+
+   A threshold with room either side of it (12px down, 4px back), so a form
+   resting a pixel or two off the top does not flip the bar open and shut on
+   every wheel notch. Nothing is written on :root and no custom property changes
+   here: a class on the bar itself is the whole of it, and the browser restyles
+   that card rather than the page (see "A CSS variable written on <html> is a
+   page-wide restyle"). */
+(function () {
+    let bar = null, stuck = false, queued = false;
+
+    function steps() {
+        if (!bar || !bar.isConnected) { bar = document.querySelector('.upload-steps'); }
+        return bar;
+    }
+    function scroller() {
+        const b = document.getElementById('mainBody');
+        return (document.documentElement.classList.contains('side-locked') && b) ? b : null;
+    }
+    function scrolled() {
+        const el = scroller();
+        return el ? el.scrollTop : (window.scrollY || document.documentElement.scrollTop || 0);
+    }
+    /* Whether the folded bar still fits on one line, and what to drop until it
+       does. Measured, because the main pane can be narrow while the window is
+       wide, which no media query can see.
+
+       The test is whether the last step has dropped below the first, not whether
+       the bar overflows: .upload-steps is flex-wrap: wrap, so it never overflows,
+       it wraps, and a scrollWidth test reported it fitting while it sat on two
+       lines. */
+    function tooWide(el) {
+        /* Two ways it can fail to fit, because the bar is laid out two ways. In
+           the panes it is flex-wrap: wrap, so it never overflows and the sign is
+           the last step dropping below the first. Under 768px, and in a narrow
+           upload column, it is nowrap with overflow-x: auto, so it does not wrap
+           and the sign is the overflow. Testing only one of them left the other
+           width sitting on two lines, or scrolling sideways, while the bar
+           believed itself to fit. */
+        const items = el.querySelectorAll('.step-item');
+        if (items.length > 1 && items[items.length - 1].offsetTop > items[0].offsetTop + 2) {
+            return true;
+        }
+        return el.scrollWidth > el.clientWidth + 1;
+    }
+    function fit(el) {
+        el.classList.remove('is-tight', 'is-min');
+        if (!tooWide(el)) { return; }
+        el.classList.add('is-tight');          // only the step you are on is named
+        if (!tooWide(el)) { return; }
+        el.classList.add('is-min');            // and the rules between them go
+    }
+    function check() {
+        queued = false;
+        const el = steps();
+        if (!el) { return; }
+        const y = scrolled();
+        if (!stuck && y > 12) {
+            stuck = true;
+            el.classList.add('is-stuck');
+            fit(el);
+        } else if (stuck && y < 4) {
+            stuck = false;
+            el.classList.remove('is-stuck', 'is-tight', 'is-min');
+        }
+    }
+    // One check a frame at most: a scroll fires far more often than that.
+    function soon() { if (!queued) { queued = true; requestAnimationFrame(check); } }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        steps();
+        /* One listener for both scrollers. A scroll event does not bubble, but it
+           does run the capture path from the document, so this hears the main
+           pane's body and the window alike. Listening to #mainBody by name would
+           mean waiting for papelSide to build it, and this block is parsed well
+           before that: the first build of this heard nothing in the panes, where
+           the window never scrolls at all, so the bar never folded. */
+        document.addEventListener('scroll', soon, { capture: true, passive: true });
+        window.addEventListener('resize', function () {
+            const el = steps();
+            if (el && stuck) { fit(el); }
+            soon();
+        }, { passive: true });
+        /* The panes are built and taken apart as the window crosses 900px, and
+           with them which box scrolls, so the bar is asked again after each. */
+        document.addEventListener('papel-step', soon);
+        check();
+    });
+})();
+
+/* ---- Taking the student to what the notice was about --------------------
+   A notice that names something missing is only half an answer: the box it is
+   about can be below the fold, and on a long step the student is left hunting
+   for it. papelAlert's `field` option hands the box to this once the dialog
+   has closed, never while it is up: a scroll behind the dialog finishes before
+   anyone can see it happen.
+
+   The wash goes on the field's group and comes off the moment the student
+   touches it. Leaving it up while they type would make a box they have just
+   answered still look wrong, which is worse than no mark at all. */
+let fillGroup = null;
+const FILL_OFF = ['pointerdown', 'focusin', 'input', 'change', 'keydown'];
+function clearNeedsFill() {
+    if (!fillGroup) return;
+    const g = fillGroup;
+    fillGroup = null;
+    g.classList.remove('needs-fill');
+    FILL_OFF.forEach(function (e) { g.removeEventListener(e, clearNeedsFill, true); });
+}
+window.papelNeedsFill = function (target) {
+    // A function instead of a box: the caller marks the thing itself (a section).
+    if (typeof target === 'function') { target(); return; }
+    const el = typeof target === 'string' ? document.querySelector(target) : target;
+    if (!el) return;
+    /* The column the field sits in, which carries its label, or, in the two
+       tables, the row's file control: a file input there is clipped off the
+       page behind its Choose file label, so washing the control itself lit a
+       1px box nobody could see. Falls back to the control where it is in
+       neither. */
+    const g = el.closest('.col-md-12, .col-md-6, .col-md-4, .col-lg-6, .col-12, .form-group, .mb-3, .docs-file')
+           || el;
+    clearNeedsFill();
+    fillGroup = g;
+    g.classList.add('needs-fill');
+    g.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    /* The cursor goes in the box where it can be put there: a file input opens
+       nothing from script, and a hidden control cannot take focus at all. */
+    if (el.type !== 'file' && el.offsetParent !== null) {
+        try { el.focus({ preventScroll: true }); } catch (err) {}
+    }
+    /* Listened for after that focus, and after the scroll has been asked for,
+       or the page's own focus would count as the student touching it and the
+       wash would be gone before they saw it. */
+    setTimeout(function () {
+        if (fillGroup !== g) return;
+        FILL_OFF.forEach(function (e) { g.addEventListener(e, clearNeedsFill, true); });
+    }, 0);
+};
 
 function goToStep(step) {
     // Validation before moving forward
@@ -8796,14 +9931,14 @@ function goToStep(step) {
         if (currentStep === 1) {
             const paperType = document.querySelector('select[name="paper_type"]').value;
             if (!paperType) {
-                papelAlert('Please select a paper type');
+                papelAlert('Please select a paper type', { field: 'select[name="paper_type"]' });
                 return;
             }
             if (paperType === 'other') {
                 // Empty, a sentence, a greeting or mashing: the same answer the server gives.
                 const problem = otherNameProblem(otherPaperTypeName(), 'paper type');
                 if (problem) {
-                    papelAlert(problem);
+                    papelAlert(problem, { field: 'select[name="paper_type"]' });
                     const box = document.getElementById('paperTypeOther');
                     const typeIn = document.querySelector('select[name="paper_type"] ~ .sel-type');
                     if (box && !box.hidden) box.focus(); else if (typeIn) typeIn.focus();
@@ -8819,17 +9954,18 @@ function goToStep(step) {
             const programEl = document.querySelector('[name="program_category"]');
             const program = programEl ? String(programEl.value).trim() : '';
             if (!program) {
-                papelAlert('Please select an Academic Program');
+                papelAlert('Please select an Academic Program', { field: '[name="program_category"]' });
                 return;
             }
             /* `required` on a checkbox means that one box, not one of the
                group, so the "at least one" rule is made here. */
             if (!document.querySelectorAll('.js-manuscript:checked').length) {
-                papelAlert('Please choose at least one manuscript type');
+                papelAlert('Please choose at least one manuscript type', { field: '.js-manuscript' });
                 return;
             }
             if (pdfTicked('other') && otherNameProblem(otherManuscriptName(), 'manuscript')) {
-                papelAlert(otherNameProblem(otherManuscriptName(), 'manuscript'));
+                papelAlert(otherNameProblem(otherManuscriptName(), 'manuscript'),
+                    { field: '#manuscriptTypeOther' });
                 const box = document.getElementById('manuscriptTypeOther');
                 if (box) box.focus();
                 return;
@@ -8837,7 +9973,8 @@ function goToStep(step) {
             /* Marked required on the form, so it is asked for here too. One is
                ticked to begin with, but all three can be cleared. */
             if (!document.querySelectorAll('input[name="paper_status[]"]:checked').length) {
-                papelAlert('Please choose at least one paper status');
+                papelAlert('Please choose at least one paper status',
+                    { field: 'input[name="paper_status[]"]' });
                 return;
             }
         }
@@ -8850,7 +9987,8 @@ function goToStep(step) {
                 // Named when there are two to tell apart, or when it is one the student named.
                 papelAlert(active.length > 1 || lacking[0].key === 'other'
                     ? 'Please upload your ' + lacking[0].label + ' PDF.'
-                    : 'Please upload a PDF file');
+                    : 'Please upload a PDF file',
+                    { field: pdfInput(lacking[0].key) });
                 return;
             }
             const tooBig = filesTooBig();
@@ -8859,7 +9997,8 @@ function goToStep(step) {
                 return;
             }
             if (!titleField) {
-                papelAlert('Please extract metadata first by clicking "Extract Metadata with AI"');
+                papelAlert('Please extract metadata first by clicking "Extract Metadata with AI"',
+                    { field: '#btnExtract' });
                 return;
             }
             // A completion date, or the year alone when the box under it says there is no exact one.
@@ -8868,26 +10007,29 @@ function goToStep(step) {
             if (yearOnlyBox && yearOnlyBox.checked) {
                 const yr = parseInt(document.getElementById('yearField').value, 10);
                 if (!(yr >= 1900 && yr <= 2100)) {
-                    papelAlert('Please enter the year the research was completed, in the Year box (1900 to 2100).');
+                    papelAlert('Please enter the year the research was completed, in the Year box (1900 to 2100).',
+                        { field: '#yearField' });
                     return;
                 }
             } else if (!researchDate) {
-                papelAlert('Please enter the date the research was completed, or tick "No exact date: use the year only".');
+                papelAlert('Please enter the date the research was completed, or tick "No exact date: use the year only".',
+                    { field: '#researchDateField' });
                 return;
             }
             // Keyword Validation
             const keywords = document.getElementById('keywordsField').value;
             const kwCount = keywords.split(',').filter(k => k.trim().length> 0).length;
             if (kwCount < 5) {
-                papelAlert('Please provide at least 5 keywords (comma-separated).');
+                papelAlert('Please provide at least 5 keywords (comma-separated).',
+                    { field: '#keywordsField' });
                 return;
             }
             // Every IMRAD section must be filled before moving on.
             papelDoc.syncAll();
             const missing = papelDoc.firstEmpty();
             if (missing) {
-                papelAlert('Please write the ' + papelDoc.label(missing) + ' section before continuing.');
-                papelDoc.flag(missing);
+                papelAlert('Please write the ' + papelDoc.label(missing) + ' section before continuing.',
+                    { field: function () { papelDoc.flag(missing); } });
                 return;
             }
         }
@@ -8899,16 +10041,19 @@ function goToStep(step) {
                 return;
             }
         }
-        if (currentStep === 3 && supportingDocsRequired()) {
-            const missing = REQUIRED_DOCS.filter(function (d) {
-                const input = document.querySelector('input[name="' + d.name + '"]');
-                return !input || !input.files[0];
-            });
-            if (missing.length) {
-                papelAlert('Please attach the ' + missing[0].label + '. It is required for a '
-                    + paperTypeLabel() + '.');
+        if (currentStep === 3) {
+            // A row the student added is a name and a file, never one without the other.
+            const badDoc = extraDocProblem();
+            if (badDoc) {
+                papelAlert(badDoc.message, { field: badDoc.field });
                 return;
             }
+            /* No document is demanded here any more. Which of them this paper needs is
+               the author's to judge, so they are asked once, on the way out of the step,
+               and the answer is theirs: "Yes, continue" goes on with boxes still empty.
+               The question is asked on every Next from Step 3, because the answer can
+               change between one press and the next. */
+            if (!docsConfirmed) { confirmSupportingDocs(); return; }
         }
     }
     
@@ -8936,11 +10081,11 @@ function goToStep(step) {
     // Step 2's boxes follow whatever step 1 has ticked by now.
     if (step === 2) {
         syncPdfSlots();
-        /* Which sections to submit is asked after this call returns, not during
-           it: a click on the step indicator that skips ahead runs goToStep once
-           per step on the way, and the question belongs to wherever the student
-           actually lands. It is asked only while no choice is recorded. */
-        setTimeout(function () { askSectionScope(false); }, 0);
+        /* The step's three dialogs, after this call returns rather than during it:
+           a click on the step indicator that skips ahead runs goToStep once per
+           step on the way, and they belong to wherever the student actually
+           lands. openStepTwo() checks that before it shows anything. */
+        setTimeout(function () { openStepTwo(); }, 0);
     }
 
     // Update review if going to step 4
@@ -9125,6 +10270,71 @@ function setSectionScope(list) {
        for a student who had only answered a question. */
 }
 
+/* Taking one section off the paper, from the X on its row in the Writing View's list.
+   It is the same choice the chooser makes, one row at a time, so it goes through the
+   same two setters and the same rules decide it.
+
+   Two answers are refusals, and both say why rather than simply doing nothing:
+
+     - The last one. A paper with no written section at all has nothing to publish,
+       and the chooser answers this by putting the Abstract back (currentScope()).
+       Here the row is simply the only one left, so it is explained instead.
+     - The Abstract, where it is the only thing keeping the choice valid. It may be
+       left out by an author with sections of their own, and not otherwise: that is
+       the rule the server holds to (section_scope_for()) and the reason the chooser
+       shows its box locked. Removed anyway, currentScope() would put it straight
+       back, which reads as the X being broken.
+
+   A section with something written in it is asked about first: the text goes with the
+   box, and the chooser warns before throwing any away for the same reason. */
+async function removeSectionFromPaper(key) {
+    if (!key) return false;
+    const own = isCustomKey(key);
+    const custom = currentCustom();
+    const scope = currentScope() || SECTION_KEYS.slice();
+    const label = own ? ((custom.filter(function (c) { return c.key === key; })[0] || {}).label || 'This section')
+                      : (SECTION_LABELS[key] || 'This section');
+
+    const keptStd = own ? scope : scope.filter(function (k) { return k !== key; });
+    const keptOwn = (own ? custom.filter(function (c) { return c.key !== key; }) : custom)
+                        .map(function (c) { return c.key; });
+    const kept = keptStd.concat(keptOwn);
+
+    if (!kept.length) {
+        await window.papelAlert('Your paper needs at least one written section, and ' + label
+            + ' is the only one left. Add another section first, then this one can come off.',
+            { title: 'One section has to stay', icon: 'segment' });
+        return false;
+    }
+    if (key === 'abstract' && !keptOwn.length) {
+        await window.papelAlert('The Abstract is what your paper\u2019s page leads with, and what the'
+            + ' search reads, so it is always submitted. It can be left out only by an author'
+            + ' writing sections of their own: add one with + Add a section, and the Abstract'
+            + ' becomes optional.',
+            { title: 'The Abstract is always submitted', icon: 'segment' });
+        return false;
+    }
+
+    if (papelDoc.text(key) !== '') {
+        const go = await window.papelConfirm('You have written in ' + label
+            + '. Taking it off the paper throws that text away.',
+            { title: 'Take ' + label + ' off the paper?', icon: 'delete',
+              confirmText: 'Take it off', cancelText: 'Keep it' });
+        if (!go) return false;
+    }
+
+    if (own) {
+        setCustomList(custom.filter(function (c) { return c.key !== key; }));
+        /* setCustomList moves the boxes and rewrites its own field; the scope field is
+           what the rest of the page reads, so it is told too. setSectionScope does this
+           for the other branch. */
+        syncSectionScope();
+    } else {
+        setSectionScope(keptStd);
+    }
+    return true;
+}
+
 /* Waits until no dialog is on screen. They all share one box with one answer
    slot, so opening a second while a first is up would leave the first never
    answered. An alert raised by the very click that brought the student here, or
@@ -9258,6 +10468,175 @@ function sectionsNote() {
             + ' submissions only.</p>');
 }
 
+/* The pop-up Step 2 opens with: where the paper itself is attached, by dragging a
+   file onto it or by pressing it to choose one. One zone per manuscript type ticked
+   in Step 1, so a paper handed in both ways has a zone each, and the heading is that
+   type's own name (for Other, the author's words, so it goes through escHtml()).
+
+   The zone does not hold the file. It drives the real input in the form
+   (#pdfFile_<key>), the same one the row on the page drives, so everything that
+   already watches that input carries on working: the indicator, the preview panel,
+   the step's own check and the submit. Nothing here is a second way to hold a file. */
+function uploadDropsHtml() {
+    const active = pdfActive();
+    const many = active.length > 1;
+    const zones = active.map(function (f) {
+        const label = escHtml(f.label);
+        return '<div class="up-drop" data-format="' + escHtml(f.key) + '">'
+          + (many ? '<p class="up-drop-head">' + label + '</p>' : '')
+          + '<button type="button" class="up-drop-zone" data-role="zone">'
+          + '<span class="material-symbols-outlined" aria-hidden="true">upload_file</span>'
+          + '<span class="up-drop-text">Drag your ' + label + ' PDF here, or press to choose one</span>'
+          + '<span class="up-drop-name" data-role="name"></span>'
+          + '</button>'
+          + '<p class="up-drop-error" data-role="error" hidden></p>'
+          + '</div>';
+    }).join('');
+
+    return '<p>' + (many
+            ? 'You ticked ' + joinNames(active.map(function (f) { return escHtml(f.label); }))
+              + ' in Step 1, so there is a zone for each. It is one paper with two files,'
+              + ' not two papers.'
+            : 'Attach the PDF of your paper.')
+      + '</p>'
+      + '<div class="up-drops">' + zones + '</div>'
+      + '<p class="up-drop-hint">PDF only, and the server takes at most ' + escHtml(POST_MAX_LABEL)
+      + ' for everything on this form in one go. You can also do this on the page afterwards,'
+      + ' and nothing is sent until you submit at Step 4.</p>';
+}
+
+/* Shown on every arrival at Step 2, unlike the question that follows it, which is
+   asked only while no choice is recorded. This one is how the step's own work is
+   done, so it is there whenever the step is.
+
+   It does not insist on a file. The student may not have it to hand, the row on the
+   page is still there, and Step 2 already refuses to go on without one. */
+function explainUpload() {
+    const promise = window.papelAlert('', {
+        title: 'Upload your paper',
+        icon: 'upload_file',
+        wide: true,
+        html: uploadDropsHtml()
+    });
+    /* Wired straight after the call, not inside a listener: papelAlert writes the
+       markup and opens the box synchronously, so the zones are in the page by now. */
+    wireUploadDrops(promise);
+    return promise;
+}
+
+/* Drives the real inputs from the zones, and keeps the zones showing what is in them.
+   Everything it adds is taken off again when the box closes, so opening Step 2 a
+   second time does not leave a second set of listeners on the same inputs. */
+function wireUploadDrops(promise) {
+    const body = document.getElementById('papelDialogMessage');
+    if (!body) return;
+    const ok = document.getElementById('papelDialogOk');
+    if (ok) ok.textContent = 'Continue';
+    const undo = [];
+
+    function paint(drop) {
+        const input = pdfInput(drop.dataset.format);
+        const file = input && input.files && input.files[0] ? input.files[0] : null;
+        drop.classList.toggle('has-file', !!file);
+        drop.querySelector('[data-role="name"]').textContent =
+            file ? file.name + ' (' + fileSizeLabel(file.size) + ')' : '';
+    }
+    function say(drop, why) {
+        const box = drop.querySelector('[data-role="error"]');
+        box.textContent = why || '';
+        box.hidden = !why;
+    }
+
+    body.querySelectorAll('.up-drop').forEach(function (drop) {
+        const key = drop.dataset.format;
+        const input = pdfInput(key);
+        if (!input) return;
+        const zone = drop.querySelector('[data-role="zone"]');
+
+        paint(drop);
+
+        // Pressing the zone opens the same picker the row on the page opens.
+        zone.addEventListener('click', function () { say(drop, ''); input.click(); });
+
+        /* The zone has to say it will take the file, or the browser opens the PDF in
+           the tab instead and the work on this page is lost. Both events, because a
+           dragover that is not prevented is a refusal however the drop is handled. */
+        ['dragenter', 'dragover'].forEach(function (t) {
+            zone.addEventListener(t, function (e) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'copy';
+                drop.classList.add('is-over');
+            });
+        });
+        ['dragleave', 'dragend'].forEach(function (t) {
+            zone.addEventListener(t, function () { drop.classList.remove('is-over'); });
+        });
+        zone.addEventListener('drop', function (e) {
+            e.preventDefault();
+            drop.classList.remove('is-over');
+            const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+            if (!file) return;
+            /* Checked by type and by name: a file dragged from some places arrives with
+               an empty type, and refusing it on that alone would turn a real PDF away. */
+            const looksPdf = file.type === 'application/pdf'
+                || /\.pdf$/i.test(file.name || '');
+            if (!looksPdf) {
+                say(drop, 'That is not a PDF. ' + (file.name || 'The file') + ' was not attached.');
+                return;
+            }
+            say(drop, '');
+            /* The only way a page may put a file into a file input: build a
+               DataTransfer and hand over its list. Assigning .files any other way
+               throws, and the input is what the rest of the page reads. */
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            input.files = dt.files;
+            // Bubbles, so the indicator, the preview panel and the autosave all hear it.
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+
+        // Chosen through the picker, or cleared from the row behind the box.
+        const onChange = function () { paint(drop); say(drop, ''); };
+        input.addEventListener('change', onChange);
+        undo.push(function () { input.removeEventListener('change', onChange); });
+    });
+
+    promise.then(function () { undo.forEach(function (off) { off(); }); });
+}
+
+/* What Step 2 opens with, in a fixed order and one at a time: where the paper is
+   attached, then which sections are being submitted.
+
+   "Why you type the sections out" is deliberately not here. It belongs to the box
+   a student is about to write in, and it is raised by that box (the mousedown and
+   focus handlers on a .doc-surface), so it arrives when there is something to
+   explain rather than as a third notice in a row on the way in. The button above
+   the boxes brings it back.
+
+   The two have to be awaited one after another rather than fired together, because
+   every dialog on this page shares one box with one answer slot: a second opened
+   over a first would leave the first never answered.
+
+   The step is checked again between them. A click on the step indicator that
+   skips ahead runs goToStep once per step on the way, and Back and Forward walk
+   it the same way, so by the time this runs the student may be somewhere else
+   entirely; and a dialog can be dismissed out from under us by the history
+   (papelDialogDismiss), which resolves the await with the page already changed. */
+let stepTwoOpening = false;
+async function openStepTwo() {
+    if (stepTwoOpening) return;
+    stepTwoOpening = true;
+    try {
+        await dialogIdle();
+        if (currentStep !== 2) return;
+        await explainUpload();
+        if (currentStep !== 2) return;
+        await askSectionScope(false);
+    } finally {
+        stepTwoOpening = false;
+    }
+}
+
 function explainSections(force) {
     if (sectionsExplained && !force) return Promise.resolve(false);
     sectionsExplained = true;
@@ -9294,22 +10673,21 @@ function updateReview() {
     if (document.querySelector('input[name="ethics_clearance"]').files[0]) docCount++;
     if (document.querySelector('input[name="consent_form"]').files[0]) docCount++;
     if (document.querySelector('input[name="data_collection"]').files[0]) docCount++;
-    if (document.querySelector('input[name="other_doc"]').files[0]) docCount++;
     if (document.querySelector('input[name="copyright_doc"]').files[0]) docCount++;
+    // The student's own rows count as the documents they are.
+    docCount += extraDocRows().filter(extraDocFile).length;
     
-    /* The wording follows whether this paper type needs the documents at
-       all. "Missing" reads as a fault, and for a Journal Article or a
-       Project there is no fault to report: nothing was ever required. */
-    const docsNeeded = supportingDocsRequired();
-
+    /* A count, and nothing read as a fault. No document is required of any paper
+       type now, so "Missing" and "Not required for this paper type" were both
+       saying something the form no longer decides: what is here is what the
+       author chose to attach, which is all this line has to report. */
     document.getElementById('reviewDocs').textContent =
-        docCount ? docCount + ' document(s) attached'
-                 : (docsNeeded ? 'None attached yet' : 'Not required for this paper type');
+        docCount ? docCount + (docCount === 1 ? ' document attached' : ' documents attached')
+                 : 'None attached';
 
     const copyFile = document.querySelector('input[name="copyright_doc"]').files[0];
     document.getElementById('reviewCopyright').textContent =
-        copyFile ? copyFile.name
-                 : (docsNeeded ? 'Not attached yet' : 'Not applicable');
+        copyFile ? copyFile.name : 'None attached';
 }
 
 /* The overlay is this page's loader, and its card plays the PAPEL logo
@@ -9663,15 +11041,16 @@ document.getElementById('uploadForm').addEventListener('submit', function(e){
     papelDoc.syncAll();
     const missingSection = papelDoc.firstEmpty();
     if (missingSection) {
-        papelAlert('Please write the ' + papelDoc.label(missingSection) + ' section before submitting.');
-        papelDoc.flag(missingSection);
+        papelAlert('Please write the ' + papelDoc.label(missingSection) + ' section before submitting.',
+            { field: function () { papelDoc.flag(missingSection); } });
         return;
     }
 
     // One PDF for every manuscript type ticked, and all of it small enough to send at once.
     const noPdf = pdfActive().filter(function (f) { return !pdfFileOf(f.key); })[0];
     if (noPdf) {
-        papelAlert('Please upload your ' + noPdf.label + ' PDF.');
+        papelAlert('Please upload your ' + noPdf.label + ' PDF.',
+            { field: pdfInput(noPdf.key) });
         return;
     }
     const tooBig = filesTooBig();
@@ -10137,6 +11516,10 @@ function currentChatSide() {
    foot a gap above the window's, with the form scrolling inside it rather than the
    page. Locked on <html> (see "Lock the page on <html>" in CLAUDE.md), and the page's
    place carried into the card and back, so locking and unlocking move nothing. */
+/* The skeleton waits for this page rather than for DOMContentLoaded: the form paints
+   as one column and is rebuilt into the panes below, and lifting between the two is the
+   jump the skeleton is there to cover. Released after the first render(). */
+if (window.papelSkeleton) window.papelSkeleton.hold();
 window.papelSide = (function () {
     /* Two panes with tabs, like an editor's: the main one, which is the form's card,
        and the side one beside it.
@@ -10168,7 +11551,10 @@ window.papelSide = (function () {
        open, so a tab is always found in the same place. Dragging moves one only for as long
        as it stays open. Where each was dragged used to be kept on the device
        (papel.paneTabs) and reopened there; that key is cleared below. */
-    const HOME = { main: ['form', 'write', 'preview', 'pdf'], side: ['toc', 'corpus'] };
+    /* Preview comes last in the main pane. It is the one tab that is about the
+       finished paper rather than about writing it, so a PDF or a Writing View
+       opening should land before it and not push it along. */
+    const HOME = { main: ['form', 'write', 'pdf', 'preview'], side: ['toc', 'corpus'] };
     let order = { main: HOME.main.slice(), side: HOME.side.slice() };
     try { localStorage.removeItem(KEYS_KEY); } catch (err) {}
     function homeTab(k) {
@@ -10206,6 +11592,30 @@ window.papelSide = (function () {
        form (parked), so it is there to read and write in, and taken out again when its tab is.
        It was left out of the form, a blank box where the section should be, the whole time it
        had a tab. While parked, the tab stays and the history still has the section open. */
+    /* The Writing View's section is written inside its step, and every step but
+       the one on screen is display:none, which hides a fixed box as surely as any
+       other: leaving step 2 with the tab open left the pane blank and the text
+       apparently gone. So while the section is the pane's page it is moved to a
+       holder of its own, and put back exactly where it was when it is not.
+
+       The holder is inside <form>, which is what makes the rest of it work: the
+       hidden field that carries what was typed travels with the submission as
+       before, and step 2 shows the same text the moment the box goes home,
+       because it is the same box. */
+    const docHolder = document.getElementById('docPaneHolder');
+    const docHome = new WeakMap();
+    function toHolder(el) {
+        if (!docHolder || !el || el.parentElement === docHolder) return;
+        docHome.set(el, { parent: el.parentElement, next: el.nextSibling });
+        docHolder.appendChild(el);
+    }
+    function fromHolder(el) {
+        if (!docHolder || !el || el.parentElement !== docHolder) return;
+        const h = docHome.get(el);
+        docHome.delete(el);
+        if (h && h.parent) { h.parent.insertBefore(el, h.next); }
+    }
+
     let parked = null, parking = false;
     function park() {
         if (parking || !writeOpen()) return;
@@ -10270,6 +11680,36 @@ window.papelSide = (function () {
         sh.appendChild(mainBody);
     }
 
+    /* The step bar is a row of the pane, not part of the page that scrolls under
+       it. Moved here rather than styled into place, because the only way to stop
+       a pinned bar covering the page below it is to take it out of that page. */
+    const stepBar = document.querySelector('.upload-steps');
+    /* The row carries the form's white card up over the bar, so the two read as
+       one page rather than a card for the steps and another for the form with a
+       cream seam between them. The bar itself keeps its cream and sits inset in
+       it. Built once and left in place; it only leaves the pane with the bar. */
+    const stepRow = document.createElement('div');
+    stepRow.className = 'step-row';
+    function placeStepBar(W) {
+        const sh = shell();
+        if (!stepBar || !sh || !mainBody) return;
+        if (W) {
+            if (stepBar.parentElement !== stepRow) { stepRow.appendChild(stepBar); }
+            if (stepRow.parentElement !== sh) { sh.insertBefore(stepRow, mainBody); }
+            /* The body's scrollbar, which the row has to leave room for or the bar
+               overhangs the card it is the top of. .main-body keeps the gutter
+               whether it scrolls or not, so this is a constant per device; it is
+               read on every placement rather than once because the zoom can change
+               it and a placement is already a layout. */
+            const sb = mainBody.offsetWidth - mainBody.clientWidth;
+            stepRow.style.setProperty('--sb-w', (sb > 0 ? sb : 0) + 'px');
+        } else if (stepBar.parentElement !== mainBody) {
+            // No panes, no row: back to the top of the page, where it is sticky.
+            mainBody.insertBefore(stepBar, mainBody.firstChild);
+            stepRow.remove();
+        }
+    }
+
     /* ----- The contents panel ----- */
     const toc = document.createElement('aside');
     toc.className = 'side-toc';
@@ -10297,14 +11737,24 @@ window.papelSide = (function () {
       + '<span class="side-preview-note">How your paper will look in the Public Repository once it is published. It follows what you type.</span>'
       + '<span class="side-preview-sizes" role="group" aria-label="Preview width">'
       + '<button type="button" data-size="desktop" title="As on a computer screen, scaled to fit">Desktop</button>'
-      + '<button type="button" data-size="fit" title="As wide as this panel">Fit</button>'
+      + '<button type="button" data-size="phone" title="As on a phone, 390px wide">Phone</button>'
       + '</span></div>'
       + '<div class="side-preview-stage"><div class="side-preview-wait" aria-hidden="true"></div></div>';
     const previewStage = preview.querySelector('.side-preview-stage');
     // A computer screen's width, drawn at that width and scaled down to the pane.
     const PREVIEW_DESKTOP_W = 1280;
+    /* A phone's, drawn at that width whatever the pane is doing, so what shows is
+       the layout a reader on a phone gets rather than the desktop one squeezed.
+       390 is the common portrait width (iPhone 14, Pixel), and it is well under
+       every breakpoint the public paper page turns on, so any of them would do. */
+    const PREVIEW_PHONE_W = 390;
     let previewSize = 'desktop';
-    try { previewSize = localStorage.getItem('papel.previewSize') === 'fit' ? 'fit' : 'desktop'; } catch (err) {}
+    try {
+        /* 'fit' was the other choice here: the page at the pane's own width. The
+           phone view replaces it, so a device that still has 'fit' saved gets it. */
+        const kept = localStorage.getItem('papel.previewSize');
+        previewSize = (kept === 'phone' || kept === 'fit') ? 'phone' : 'desktop';
+    } catch (err) {}
     let previewStale = true, previewBusy = false, previewAgain = false, previewTimer = null;
     let previewWasOnView = false, previewCount = 0;
     let previewFrame = null;         // the copy on show; a new one is drawn behind it
@@ -10312,12 +11762,25 @@ window.papelSide = (function () {
     function sizeFrame(fr) {
         const w = previewStage.clientWidth, h = previewStage.clientHeight;
         if (!w || !h || !fr) return;
-        const scale = previewSize === 'desktop' && w < PREVIEW_DESKTOP_W ? w / PREVIEW_DESKTOP_W : 1;
-        fr.style.width  = Math.round(w / scale) + 'px';
+        const phone = previewSize === 'phone';
+        /* The width the page is drawn at, and how far it has to shrink to fit the
+           pane. A phone keeps its width and is scaled down only where the pane is
+           narrower than a phone; a computer screen is 1280, or the pane itself once
+           the pane is wider than that. */
+        const want = phone ? PREVIEW_PHONE_W : PREVIEW_DESKTOP_W;
+        const scale = w < want ? w / want : 1;
+        const cols = phone ? want : Math.round(w / scale);
+        fr.style.width  = cols + 'px';
         fr.style.height = Math.round(h / scale) + 'px';
         fr.style.transform = scale === 1 ? '' : 'scale(' + scale + ')';
+        /* Stood in the middle of the pane rather than against its left edge. The
+           frame is positioned from the left and scales from its top-left corner
+           (transform-origin: 0 0), so the gap is worked out from the width it
+           actually takes up, which is its columns times the scale. */
+        fr.style.left = phone ? Math.round((w - cols * scale) / 2) + 'px' : '0px';
     }
     function sizePreview() {
+        previewStage.classList.toggle('is-phone', previewSize === 'phone');
         previewStage.querySelectorAll('iframe').forEach(sizeFrame);
         preview.querySelectorAll('.side-preview-sizes button').forEach(function (b) {
             b.setAttribute('aria-pressed', b.dataset.size === previewSize ? 'true' : 'false');
@@ -10526,6 +11989,7 @@ window.papelSide = (function () {
             wasOpen[k] = open;
         });
         document.body.classList.toggle('panes', W);
+        placeStepBar(W);
         const mainTabs = W ? openIn('main') : [];
         const sideTabs = openIn('side').filter(function (k) { return W || k !== 'write'; });
         // On a phone everything but the form is the side pane's, the full view aside.
@@ -10619,6 +12083,7 @@ window.papelSide = (function () {
            place, it stayed pinned over the pane. */
         document.querySelectorAll('.doc-editor.in-pane:not(.is-expanded)').forEach(function (el) {
             el.classList.remove('in-pane', 'side-hidden');
+            fromHolder(el);
         });
         noteSpacer();
         ['toc', 'pdf', 'corpus', 'write', 'preview'].forEach(function (k) {
@@ -10626,9 +12091,11 @@ window.papelSide = (function () {
             if (!el) return;
             const where = isOpen(k) ? whereOnView(k) : null;
             const box = where ? boxes[where] : null;
-            if (k === 'write' && !W) { el.classList.remove('in-pane', 'side-hidden'); return; }
-            if (!isOpen(k)) { el.classList.remove('in-pane', 'side-hidden'); return; }
+            if (k === 'write' && !W) { el.classList.remove('in-pane', 'side-hidden'); fromHolder(el); return; }
+            if (!isOpen(k)) { el.classList.remove('in-pane', 'side-hidden'); if (k === 'write') fromHolder(el); return; }
             el.classList.add('in-pane');
+            // Out of its step, so a step it does not belong to cannot hide it.
+            if (k === 'write') { toHolder(el); }
             el.dataset.pane = where || paneOf(k);
             el.classList.toggle('side-hidden', !box);
             if (box) {
@@ -11054,9 +12521,9 @@ window.papelSide = (function () {
             return t ? t.textContent.replace('*', '').trim() : '';
         }
         if (el.classList.contains('pdf-slot')) {
+            // Every row is named in the table now, one file or two, so the contents is too.
             const l = el.querySelector('.pdf-slot-label');
-            const multi = el.closest('.pdf-slots') && el.closest('.pdf-slots').classList.contains('is-multi');
-            return multi && l ? l.textContent.trim() : 'Your PDF';
+            return l ? l.textContent.trim() : 'Your PDF';
         }
         if (el.id === 'scopeBar') return 'Sections you are submitting';
         if (el.classList.contains('ai-extract-question')) return 'Enter your paper details';
@@ -11228,6 +12695,8 @@ window.papelSide = (function () {
         }
         if (mainBody) mainBody.addEventListener('scroll', function () { if (whereOnView('toc')) soon('spy', spy); }, { passive: true });
         render();
+        // The panes are up: the skeleton may lift onto the finished layout.
+        if (window.papelSkeleton) window.papelSkeleton.done();
     });
 
     return {
@@ -12015,7 +13484,22 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('consent_form').addEventListener('change', function() { updateFileIndicator(this, 'consent-indicator'); });
     document.getElementById('data_collection').addEventListener('change', function() { updateFileIndicator(this, 'data-indicator'); });
     document.getElementById('copyright_doc').addEventListener('change', function() { updateFileIndicator(this, 'copyright-indicator'); });
-    document.getElementById('other_doc').addEventListener('change', function() { updateFileIndicator(this, 'other-indicator'); });
+    const addDocBtn = document.getElementById('btnAddDoc');
+    if (addDocBtn) {
+        addDocBtn.addEventListener('click', function () {
+            /* A row that was added and never filled in is cleared away rather
+               than left above the new one: pressing the button four times used
+               to leave four empty rows, and a name of nothing but spaces reads
+               as one of them. */
+            extraDocRows().forEach(function (row) {
+                if (!extraDocName(row) && !extraDocFile(row)) { row.remove(); }
+            });
+            const tr = addExtraDocRow('');
+            // Straight into the name box: the row is useless until it has one.
+            if (tr) { const n = tr.querySelector('input[name="extra_doc_name[]"]'); if (n) n.focus(); }
+        });
+    }
+    syncExtraDocs();
     // Chatbot toggle buttons
     document.getElementById('chatCloseBtn').addEventListener('click', toggleChat);
     document.getElementById('chatDockBtn').addEventListener('click', toggleChatDock);
@@ -12077,7 +13561,10 @@ document.addEventListener('DOMContentLoaded', () => {
      browser's memory. Nothing here has been sent to the server yet. -->
 
 <!-- Site dialog, used in place of the browser's alert box -->
-<div class="papel-dialog-backdrop" id="papelDialog" role="dialog" aria-modal="true" aria-labelledby="papelDialogTitle">
+<!-- spellcheck for the same reason as the form: the names of the author's own
+     sections are typed in here, not in the form. -->
+<div class="papel-dialog-backdrop" id="papelDialog" role="dialog" aria-modal="true"
+     aria-labelledby="papelDialogTitle" spellcheck="true">
   <div class="papel-dialog">
     <div class="papel-dialog-head">
       <span class="material-symbols-outlined" id="papelDialogIcon">info</span>
@@ -12209,7 +13696,14 @@ document.addEventListener('DOMContentLoaded', () => {
         backdrop.classList.add('open');
         document.body.style.overflow = 'hidden';
         okBtn.focus();
-        return new Promise(function (resolve) { resolver = resolve; });
+        /* Held here rather than read on the way out: another dialog may have
+           opened by then and replaced opts. */
+        var field = opts.field;
+        return new Promise(function (resolve) { resolver = resolve; }).then(function (value) {
+            // Only once the box is out of the way, so the scroll can be seen.
+            if (field && window.papelNeedsFill) { window.papelNeedsFill(field); }
+            return value;
+        });
     };
 
     /* Same dialog, asking for a value instead of just announcing one. Resolves

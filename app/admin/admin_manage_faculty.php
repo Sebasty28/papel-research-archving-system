@@ -250,6 +250,11 @@ $password_rows = password_audit_rows(['faculty', 'librarian'], (int)$u['user_id'
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Manage Staff · <?= e(APP_NAME) ?></title>
+<?php
+/* The loading skeleton's shape (includes/skeleton.php). Set before the shared
+   head, which is where the skeleton reads it. */
+$PAGE_SKELETON = 'table';
+?>
 <?php require_once ROOT_PATH.'/includes/site_head.php'; ?>
 <?php require_once ROOT_PATH.'/includes/manage_console.php'; ?>
 <?php require_once ROOT_PATH.'/includes/manage_page.php'; ?>

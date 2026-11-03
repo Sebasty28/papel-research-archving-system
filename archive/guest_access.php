@@ -22,7 +22,7 @@ if ($guest) {
         'user_id' => 0, // Guests don't have a real user_id in users table
         'username' => $guest['username'],
         'email' => '',
-        'full_name' => 'Guest User',
+        'full_name' => 'Pass holder',
         'user_role' => 'guest'
     ];
     login_user($u);

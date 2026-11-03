@@ -120,7 +120,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
                         <td>The date and time of your most recent login, kept for account management.</td>
                     </tr>
                     <tr>
-                        <td>Guest access</td>
+                        <td>Library Pass</td>
                         <td>For guest visitors, an email address and temporary login credentials that automatically expire.</td>
                     </tr>
                 </tbody>
@@ -146,7 +146,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
             <ul>
                 <li><strong>Cloud file storage (Google Drive):</strong> Uploaded papers and supporting documents are stored on the institution's connected Google Drive.</li>
                 <li><strong>AI processing service:</strong> The text of an uploaded paper or its abstract may be sent to an AI provider to generate summaries and metadata. This content is processed only to produce those results.</li>
-                <li><strong>Email delivery:</strong> Email is used to send notifications and to deliver guest access credentials.</li>
+                <li><strong>Email delivery:</strong> Email is used to send notifications and to deliver Library Pass credentials.</li>
             </ul>
             <p>These providers receive only the data necessary to perform their function and are not permitted to use it for their own purposes.</p>
         </div>
@@ -167,7 +167,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
                 <li>Account information is retained while your account remains active within the institution.</li>
                 <li>Approved papers are preserved as part of the university's research archive and may be archived rather than deleted.</li>
                 <li>When a submission is declined, its uploaded files may be permanently removed from cloud storage to conserve space, so you should always keep your own copy of any work you submit.</li>
-                <li>Guest credentials expire automatically and expired guest sessions may be cleared by an administrator.</li>
+                <li>Library Pass credentials expire automatically, and an expired pass may be cleared by an administrator.</li>
             </ul>
         </div>
 

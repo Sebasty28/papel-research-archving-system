@@ -142,7 +142,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
                     <td>Manages administrator accounts and system settings, archives papers, and reads the whole published repository.</td>
                 </tr>
                 <tr>
-                    <td><span class="role-badge">Guest</span></td>
+                    <td><span class="role-badge">Library Pass</span></td>
                     <td>A visitor issued time-limited credentials by an administrator to access the repository.</td>
                 </tr>
             </tbody>

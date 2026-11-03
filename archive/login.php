@@ -53,7 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($row = $res->fetch_assoc()) {
       if (password_verify($password, $row['password'])) {
         login_throttle_clear($username);
-        $u = ['user_id' => 0, 'username' => $row['username'], 'email' => '', 'full_name' => 'Guest User', 'user_role' => 'guest'];
+        $u = ['user_id' => 0, 'username' => $row['username'], 'email' => '', 'full_name' => 'Pass holder', 'user_role' => 'guest'];
         login_user($u);
         $_SESSION['guest_expire'] = strtotime($row['expires_at']);
         $_SESSION['guest_login'] = true;
@@ -842,7 +842,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <h1 class="branding-title">ARCHIVE</h1>
         <p class="branding-subtitle">
           Public Research Repository<br>
-          Guest Access Portal
+          Library Pass Sign-in
         </p>
 
         <div class="branding-features">
@@ -867,8 +867,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               </svg>
             </div>
             <div class="feature-text">
-              <h3>Guest Access</h3>
-              <p>Temporary secure access for external visitors</p>
+              <h3>Library Pass</h3>
+              <p>Issued by the librarian to visitors, for a day at most</p>
             </div>
           </div>
 
@@ -907,7 +907,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <path
                   d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z" />
               </svg>
-              Your guest session has expired. Please login again.
+              Your Library Pass has expired. Please sign in again.
             </div>
           <?php endif; ?>
           <?php if (isset($error)): ?>

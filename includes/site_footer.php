@@ -385,18 +385,19 @@ document.addEventListener('DOMContentLoaded', function () {
             btn.setAttribute('aria-pressed', open ? 'true' : 'false');
         }
     }
-    /* A guest signs in with the username printed on their pass, not an ID.
+    /* A pass holder signs in with the username printed on their pass, not an ID.
        Calling it "Guest ID" sent people looking for a number they were never
-       given. The placeholder follows the label for the same reason. */
+       given. The placeholder follows the label for the same reason, and it keeps
+       the shape of a real username, which is the one thing a label cannot show. */
     var roleLabels = {
         student: 'Student ID',
         faculty: 'Faculty ID',
-        guest:   'Guest username'
+        guest:   'Pass username'
     };
     var rolePlaceholders = {
         student: 'Enter your Student ID',
         faculty: 'Enter your Faculty ID',
-        guest:   'e.g. guest_4f2a91c8'
+        guest:   'e.g. libraryPass_4f2a91c8'
     };
     function selectRole(role) {
         document.querySelectorAll('.role-card').forEach(function (c) {
@@ -407,6 +408,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
         var idInput = document.getElementById('modalIdentifier');
         if (idInput) { idInput.placeholder = rolePlaceholders[role] || 'Enter your ID'; }
+
+        // Where to get one: asked only by the role that has to be given one.
+        var idHint = document.getElementById('idFieldHint');
+        if (idHint) { idHint.hidden = role !== 'guest'; }
 
         /* The birthdate was dropped from sign-in and its markup went with it,
            but this still reached for the element and threw on every role click,

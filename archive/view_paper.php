@@ -301,6 +301,11 @@ endif;   // a real record, not the upload form's preview
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?= e($paper['title']) ?> · <?= e(APP_NAME) ?></title>
+<?php
+/* The loading skeleton's shape (includes/skeleton.php). Set before the shared
+   head, which is where the skeleton reads it. */
+$PAGE_SKELETON = 'reader';
+?>
 <?php require_once ROOT_PATH.'/includes/site_head.php'; ?>
 <?php require_once ROOT_PATH.'/includes/console_shell.php'; ?>
 <?php require_once ROOT_PATH.'/includes/paper_record_css.php'; ?>
@@ -392,7 +397,7 @@ endif;   // a real record, not the upload form's preview
 <?php if (isset($_SESSION['guest_login']) && isset($_SESSION['guest_expire'])): ?>
     <div class="timer-badge">
         <span class="material-symbols-outlined mi-18">timer</span>
-        <span id="guestTimer">Guest session</span>
+        <span id="guestTimer">Library Pass</span>
     </div>
 <?php endif; ?>
 
@@ -807,15 +812,15 @@ require ROOT_PATH.'/includes/site_footer.php';
 ?>
 <?php if (isset($_SESSION['guest_login']) && isset($_SESSION['guest_expire'])): ?>
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
-/* A guest session ends on its own, so the badge counts it down rather than
-   letting the page expire mid-read without warning. */
+/* A pass ends on its own, so the badge counts it down rather than letting the
+   page expire mid-read without warning. */
 (function () {
     var ends = <?= (int)$_SESSION['guest_expire'] ?> * 1000;
     var el = document.getElementById('guestTimer');
     if (!el) return;
     function tick() {
         var left = Math.max(0, ends - Date.now());
-        if (left <= 0) { el.textContent = 'Session ended'; return; }
+        if (left <= 0) { el.textContent = 'Pass expired'; return; }
         var m = Math.floor(left / 60000), s = Math.floor((left % 60000) / 1000);
         el.textContent = m + 'm ' + (s < 10 ? '0' : '') + s + 's left';
         setTimeout(tick, 1000);
@@ -1038,6 +1043,18 @@ document.addEventListener('DOMContentLoaded', function () {
    card and the scroll button would only be clutter in the preview. The accessibility
    widget moves itself to <html>, so the rule is not scoped to <body>. */
 #a11y-widget, #themeWelcome, #scrollJump { display: none !important; }
+/* The navbar, the breadcrumb strip and the footer belong to the site, not to the
+   paper, and the upload page around the frame already carries all three: inside it
+   they only repeat the bars the student is looking at and eat the room the paper
+   has to be read in. Every link in them is stopped by the script below anyway, so
+   nothing is lost. */
+#siteHeader, .crumb-bar, .site-footer { display: none !important; }
+/* Both of the rail's offsets were the navbar's height plus a gap. With no navbar
+   the gap is the page's own, or the contents would stick 76px down from nothing. */
+.pd-side {
+    top: 1.25rem;
+    max-height: min(calc(100vh - 2.5rem), var(--pd-main-h, calc(100vh - 2.5rem)));
+}
 </style>
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 /* A preview inside the upload form: it is to be looked at, not used. Every way out

@@ -64,7 +64,7 @@ if (!$u) {
                permanently empty for this role. Manuscript Requests is the
                librarian's real inbox. */
             $nav_links = [
-                ['label' => 'Guest Passes',        'href' => BASE_URL.'/app/librarian/librarian_manage_guests.php', 'match' => ['librarian_manage_guests.php']],
+                ['label' => 'Library Passes',      'href' => BASE_URL.'/app/librarian/librarian_manage_guests.php', 'match' => ['librarian_manage_guests.php']],
                 ['label' => 'Manuscript Requests', 'href' => BASE_URL.'/app/librarian/manuscript_requests.php',      'match' => ['manuscript_requests.php']],
             ];
             break;
@@ -487,7 +487,12 @@ $login_notif_popup_items = $show_login_notif_popup
             <div class="role-card" id="roleGuest" data-role="guest">
                 <span class="role-dot"></span>
                 <div class="role-icon"><span class="material-symbols-outlined">account_circle</span></div>
-                <span class="role-label">Guest</span>
+                <?php /* "Guest" read as an open door: a reader who had no account
+                         took it for the public way in, when it is a pass the Librarian
+                         issues by email and it lasts a day at most. The data-role stays
+                         `guest`: it is the stored value, and renaming it would reach the
+                         session, the users table and the Librarian's console for nothing. */ ?>
+                <span class="role-label">Library Pass</span>
             </div>
         </div>
 
@@ -514,6 +519,10 @@ $login_notif_popup_items = $show_login_notif_popup
             <div class="lf-group">
                 <label class="lf-label" id="idFieldLabel" for="modalIdentifier">Username</label>
                 <input class="lf-input" type="text" name="identifier" id="modalIdentifier" placeholder="Enter your ID" required>
+                <?php /* Only under the Library Pass, where the question "how do I get one?"
+                         is the one the tile raises and the label cannot answer. Hidden for
+                         the two roles that hold a standing account. */ ?>
+                <p class="lf-hint" id="idFieldHint" hidden>Issued by the PUP Bi&ntilde;an library and valid for up to 24 hours. Ask the librarian for one.</p>
             </div>
 
             <div class="lf-group lf-group-tight">
@@ -544,3 +553,11 @@ $login_notif_popup_items = $show_login_notif_popup
     </div>
 </div>
 <?php endif; ?>
+
+<?php
+/* The loading skeleton's blocks (includes/skeleton.php). Printed here, at the
+   end of the header, so they are in <body> with the navbar already above them
+   and before the page's own content, which is what puts them on the first
+   paint. They show only when that file's script has decided to use them. */
+if (function_exists('papel_skeleton_layer')) { papel_skeleton_layer(); }
+?>

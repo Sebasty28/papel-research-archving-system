@@ -196,6 +196,11 @@ $history = $conn->query("SELECT $select FROM manuscript_requests r $paperJoin
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Manuscript Requests · <?= e(APP_NAME) ?></title>
+<?php
+/* The loading skeleton's shape (includes/skeleton.php). Set before the shared
+   head, which is where the skeleton reads it. */
+$PAGE_SKELETON = 'table';
+?>
 <?php require_once ROOT_PATH.'/includes/site_head.php'; ?>
 <?php require_once ROOT_PATH.'/includes/manage_page.php'; ?>
 <?php require_once ROOT_PATH.'/includes/flash_banner.php'; ?>

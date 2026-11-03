@@ -166,7 +166,7 @@
               if (!data || !data.success) {
                   if (window.papelNote) {
                       window.papelNote(data && data.error
-                          ? data.error : 'That could not be saved.', false);
+                          ? data.error : 'That could not be saved.', 'bad');
                   }
                   return;
               }
@@ -183,7 +183,7 @@
           })
           .catch(function () {
               if (window.papelNote) {
-                  window.papelNote('That could not be saved.', false);
+                  window.papelNote('That could not be saved.', 'bad');
               }
           })
           .then(function () { if (pill) { pill.done(); } });

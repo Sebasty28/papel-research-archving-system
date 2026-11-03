@@ -40,6 +40,7 @@
  * same panel from script, drawn straight from memory: nothing is fetched to
  * show it, and nothing reaches the server or Google Drive.
  *     window.papelPdfDock.openFile(file, 'name for the header');
+ *     window.papelPdfDock.popOut(file, 'name')   the same file in its own new tab
  *     window.papelPdfDock.close() / .minimise() / .restore() / .forget() / .isOpen()
  *     window.papelPdfDock.place()   'inline', 'left' or 'right' while open, else null
  *     window.papelPdfDock.dockTo(where)   moves an open panel with a home
@@ -529,6 +530,11 @@ function later(name) {
 }
 window.papelPdfDock = {
     openFile: later('openFile'),
+    /* A local file in a viewer of its own, in a new browser tab. The panel
+       holds one PDF at a time, so anything that has several to show (the
+       supporting documents on the upload form) opens each one this way rather
+       than replacing whatever is in the panel. */
+    popOut:   later('popOutFile'),
     close:    later('close'),
     minimise: later('minimise'),
     restore:  later('restore'),
@@ -1264,6 +1270,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     impl = {
         openFile: openFile,
+        popOutFile: popOutFile,
         close: function () {
             if (dock.classList.contains('is-open')) close();
             else { stopShowing(); syncRestoreTab(); }   // minimised: only the pages behind it to drop

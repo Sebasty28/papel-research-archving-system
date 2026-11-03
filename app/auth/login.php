@@ -65,7 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               /* Said plainly: an expired pass and a mistyped one look the same
                  from here, and "not right or has expired" covers both without
                  revealing which. */
-              flash('login_error', 'That guest username or password is not right, or the pass has expired.');
+              flash('login_error', 'That pass username or password is not right, or the pass has expired.');
               header('Location: '.$error_redirect); exit;
           }
 
@@ -74,7 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               'user_id'   => 0,
               'username'  => $guest['username'],
               'email'     => '',
-              'full_name' => 'Guest User',
+              'full_name' => 'Pass holder',
               'user_role' => 'guest',
           ]);
           $_SESSION['guest_expire'] = strtotime($guest['expires_at']);

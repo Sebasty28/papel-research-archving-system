@@ -1,5 +1,5 @@
 {
- "built": "2026-10-29 13:58",
+ "built": "2026-11-03 16:58",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -26,16 +26,16 @@
    "lines": 240
   },
   "app/admin/admin_manage_faculty.php": {
-   "lines": 526
+   "lines": 531
   },
   "app/admin/admin_review_dashboard.php": {
    "lines": 139
   },
   "app/admin/gdrive_settings.php": {
-   "lines": 364
+   "lines": 368
   },
   "app/admin/super_admin_manage_admins.php": {
-   "lines": 503
+   "lines": 508
   },
   "app/admin/super_admin_review_dashboard.php": {
    "lines": 135
@@ -50,7 +50,7 @@
    "lines": 214
   },
   "app/faculty/faculty_manage_students.php": {
-   "lines": 1172
+   "lines": 1177
   },
   "app/faculty/faculty_review_dashboard.php": {
    "lines": 166
@@ -62,10 +62,10 @@
    "lines": 72
   },
   "app/librarian/librarian_manage_guests.php": {
-   "lines": 456
+   "lines": 470
   },
   "app/librarian/manuscript_requests.php": {
-   "lines": 592
+   "lines": 597
   },
   "app/models/AdminManagementService.php": {
    "lines": 183
@@ -92,10 +92,10 @@
    "lines": 155
   },
   "app/review_paper.php": {
-   "lines": 780
+   "lines": 785
   },
   "app/student/paper_details.php": {
-   "lines": 688
+   "lines": 693
   },
   "app/student/paper_preview.php": {
    "lines": 97
@@ -110,7 +110,7 @@
    "lines": 104
   },
   "app/student/student_dashboard.php": {
-   "lines": 886
+   "lines": 891
   },
   "app/student/student_draft_delete.php": {
    "lines": 139
@@ -122,13 +122,13 @@
    "lines": 435
   },
   "app/student/student_upload_ai.php": {
-   "lines": 12992
+   "lines": 14486
   },
   "app/student/upload_diagnostics.php": {
    "lines": 235
   },
   "app/support_requests.php": {
-   "lines": 289
+   "lines": 294
   },
   "archive/archive_handler.php": {
    "lines": 15
@@ -140,19 +140,19 @@
    "lines": 954
   },
   "archive/index.php": {
-   "lines": 1279
+   "lines": 1284
   },
   "archive/login.php": {
    "lines": 1081
   },
   "archive/view_paper.php": {
-   "lines": 1060
+   "lines": 1077
   },
   "config/config.php": {
    "lines": 176
   },
   "config/core.php": {
-   "lines": 4184
+   "lines": 4353
   },
   "config/error_handler.php": {
    "lines": 228
@@ -179,7 +179,7 @@
    "lines": 1214
   },
   "includes/action_dialogs.php": {
-   "lines": 343
+   "lines": 337
   },
   "includes/back_button.php": {
    "lines": 5
@@ -209,7 +209,7 @@
    "lines": 95
   },
   "includes/flash_dismiss.php": {
-   "lines": 325
+   "lines": 364
   },
   "includes/focus_ring.php": {
    "lines": 182
@@ -254,7 +254,7 @@
    "lines": 124
   },
   "includes/pdf_dock.php": {
-   "lines": 1401
+   "lines": 1408
   },
   "includes/pdf_writer.php": {
    "lines": 416
@@ -269,7 +269,7 @@
    "lines": 486
   },
   "includes/review_console.php": {
-   "lines": 1741
+   "lines": 1747
   },
   "includes/scroll_jump.php": {
    "lines": 93
@@ -278,13 +278,16 @@
    "lines": 894
   },
   "includes/site_footer.php": {
-   "lines": 488
+   "lines": 493
   },
   "includes/site_head.php": {
-   "lines": 1379
+   "lines": 1389
   },
   "includes/site_header.php": {
-   "lines": 547
+   "lines": 564
+  },
+  "includes/skeleton.php": {
+   "lines": 602
   },
   "includes/splash.php": {
    "lines": 167
@@ -311,7 +314,7 @@
    "lines": 34
   },
   "notifications/notification_center.php": {
-   "lines": 479
+   "lines": 484
   },
   "notifications/notifications_handler.php": {
    "lines": 109

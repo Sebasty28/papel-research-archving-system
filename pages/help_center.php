@@ -221,12 +221,12 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
                     account, and see each paper's title, authors, programme and year.</p>
 
                     <p>Opening a paper needs an account. Signed in, whether as a student, as staff
-                    or with a guest pass from the Librarian, you can read the whole record: the
+                    or with a Library Pass from the Librarian, you can read the whole record: the
                     abstract, the keywords and every section the authors wrote.</p>
 
                     <p class="faq-note">The manuscript file itself is another matter. Staff can open
                     it; a student can ask a librarian to unlock it for a while, on the paper's own
-                    page. A guest pass does not open it.</p>
+                    page. A Library Pass does not open it.</p>
                 </div>
             </div>
 

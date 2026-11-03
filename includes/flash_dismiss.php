@@ -140,10 +140,16 @@ html.papel-snacks-on .js-flash-snack { display: none; }
     transition: opacity .3s ease, transform .3s ease;
 }
 .papel-snack-icon { flex: 0 0 auto; font-size: 20px; margin-top: .05rem; }
-/* Told apart by the icon's shape as well as its colour, and the colours are
-   the palette's own for success and failure, so they hold up on white and on
-   Old Night's dark card alike. */
-.papel-snack.is-good .papel-snack-icon { color: var(--ok-text); }
+/* Three kinds, told apart by the icon's shape first: check_circle, error, info.
+   The tick is the site's own maroon rather than a green. Green was the one colour
+   on these cards that belonged to no palette here, and it read as a different
+   product's notification sitting on a maroon page; the shape is what says
+   "that worked", and it says it in both themes without a second hue.
+   --maroon, not --maroon-surface: this is an icon read as a mark, so it lifts on
+   Old Night's dark card instead of staying the dark fill the buttons use.
+   Failure keeps its own colour: it is the one state worth a second signal. */
+.papel-snack.is-good .papel-snack-icon,
+.papel-snack.is-info .papel-snack-icon { color: var(--maroon); }
 .papel-snack.is-bad  .papel-snack-icon { color: var(--bad-text); }
 .papel-snack-text { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
 .papel-snack-text a { color: var(--maroon); text-decoration: underline; }
@@ -222,6 +228,39 @@ html.papel-snacks-on .js-flash-snack { display: none; }
         });
         return words;
     }
+
+    /* The same card, raised by script rather than converted from a banner on the
+       page. Every notice on the site comes through here: papelNote() in
+       action_dialogs.php is this function, so a note after an action and a flash
+       after a reload are the same card in the same place, and there is one set of
+       rules for how long it stays and how it is dismissed.
+
+       `kind` is 'good', 'bad' or anything else for a plain note. The message is
+       written with textContent, never as markup: callers pass a person's typing
+       (a file's name, a section's name) without thinking about it. */
+    function snack(message, kind) {
+        var k = kind === 'good' ? 'is-good' : kind === 'bad' ? 'is-bad' : 'is-info';
+        var el = document.createElement('div');
+        el.className = 'papel-snack ' + k;
+        el.setAttribute('role', k === 'is-bad' ? 'alert' : 'status');
+        el.dataset.papelFlash = '1';
+
+        var icon = document.createElement('span');
+        icon.className = 'material-symbols-outlined papel-snack-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.textContent = k === 'is-good' ? 'check_circle' : k === 'is-bad' ? 'error' : 'info';
+
+        var text = document.createElement('span');
+        text.className = 'papel-snack-text';
+        text.textContent = String(message == null ? '' : message);
+
+        el.appendChild(icon);
+        el.appendChild(text);
+        snackStack().appendChild(el);
+        arm(el);
+        return el;
+    }
+    window.papelSnack = snack;
 
     function toSnack(el) {
         var bad = isBad(el);

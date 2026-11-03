@@ -121,9 +121,10 @@ lay across its bottom, which is what a short Step 2 shows the moment a PDF arriv
 The form's card is the **main pane** and a card beside it the **side pane**, each with a strip of tabs
 like an editor's. **Every tab opens in its home place** (`HOME` in `papelSide`, applied by `homeTab()`
 each time a tab opens): main, in this order, **Upload Paper** (the form; it is the page, so it never
-moves and cannot be closed), **Writing View** (while a section is open for writing), **Preview** (no
-close), the **PDF** (when a file is attached); side, **Contents** (no close), then **Corpus** (when he is
-opened). The owner asked for this order to hold whenever a tab opens. The side pane is on the **left
+moves and cannot be closed), **Writing View** (while a section is open for writing), the **PDF**
+(when a file is attached), then **Preview** (no close), which is last because it is the one tab
+about the finished paper rather than about writing it, so nothing opening should push it along;
+side, **Contents** (no close), then **Corpus** (when he is opened). The owner asked for this order to hold whenever a tab opens. The side pane is on the **left
 by default** (`papel.sideSide` keeps a move to the right).
 
 - **Any tab but Upload Paper can be dragged** to the other pane or along its own: pointer events
@@ -145,6 +146,15 @@ by default** (`papel.sideSide` keeps a move to the right).
   form moved in the page keeps what is typed and chosen, files included). Another tab on view in the
   main pane hides the form under it (`#mainBody.is-covered`). Switching tabs only hides
   (`.side-hidden`), so the PDF keeps its page, Corpus his conversation, a section its text.
+- **A section on view in the Writing View is moved out of its step.** Every step
+  but the one on screen is `display: none`, which hides a fixed box as surely as
+  any other, so leaving step 2 with the tab open left the pane blank and the text
+  apparently gone. While the section is the pane's page it lives in
+  `#docPaneHolder` (`toHolder()` / `fromHolder()` in `papelSide`), and goes back
+  exactly where it was when it is not. The holder is **inside `<form>`**, which is
+  what makes the rest of it work: the hidden field that carries what was typed
+  still posts, and step 2 shows the edit the moment the box goes home, because it
+  is the same box.
 - **Writing View is the section editor itself.** In panes, `toggleExpand()` sets `doc-writing` instead
   of the full view's `doc-expanded`, so none of the full view's window-covering rules apply (bars,
   chat and contents hidden, page padding taken away). It raises `papel-full-state` on every open and
@@ -248,7 +258,10 @@ Tested by `ui31_panes.py` and `ui32_panes_more.py` (scratch scripts, not in the 
 layout, every drag, the Writing View, resizing, folding, the sides, the contents and the phone.
 Several of ui31's checks compare the main strip's tabs exactly and predate Preview.
 
-Put a new fixed element on that ladder instead of reaching for a bigger number.
+Above all of them sit three full-window layers, in this order: the loading
+skeleton at 2147482000, the splash at 2147483000 and the loading bar at
+2147483100. Put a new fixed element on the ladder above instead of reaching
+for a bigger number.
 Corpus follows the footer's visible height (`--chat-lift`, set by
 `watchChatLift()`): floating, he is lifted by it, so he rests above the footer
 rather than being buried by it on a page short enough to show it all the time;
@@ -277,6 +290,46 @@ sets `body.style.overflow` while it is open, so the full view also forces `<body
 only sections being submitted have one: a tab for a section left out "expanded" a hidden box,
 which looked like the full view closing itself.
 
+### The step bar pins itself and folds down
+
+**In the panes it is a row of its own.** `placeStepBar()` lifts `.upload-steps`
+out of the scrolling page and puts it between the tab strip and `#mainBody`, and
+puts it back at the top of the page when the panes go away. Sticky inside the
+page was the first build, and the form slid underneath it: the white card's top
+edge, its title and its Step heading all went behind the bar, which is a bar
+covering the thing it labels. The only way to stop a pinned bar covering the page
+below it is to take it out of that page. It belongs to the form, so
+`.main-tabs:not([data-on="form"]) + .upload-steps` hides it with the form, and
+the radius rule that joined the strip to the body is now `~` and not `+`, since
+the bar is lifted in between them.
+
+Where there are **no panes** the window is the scroller and there is no row to
+put it in, so it stays `position: sticky` with its `top` at `--pdf-dock-top`, the
+navbar's measured bottom edge, never a number; the breadcrumb strip is
+`position: relative` and scrolls away, so it is not part of the sum. It still
+rides over the card there.
+
+Once the form has scrolled, `.is-stuck` folds the card to one line in the same
+place: each step becomes a row rather than a column, the circles go 44px to
+24px, the connectors shorten. 101px becomes 38px. A threshold with room either
+side of it (12px down, 4px back) keeps a form resting a pixel off the top from
+flipping it open and shut on every notch, and the work is a class on that card,
+never a custom property on `:root`.
+
+Two things that cost a build each:
+
+- **A scroll event does not bubble**, so a listener on `window` hears nothing in
+  the panes, where the window never scrolls at all. It is one listener on the
+  `document` in the **capture** phase, which hears both. Naming `#mainBody`
+  instead would mean waiting for `papelSide` to build it, and this block is
+  parsed long before that.
+- **The bar fails to fit in two different ways**, because it is laid out two
+  ways: `flex-wrap: wrap` in the panes, where it never overflows and the sign is
+  the last step dropping below the first; `nowrap` with `overflow-x: auto` under
+  768px and in a narrow upload column, where it does not wrap and the sign is
+  the overflow. `tooWide()` tests both. Then `.is-tight` leaves only the step you
+  are on named, and `.is-min` drops the rules between the circles.
+
 ### Back and Forward on the upload page go through the history, never `location.href`
 
 Each step of `student_upload_ai.php` is an entry in the browser's history, and so is a section
@@ -289,6 +342,17 @@ the history twice, Back from it came straight back to the form, and Forward had 
 `goToStep()` raises `papel-step` and the full view `papel-fullview`; the history listens, and
 the popstate handler changes the page without making new entries. Test it with
 `Page.navigateToHistoryEntry` over CDP, which is the browser's own Back and Forward.
+
+**A notice that names something missing takes the student to it.**
+`papelAlert(message, { field })` hands the box to `papelNeedsFill()` once the
+dialog has closed, never while it is up: a scroll behind the dialog finishes
+before anyone can see it happen. The field's whole column is washed (`.needs-fill`,
+a `box-shadow` so nothing moves, mixed from `--maroon` so the dark theme holds)
+and the wash comes off the moment the student touches the group. Leaving it up
+while they type would make a box they have just answered still look wrong, which
+is why `papelDoc.flag()` now clears its `is-invalid` on the first keystroke too.
+`field` may be a function instead of a box, for something that marks itself.
+One wash at a time: a second notice moves it.
 
 The page's dialog keeps its width and buttons until it has faded out (`plainBox()` runs on the
 next open, or 260ms after a close). Stripping them at the start of the fade showed the text
@@ -553,6 +617,7 @@ its own palette is a bug, not a style choice.
 | `manage_save_confirm.php` | "Save these changes?" with a field-by-field diff |
 | `theme.php` | Palette + light/dark, applied pre-paint |
 | `scroll_jump.php` | Scroll to top/bottom button |
+| `skeleton.php` | The loading skeleton: pale blocks in the shape of the page, over the content area until the page has settled |
 
 **Never use `alert()` or `confirm()`.** Put `data-confirm="..."` on the button
 and `action_dialogs.php` handles it.
@@ -564,6 +629,56 @@ site. Drive it with `window.papelLoading.start()` and `.done()`;
 paints a progress bar of its own ends up with two of them, in two places: the
 student dashboard drew one across the top of its results column, which on that
 page is above the search box, so it read as a stray rule floating in the gap.
+
+### The loading skeleton
+
+The splash (`includes/splash.php`) plays only on the first page of a visit and
+on a refresh: it returns early otherwise. So ordinary navigation from page to
+page had nothing over it, and a page painted the server's markup and then
+settled into its real shape in front of the reader. On the upload page that is
+a jump you cannot miss: the form paints as one column and `papelSide` rebuilds
+it into two panes with tab strips at `DOMContentLoaded`.
+
+`includes/skeleton.php` covers that gap. It is required from the top of
+`site_head.php`, so it decides before the first paint, and prints its blocks
+from the end of `site_header.php`, so they are in `<body>` before the page's
+own content. The splash and the skeleton never both appear: the skeleton
+returns early when `papel-splash` is already on `<html>`.
+
+- **A page picks its shape** with `$PAGE_SKELETON` *before* including
+  `site_head.php`: `panes` (the upload page), `console` (the dashboards and the
+  four review desks, defaulted in `review_console.php` so the desks need no
+  edit), `repository`, `reader`, `table` (the management consoles), or nothing
+  at all for the generic page. Everything else that includes `site_head.php`
+  gets the generic shape with no edit.
+- **It covers rather than hides.** The real content stays laid out underneath,
+  so nothing that measures an element sees a hidden box. The overlay starts at
+  the navbar's and breadcrumb strip's live measured bottom, not at a number:
+  those two are server-rendered and never reshaped, so they stay real.
+- **The shapes are measured, not judged by eye.** `.wrap` is 1168px at most with
+  24px of padding, and inside it the main column, a 36px gap and the 226px rail
+  come to 1120px; the reader's is 1fr + 256px with a 28px gap; the management
+  grid is 304px + 1fr with 20px. The upload page's side pane is read from
+  `papel.pdfDockWidth` (with `papel.sideSide` and `papel.sideCollapsed`), since
+  a guessed width still shifts the page sideways when the skeleton lifts, which
+  is the jump being covered.
+- **It lifts at the later of the page's ready signal and 300ms.** The minimum is
+  deliberate: a cached page is ready in well under a tenth of a second, and a
+  skeleton that appears and vanishes inside one is a blink of its own. A page
+  that rebuilds its own layout calls `papelSkeleton.hold()` while it parses and
+  `papelSkeleton.done()` once the real layout is up (the upload page does this
+  around `papelSide`), so it never lifts onto a half-built page. Two failsafes:
+  the script gives up 1.5s after `load`, and the CSS fades the layer out at 6s
+  in case the script is itself what failed. With no script at all nothing is
+  ever shown.
+- Block tones are `color-mix` off `--ink`, never a fixed grey, so the blocks
+  track the theme. Reduced motion drops the sweep and keeps the blocks: the
+  blocks are what stops the page jumping.
+
+Measured on a navigation into the upload page: skeleton on at 22ms, the layer
+present at `DOMContentLoaded` (133ms), the fade beginning at 307ms with
+`body.panes`, the tab strips and `#mainBody` all already built, and the layer
+out of the DOM at 515ms.
 
 The upload page's overlay is the one place the logo is not a pill: it plays the
 same GIF inside its own card and does not call `papelLoading.work.*`, since
@@ -905,6 +1020,86 @@ Each gets a box on Step 2 and is required like a ticked standard section. Plan:
 - **A name is a person's typing.** It is written with `textContent` and escaped with `escHtml()`
   wherever markup is built (the Step 4 explanation, the extraction notice). The dialog's body scrolls
   inside the box, so twelve rows fit a short screen.
+
+### Supporting documents
+
+Step 3 is **one table**: what is being asked for down the left, the control and
+the file's name down the right. It was three cards of stacked label-and-input
+pairs, which read as three unrelated questions and left the student scrolling to
+see what was still missing. The four named documents (ethics clearance, consent
+form, data collection tool, copyright/IP) are fixed rows, and under them, in
+their own `<tbody>`, are as many rows as the student adds and names, the way
+they add sections of their own at Step 2.
+
+- **The native control is off the page and a `<label>` stands in for it**
+  (`.docs-input` clipped, `.docs-choose` styled as the button). It drew the
+  browser's own "No file chosen" beside a button saying what the indicator
+  already says, and the pair did not fit the cell, so the text was cut to
+  "N...sen"; and its width answers to what it holds, so choosing a file made the
+  button wider and pushed the box along. A label with `for` opens the picker by
+  itself, keyboard included, and the focus ring goes on the label
+  (`.docs-input:focus-visible + .docs-choose`) since the control is not seen.
+  **The row is one shape** empty, filled or focused: the padding and the 1px
+  border never change between states. Measured, not judged by eye.
+- `syncSupportingDocs()` finds a document's label with
+  `.docs-table th label[for="..."]`, scoped to the left-hand cell, because the
+  Choose file label carries the same `for`.
+- **A file that is there is a control.** `updateFileIndicator()` builds the box
+  from elements (the name is the file's, so it goes in as text): left-click
+  opens it in a viewer of its own, right-click offers that, the raw file and
+  Remove (`.doc-pop`, the editor's own popover), and an X appears at the end on
+  hover, or always where there is no hover. Removing empties the input, which is
+  the only thing script may do to a file input.
+- **A supporting document gets its own viewer**, `papelPdfDock.popOut(file, name)`
+  (newly public; the handshake was already there for the panel's own "new tab"
+  button). Not the docked panel: it holds one PDF at a time and that one is the
+  manuscript, so sending a consent form to it replaced the paper the student was
+  reading against, and opening a second document replaced the first. The file
+  never leaves the browser either way, the new tab being handed the `File` over
+  `postMessage`, same origin only.
+- **What a document may be called**: `supporting_doc_name_problem()`, which
+  shares other_name_problem's two tests but allows 8 words rather than 4, since
+  a document really is called "Certificate of Originality and Authorship". A
+  separate function on purpose: `tests/_other_name_unit.php` pins the wording of
+  the other one. The page says the same thing first (`docNameProblem()`); keep
+  the two together. Pressing Add clears away any row that was added and never
+  filled in, so a name of nothing but spaces does not survive it.
+- **Ask `config/core.php`**: `supporting_docs_extra($post, $files, $require)` is
+  the authority on what the added rows may hold. It is called at the **top** of
+  the submit handler, before a file is moved or sent to Drive, so a bad row is
+  answered in words rather than after a minute of uploading. On a submission it
+  refuses a file with no name, a name with no file, two rows under one name, and
+  more than `SUPPORTING_DOC_EXTRA_MAX` (6); saving a draft refuses none of that,
+  because a row halfway through being filled in is ordinary. A row left entirely
+  blank is ignored either way.
+- Both fields post unindexed (`extra_doc_name[]`, `extra_doc[]`), so one position
+  means the same row in each, and the helper returns the row's index for reaching
+  into `$_FILES['extra_doc']`. An empty row between two filled ones still maps the
+  third row to index 2; do not renumber.
+- Each added row is filed exactly as the old single "Other Document" was: kind
+  `other`, with the student's name in `document_name` where the column exists
+  (`supporting_documents_have_name()`), and without it on a server that has not
+  run the repair. **Never build the file's path from the typed name**: it goes
+  through `safe_name()`, for the same reason a paper type does.
+- The old `other_doc` / `other_doc_name` pair is gone from the form, and the
+  server still accepts it, for a page cached before this change.
+
+**The names are stored inside `imrad_content`, under `_docs`** (`PAPER_DOCS_KEY`),
+and not in a column, for the same reasons `_scope` and `_custom` are: nothing to
+add to `papers_archive`, to `ArchiveRepository`'s column list or to its bind
+types, and no migration for a copy of the site that is behind. Every reader takes
+the written sections **by name** (`paper_sections_for_display()`), so a key they
+do not know about is invisible to them; a reader that loops over the decoded JSON
+instead would print it as a section. Ask `extra_doc_names_clean()` and
+`paper_extra_doc_names()`, do not parse it by hand.
+
+Only the names are kept there. The documents are rows in `supporting_documents`
+once a paper is handed in, and **a draft holds no file**, so this is what lets a
+draft reopened from the dashboard come back with its rows labelled and waiting
+for their PDFs. A submitted paper keeps them too: a paper returned for revision
+is a draft again. On the page they ride in the hidden `extra_docs` field, and
+`restoreExtraDocs()` rebuilds the rows **before** the restore puts anything in
+them, since a box made after load is not there for the restore to find.
 
 ### The review checklist
 

@@ -134,8 +134,12 @@ if ($sc) $stored = (int)($sc->fetch_assoc()['n'] ?? 0);
 .set-actions .set-hint { font-size: .75rem; color: var(--grey); }
 
 .set-flash { border-radius: var(--r-card, 8px); padding: .75rem 1rem; font-size: .8125rem; margin-bottom: 1.25rem; }
-.set-flash.ok  { background: #e7f6ed; color: #1b5e35; }
-.set-flash.bad { background: #fdeaea; color: var(--dark-maroon); }
+/* Tokens, not a pair of literals: these turned white-on-pale in Old Night, the
+   one palette they were never checked against. With script running, the banner
+   is lifted into the site's snackbar anyway (includes/flash_dismiss.php) and
+   this is what is seen without it. */
+.set-flash.ok  { background: var(--ok-bg);  color: var(--ok-text); }
+.set-flash.bad { background: var(--bad-bg); color: var(--bad-text); }
 
 @media (max-width: 600px) {
     .set-wrap { padding: 1.25rem 0 2rem; }

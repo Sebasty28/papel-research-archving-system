@@ -234,6 +234,11 @@ ob_start();
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>My Dashboard · <?= e(APP_NAME) ?></title>
+<?php
+/* The loading skeleton's shape (includes/skeleton.php). Set before the shared
+   head, which is where the skeleton reads it. */
+$PAGE_SKELETON = 'console';
+?>
 <?php require_once ROOT_PATH.'/includes/site_head.php'; ?>
 <?php require_once ROOT_PATH.'/includes/browse_console.php'; ?>
 <?php require_once ROOT_PATH.'/includes/console_shell.php'; ?>

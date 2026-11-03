@@ -694,7 +694,7 @@ function account_position(array $user): string {
     if ($role === 'admin') {
         return $level === 2 ? 'Head of Academic Programs' : 'Research Coordinator';
     }
-    if ($role === 'guest')         return 'Guest';
+    if ($role === 'guest')         return 'Library Pass';
     // Anything unrecognised is named after itself rather than guessed at.
     return trim((string)($user['title'] ?? '')) ?: ucwords(str_replace('_', ' ', $role));
 }
@@ -724,7 +724,7 @@ function account_identifier(array $user): array {
         return ['label' => 'Student ID', 'value' => $student];
     }
     if ($role === 'guest') {
-        return ['label' => 'Guest username', 'value' => trim((string)($user['username'] ?? ''))];
+        return ['label' => 'Pass username', 'value' => trim((string)($user['username'] ?? ''))];
     }
 
     $label = ($role === 'librarian') ? 'Librarian ID' : 'Faculty ID';
@@ -1526,14 +1526,16 @@ function student_expiry_date(?string $section, ?string $academicYear, ?string $c
 // Human-readable job title for a role, used under the user's name in the
 // header dropdown and on the settings page.
 function role_label(?array $u): string {
-  if (!$u) return 'Guest';
+  /* Nobody signed in is a visitor; somebody holding a pass is a Library Pass.
+     Both were "Guest", which is what made a pass look like the public way in. */
+  if (!$u) return 'Visitor';
   $role = $u['user_role'] ?? '';
   if ($role === 'super_admin')   return 'Director';
   if ($role === 'head_academic') return 'Head of Academic Programs';
   if ($role === 'faculty')       return 'Faculty Adviser';
   if ($role === 'student')       return 'Student Researcher';
   if ($role === 'librarian')     return 'Librarian';
-  if ($role === 'guest')         return 'Guest';
+  if ($role === 'guest')         return 'Library Pass';
   if ($role === 'admin') {
     return (($u['admin_level'] ?? 1) == 2) ? 'Records Officer' : 'Research Coordinator';
   }
@@ -3965,6 +3967,173 @@ function supporting_doc_label(?string $type, ?string $name = null): string {
         ''                 => 'Copyright / IP Document',
     ];
     return $labels[$key] ?? ucwords(str_replace('_', ' ', (string)$type));
+}
+
+/** A document's name may run longer than a paper type's. */
+const SUPPORTING_DOC_NAME_MAX_WORDS = 8;
+
+/**
+ * What is wrong with the name a student typed for a document of their own.
+ *
+ * The same reading other_name_problem() gives a paper type, and it shares that
+ * function's two tests (other_name_filler(), other_name_looks_random()), but it
+ * is deliberately a separate function rather than a parameter on that one: a
+ * paper type is "Case Study" in two words, while a document really is called
+ * "Certificate of Originality and Authorship", so the limit and the examples
+ * both differ, and tests/_other_name_unit.php pins that function's wording.
+ *
+ * Null when there is nothing wrong.
+ */
+function supporting_doc_name_problem(string $name): ?string {
+    $name = trim($name);
+    if ($name === '') {
+        return 'Please type what this document is called.';
+    }
+    $letters = preg_replace('/[^\p{L}]+/u', '', $name) ?? '';
+    if (mb_strlen($letters) < 2) {
+        return 'Please write what this document is called, in words.';
+    }
+    $words = preg_split('/\s+/u', $name) ?: [];
+    if (count($words) > SUPPORTING_DOC_NAME_MAX_WORDS) {
+        return 'Please keep the name of a document to ' . SUPPORTING_DOC_NAME_MAX_WORDS
+             . ' words at most, the way "Certificate of Originality" names one.';
+    }
+    $bare = preg_replace('/[^\p{L}\s]+/u', ' ', mb_strtolower($name, 'UTF-8')) ?? '';
+    $bare = trim(preg_replace('/\s+/u', ' ', $bare) ?? '');
+    if ($bare !== '' && in_array($bare, other_name_filler(), true)) {
+        return 'Please write what this document is called, not a greeting.';
+    }
+    if (other_name_looks_random($name)) {
+        return 'That does not look like a name. Please write what the document is called, '
+             . 'like "Turnitin Report" or "Certificate of Originality".';
+    }
+    return null;
+}
+
+/**
+ * The key the names of a student's own supporting documents are kept under,
+ * inside imrad_content.
+ *
+ * The same reasoning as PAPER_CUSTOM_KEY: no column, so there is nothing to add
+ * to papers_archive, to ArchiveRepository's column list or to its bind types,
+ * and a copy of the site that is behind needs no migration run. Every reader
+ * takes the written sections by name (paper_sections_for_display()), so a key
+ * they do not know about is invisible to them.
+ *
+ * Only the names are kept here. The documents themselves are rows in
+ * supporting_documents once a paper is handed in, and a draft holds no file at
+ * all (see "A draft lives in two places"). This is what lets a draft reopened
+ * from the dashboard come back with its rows still labelled, each waiting for
+ * its PDF again, instead of as a blank Step 3.
+ */
+const PAPER_DOCS_KEY = '_docs';
+
+/**
+ * The names behind Step 3's hidden extra_docs field, cleaned for storage.
+ *
+ * Takes the posted JSON string or an already decoded list. An unnamed row is
+ * kept, because in a draft a row the student has added and not yet named is an
+ * ordinary thing to find; a list that is nothing but unnamed rows is not worth
+ * storing at all and comes back empty.
+ */
+function extra_doc_names_clean($raw): array {
+    $list = is_array($raw) ? $raw : json_decode((string) $raw, true);
+    if (!is_array($list)) { return []; }
+
+    $out = [];
+    foreach ($list as $name) {
+        if (count($out) >= SUPPORTING_DOC_EXTRA_MAX) { break; }
+        if (!is_scalar($name)) { continue; }
+        // A person's typing, cleaned as supporting_docs_extra() cleans it.
+        $out[] = mb_substr(trim(preg_replace('/\s+/u', ' ', strip_tags((string) $name))), 0, 80);
+    }
+    foreach ($out as $n) { if ($n !== '') { return $out; } }
+    return [];
+}
+
+/** The names stored on a paper, for Step 3 to rebuild its rows from. */
+function paper_extra_doc_names($imradContent): array {
+    if (!is_string($imradContent) || $imradContent === '') { return []; }
+    $decoded = json_decode($imradContent, true);
+    if (!is_array($decoded)) { return []; }
+    return extra_doc_names_clean($decoded[PAPER_DOCS_KEY] ?? null);
+}
+
+/** How many documents of their own a student may add beyond the four named ones. */
+const SUPPORTING_DOC_EXTRA_MAX = 6;
+
+/**
+ * The supporting documents the student named themselves, read from a posted form.
+ *
+ * Step 3 of the upload form lists the four named documents and then as many rows
+ * of the student's own as they add, each one a name they typed and a PDF. Only
+ * the name and which posted row it belongs to are decided here; moving the file
+ * is the caller's business. Returns a list of ['index' => int, 'name' => string]
+ * in the order the rows were posted, so the caller can reach into the matching
+ * entry of $_FILES['extra_doc'].
+ *
+ * Both fields are posted unindexed (`extra_doc_name[]`, `extra_doc[]`), so the
+ * two arrays are in the same order and one position means the same row in each.
+ *
+ * $require is false while a draft is being saved, where a row halfway through
+ * being filled in is ordinary, and true on a submission, where the answer has to
+ * stand up: a file with no name cannot be labelled on the paper's page, a name
+ * with no file files nothing, and two rows under one name are two documents
+ * nobody can tell apart afterwards.
+ */
+function supporting_docs_extra(array $post, array $files, bool $require): array {
+    $names = $post['extra_doc_name'] ?? [];
+    if (!is_array($names)) { return []; }
+    $errors = $files['extra_doc']['error'] ?? [];
+    if (!is_array($errors)) { $errors = []; }
+
+    $out  = [];
+    $seen = [];
+    foreach (array_values($names) as $i => $raw) {
+        // A person's typing: tags out, runs of space collapsed, and short enough
+        // to read in a table cell. The column itself holds 255.
+        $name = trim(preg_replace('/\s+/u', ' ', strip_tags((string) $raw)));
+        $name = mb_substr($name, 0, 80);
+        $hasFile = (($errors[$i] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK);
+
+        // A row the student added and never filled in is not an answer at all.
+        if ($name === '' && !$hasFile) { continue; }
+
+        if ($require && $name === '') {
+            throw new UserFacingException(
+                'One of the documents you attached has no name. Type what it is, or remove the row.');
+        }
+        /* And the name has to be a name: a greeting, a whole sentence or a row of
+           mashed keys is filed and published as the document's label otherwise. */
+        if ($require) {
+            $problem = supporting_doc_name_problem($name);
+            if ($problem !== null) { throw new UserFacingException($problem); }
+        }
+        if ($require && !$hasFile) {
+            throw new UserFacingException(
+                'There is no file attached for "' . $name . '". Choose a PDF for it, or remove the row.');
+        }
+
+        $key = mb_strtolower($name);
+        if ($name !== '' && isset($seen[$key])) {
+            if ($require) {
+                throw new UserFacingException(
+                    'Two of your documents are both called "' . $name . '". Give them different names.');
+            }
+            continue;
+        }
+        if (count($out) >= SUPPORTING_DOC_EXTRA_MAX) {
+            if ($require) {
+                throw new UserFacingException('You may add at most ' . SUPPORTING_DOC_EXTRA_MAX
+                    . ' documents of your own. Please remove the rest.');
+            }
+            break;
+        }
+
+        $seen[$key] = true;
+        $out[] = ['index' => $i, 'name' => $name];
+    }
+    return $out;
 }
 
 /**

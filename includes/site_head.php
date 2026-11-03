@@ -8,6 +8,7 @@
 ?>
 <?php require_once __DIR__ . '/favicon.php'; ?>
 <?php require_once __DIR__ . '/splash.php'; ?>
+<?php require_once __DIR__ . '/skeleton.php'; ?>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1131,6 +1132,15 @@ html.nav-open .nav-burger .burger-open { display: inline-flex; }
     font-weight: 400;
     color: var(--ink);
     margin-bottom: .375rem;
+}
+/* Under a field, for the one role that has to be given its credential before it
+   can use this form: it says where to get one, which the label has no room for. */
+.lf-hint {
+    margin: .375rem 0 0;
+    font-family: var(--font-body);
+    font-size: .75rem;
+    line-height: 1.45;
+    color: var(--grey);
 }
 .lf-input {
     width: 100%;

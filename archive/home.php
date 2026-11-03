@@ -791,7 +791,7 @@ $types_res = $conn->query("SELECT DISTINCT paper_type FROM research_papers WHERE
         <div class="d-flex align-items-center gap-3">
             <?php if ($u): ?>
                 <span class="navbar-text">
-                    <?= isset($_SESSION['guest_login']) ? '👤 Guest Session' : '👤 ' . e($u['full_name']) ?>
+                    <?= isset($_SESSION['guest_login']) ? '👤 Library Pass' : '👤 ' . e($u['full_name']) ?>
                 </span>
                 <a href="../logout.php?from=archive" class="btn btn-outline-custom">Exit Archive</a>
             <?php else: ?>

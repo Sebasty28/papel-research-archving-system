@@ -221,6 +221,11 @@ ob_start();
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Public Repository · <?= e(APP_NAME) ?></title>
+<?php
+/* The loading skeleton's shape (includes/skeleton.php). Set before the shared
+   head, which is where the skeleton reads it. */
+$PAGE_SKELETON = 'repository';
+?>
 <?php require_once ROOT_PATH.'/includes/site_head.php'; ?>
 <?php require_once ROOT_PATH.'/includes/browse_console.php'; ?>
 <?php require_once ROOT_PATH.'/includes/browse_card.php'; ?>
@@ -1011,7 +1016,7 @@ ob_start();
             </div>
             <div class="sidebar-card-body">
                 <button class="sidebar-link js-open-modal" type="button" data-role="student">Login</button>
-                <button class="sidebar-link js-open-modal" type="button" data-role="guest">Guest Login</button>
+                <button class="sidebar-link js-open-modal" type="button" data-role="guest">Sign in with a Library Pass</button>
             </div>
         </div>
         <div class="note-card">

@@ -45,7 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($owner = email_account_owner($email)) {
             flash('error', 'That email already belongs to a PAPEL account: ' . $owner['full_name']
                 . ' (' . role_label($owner) . '). They should sign in with that account. '
-                . 'Guest passes are for visitors who do not have one.');
+                . 'Library passes are for visitors who do not have one.');
             header('Location: librarian_manage_guests.php');
             exit;
         }
@@ -53,7 +53,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $duration = (int)($_POST['duration'] ?? 2);
         $duration = max(GUEST_MIN_HOURS, min(GUEST_MAX_HOURS, $duration));
 
-        $username = 'guest_' . bin2hex(random_bytes(4));
+        /* The name on the pass, which the holder reads off an email and types into
+           the sign-in panel, so it says what it is: libraryPass_4f2a91c8. It was
+           guest_<hex>, from when the role was called Guest.
+
+           Only new passes are named this way. Every lookup is by the exact username
+           (archive/login.php, guest_access.php, guest_pass_live()), so the passes
+           already issued keep working under the names they were sent out with, and
+           nothing has to be rewritten in the table. username is varchar(50); this is
+           20 characters. */
+        $username = 'libraryPass_' . bin2hex(random_bytes(4));
 
         /* No I, l, O or 0: this is read out loud and typed by hand more often
            than it is copied. */
@@ -73,8 +82,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($stmt->execute()) {
             $body  = email_para('Good day,');
-            $body .= email_para('You have been granted temporary guest access to ' . APP_NAME
-                   . ', the research repository of PUP Biñan Campus. Guest access is read only '
+            $body .= email_para('You have been given a Library Pass to ' . APP_NAME
+                   . ', the research repository of PUP Biñan Campus. A pass is read only '
                    . 'and expires on the date shown below.');
             $body .= email_details([
                 'Username'    => $username,
@@ -83,11 +92,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ], ['Username', 'Password']);
             $body .= email_action('Sign in at', BASE_URL . '/archive/login.php');
 
-            $sent = send_email($email, 'Guest access to ' . APP_NAME, $body);
+            $sent = send_email($email, 'Your Library Pass to ' . APP_NAME, $body);
 
             flash('success', $sent
-                ? 'Guest pass created and sent to ' . $email . '.'
-                : 'Guest pass created, but the email to ' . $email . ' could not be sent. '
+                ? 'Library pass created and sent to ' . $email . '.'
+                : 'Library pass created, but the email to ' . $email . ' could not be sent. '
                   . 'Pass the credentials on yourself.');
             /* Shown once beneath the flash, the same block the other consoles
                use. The pass is listed in the table as well, so this is a
@@ -98,7 +107,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'lost' => 'If it is lost, revoke this pass and issue a new one.',
             ]));
         } else {
-            flash('error', 'That guest pass could not be created. Please try again.');
+            flash('error', 'That library pass could not be created. Please try again.');
         }
         header('Location: librarian_manage_guests.php');
         exit;
@@ -110,8 +119,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->bind_param('i', $guest_id);
         $stmt->execute();
         flash('success', $stmt->affected_rows > 0
-            ? 'Guest pass revoked.'
-            : 'That guest pass could not be found.');
+            ? 'Library pass revoked.'
+            : 'That library pass could not be found.');
         header('Location: librarian_manage_guests.php');
         exit;
     }
@@ -157,7 +166,7 @@ function guest_table(array $rows, string $which): void {
             <table class="mgmt-table">
                 <thead>
                     <tr>
-                        <th>Guest pass</th>
+                        <th>Library pass</th>
                         <th>Password</th>
                         <th><?= $which === 'expired' ? 'Expired' : 'Expires' ?></th>
                         <th>Actions</th>
@@ -173,7 +182,7 @@ function guest_table(array $rows, string $which): void {
                                 </span>
                                 <?= $which === 'expired'
                                         ? 'Nothing has expired yet.'
-                                        : 'No guest passes are active. Create one on the left.' ?>
+                                        : 'No library passes are active. Create one on the left.' ?>
                             </div>
                         </td>
                     </tr>
@@ -224,7 +233,12 @@ function guest_table(array $rows, string $which): void {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Guest Passes · <?= e(APP_NAME) ?></title>
+<title>Library Passes · <?= e(APP_NAME) ?></title>
+<?php
+/* The loading skeleton's shape (includes/skeleton.php). Set before the shared
+   head, which is where the skeleton reads it. */
+$PAGE_SKELETON = 'table';
+?>
 <?php require_once ROOT_PATH.'/includes/site_head.php'; ?>
 <?php require_once ROOT_PATH.'/includes/manage_console.php'; ?>
 <?php require_once ROOT_PATH.'/includes/manage_page.php'; ?>
@@ -283,7 +297,7 @@ function guest_table(array $rows, string $which): void {
     <div class="wrap crumb-inner">
         <a href="<?= e(BASE_URL) ?>/archive/index.php">Home</a>
         <span class="material-symbols-outlined crumb-arrow">chevron_right</span>
-        <span class="crumb-current">Guest Passes</span>
+        <span class="crumb-current">Library Passes</span>
     </div>
 </div>
 
@@ -292,7 +306,7 @@ function guest_table(array $rows, string $which): void {
     <div class="mgmt-head">
         <div class="mgmt-head-row">
             <div>
-                <h1>Guest Passes</h1>
+                <h1>Library Passes</h1>
                 <p>Issue temporary, read-only access to the repository for visitors and external researchers.</p>
             </div>
             <?php /* This desk has no sidebar of links, so the one other thing a
@@ -314,7 +328,7 @@ function guest_table(array $rows, string $which): void {
         <!-- ============ Issue a pass ============ -->
         <?php /* No heading row, as on the other management pages: the page
                  title already says what this form is for. */ ?>
-        <section class="mgmt-panel" id="formPanel" aria-label="Guest pass form">
+        <section class="mgmt-panel" id="formPanel" aria-label="Library pass form">
             <div class="mgmt-panel-body">
                 <form method="post" id="guestForm">
                     <?= csrf_field(); ?>
