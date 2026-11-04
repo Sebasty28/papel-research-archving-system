@@ -211,6 +211,56 @@ $login_notif_popup_items = $show_login_notif_popup
                     </div>
                 </div>
             <?php endif; ?>
+            <?php /* A page's own panel, folded into the sheet beside the site's
+                     links. Only a page that has one declares it ($nav_panel,
+                     set before this file is required, the way $hero_under_nav
+                     is), so every other page prints nothing here.
+
+                     Links, not buttons, and the destinations themselves rather
+                     than a way to open the panel they are listed in: a menu
+                     that opens another menu is two presses to reach what one
+                     press should give. They are the same entries the sidebar's
+                     own cards draw, so they are marked against the page being
+                     read with the same test the cards use
+                     (sidebar_link_is_current(), includes/browse_card.php),
+                     guarded in case a page declares a panel without that file.
+                     The stylesheet shows all of this only where the sheet
+                     is. */ ?>
+            <?php
+            /* Anything the sheet has already offered is dropped rather than
+               said twice: a student's own nav is My Dashboard and PUPSIS, and
+               the Browse card's second entry is My Dashboard again, so the two
+               stood four rows apart in a sheet short enough to read at a
+               glance. Matched on the label, which is what a reader compares,
+               and not on the href: the same page is reached as
+               /archive/index.php from the bar and ?browse=1 from the card,
+               while My Dashboard and View Drafts share a path and differ only
+               by a tab. */
+            $panel_items = [];
+            if (!empty($nav_panel['items'])) {
+                $panel_seen = [];
+                foreach (array_merge($nav_links, $info_links ?? []) as $printed) {
+                    $panel_seen[mb_strtolower(trim((string)$printed['label']))] = true;
+                }
+                foreach ($nav_panel['items'] as $panel_item) {
+                    $panel_key = mb_strtolower(trim((string)$panel_item['label']));
+                    if (isset($panel_seen[$panel_key])) { continue; }
+                    $panel_seen[$panel_key] = true;
+                    $panel_items[] = $panel_item;
+                }
+            }
+            ?>
+            <?php if ($panel_items): ?>
+                <div class="nav-panel">
+                    <span class="nav-panel-title"><?= e($nav_panel['label'] ?? 'Control Panel') ?></span>
+                    <?php foreach ($panel_items as $panel_item): ?>
+                        <?php $panel_on = function_exists('sidebar_link_is_current')
+                                       && sidebar_link_is_current($panel_item); ?>
+                        <a class="nav-panel-item<?= $panel_on ? ' active' : '' ?>"
+                           href="<?= e($panel_item['href']) ?>"<?= $panel_on ? ' aria-current="page"' : '' ?>><?= e($panel_item['label']) ?></a>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
             <?php /* The avatar menu, folded into this sheet, and shown only where
                      the sheet is (the stylesheet hides it above 900px). On a phone
                      the bar has room for the mark, the bell and this button and no
@@ -234,6 +284,23 @@ $login_notif_popup_items = $show_login_notif_popup
                     <a href="<?= e(BASE_URL.'/app/auth/logout.php') ?>">
                         <span class="material-symbols-outlined mi-20">logout</span> Logout
                     </a>
+                </div>
+            <?php else: ?>
+                <?php /* Signed out, the sheet's foot is Login, for the same
+                         reason the avatar menu's is above it: on a phone the
+                         row holds the mark and the menu button and little
+                         else, and a third control beside them crowds both.
+                         The stylesheet hides the bar's own copy at the width
+                         this one appears at, so there is never a pair. It
+                         opens the same panel (#loginPanel) and is wired in
+                         site_footer.php beside that button, not with
+                         .js-open-modal: the sheet has to shut first, and the
+                         focus has to go back to the menu button rather than
+                         to this one, which the shutting has just hidden. */ ?>
+                <div class="nav-login">
+                    <button class="nav-login-btn" id="navSheetLoginBtn" type="button">
+                        <span class="material-symbols-outlined mi-20">login</span> Login
+                    </button>
                 </div>
             <?php endif; ?>
         </nav>
@@ -503,19 +570,21 @@ $login_notif_popup_items = $show_login_notif_popup
         <p class="panel-subtitle">Select your role to log in</p>
 
         <div class="role-selector">
+            <?php /* The dot goes inside the tile, not beside it in the card: the
+                     card is wider than the tile below 600px (84px against 64,
+                     to give "Faculty / Admin" room to wrap), and a dot placed
+                     against the card's edge then sat 2px outside the tile's,
+                     half off its rounded corner. */ ?>
             <div class="role-card" id="roleStudent" data-role="student">
-                <span class="role-dot"></span>
-                <div class="role-icon"><span class="material-symbols-outlined">assignment_ind</span></div>
+                <div class="role-icon"><span class="role-dot"></span><span class="material-symbols-outlined">assignment_ind</span></div>
                 <span class="role-label">Student</span>
             </div>
             <div class="role-card" id="roleFaculty" data-role="faculty">
-                <span class="role-dot"></span>
-                <div class="role-icon"><span class="material-symbols-outlined mi-fill">school</span></div>
+                <div class="role-icon"><span class="role-dot"></span><span class="material-symbols-outlined mi-fill">school</span></div>
                 <span class="role-label">Faculty / Admin</span>
             </div>
             <div class="role-card" id="roleGuest" data-role="guest">
-                <span class="role-dot"></span>
-                <div class="role-icon"><span class="material-symbols-outlined">account_circle</span></div>
+                <div class="role-icon"><span class="role-dot"></span><span class="material-symbols-outlined">account_circle</span></div>
                 <?php /* "Guest" read as an open door: a reader who had no account
                          took it for the public way in, when it is a pass the Librarian
                          issues by email and it lasts a day at most. The data-role stays

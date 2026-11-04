@@ -123,22 +123,36 @@ function quick_action_links(?array $u): array
 }
 
 /**
+ * Whether one of those links is the page being read.
+ *
+ * Its own function because the card is no longer the only thing that draws
+ * these links: the phone's menu sheet lists the same ones (see $nav_panel in
+ * includes/site_header.php, filled by archive/index.php), and a second copy
+ * of this test would drift the first time a page learned a new tab.
+ */
+function sidebar_link_is_current(array $link): bool
+{
+    $script = basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));
+    $tab    = (string)($_GET['tab'] ?? '');
+
+    return in_array($script, $link['match'], true)
+        && (($link['tab'] ?? null) === null || $link['tab'] === $tab);
+}
+
+/**
  * A collapsible sidebar card of plain-text links, active-highlighted against
  * the page actually open. Shared by the Browse card and the student's "What
  * you can do" card so the two keep behaving identically rather than drifting.
  */
 function sidebar_link_card_html(string $title, string $cardId, array $links): string
 {
-    $script = basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));
-    $tab    = (string)($_GET['tab'] ?? '');
-    $id     = e($cardId);
+    $id = e($cardId);
 
     $rows = '';
     foreach ($links as $link) {
-        $on = in_array($script, $link['match'], true)
-            && ($link['tab'] === null || $link['tab'] === $tab);
         $rows .= '<a href="' . e($link['href']) . '" class="sidebar-link'
-               . ($on ? ' active' : '') . '">' . e($link['label']) . "</a>\n";
+               . (sidebar_link_is_current($link) ? ' active' : '') . '">'
+               . e($link['label']) . "</a>\n";
     }
 
     return '<div class="sidebar-card" id="' . $id . '">'

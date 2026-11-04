@@ -1,5 +1,5 @@
 {
- "built": "2026-11-04 02:12",
+ "built": "2026-11-04 15:30",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -8,7 +8,7 @@
    "lines": 306
   },
   "ai/help_assistant.php": {
-   "lines": 149
+   "lines": 122
   },
   "ai/prompt_guard.php": {
    "lines": 188
@@ -17,7 +17,7 @@
    "lines": 133
   },
   "analytics/analytics_dashboard.php": {
-   "lines": 1397
+   "lines": 1401
   },
   "analytics/dashboard.php": {
    "lines": 19
@@ -104,7 +104,7 @@
    "lines": 331
   },
   "app/student/student_assistant.php": {
-   "lines": 168
+   "lines": 147
   },
   "app/student/student_cancel_submission.php": {
    "lines": 104
@@ -122,10 +122,10 @@
    "lines": 435
   },
   "app/student/student_upload_ai.php": {
-   "lines": 14486
+   "lines": 14497
   },
   "app/student/upload_diagnostics.php": {
-   "lines": 235
+   "lines": 245
   },
   "app/support_requests.php": {
    "lines": 294
@@ -140,13 +140,13 @@
    "lines": 954
   },
   "archive/index.php": {
-   "lines": 1281
+   "lines": 1359
   },
   "archive/login.php": {
    "lines": 1081
   },
   "archive/view_paper.php": {
-   "lines": 1077
+   "lines": 1075
   },
   "config/config.php": {
    "lines": 237
@@ -161,7 +161,7 @@
    "lines": 750
   },
   "config/groq_config.php": {
-   "lines": 720
+   "lines": 987
   },
   "config/mail_config.php": {
    "lines": 1
@@ -176,7 +176,7 @@
    "lines": 12
   },
   "includes/accessibility.php": {
-   "lines": 1214
+   "lines": 1209
   },
   "includes/action_dialogs.php": {
    "lines": 337
@@ -185,7 +185,7 @@
    "lines": 5
   },
   "includes/browse_card.php": {
-   "lines": 176
+   "lines": 190
   },
   "includes/browse_console.php": {
    "lines": 977
@@ -281,13 +281,13 @@
    "lines": 894
   },
   "includes/site_footer.php": {
-   "lines": 499
+   "lines": 513
   },
   "includes/site_head.php": {
-   "lines": 1490
+   "lines": 1573
   },
   "includes/site_header.php": {
-   "lines": 593
+   "lines": 662
   },
   "includes/skeleton.php": {
    "lines": 602

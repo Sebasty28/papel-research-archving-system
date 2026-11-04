@@ -433,6 +433,20 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     document.getElementById('openModalBtn') && document.getElementById('openModalBtn').addEventListener('click', function () { openLoginModal('student', this); });
+    /* The same button at the foot of the phone's menu sheet. Not .js-open-modal:
+       the sheet has to be shut first, or it sits open behind the panel, and the
+       opener handed over is the menu button rather than this one, since closing
+       the sheet hides this one and focus cannot go back to a hidden box when the
+       panel closes. */
+    var navSheetLoginBtn = document.getElementById('navSheetLoginBtn');
+    if (navSheetLoginBtn) {
+        navSheetLoginBtn.addEventListener('click', function () {
+            var burger = document.getElementById('navToggle');
+            document.documentElement.classList.remove('nav-open');
+            if (burger) { burger.setAttribute('aria-expanded', 'false'); }
+            openLoginModal('student', burger || null);
+        });
+    }
     // Delegated so buttons that appear later (e.g. AJAX-swapped result lists) still work
     document.addEventListener('click', function (e) {
         var trigger = e.target.closest('.js-open-modal');

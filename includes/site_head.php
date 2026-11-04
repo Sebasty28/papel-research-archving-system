@@ -566,6 +566,13 @@ body:has(.crumb-bar) .nav-photo { height: calc(var(--nav-h) + var(--crumb-h)); }
    part of the nav markup at every width, so it is switched off here and on again
    in the phone's block below, where the sheet itself lives. */
 .nav-account { display: none; }
+/* The bar's Login button inside that same sheet, for a reader who is signed
+   out. Off here, on in the phone's block, where .btn-login-nav goes off. */
+.nav-login { display: none; }
+/* And a page's own panel in the sheet ($nav_panel in site_header.php). Off
+   here for the same reason as the two above: it is part of the nav markup at
+   every width, and the bar is not where it belongs. */
+.nav-panel { display: none; }
 
 .nav-burger {
     display: none;
@@ -1111,9 +1118,14 @@ html.nav-open .nav-burger .burger-open { display: inline-flex; }
 }
 .role-card:not(.active) { opacity: .55; }
 .role-card:not(.active):hover { opacity: .85; }
+/* Inside the tile (see site_header.php), so it is placed against the thing it
+   marks rather than against the card, which is wider than the tile below
+   600px. 8px in from each edge clears the tile's own 8px corner: a dot of
+   radius 5.5 centred at 13.5 is 15.8px from the nearest point of that curve,
+   where 7px put its edge on it. */
 .role-dot {
     position: absolute;
-    top: 7px; left: 8px;
+    top: 8px; left: 8px;
     width: 11px; height: 11px;
     border-radius: 50%;
     background: var(--pup-maroon);
@@ -1122,6 +1134,8 @@ html.nav-open .nav-burger .burger-open { display: inline-flex; }
 }
 .role-card.active .role-dot { display: block; }
 .role-icon {
+    /* The dot is placed against this box, not the card around it. */
+    position: relative;
     width: 105px; height: 105px;
     border-radius: var(--r-card, 8px);
     background: var(--cream);
@@ -1289,6 +1303,26 @@ select.lf-input {
        a 48px bar leaves it almost no room either side. */
     .header-inner { gap: .75rem; height: 60px; }
 
+    /* The strip is chrome, and on a phone the chrome above it has already
+       grown from 37px to 60px for the sake of a touch target. Holding the
+       strip at its desktop 36px on top of that took 96px off a 844px screen
+       before the page began. Nothing in it is pressed (the crumbs are links,
+       and a link keeps its own hit area), so it gives up the height the bar
+       took: a little under 4px of padding each side and a 16px chevron bring
+       it to about 26px.
+
+       .crumb-bar .crumb-inner, not .crumb-inner: archive/index.php restates
+       the plain rule in its own <style>, which is later in the document, so a
+       single class here loses to it at equal specificity. One step more
+       specific is what makes this reach that page, which is the one the strip
+       matters most on. */
+    .crumb-bar .crumb-inner {
+        padding-top: .225rem;
+        padding-bottom: .225rem;
+        font-size: .6875rem;
+    }
+    .crumb-bar .crumb-arrow { font-size: 16px; }
+
     /* The mark keeps the left edge and everything else goes to the right. The
        nav is taken out of the flow at this width (it is the sheet below), so the
        row is the mark, these, and the menu button, and with nothing claiming the
@@ -1304,11 +1338,34 @@ select.lf-input {
     .avatar-group,
     .user-dropdown { display: none; }
 
+    /* And the same for Login, which is the signed-out bar's only control: into
+       the sheet (.nav-login) with everything else that left the row. Hidden
+       rather than moved, since the wide layout still wants it here. The group
+       it leaves behind collapses to nothing and keeps its margin-left:auto, so
+       the menu button stays against the right-hand edge as before. */
+    .btn-login-nav { display: none; }
+
+    .nav-login,
+    .nav-panel,
     .nav-account {
         display: block;
         margin-top: .375rem;
         padding-top: .375rem;
         border-top: 1px solid var(--border);
+    }
+    /* The one group in the sheet with a name of its own: the rows above are
+       the site's own pages and need none, and these belong to the page being
+       read. Lined up with .nav-account-id's text, so the heading and the rows
+       under it share the 1.25rem the whole sheet is set to. */
+    .nav-panel-title {
+        display: block;
+        padding: .5rem 1.25rem .125rem;
+        font-family: var(--font-head);
+        font-size: .6875rem;
+        font-weight: 600;
+        letter-spacing: .08em;
+        text-transform: uppercase;
+        color: var(--grey);
     }
     .nav-account-id {
         display: flex;
@@ -1357,6 +1414,29 @@ select.lf-input {
     }
     .nav-account a .material-symbols-outlined { color: var(--maroon); }
 
+    /* Login is a button, since it opens the panel rather than going anywhere,
+       and the Control Panel's rows are links. Both are painted as one of the
+       rows above them, down to the .8rem that makes them a fingertip tall, so
+       the sheet reads as one list and not as a list with a control stuck on
+       the end. */
+    .nav-login-btn,
+    .nav-panel-item {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        width: 100%;
+        padding: .8rem 1.25rem;
+        background: none;
+        border: 0;
+        text-align: left;
+        font-family: var(--font-body);
+        font-size: .9375rem;
+        color: var(--ink);
+        text-decoration: none;
+        cursor: pointer;
+    }
+    .nav-login-btn .material-symbols-outlined { color: var(--maroon); }
+
     .main-nav {
         display: none;
         position: absolute;
@@ -1394,6 +1474,8 @@ select.lf-input {
     .nav-more-label::after { display: none; }
     .main-nav > a:hover,
     .nav-account a:hover,
+    .nav-login-btn:hover,
+    .nav-panel-item:hover,
     .nav-more-dropdown a:hover {
         background: none;
         text-decoration: underline;
@@ -1402,6 +1484,7 @@ select.lf-input {
         text-decoration-color: var(--soft-maroon);
     }
     .main-nav > a.active,
+    .nav-panel-item.active,
     .nav-more-dropdown a.active {
         background: none;
         text-decoration: underline;

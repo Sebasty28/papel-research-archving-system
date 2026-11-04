@@ -488,12 +488,30 @@ $PAGE_SKELETON = 'repository';
     top: 50%;
     transform: translateY(-50%);
     padding: 0;
-    color: #fff;
     /* Quiet at rest (it is a setting, not something to act on every visit)
        and full strength the moment it is pointed at, pressed or reached from
-       the keyboard. */
-    opacity: .4;
-    transition: opacity .2s ease;
+       the keyboard. It was white held back to 40%, which the strip's maroon
+       mixed into a grey; this is the palette's own maroon instead, so the
+       glyph reads as the site's colour rather than as a washed white, and
+       nothing is faded any more, which leaves the hover a change of colour
+       alone.
+
+       The maroon, lightened, rather than the token on its own. The strip is
+       82% maroon over the banner photo, and measured against the band as it
+       is painted, --maroon itself comes out at 1.18:1 and is simply not
+       there. --soft-maroon clears 3:1 but this palette resolves it to a grey
+       rose that does not read as the site's colour at all. Mixing --maroon
+       toward white keeps the hue and buys the contrast: 5.1:1 where the photo
+       behind the band is dark, 2.8:1 at its very lightest. White is the mixing
+       operand, not a colour of its own, and is right in either theme because
+       the band is dark in both (--maroon-surface-hover does not lift).
+
+       Read the pixels before changing this. The photo moves every five
+       seconds, so what it looks like at a glance depends on which photo, and
+       the two candidates are a shade apart on screen and far apart measured. */
+    color: color-mix(in srgb, var(--maroon) 55%, #fff);
+    opacity: 1;
+    transition: color .2s ease;
 }
 .crumb-inner .btn-banner-toggle.is-guest {
     right: calc(1.5rem + 13px);    /* signed out: under the Login icon (12 + 3 − 2) */
@@ -599,7 +617,41 @@ $PAGE_SKELETON = 'repository';
 @media (max-width: 900px) {
     .layout { grid-template-columns: 1fr; gap: 2rem; margin-top: .75rem; }
     .search-row { grid-template-columns: 1fr; gap: .5rem; }
-    :root { --hero-h: 190px; }
+    /* The photos are 3840x680, which is 5.6 times as wide as it is tall,
+       and the box they fill is nothing like that shape once the window
+       narrows. Covering it scales the photo to the box's height and throws
+       the sides away, so the narrower the window the more it looks zoomed
+       in: measured on one photo, the banner showed 75% of it at 1440px, 66%
+       at 1280, 49% at 900, 39% at 600 and 29% at 390, which is four book
+       spines where a desktop shows a wall of them.
+
+       The box cannot be narrower, and filling it with an undistorted photo
+       fixes the crop exactly, so the only way to widen the view is to make
+       the box shorter. Two things come out of it, and the tail goes first
+       because it costs nothing to see:
+
+       - The tail is the part of the photo that carries on below the banner
+         and fades out behind the search field. At 390px it was 28px of box
+         for something the field covers anyway, so it is 14px here, with the
+         fade shortened to match. The field is inside the page's gutter and
+         the photo is not, so a few pixels of tail still have to survive in
+         the 16px either side of it: that is what the 14 is for.
+       - The banner itself then gives up what it must. 190/150/124 become
+         150/115/100.
+
+       Together, at 390px: a box of 237px becomes 199px, and the view widens
+       from 29% of the photo to 35%. A phone cannot reach a desktop's
+       framing whatever is done here - 85px of the box runs up behind the
+       navbar and the maroon strip and is there however short the banner is,
+       which caps a 390px screen at 61% even with no banner at all. */
+    :root { --hero-h: 150px; }
+    .hero {
+        --hero-tail: 14px;
+        /* The fade has to fit inside a tail this short, or it would start
+           above the banner's own bottom edge and thin the photo where it is
+           still meant to be solid. */
+        --hero-fade-run: 64px;
+    }
 
     /* Everything else about it comes from .toolbar-btn, which it now is; all
        this width decides is whether there is a drawer to open at all. */
@@ -666,16 +718,25 @@ $PAGE_SKELETON = 'repository';
     .sidebar-right, .tools-backdrop { transition: none; }
 }
 @media (max-width: 600px) {
-    :root { --hero-h: 150px; --hero-overlap: 32px; }
+    :root { --hero-h: 115px; --hero-overlap: 32px; }
     .section-heading { font-size: 1.375rem; }
     .paper-foot { grid-template-columns: 1fr; gap: .25rem; }
+    /* The page's gutter drops to 1rem here and the menu button goes with it. */
+    .crumb-inner .btn-banner-toggle,
+    .crumb-inner .btn-banner-toggle.is-guest { right: calc(1rem + 11px); }
+}
+/* The narrowest phones: .75rem of gutter, and the menu button's own padding
+   down from 7px to 5px (includes/site_head.php). */
+@media (max-width: 380px) {
+    .crumb-inner .btn-banner-toggle,
+    .crumb-inner .btn-banner-toggle.is-guest { right: calc(.75rem + 9px); }
 }
 /* A phone, compact: the same notch down the result cards take at this width
    (the block at the foot of includes/browse_console.php), for the three things
    on this page that are not cards. The banner gives up height too: at 150px it
    was a third of the screen before a single result. */
 @media (max-width: 480px) {
-    :root { --hero-h: 124px; --hero-overlap: 26px; }
+    :root { --hero-h: 100px; --hero-overlap: 26px; }
     .section-heading { font-size: 1.1875rem; }
 }
 </style>
@@ -685,6 +746,22 @@ $PAGE_SKELETON = 'repository';
 <?php /* This page's own banner runs up behind the navbar, so the header's
          stand-in strip of the same photo is not wanted here. */
       $hero_under_nav = true; ?>
+<?php /* The sidebar's two lists of destinations, offered in the menu sheet as
+         well, so the phone has one menu rather than two buttons in two
+         corners that each hold half of what there is. The links themselves,
+         not a way to open the cards they live in: the same arrays the cards
+         are built from, so the sheet cannot say anything the sidebar does
+         not. "What you can do" is empty for a guest and for the roles with
+         no actions of their own, and an empty array simply adds nothing.
+
+         Filter is deliberately not here. These are places to go and a link
+         can carry someone to one; the filters are a form to work in, which
+         wants the drawer and the results behind it, and the tune button in
+         the toolbar is still what opens that. */
+      $nav_panel = ['label' => 'Control Panel', 'items' => array_merge(
+          browse_card_links($u ?? null),
+          quick_action_links($u ?? null)
+      )]; ?>
 <?php require ROOT_PATH.'/includes/site_header.php'; ?>
 
 <!-- ===== 3. Breadcrumb ===== -->
@@ -1266,6 +1343,7 @@ window.addEventListener('popstate', function () {
     window.addEventListener('resize', function () {
         if (window.innerWidth > 900 && isOpen()) { setOpen(false); }
     });
+
 })();
 </script>
 

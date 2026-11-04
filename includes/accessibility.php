@@ -98,32 +98,27 @@ body {
 /* Once moved, the widget is positioned from the top-left, so the panel has
    to flip to whichever side has room. */
 /* ===== Phones =====
-   A 113px vertical tab down the side of a page whose text runs edge to edge
-   is always sitting on top of something to read. It becomes a round button in
-   the corner instead: the word goes, the icon stays, and it covers a fifth of
-   the area it used to. Above 900px the tab is unchanged. */
-@media (max-width: 900px) {
-    #a11y-toggle {
-        width: 48px;
-        height: 48px;
-        padding: 0;
-        justify-content: center;
-        border-radius: 50%;
-        box-shadow: 0 2px 12px rgba(51, 0, 0, .3);
-    }
-    #a11y-toggle .a11y-tab-label { display: none; }
-    #a11y-toggle:hover { padding-right: 0; }
-    /* The edge classes each round three corners flat to sit against a side;
-       nothing is against a side any more. */
-    #a11y-widget.edge-left #a11y-toggle,
-    #a11y-widget.edge-right #a11y-toggle,
-    #a11y-widget.edge-top #a11y-toggle,
-    #a11y-widget.edge-bottom #a11y-toggle { border-radius: 50%; }
+   A phone gets the same tab as everything else: the same shape, the same
+   padding, the same word down its side, parked against the edge it was
+   dragged to. It was a 48px circle floating 12px off the right-hand edge,
+   which was the one control on the site that changed shape with the window,
+   and a circle over the reading is no less over it than a tab beside it.
+   What a phone still gets of its own is where the tab rests, which is
+   dockForPhone() in the script below, not a shape. */
+
+/* A touch screen has no pointer to take away, so a tap left :hover on and the
+   tab stayed 4px wider than its neighbours until something else was tapped,
+   which reads as a control stuck open. The same guard the navbar's buttons
+   carry (includes/site_head.php). Every edge, since each has its own growth. */
+@media (hover: none) {
+    #a11y-toggle:hover,
     #a11y-widget.edge-left #a11y-toggle:hover,
-    #a11y-widget.edge-right #a11y-toggle:hover,
+    #a11y-widget.edge-right #a11y-toggle:hover {
+        padding: .75rem .5rem;
+    }
     #a11y-widget.edge-top #a11y-toggle:hover,
     #a11y-widget.edge-bottom #a11y-toggle:hover {
-        padding: 0;
+        padding: .45rem .85rem;
     }
 }
 
@@ -769,10 +764,10 @@ try {
             var s = widgetSize();
             placeWidget('right',
                 Math.max(0, window.innerHeight - s.h - 88), false);
-            /* A circle flush against the edge looks clipped, and the thumb
-               reaching it drags along the screen edge where a browser reads
-               the gesture as a back-swipe. */
-            widget.style.right = '12px';
+            /* Flush against the edge, as on a desktop: it is a tab, and the
+               curve is on the face that looks into the page. It used to be
+               held 12px off, which a circle needs (one flush against the side
+               reads as clipped) and a tab does not. */
         }
 
         function restorePosition() {
