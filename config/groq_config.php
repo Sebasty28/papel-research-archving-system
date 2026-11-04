@@ -26,37 +26,96 @@ if (!defined('GROQ_API_KEY')) {
         load_env(__DIR__ . '/../.env');
     }
 
-    define('GROQ_API_KEY',            $_ENV['GROQ_API_KEY']            ?? '');
-    define('GROQ_API_KEY_UPLOAD',     $_ENV['GROQ_API_KEY_UPLOAD']     ?? GROQ_API_KEY);
-    define('GROQ_API_KEY_SUPERADMIN', $_ENV['GROQ_API_KEY_SUPERADMIN'] ?? GROQ_API_KEY);
-    define('GROQ_API_KEY_ADMIN',      $_ENV['GROQ_API_KEY_ADMIN']      ?? GROQ_API_KEY);
-    define('GROQ_API_KEY_FACULTY',    $_ENV['GROQ_API_KEY_FACULTY']    ?? GROQ_API_KEY);
-    define('GROQ_API_KEY_STUDENT',    $_ENV['GROQ_API_KEY_STUDENT']    ?? GROQ_API_KEY);
-    define('GROQ_API_KEY_CHATBOT',    $_ENV['GROQ_API_KEY_CHATBOT']    ?? GROQ_API_KEY);
-    define('GROQ_API_KEY_CHATBOT_2',  $_ENV['GROQ_API_KEY_CHATBOT_2']  ?? GROQ_API_KEY);
-    define('GROQ_API_KEY_UPLOAD_2',   $_ENV['GROQ_API_KEY_UPLOAD_2']   ?? GROQ_API_KEY);
+    /* --- The key pool -----------------------------------------------------
+       One pool of keys, read in order, and every AI feature on the site draws
+       from it. There used to be a key per feature (_UPLOAD, _CHATBOT, _ADMIN,
+       _FACULTY and the rest), which sounded like isolation and was not: Groq
+       counts a daily limit per *account*, so eight keys minted in one account
+       share one allowance, and the site spent it eight ways while each feature
+       believed it had its own. Worse, a feature whose own key was refused
+       simply stopped, with five other keys untouched.
+
+       A pool is the opposite. A call refused for a limit carries straight on
+       down it, so a feature stops only when every key is spent. For that to
+       buy more than tidiness the keys want to be on *separate Groq accounts*:
+       four keys in one account still share that account's day.
+
+       GROQ_API_KEY_1..8 are read in order and blanks are dropped, so the pool
+       is lengthened or shortened in .env with no change here. A .env written
+       before the pool existed is still honoured: its single GROQ_API_KEY, and
+       any of the old per-feature names, become the pool, in that order. */
+    define('GROQ_API_KEYS', (static function (): array {
+        $names = [];
+        for ($n = 1; $n <= 8; $n++) $names[] = 'GROQ_API_KEY_' . $n;
+        /* Read only so a server whose .env has not been rewritten yet still
+           has AI. Nothing in the app names these any more. */
+        $names = array_merge($names, [
+            'GROQ_API_KEY', 'GROQ_API_KEY_UPLOAD', 'GROQ_API_KEY_UPLOAD_2',
+            'GROQ_API_KEY_CHATBOT', 'GROQ_API_KEY_CHATBOT_2',
+            'GROQ_API_KEY_STUDENT', 'GROQ_API_KEY_FACULTY',
+            'GROQ_API_KEY_ADMIN', 'GROQ_API_KEY_SUPERADMIN',
+        ]);
+        $pool = [];
+        foreach ($names as $name) {
+            $value = trim((string)($_ENV[$name] ?? ''));
+            /* One key under two names is one key: a duplicate in the chain
+               would spend a retry re-asking the key that has just refused. */
+            if ($value !== '' && !in_array($value, $pool, true)) $pool[] = $value;
+        }
+        return $pool;
+    })());
+
+    /* The pool's first key. Retained because a few places ask only "is the AI
+       configured at all?"; it is not a default to hand to call_groq_api(),
+       which starts from the session's own engine. */
+    define('GROQ_API_KEY',            GROQ_API_KEYS[0] ?? '');
     define('GROQ_API_URL',            'https://api.groq.com/openai/v1/chat/completions');
     // Longest pause worth taking when Groq asks us to wait out a rate limit.
     // Beyond this the caller is better off being told than left hanging.
     define('GROQ_RETRY_MAX_WAIT',     12);
+    /* How long one call may spend walking the pool, every request and wait in
+       it together. Free hosting cuts a request off at about 30 seconds and
+       answers with its own page, which carries no JSON and so tells the
+       student nothing; giving up first means PHP is still alive to say what
+       happened in the shape the page can read. A refusal comes back in
+       milliseconds, so the realistic walk is a few quick refusals and then one
+       real generation, well inside this. */
+    define('GROQ_CHAIN_BUDGET',       25);
     // Llama 3.3 70B Versatile was decommissioned on Groq (2026-08-16).
     // Override with GROQ_MODEL in .env if the model id changes again: every
     // call site reads this constant, so that is a one-line change.
     define('GROQ_MODEL',              $_ENV['GROQ_MODEL'] ?? 'openai/gpt-oss-120b');
 }
 
-/* ===== The two AI engines =====
-   Aincrad and Alfheim are not two models. They are one model reached on two
-   API keys, and a key carries its own usage window, so when one is spent the
-   other still answers.
+/* ===== The AI engines =====
+   The engines are not different models. They are one model reached on
+   different API keys, and a key carries its own usage window, so when one is
+   spent the next still answers. There is one engine per key in the pool (four,
+   as .env now stands), and the names stay because the log lines, and anyone
+   reading this code, need a way to say which key is meant.
 
-   Which of the two is in use is no longer a question put to the student: it is
-   kept here, in the session, and flipped the moment a call is refused for the
-   quota. The next call then starts on the engine that has room rather than on
-   the one that has just run out. The names stay because the log lines, and
-   anyone reading this code, need a way to say which key is meant. */
+   Which engine is in play is no longer a question put to the student: it is
+   kept here, in the session, and moved on the moment a call is refused for a
+   limit. The next call then starts on a key that has room rather than on the
+   one that has just run out. */
+function groq_key_pool(): array {
+    return defined('GROQ_API_KEYS') ? GROQ_API_KEYS : [];
+}
+
+function groq_pool_size(): int {
+    return count(groq_key_pool());
+}
+
 function ai_engine_names(): array {
-    return [1 => 'Aincrad', 2 => 'Alfheim'];
+    /* Enough names for a pool of eight, which is as many as the loader reads.
+       A pool of four uses the first four; a longer one would fall back to
+       "Engine 9" and so on, which is ugly but never undefined. */
+    $names = ['Aincrad', 'Alfheim', 'Gun Gale', 'Underworld',
+              'Ordinal', 'Centoria', 'Rulid', 'Zakkaria'];
+    $out  = [];
+    $size = max(1, groq_pool_size());
+    for ($i = 1; $i <= $size; $i++) $out[$i] = $names[$i - 1] ?? ('Engine ' . $i);
+    return $out;
 }
 
 /* The endpoints that use this do not all go through core.php. */
@@ -68,20 +127,43 @@ function ai_engine_session(): void {
 
 function ai_engine_current(): int {
     ai_engine_session();
-    return ((int)($_SESSION['ai_engine'] ?? 1)) === 2 ? 2 : 1;
+    $size = max(1, groq_pool_size());
+    $n    = (int)($_SESSION['ai_engine'] ?? 1);
+    /* A session held over from a longer pool, or from before any of this, must
+       not point past the end of it: that is a call starting on no key at all. */
+    return ($n >= 1 && $n <= $size) ? $n : 1;
 }
 
 function ai_engine_name(?int $engine = null): string {
     $names = ai_engine_names();
-    return $names[$engine ?? ai_engine_current()] ?? $names[1];
+    $n = $engine ?? ai_engine_current();
+    return $names[$n] ?? ('Engine ' . (int)$n);
 }
 
-/* Called when an engine has had to hand a call over: the one that answered is
-   the one to start from next time. */
+/** The pool key an engine number stands for, or null when the pool is empty. */
+function groq_engine_key(?int $engine): ?string {
+    $pool = groq_key_pool();
+    if (!$pool) return null;
+    $n = (int)($engine ?? ai_engine_current());
+    return $pool[$n - 1] ?? $pool[0];
+}
+
+/** Put the session on an engine. An out-of-range number is ignored. */
+function ai_engine_set(int $engine): int {
+    ai_engine_session();
+    if ($engine >= 1 && $engine <= max(1, groq_pool_size())) {
+        $_SESSION['ai_engine'] = $engine;
+    }
+    return ai_engine_current();
+}
+
+/* Called when an engine has had to hand a call over and we cannot tell which
+   one answered: step to the next in the pool, wrapping round. */
 function ai_engine_switch(): int {
     ai_engine_session();
     $was  = ai_engine_current();
-    $next = $was === 1 ? 2 : 1;
+    $size = max(1, groq_pool_size());
+    $next = ($was % $size) + 1;
     $_SESSION['ai_engine'] = $next;
     error_log(sprintf('AI engine: %s is spent for now, switching to %s.',
                       ai_engine_name($was), ai_engine_name($next)));
@@ -89,11 +171,23 @@ function ai_engine_switch(): int {
 }
 
 /**
- * Did the last call have to fall back to the other key?
+ * Move the session onto whichever key actually answered the last call.
  *
- * call_groq_api swaps keys inside one request, so the caller sees a success
- * and cannot otherwise tell that the engine it asked for had nothing left.
- * Read by the pages that keep the session on whichever engine is answering.
+ * Better than ai_engine_switch() after a fallback: the walk may have passed
+ * over two spent keys, and stepping on by one would start the next call on a
+ * key that has already refused.
+ */
+function ai_engine_adopt(): int {
+    $served = groq_served_engine();
+    return $served !== null ? ai_engine_set($served) : ai_engine_switch();
+}
+
+/**
+ * Did the last call have to leave the key it started on?
+ *
+ * groq_pool_request() walks the pool inside one request, so the caller sees a
+ * success and cannot otherwise tell that the engine it asked for had nothing
+ * left. Read by the pages that keep the session on whichever engine answers.
  */
 function groq_used_fallback($set = null) {
     static $used = false;
@@ -102,31 +196,278 @@ function groq_used_fallback($set = null) {
 }
 
 /**
+ * Which engine (1-based position in the pool) answered the last call.
+ * Pass false to clear it; null is "we do not know".
+ */
+function groq_served_engine($set = null): ?int {
+    static $engine = null;
+    if ($set !== null) $engine = $set === false ? null : (int)$set;
+    return $engine;
+}
+
+/**
+ * The keys to try, in order, for one call.
+ *
+ * Starts at $start -- a key, or an engine number, or null for the session's own
+ * engine -- and then runs through the rest of the pool, wrapping round, so
+ * every key gets a turn and none gets two. A Groq key is never all digits, so
+ * a numeric $start is read as an engine number without ambiguity.
+ */
+function groq_key_chain($start = null, $extraKey = null): array {
+    $pool = groq_key_pool();
+
+    $first = null;
+    if (is_int($start) || (is_string($start) && $start !== '' && ctype_digit($start))) {
+        $first = groq_engine_key((int)$start);
+    } elseif (is_string($start) && trim($start) !== '') {
+        $first = trim($start);
+    }
+    if ($first === null || $first === '') $first = groq_engine_key(null);
+
+    $chain = [];
+    if ($first !== null && $first !== '') $chain[] = $first;
+
+    /* From the key after the one we start on, wrapping round. A key spent for
+       the whole day is passed over again on the next call, which costs one
+       quick refusal; a key that was merely busy for a minute is still reached. */
+    $n = count($pool);
+    if ($n > 0) {
+        $at   = array_search($first, $pool, true);
+        $from = $at === false ? 0 : (int)$at + 1;
+        for ($i = 0; $i < $n; $i++) {
+            $k = $pool[($from + $i) % $n];
+            if (!in_array($k, $chain, true)) $chain[] = $k;
+        }
+    }
+
+    if (is_string($extraKey) && trim($extraKey) !== '' && !in_array(trim($extraKey), $chain, true)) {
+        $chain[] = trim($extraKey);
+    }
+    return $chain;
+}
+
+/** One chat-completion request on one key. @return array [$httpCode, $body, $curlError] */
+function groq_fire(string $key, array $payload, int $timeout): array {
+    $ch = curl_init(GROQ_API_URL);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        // Substituted rather than refused: json_encode() returns false on one bad byte, and the request then goes out empty.
+        CURLOPT_POSTFIELDS => json_encode($payload, JSON_INVALID_UTF8_SUBSTITUTE),
+        CURLOPT_HTTPHEADER => [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . trim($key)   // authenticate with this key
+        ],
+        CURLOPT_SSL_VERIFYPEER => true,             // verify SSL certificate for security
+        CURLOPT_SSL_VERIFYHOST => 2,
+        CURLOPT_TIMEOUT => $timeout,                // what is left of GROQ_CHAIN_BUDGET
+        CURLOPT_CONNECTTIMEOUT => 8
+    ]);
+    $body      = curl_exec($ch);
+    $httpCode  = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch); // suppress PHP 8.5 deprecation: curl handle auto-closes on GC
+    return [$httpCode, $body, $curlError];
+}
+
+/**
+ * Send a prepared payload to Groq, walking the key pool until one answers.
+ *
+ * This is the one place the fallback lives. Every AI feature on the site goes
+ * through it, so none of them has its own idea of what to do when a key is
+ * spent -- which is how the two chatbots ended up with a hand-rolled "retry
+ * once on the other key" that gave up while two keys still had room.
+ *
+ * Which faults move on to the next key, and which do not:
+ *   429 rate or daily limit  move on at once. Groq's reply says how long
+ *                            that key wants, and the wait is *not* taken yet:
+ *                            measured on the four keys in .env, a key refused
+ *                            for its limit sits beside three that answer the
+ *                            identical request immediately, so the next key is
+ *                            quicker than any wait. The shortest advised wait
+ *                            is kept and taken only once every key has
+ *                            refused, which is the one time there is nothing
+ *                            better to do than wait.
+ *   401 / 403                move on, loudly. A revoked or mistyped key must
+ *                            not take the whole service down with it.
+ *   5xx                      move on. Groq's own trouble may not be on every
+ *                            route.
+ *   400 and anything else    stop. The payload is at fault, and asking four
+ *                            keys the same bad question only wastes them.
+ *   connection error         stop. The network is not key-specific.
+ *
+ * @param array       $payload  the whole request body, model included
+ * @param string|null $start    where to start: a key, an engine number, or
+ *                              null for the session's own engine
+ * @param string|null $extraKey a key to try after the pool (rarely needed)
+ * @return array ['success','body','http_code','error','engine']
+ */
+function groq_pool_request(array $payload, $start = null, $extraKey = null): array {
+    $chain = groq_key_chain($start, $extraKey);
+    groq_used_fallback(false);
+    groq_served_engine(false);
+
+    if (!$chain) {
+        return ['success' => false, 'body' => '', 'http_code' => 0,
+                'error' => 'Groq API Key is missing or invalid.', 'engine' => null];
+    }
+
+    $pool    = groq_key_pool();
+    $started = microtime(true);
+    $budget  = defined('GROQ_CHAIN_BUDGET') ? (float)GROQ_CHAIN_BUDGET : 25.0;
+    $total   = count($chain);
+    /* The shortest wait any refusing key asked for, and which key that was.
+       Acted on after the walk, not during it: see the note above. */
+    $bestWait = null;
+    $bestKey  = null;
+    $bestEng  = null;
+    $last    = ['success' => false, 'body' => '', 'http_code' => 0,
+                'error' => 'No Groq key had room for this request.', 'engine' => null];
+
+    /* A name for the log. The key may be one handed in by a caller rather than
+       one of the pool's, and then there is no engine number for it. */
+    $label = function (?int $eng): string {
+        return $eng === null ? 'a key outside the pool' : ai_engine_name($eng);
+    };
+
+    for ($i = 0; $i < $total; $i++) {
+        $spent = microtime(true) - $started;
+        $left  = $budget - $spent;
+        /* Out of time: report what the last key said rather than begin a
+           request this script will be killed in the middle of. */
+        if ($i > 0 && $left < 4) {
+            error_log(sprintf('Groq: %.1fs spent, leaving the remaining %d key(s) untried.',
+                              $spent, $total - $i));
+            break;
+        }
+
+        $key = $chain[$i];
+        $pos = array_search($key, $pool, true);
+        $eng = $pos === false ? null : (int)$pos + 1;
+
+        [$httpCode, $body, $curlError] = groq_fire($key, $payload, (int)max(6, min(20, $left)));
+
+        if ($curlError) {
+            error_log("Groq CURL Error: $curlError");
+            return ['success' => false, 'body' => '', 'http_code' => 0,
+                    'error' => 'Connection error: ' . $curlError, 'engine' => $eng];
+        }
+
+        if ($httpCode === 200) {
+            if ($i > 0) {
+                groq_used_fallback(true);
+                error_log(sprintf('Groq: answered by %s, after %d key(s) with no room.',
+                                  $label($eng), $i));
+            }
+            groq_served_engine($eng === null ? false : $eng);
+            return ['success' => true, 'body' => (string)$body, 'http_code' => 200,
+                    'error' => null, 'engine' => $eng];
+        }
+
+        $decoded = json_decode((string)$body, true);
+        $detail  = (string)($decoded['error']['message'] ?? '');
+        $last    = ['success' => false, 'body' => (string)$body, 'http_code' => $httpCode,
+                    'error' => "API error: HTTP $httpCode", 'engine' => $eng];
+
+        if ($httpCode === 429) {
+            $isTpm = stripos($detail, 'tokens per minute') !== false || stripos($detail, 'TPM') !== false;
+            $wait  = preg_match('/try again in ([0-9.]+)\s*s/i', $detail, $m) ? (float)$m[1] : 0.0;
+
+            /* Remembered, not acted on: the next key is almost always quicker
+               than the shortest wait Groq will quote. Whichever key wants the
+               least time is the one to come back to if they all refuse. */
+            if ($wait > 0 && ($bestWait === null || $wait < $bestWait)) {
+                $bestWait = $wait;
+                $bestKey  = $key;
+                $bestEng  = $eng;
+            }
+            error_log(sprintf('Groq 429 on %s (%s)%s. Moving on to the next key.',
+                              $label($eng), $isTpm ? 'tokens/min' : 'rate limit',
+                              $detail === '' ? '' : ': ' . $detail));
+            groq_used_fallback(true);
+            continue;
+        }
+
+        if ($httpCode === 401 || $httpCode === 403) {
+            /* A key the pool still lists but Groq will not accept. Worth
+               shouting about: the pool is shorter than .env makes it look. */
+            error_log(sprintf('Groq %d on %s - that key is rejected, not rate-limited. Check .env. %s',
+                              $httpCode, $label($eng), $detail));
+            groq_used_fallback(true);
+            continue;
+        }
+
+        if ($httpCode >= 500) {
+            error_log("Groq API Error: HTTP $httpCode - $body");
+            groq_used_fallback(true);
+            continue;
+        }
+
+        // 400 and the rest: the request is what is wrong, so stop here.
+        error_log("Groq API Error: HTTP $httpCode - $body");
+        return $last;
+    }
+
+    /* Every key refused for a limit and at least one said how long it wants.
+       *Now* the wait earns its keep: there is nothing else left to try, and a
+       student who waits four seconds has their answer instead of an error. One
+       wait a call, and only while there is budget left to make the request
+       afterwards -- a wait that ends with no time to ask is worse than the
+       refusal, because the page has sat there for it. */
+    if ($bestWait !== null && $bestKey !== null) {
+        $left = $budget - (microtime(true) - $started);
+        $cap  = defined('GROQ_RETRY_MAX_WAIT') ? (float)GROQ_RETRY_MAX_WAIT : 12.0;
+        if ($bestWait <= $cap && ($left - $bestWait) > 6) {
+            error_log(sprintf('Groq: every key is at its limit. Waiting %.1fs for %s, the soonest free.',
+                              $bestWait, $label($bestEng)));
+            usleep((int)(($bestWait + 0.25) * 1000000));   // a little past the window
+
+            $left = $budget - (microtime(true) - $started);
+            [$httpCode, $body, $curlError] = groq_fire($bestKey, $payload, (int)max(6, min(20, $left)));
+
+            if (!$curlError && $httpCode === 200) {
+                groq_used_fallback(true);
+                groq_served_engine($bestEng === null ? false : $bestEng);
+                error_log(sprintf('Groq: answered by %s after the wait.', $label($bestEng)));
+                return ['success' => true, 'body' => (string)$body, 'http_code' => 200,
+                        'error' => null, 'engine' => $bestEng];
+            }
+            $last = ['success' => false, 'body' => (string)$body, 'http_code' => (int)$httpCode,
+                     'error' => $curlError ? 'Connection error: ' . $curlError : "API error: HTTP $httpCode",
+                     'engine' => $bestEng];
+        } else {
+            error_log(sprintf('Groq: every key is at its limit and the soonest (%.1fs) is longer than this call can wait.',
+                              $bestWait));
+        }
+    }
+
+    return $last;
+}
+
+/**
  * Sends a request to Groq AI API and gets a response
  * Think of this as asking the AI a question and waiting for an answer
- * 
+ *
  * @param string $systemPrompt - Tells the AI what role to play (e.g., "You are a research expert")
  * @param string $userPrompt - The actual question or task we want the AI to do
  * @param int $maxTokens - Maximum length of AI's response (tokens are like words)
- * @param string|null $apiKey - Optional specific API key to use
- * @param string|null $fallbackKey - Optional backup API key; auto-retried on HTTP 429 (rate limit)
+ * @param string|null $apiKey - Where in the pool to start: a key, an engine
+ *        number, or null for the session's own engine. The rest of the pool
+ *        stands behind it either way, so a caller no longer names a fallback.
+ * @param string|null $fallbackKey - Kept for callers written before the pool:
+ *        a key to try after it, if it is not already in it.
  * @param bool $jsonMode - Ask the API itself for a raw JSON object (see below)
- * @param int $attempt - Internal: how many times this call has already retried
+ * @param int $attempt - Unused. Kept so a call site written against the old
+ *        signature still parses; the retry count lives in groq_pool_request().
  * @return array - Returns success/failure status and the AI's response
  */
 function call_groq_api($systemPrompt, $userPrompt, $maxTokens = 1024, $apiKey = null, $fallbackKey = null, $jsonMode = false, $attempt = 0) {
-    $key = $apiKey ?? (defined('GROQ_API_KEY') ? GROQ_API_KEY : '');
-
-    if (empty($key)) {
-        return ['success' => false, 'error' => 'Groq API Key is missing or invalid.'];
-    }
-
     // Prepare the data we're sending to Groq AI
     $payload = [
         'model' => GROQ_MODEL, // Which AI model to use
         'messages' => [
             ['role' => 'system', 'content' => $systemPrompt], // AI's instructions
-            ['role' => 'user', 'content' => $userPrompt] // Our question
+            ['role' => 'user',   'content' => $userPrompt]    // Our question
         ],
         'temperature' => 0, // How creative the AI should be (0=strict/consistent, 1=creative)
         'max_tokens' => $maxTokens, // Limit response length
@@ -142,89 +483,22 @@ function call_groq_api($systemPrompt, $userPrompt, $maxTokens = 1024, $apiKey = 
         $payload['response_format'] = ['type' => 'json_object'];
     }
 
-    // Initialize cURL to make HTTP request to Groq API
-    $ch = curl_init(GROQ_API_URL);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true, // Return response as string
-        CURLOPT_POST => true, // Use POST method
-        // Substituted rather than refused: json_encode() returns false on one bad byte, and the request then goes out empty.
-        CURLOPT_POSTFIELDS => json_encode($payload, JSON_INVALID_UTF8_SUBSTITUTE),
-        CURLOPT_HTTPHEADER => [
-            'Content-Type: application/json',
-            'Authorization: Bearer ' . trim($key) // Authenticate with API key
-        ],
-        CURLOPT_SSL_VERIFYPEER => true, // Verify SSL certificate for security
-        CURLOPT_SSL_VERIFYHOST => 2,
-        /* Under the host's own ceiling, deliberately. Free hosting cuts a
-           request off at about 30 seconds and answers with its own page,
-           which carries no JSON and so tells the student nothing. Giving up
-           first means PHP is still alive to say what happened in the shape
-           the page can read. */
-        CURLOPT_TIMEOUT => 20,
-        CURLOPT_CONNECTTIMEOUT => 8
-    ]);
+    $out = groq_pool_request($payload, $apiKey, $fallbackKey);
 
-    // Execute the request and get response
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $curlError = curl_error($ch);
-    curl_close($ch); // suppress PHP 8.5 deprecation: curl handle auto-closes on GC
-
-    // Check if there was a connection error
-    if ($curlError) {
-        error_log("Groq CURL Error: $curlError");
-        return ['success' => false, 'error' => 'Connection error: ' . $curlError];
-    }
-
-    /* ── Rate limits (429) ────────────────────────────────────────────────
-       Swapping to the backup key was the only response here, which does not
-       help for the limit that actually bites: tokens-per-minute is counted
-       per *organisation*, so the second key runs into the identical ceiling
-       and the retry is spent for nothing. One upload sends a metadata call
-       and an analysis call back to back, which together can exceed a free
-       tier's TPM, and the analysis then came back empty.
-
-       Groq's reply says exactly how long to wait, so short waits are honoured
-       before falling back to the key swap, which still helps for the per-key
-       limits (requests per minute or per day). */
-    if ($httpCode === 429) {
-        $decoded = json_decode((string)$response, true);
-        $detail  = (string)($decoded['error']['message'] ?? '');
-        $isTpm   = stripos($detail, 'tokens per minute') !== false || stripos($detail, 'TPM') !== false;
-        $wait    = preg_match('/try again in ([0-9.]+)\s*s/i', $detail, $m) ? (float)$m[1] : 0.0;
-
-        if ($attempt < 1 && $wait > 0 && $wait <= GROQ_RETRY_MAX_WAIT) {
-            error_log(sprintf('Groq 429 (%s): waiting %.1fs, then retrying.', $isTpm ? 'tokens/min' : 'rate limit', $wait));
-            usleep((int)(($wait + 0.25) * 1000000));   // a little past the window
-            return call_groq_api($systemPrompt, $userPrompt, $maxTokens, $key, $fallbackKey, $jsonMode, $attempt + 1);
-        }
-
-        if (!$isTpm && !empty($fallbackKey) && $fallbackKey !== $key) {
-            error_log('Groq 429 on the primary key, retrying with the fallback key.');
-            /* Noted for the caller: the engine it asked for is out of room for
-               now, whatever this retry comes back with. */
-            groq_used_fallback(true);
-            return call_groq_api($systemPrompt, $userPrompt, $maxTokens, $fallbackKey, null, $jsonMode, $attempt);
-        }
-
-        if ($detail !== '') error_log('Groq 429, giving up: ' . $detail);
-    }
-
-    // Check if API returned an error (anything other than 200 OK)
-    if ($httpCode !== 200) {
-        error_log("Groq API Error: HTTP $httpCode - $response");
-        return ['success' => false, 'error' => "API error: HTTP $httpCode", 'http_code' => $httpCode];
+    if (!$out['success']) {
+        return ['success' => false, 'error' => $out['error'], 'http_code' => $out['http_code']];
     }
 
     // Parse the JSON response from API
-    $result = json_decode($response, true);
+    $result = json_decode($out['body'], true);
     if (isset($result['choices'][0]['message']['content'])) {
-        // Success! Return the AI's response
-        return ['success' => true, 'response' => $result['choices'][0]['message']['content']];
+        // Success! Return the AI's response, and which key gave it
+        return ['success' => true, 'response' => $result['choices'][0]['message']['content'],
+                'engine' => $out['engine']];
     }
 
     // Something went wrong with the response format
-    return ['success' => false, 'error' => 'Invalid API response'];
+    return ['success' => false, 'error' => 'Invalid API response', 'http_code' => 200];
 }
 
 /**
@@ -419,7 +693,9 @@ function groq_last_failure($set = false) {
  * This is like having an AI assistant read the paper and pull out key information
  * 
  * @param string $pdfText - The text content extracted from the PDF
- * @param string $modelChoice - Model 1 or 2
+ * @param string $modelChoice - Which engine to start on (1 .. the pool's size).
+ *        The rest of the pool stands behind it, so this is a starting point and
+ *        not a restriction: see groq_key_chain().
  * @return array|null - Returns array with title, authors, year, keywords, abstract or null if failed
  */
 function extract_metadata_with_groq($pdfText, $modelChoice = '1') {
@@ -447,16 +723,11 @@ function extract_metadata_with_groq($pdfText, $modelChoice = '1') {
     
     $userPrompt .= "Research Paper Text (first 8000 characters):\n" . pdf_text_clip((string)$pdfText, 8000);
 
-    /* The engine in play and the other one behind it. Which is which comes
-       from ai_engine_current(); nobody picks it on the form any more. */
-    if ((string)$modelChoice === '2') {
-        $uploadKey = defined('GROQ_API_KEY_UPLOAD_2') ? GROQ_API_KEY_UPLOAD_2 : null;
-        $uploadFallback = defined('GROQ_API_KEY_UPLOAD') ? GROQ_API_KEY_UPLOAD : null;
-    } else {
-        $uploadKey = defined('GROQ_API_KEY_UPLOAD') ? GROQ_API_KEY_UPLOAD : null;
-        $uploadFallback = defined('GROQ_API_KEY_UPLOAD_2') ? GROQ_API_KEY_UPLOAD_2 : null;
-    }
-    $result = call_groq_api($systemPrompt, $userPrompt, 1200, $uploadKey, $uploadFallback, true);
+    /* The engine to start on, with the whole rest of the pool behind it.
+       Which engine that is comes from ai_engine_current(); nobody picks it on
+       the form any more. There is no fallback to name: the pool is the
+       fallback, every key of it. */
+    $result = call_groq_api($systemPrompt, $userPrompt, 1200, groq_engine_key((int)$modelChoice), null, true);
 
     if (!$result['success']) {
         // Remember why, so the page can tell the student whether to wait and
@@ -657,8 +928,9 @@ function generate_analytics_insight($statsData, $apiKey = null) {
  * Extracts Methodology, Sample Size, Statistical Tools, etc.
  * 
  * @param string $pdfText - The text content of the paper
- * @param string|null $apiKey - Caller supplied key
- * @param string $modelChoice - Model 1 or 2
+ * @param string|null $apiKey - A key to start on, if the caller has one in
+ *        mind. Null is the ordinary case: start on the session's own engine.
+ * @param string $modelChoice - Which engine to start on when $apiKey is null
  * @return array - Associative array with analysis fields
  */
 function generate_statistical_analysis($pdfText, $apiKey = null, $modelChoice = '1') {
@@ -689,15 +961,10 @@ function generate_statistical_analysis($pdfText, $apiKey = null, $modelChoice = 
     
     $userPrompt .= "Text:\n" . pdf_text_clip((string)$pdfText, 20000);
 
-    // Use caller-supplied key, or fall back to upload key, with backup fallback on rate-limit
-    if ($modelChoice === '2') {
-        $resolvedKey = $apiKey ?? (defined('GROQ_API_KEY_UPLOAD_2') ? GROQ_API_KEY_UPLOAD_2 : null);
-        $uploadFallback = defined('GROQ_API_KEY_UPLOAD') ? GROQ_API_KEY_UPLOAD : null;
-    } else {
-        $resolvedKey = $apiKey ?? (defined('GROQ_API_KEY_UPLOAD') ? GROQ_API_KEY_UPLOAD : null);
-        $uploadFallback = defined('GROQ_API_KEY_UPLOAD_2') ? GROQ_API_KEY_UPLOAD_2 : null;
-    }
-    $result = call_groq_api($systemPrompt, $userPrompt, 2000, $resolvedKey, $uploadFallback, true);
+    /* Where to start, not what to be limited to: whichever key this begins
+       on, the rest of the pool stands behind it. */
+    $resolvedKey = $apiKey ?: groq_engine_key((int)$modelChoice);
+    $result = call_groq_api($systemPrompt, $userPrompt, 2000, $resolvedKey, null, true);
 
     if (!$result['success']) {
         error_log('Groq API failed: ' . ($result['error'] ?? 'Unknown error'));

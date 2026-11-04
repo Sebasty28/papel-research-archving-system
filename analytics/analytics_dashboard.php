@@ -206,7 +206,11 @@ $sortHead = function (string $key, string $align = '') use ($SORTS, $sort, $dir,
 $aiInsight = '';
 if (!empty($stats)) {
     try {
-        $aiInsight = generate_analytics_insight($stats, defined('GROQ_API_KEY_SUPERADMIN') ? GROQ_API_KEY_SUPERADMIN : null);
+        /* No key of its own any more. Every AI feature draws on the one
+           key pool, so this reads the session's engine and the other keys
+           stand behind it: an insight is no longer lost because the one key
+           this page used to hold was spent. */
+        $aiInsight = generate_analytics_insight($stats);
     } catch (Exception $e) {
         $aiInsight = 'AI analysis temporarily unavailable.';
     }

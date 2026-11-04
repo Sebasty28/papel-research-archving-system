@@ -60,10 +60,20 @@ $line('upload_max_filesize', ini_get('upload_max_filesize'));
 $line('curl extension', $yn(function_exists('curl_init')));
 $line('Smalot PdfParser', $yn(class_exists('\Smalot\PdfParser\Parser')));
 $line('vendor/autoload', $yn(is_file(__DIR__ . '/../../vendor/autoload.php')));
-foreach (['GROQ_API_KEY', 'GROQ_API_KEY_UPLOAD', 'GROQ_API_KEY_UPLOAD_2'] as $k) {
-    $line($k, defined($k) && constant($k) !== ''
-        ? 'present, ' . strlen((string)constant($k)) . ' chars' : 'ABSENT');
+/* The key pool, one line per key, and which of them the session is on. A
+   pool shorter than .env looks is the thing to spot here: a key Groq rejects
+   is dropped from the walk at the first 401, and only the server log says so. */
+$pool = function_exists('groq_key_pool') ? groq_key_pool() : [];
+$line('groq key pool', $pool ? count($pool) . ' key(s)' : 'EMPTY - no AI at all');
+foreach ($pool as $i => $groqKey) {
+    $engine = function_exists('ai_engine_name') ? ai_engine_name($i + 1) : (string)($i + 1);
+    $on     = function_exists('ai_engine_current') && ai_engine_current() === $i + 1;
+    // Never the key itself: this page is read over the shoulder of whoever asked.
+    $line('  key ' . ($i + 1) . ' (' . $engine . ')',
+        strlen((string)$groqKey) . ' chars, ends ' . substr((string)$groqKey, -4)
+        . ($on ? ' - this session starts here' : ''));
 }
+$line('groq model', defined('GROQ_MODEL') ? GROQ_MODEL : '(undefined)');
 $line('AI_PROXY_URL', defined('AI_PROXY_URL') && AI_PROXY_URL !== '' ? AI_PROXY_URL : '(not set)');
 
 /* Staff only. A student has no use for the schema, and it is not theirs to read. */

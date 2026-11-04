@@ -98,20 +98,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'extra
     // AI processing
     $aiMeta = [];
     
-    if (!defined('GROQ_API_KEY') || empty(GROQ_API_KEY)) {
-      throw new Exception('Groq API Key is not configured in the system.');
+    // The whole pool, not one key: AI is configured if any key is set.
+    if (!function_exists('groq_key_pool') || !groq_key_pool()) {
+      throw new Exception('No Groq API key is configured in the system.');
     }
     
     $pdfText = extract_pdf_text($pdf['tmp_name']);
     if (!$pdfText || strlen($pdfText) < 50) {
       throw new UserFacingException('No readable text could be found in this PDF. It may be a scan of a printed page, password-protected, or empty. Choose "Fill Manually" to enter the details yourself.');
     }
-    /* Not the student's pick any anymore: whichever engine the session is on,
-       with the other behind it for this call. If it had to hand over, the
-       session follows, so the next extraction starts on the one with room. */
+    /* Not the student's pick any more: whichever engine the session is on,
+       with the rest of the key pool behind it for this call. If it had to hand
+       over, the session moves to whichever key actually answered - not merely
+       the next one along, which the walk may have already passed over as
+       spent. See ai_engine_adopt(). */
     $extracted = extract_metadata_with_groq($pdfText, (string)ai_engine_current());
     if (function_exists('groq_used_fallback') && groq_used_fallback()) {
-        ai_engine_switch();
+        ai_engine_adopt();
     }
     if (is_array($extracted)) {
         $aiMeta = $extracted;
@@ -12749,15 +12752,23 @@ document.getElementById('chat-input').addEventListener('keypress', function(e) {
 });
 
 /* ----- PUPPY's moods -----
-   Two engines, four moods. The engine in use picks the colour (1 Aincrad is the
-   maroon dog, 2 Alfheim the yellow) and the conversation picks the mood, so the
-   face is rebuilt whenever either changes. Which engine that is comes back with
-   each reply rather than from a dropdown: nobody chooses it now, and the colour
-   is the only place it shows. All eight are preloaded: swapping src on a cold
-   cache leaves a blank frame mid-conversation, which reads as the widget
-   breaking rather than as the dog thinking. */
+   Four engines, two colours, four moods. The engine in use picks the colour and
+   the conversation picks the mood, so the face is rebuilt whenever either
+   changes. Which engine that is comes back with each reply rather than from a
+   dropdown: nobody chooses it now, and the colour is the only place it shows.
+
+   There are only two dogs drawn (maroon and yellow) and the key pool has four
+   keys, so the colours alternate: odd engines are the maroon dog, even ones the
+   yellow. A missing colour would ask for a GIF that is not there and leave the
+   dog a broken image, which is worse than two engines sharing a face. Both
+   colours' four moods are preloaded: swapping src on a cold cache leaves a
+   blank frame mid-conversation, which reads as the widget breaking rather than
+   as the dog thinking. */
 const PUPPY_BASE    = <?= json_encode(BASE_URL . '/assests/images/', JSON_UNESCAPED_SLASHES) ?>;
-const PUPPY_COLOURS = { '1': 'red', '2': 'yellow' };
+const PUPPY_COLOURS = <?= json_encode(array_map(
+    function ($n) { return $n % 2 ? 'red' : 'yellow'; },
+    array_combine(range(1, max(2, groq_pool_size())), range(1, max(2, groq_pool_size())))
+)) ?>;
 const PUPPY_STATES  = ['welcome', 'processing', 'successful', 'alert'];
 
 Object.keys(PUPPY_COLOURS).forEach(function (k) {

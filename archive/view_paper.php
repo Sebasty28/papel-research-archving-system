@@ -96,14 +96,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['archive_action'])) {
     exit;
 }
 
-// Resolve role-specific Groq key: must be defined before the AI extraction block below
-$_roleKeyMap = [
-    'super_admin' => 'GROQ_API_KEY_SUPERADMIN',
-    'admin'       => 'GROQ_API_KEY_ADMIN',
-    'faculty'     => 'GROQ_API_KEY_FACULTY',
-];
-$_roleKeyConst  = $_roleKeyMap[$u['user_role'] ?? ''] ?? 'GROQ_API_KEY';
-$archiveGroqKey = defined($_roleKeyConst) ? constant($_roleKeyConst) : null;
+/* No role-specific Groq key any more: a key per role shared one account's
+   daily limit between them, and the role whose key was spent simply lost its
+   AI while the others' keys sat idle. Every reader now draws on the one key
+   pool, starting from the session's own engine, with the rest behind it.
+   Null means exactly that; see groq_key_chain() in config/groq_config.php. */
+$archiveGroqKey = null;
 
 // Auto-extract IMRAD data if missing
 if (empty($paper['ai_summary'])) {

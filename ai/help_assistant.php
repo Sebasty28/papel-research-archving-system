@@ -65,24 +65,16 @@ Guidelines for helping:
 This is the Help Center. You are NOT the research writing assistant. You are the technical support guide." . PromptGuard::getSecurityRules();
 
 // Groq API Configuration
-/* Not asked for any more: the session says which engine is in play, and the
-   other one stands behind it for this call. See ai_engine_current(). */
+/* Not asked for any more: the session says which engine to start on, and the
+   rest of the key pool stands behind it for this call. See ai_engine_current()
+   and groq_pool_request() in config/groq_config.php. */
 $engine = ai_engine_current();
 
-if ($engine === 2) {
-    $apiKey = defined('GROQ_API_KEY_CHATBOT_2') ? GROQ_API_KEY_CHATBOT_2 : ($_ENV['GROQ_API_KEY'] ?? '');
-    $fallbackKey = defined('GROQ_API_KEY_CHATBOT') ? GROQ_API_KEY_CHATBOT : '';
-} else {
-    $apiKey = defined('GROQ_API_KEY_CHATBOT') ? GROQ_API_KEY_CHATBOT : ($_ENV['GROQ_API_KEY'] ?? '');
-    $fallbackKey = defined('GROQ_API_KEY_CHATBOT_2') ? GROQ_API_KEY_CHATBOT_2 : '';
-}
-
-if (empty($apiKey)) {
+if (!groq_key_pool()) {
     http_response_code(500);
     echo json_encode(['reply' => "AI service is not configured. Please contact the administrator."]);
     exit;
 }
-$apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
 
 // ✅ User content is isolated in its own role: never interpolated into system prompt
 $payload = [
@@ -97,49 +89,30 @@ $payload = [
     'stream' => false
 ];
 
-/**
- * Helper: fire a single cURL request to Groq and return [httpCode, response, error]
- */
-$fireRequest = function ($key) use ($apiUrl, $payload) {
-    $ch = curl_init($apiUrl);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => json_encode($payload),
-        CURLOPT_HTTPHEADER => [
-            'Content-Type: application/json',
-            'Authorization: Bearer ' . $key
-        ],
-        CURLOPT_SSL_VERIFYPEER => true,
-        CURLOPT_SSL_VERIFYHOST => 2,
-        CURLOPT_TIMEOUT => 30
-    ]);
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $curlError = curl_error($ch);
-    curl_close($ch);
-    return [$httpCode, $response, $curlError];
-};
+/* One shared walker down the key pool, rather than this page's own idea of
+   what to do when a key is spent. The hand-rolled version here tried the
+   primary key, then one named fallback, and gave up with two more keys
+   untouched; worse, a 401 on a revoked key was not a 429, so it stopped the
+   chatbot dead. See groq_pool_request() in config/groq_config.php. */
+$out = groq_pool_request($payload, $engine);
 
-// Try primary key
-[$httpCode, $response, $curlError] = $fireRequest($apiKey);
+/* The engine the session starts on follows whichever key answered, so the next
+   message does not begin on one that has just refused. */
+if (groq_used_fallback()) ai_engine_adopt();
 
-// Auto-fallback: if rate-limited (429) and a different fallback key exists, retry once
-if ($httpCode === 429 && !empty($fallbackKey) && $fallbackKey !== $apiKey) {
-    error_log("Chatbot: primary key rate-limited (429), retrying with fallback key...");
-    /* The engine asked for has nothing left for the moment, so the session
-       moves to the other one and later messages start there. */
-    ai_engine_switch();
-    [$httpCode, $response, $curlError] = $fireRequest($fallbackKey);
-}
-
-if ($curlError || $httpCode !== 200) {
+if (!$out['success']) {
+    /* A failure here means every key in the pool refused, so "try again later"
+       is the honest answer and saying which limit it was helps nobody in a
+       help chat. The server log names the key and the reason. */
+    $reply = ((int)$out['http_code'] === 429)
+        ? "Every one of my AI keys has reached its limit for the moment. Please try again in a minute."
+        : "I'm having trouble connecting to the AI service right now. Please try again later.";
     http_response_code(500);
-    echo json_encode(['reply' => "I'm having trouble connecting to the AI service right now. Please try again later."]);
+    echo json_encode(['reply' => $reply]);
     exit;
 }
 
-$data = json_decode($response, true);
+$data = json_decode($out['body'], true);
 $reply = $data['choices'][0]['message']['content'] ?? 'I am not sure how to respond to that.';
 
 // ── Prompt Injection Protection: Validate output before returning ──

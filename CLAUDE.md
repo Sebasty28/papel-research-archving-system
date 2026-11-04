@@ -560,6 +560,85 @@ skips table-of-contents lines, takes off a thesis page's Title / Researcher / Ad
 its running head, stops at the next heading, and gives up on a heading with no prose under it.
 Each rule is a real paper it once got wrong; `tests/_abstract_unit.php` holds them.
 
+### One pool of AI keys, not a key per feature
+
+Every AI feature on the site draws from **one pool** of Groq keys, tried in
+order: `GROQ_API_KEY_1` to `GROQ_API_KEY_8` in `.env`, blanks skipped, read into
+`GROQ_API_KEYS` by `config/groq_config.php`. Four are set.
+
+It used to be a key per feature — `GROQ_API_KEY_UPLOAD`, `_CHATBOT`, `_ADMIN`,
+`_FACULTY`, `_SUPERADMIN`, `_STUDENT`, and two `_2` backups. That sounded like
+isolation and was not. A feature whose own key was refused simply stopped, with
+five other keys sitting untouched, because only two of the eight had any
+fallback at all and each fallback was a single named key. The owner's reason for
+replacing them was that the eight behaved as one allowance between them; that
+was not measured before the change, and the eight old keys are no longer in
+`.env` to measure. What *was* measured is below. The old names are still **read**,
+last and in order, so a `.env` that has not been rewritten still has AI. Nothing
+in the app names them.
+
+**The pool is the fallback.** `groq_pool_request()` in `config/groq_config.php`
+is the only place that logic lives, and `call_groq_api()` is a wrapper over it.
+A caller says where to *start* — a key, an engine number, or null for the
+session's own engine — and never what to be limited to. `groq_key_chain()` then
+orders the whole pool from there, wrapping round, every key once.
+
+What moves the call on to the next key, and what does not:
+
+| Answer | What happens |
+|---|---|
+| 429 rate or daily limit | next key, at once |
+| 401 / 403 | next key, and a loud log line: the pool is shorter than `.env` looks |
+| 5xx | next key |
+| 400, 404, anything else | **stop.** The payload is at fault; four keys asked the same bad question is four keys wasted |
+| connection error | **stop.** The network is not key-specific |
+
+**Do not wait out a 429 before trying the next key.** Groq's reply says how long
+that key wants, and the obvious reading — honour it, then fall back — is
+backwards. Measured on the four keys in `.env`: key 1 refused a large request
+for its tokens-per-minute window while keys 2, 3 and 4 answered the *identical*
+request immediately, so the next key is quicker than any wait. The shortest wait
+any refusing key quoted is kept and taken **only once every key has refused**,
+which is the one moment there is nothing better to do. Driven against a stub
+endpoint: four refusals, a 3s pause, an answer on the key that asked for the
+least time — 3.3s in all.
+
+**One call has a time budget**, `GROQ_CHAIN_BUDGET` (25s), covering every
+request and wait in the walk. Free hosting cuts a request off at about 30
+seconds and answers with its own page, which carries no JSON and so tells the
+student nothing. Each request's `CURLOPT_TIMEOUT` is what is left of the budget,
+and the walk stops rather than begin a request it has no time to finish.
+
+**The engines are the pool, named.** `ai_engine_names()` is one name per key
+(Aincrad, Alfheim, Gun Gale, Underworld, then four more if the pool grows), used
+in log lines and for PUPPY's colour on the upload page. The session holds which
+engine a call *starts* on, and `ai_engine_current()` clamps a stale number to
+the pool's length — a session held over from a longer pool would otherwise start
+a call on no key at all. After a fallback, call `ai_engine_adopt()`, **not**
+`ai_engine_switch()`: adopt moves the session to whichever key actually answered
+(`groq_served_engine()`), while switch steps on by one and can land on a key the
+walk has already passed over as spent.
+
+There are only **two** PUPPY dogs drawn (maroon and yellow) and four engines, so
+the colours alternate: odd engines maroon, even yellow. A missing colour asks
+for a GIF that is not there and leaves a broken image, which is worse than two
+engines sharing a face.
+
+**Whether a pool buys anything is a measurable question, so measure it.** Keys
+in one Groq account could share that account's allowance however well the pool
+rotates. Fire one request per key and compare Groq's own
+`x-ratelimit-remaining-requests` and `-remaining-tokens` headers: counters that
+move independently mean independent windows. For the four keys in `.env` as of
+2026-11-04 they do — key 1 ran 998, 997, 996, 995 over four of its own calls
+while keys 2 and 3 each still reported 998, and key 1 refused a large request
+for its token window while the other three answered the same request at once. So
+these four really are about four times the capacity. Re-measure after minting new
+ones; do not assume it.
+
+`ai/groq_config.php` is a stale duplicate of all this that nothing requires. It
+still reads the retired `GROQ_API_KEY` and has its own `call_groq_api()`. Do not
+include it; `config/groq_config.php` is the live one.
+
 ### `bind_param` type-string length
 
 `'sssisssi'` must have exactly one character per parameter. A mismatch fails at

@@ -65,20 +65,16 @@ if (!function_exists('load_env')) {
 load_env(__DIR__ . '/../../.env');
 
 // Groq API Configuration
-// Groq API Configuration
-/* Not asked for any more: the session says which engine is in play, and the
-   other one stands behind it for this call. See ai_engine_current(). */
+/* Not asked for any more: the session says which engine to start on, and the
+   rest of the key pool stands behind it for this call. See ai_engine_current()
+   and groq_pool_request() in config/groq_config.php. */
 $engine = ai_engine_current();
 
-if ($engine === 2) {
-    $apiKey = defined('GROQ_API_KEY_CHATBOT_2') ? GROQ_API_KEY_CHATBOT_2 : ($_ENV['GROQ_API_KEY'] ?? '');
-    $fallbackKey = defined('GROQ_API_KEY_CHATBOT') ? GROQ_API_KEY_CHATBOT : '';
-} else {
-    $apiKey = defined('GROQ_API_KEY_CHATBOT') ? GROQ_API_KEY_CHATBOT : ($_ENV['GROQ_API_KEY'] ?? '');
-    $fallbackKey = defined('GROQ_API_KEY_CHATBOT_2') ? GROQ_API_KEY_CHATBOT_2 : '';
+if (!groq_key_pool()) {
+    http_response_code(500);
+    echo json_encode(['reply' => "The AI assistant is not configured yet. Please tell an administrator."]);
+    exit;
 }
-
-$apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
 
 $payload = [
     'model' => GROQ_MODEL,
@@ -92,43 +88,22 @@ $payload = [
     'stream' => false
 ];
 
-// Helper: fire a single cURL request to Groq
-$fireRequest = function ($key) use ($apiUrl, $payload) {
-    $ch = curl_init($apiUrl);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => json_encode($payload),
-        CURLOPT_HTTPHEADER => [
-            'Content-Type: application/json',
-            'Authorization: Bearer ' . $key
-        ],
-        CURLOPT_SSL_VERIFYPEER => true,
-        CURLOPT_SSL_VERIFYHOST => 2,
-        CURLOPT_TIMEOUT => 30,
-        CURLOPT_CONNECTTIMEOUT => 10,
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_MAXREDIRS => 3
-    ]);
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $curlError = curl_error($ch);
-    $curlErrno = curl_errno($ch);
-    curl_close($ch);
-    return [$httpCode, $response, $curlError, $curlErrno];
-};
+/* One shared walker down the key pool, rather than this page's own idea of
+   what to do when a key is spent. The hand-rolled version here tried the
+   primary key, then one named fallback, and gave up with two more keys
+   untouched; worse, a 401 on a revoked key was not a 429, so it stopped the
+   assistant dead. See groq_pool_request() in config/groq_config.php. */
+$out      = groq_pool_request($payload, $engine);
+$httpCode = (int)$out['http_code'];
+$response = $out['body'];
+/* A connection error is the one failure that is not about a key, so it is the
+   one this page still reports in its own words. */
+$curlError = (!$out['success'] && strpos((string)$out['error'], 'Connection error') === 0)
+    ? substr((string)$out['error'], strlen('Connection error: ')) : '';
 
-// Try primary key
-[$httpCode, $response, $curlError, $curlErrno] = $fireRequest($apiKey);
-
-// Auto-fallback: if rate-limited (429) and a different fallback key exists, retry once
-if ($httpCode === 429 && !empty($fallbackKey) && $fallbackKey !== $apiKey) {
-    error_log("Student Chatbot: primary key rate-limited (429), retrying with fallback key...");
-    /* The engine asked for has nothing left for the moment, so the session
-       moves to the other one and later messages start there. */
-    ai_engine_switch();
-    [$httpCode, $response, $curlError, $curlErrno] = $fireRequest($fallbackKey);
-}
+/* The engine the session starts on follows whichever key answered, so the next
+   message does not begin on one that has just refused. */
+if (groq_used_fallback()) ai_engine_adopt();
 
 // Handle Connection Errors
 if ($curlError) {
@@ -140,19 +115,23 @@ if ($curlError) {
     exit;
 }
 
-// Handle API Errors
-if ($httpCode !== 200) {
+/* Handle API Errors. Every one of these means the whole key pool refused, not
+   one key: groq_pool_request() has already walked it. So the wording is about
+   the service and never about "the" key, and 401 is a fault to report rather
+   than something the student can wait out. */
+if (!$out['success']) {
     $errorMessage = 'AI Service Unavailable';
-    
-    if ($httpCode === 401) {
-        $errorMessage = 'Authentication Error (Invalid API Key)';
+
+    if ($httpCode === 401 || $httpCode === 403) {
+        $errorMessage = 'The AI service is not set up correctly. Please tell an administrator.';
     } elseif ($httpCode === 429) {
-        $errorMessage = 'I am receiving too many requests right now. Please try again in a moment.';
-    } elseif ($httpCode>= 500) {
+        $errorMessage = 'All of my AI keys have reached their limit for the moment. Please try again in a minute.';
+    } elseif ($httpCode >= 500) {
         $errorMessage = 'The AI service is currently down. Please try again later.';
     }
-    
-    http_response_code($httpCode);
+
+    // A walk that never got an HTTP answer has no code to pass on as a status.
+    http_response_code($httpCode >= 400 ? $httpCode : 500);
     echo json_encode([
         'reply' => $errorMessage,
         'http_code' => $httpCode
