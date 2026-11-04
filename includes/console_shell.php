@@ -62,24 +62,229 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
    the count is dropped first when the console is narrow (see the container
    query in review_console.php), because the list underneath already shows
    what is on screen and the pager says where in it you are. */
+/* Three children now (tabs, tools, count-and-pager), so this cannot be
+   space-between: with an odd one in the middle that would centre the three
+   buttons in the gap instead of keeping them against the tabs. The last child
+   is pushed to the far end by its own auto margin, which is what
+   space-between did for it when there were two. The bar's own gap is 0 for
+   the same reason: the spacing is stated between the pieces that want it, so
+   the buttons keep the .125rem they had while they were inside .dash-tabs. */
 .dash-bar {
-    display: flex; align-items: center; justify-content: space-between;
-    gap: .75rem; flex-wrap: nowrap; margin-bottom: .75rem;
+    display: flex; align-items: center; justify-content: flex-start;
+    gap: 0; flex-wrap: nowrap; margin-bottom: .75rem;
     /* Matches .browse-toolbar on the public repository */
     font-size: .6875rem; color: var(--ink);
 }
+.dash-tools {
+    display: flex; align-items: center; gap: .125rem;
+    flex: 0 0 auto; margin-left: .125rem;
+}
+/* Scoped to this bar: .toolbar-right is shared with the public repository's
+   own toolbar (includes/browse_console.php), which lays itself out. */
+.dash-bar > .toolbar-right { margin-left: auto; padding-left: .75rem; }
+/* ---- The row of tabs, and the chevrons that say it slides ----
+   The tabs are one line that is reached by sliding it sideways when they do
+   not all fit, and a line that slides with nothing to say so reads as a line
+   that ends where the screen does: on the student dashboard at 390px, Needs
+   Revision was cut off mid-word and Archived was not there at all.
+
+   A chevron at each end, each one shown only while there is something that
+   way: none at all where the tabs fit, one at the end being slid away from,
+   and both in the middle. .can-left and .can-right are written by
+   includes/browse_console_js.php, which measures the scroller.
+
+   They are drawn on the wrapper and not on .dash-tabs itself, because
+   .dash-tabs is the scrolling box: a background or a pseudo-element on a
+   scrolling box is painted on its contents and slides away with them, so the
+   chevron would have sat over a tab somewhere in the middle of the line
+   instead of at the edge of the screen. The wrapper does not scroll, so its
+   edges are the ones the reader sees. */
+.dash-tabs-glide { position: relative; display: flex; min-width: 0; }
 .dash-tabs {
     display: flex; align-items: center; gap: .125rem; flex-wrap: nowrap;
-    min-width: 0; overflow-x: auto;
+    min-width: 0; width: 100%; overflow-x: auto;
     /* The scrollbar would sit under the tabs and take a line of its own. */
     scrollbar-width: none;
 }
 .dash-tabs::-webkit-scrollbar { display: none; }
-/* overflow-x on its own clips the other axis too (it computes to auto, never visible), so
-   the Quick Settings panel that hangs out of this row was cut to the row's own height: it
-   opened, and nothing of it could be seen or pressed, on every dashboard that has the bar.
-   While the panel is open the row does not clip; it has no need to scroll just then. */
-.dash-tabs:has(.quick-settings-dropdown.open) { overflow: visible; }
+.dash-tabs-glide::before,
+.dash-tabs-glide::after {
+    /* Material Symbols by codepoint: chevron_left and chevron_right. The
+       ligature names the markup uses need text content to be read, which a
+       pseudo-element's content is not reliably given. */
+    font-family: 'Material Symbols Outlined';
+    font-size: 20px;
+    line-height: 1;
+    /* Quiet, but not so quiet it is missed: it is the only thing saying the
+       line goes on. Nothing happens when it is pressed (pointer-events below),
+       so it must not sit up like a button either; the tab under it stays
+       pressable. */
+    color: color-mix(in srgb, var(--maroon) 75%, transparent);
+    position: absolute;
+    top: 0; bottom: 0;
+    display: flex;
+    align-items: center;
+    /* 4rem, by way of 2, 3 and 3.5. The band has to be a good deal longer
+       than the chevron is wide, or a tab's last letters stand clear of it and
+       poke out beside the arrow still legible, which is the one thing it is
+       there to stop. */
+    width: 4rem;
+    /* No blur on this one: it carries the arrow and the tint, and the
+       blurring is done by the layers under it (.glide-fade, below). */
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .18s ease;
+    /* Above the blur layers, which are positioned with z-index auto. */
+    z-index: 1;
+}
+/* The tint, over the blur, as a soft oval rather than a band: it fades out
+   before it reaches the top, the bottom and the outer edge as well as the
+   inner one, so there is no side of it drawn as a line. As a band it stopped
+   square at three of its four sides, and even at 5% the pale rectangle was
+   the one hard shape left at the end of the row. Centred at 65% of the band,
+   so the chevron, which sits at the outer end, is on the thick of it.
+
+   Maroon at 5% *of itself*, with nothing behind it. A tint mixed into the
+   page's colour is opaque and hides the blurred row under it altogether,
+   which is a frosted strip rather than glass; and at 5% the tint is barely a
+   colour at all, so what reads as the band is the blur. It also needs no
+   --white to mix with, so it holds in the dark themes without being told
+   anything about them. */
+.dash-tabs-glide::before {
+    content: '\e5cb';
+    left: 0;
+    justify-content: flex-start;
+    background: radial-gradient(ellipse 60% 75% at 35% 50%,
+        color-mix(in srgb, var(--maroon) 5%, transparent) 35%, transparent);
+}
+.dash-tabs-glide::after {
+    content: '\e5cc';
+    right: 0;
+    justify-content: flex-end;
+    background: radial-gradient(ellipse 60% 75% at 65% 50%,
+        color-mix(in srgb, var(--maroon) 5%, transparent) 35%, transparent);
+}
+.dash-tabs-glide.can-left::before,
+.dash-tabs-glide.can-right::after { opacity: 1; }
+
+/* ---- The blur, in layers ----
+   Three layers to a side, each reaching less far into the row than the one
+   under it and each blurring further: 1.5px across the whole band, 4px over
+   its outer 70%, 8px over its outer 40%. So the row goes from sharp to soft
+   to gone in steps too small to see, and there is no one line where the blur
+   starts.
+
+   One blurred band was tried first and had to choose between two faults. Cut
+   off square, its inner edge was a line down the middle of a word, half of it
+   sharp and half of it not. Faded out with a mask, it was worse: a mask
+   blends away the whole element, blurred backdrop and all, and what comes up
+   through the thin end is the page as it was, in focus, so the letters there
+   were only pale and still read. Here the thin end of each layer shows the
+   layer beneath it, which is already blurred; only the first layer's thin
+   end shows the page itself, and that layer blurs by 1.5px.
+
+   **Siblings, never nested.** The layers were first the one element and its
+   two pseudo-elements, and the two inner ones did nothing at all: measured,
+   the row was exactly as sharp with them switched off. An element with a
+   backdrop-filter (or a mask) is the backdrop root of everything inside it,
+   and what a child then blurs is what that element itself has painted, which
+   is nothing; the parent's own blurred backdrop is not part of it. A later
+   sibling's backdrop does include the siblings painted before it, so as
+   three spans side by side the steps add up.
+
+   The spans are made by script (includes/browse_console_js.php), being
+   nothing but decoration, and are shown and hidden with the chevrons. Each
+   is at most 64px by a row's height, so six of them cost little even on a
+   phone. Checked by measuring how sharp each part of the band is with each
+   layer on and off, which is the only way to tell a blur that works from one
+   that does not; by eye at 1x they look alike. */
+.glide-fade {
+    position: absolute;
+    top: 0; bottom: 0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .18s ease;
+}
+.glide-fade.is-1 {
+    width: 4rem;
+    -webkit-backdrop-filter: blur(1.5px);
+            backdrop-filter: blur(1.5px);
+}
+.glide-fade.is-2 {
+    width: 2.8rem;
+    -webkit-backdrop-filter: blur(4px);
+            backdrop-filter: blur(4px);
+}
+.glide-fade.is-3 {
+    width: 1.6rem;
+    -webkit-backdrop-filter: blur(8px);
+            backdrop-filter: blur(8px);
+}
+/* Each layer fades inward, and also at its top and its bottom: the two
+   masks are intersected, so a layer is at full strength only where both say
+   so. Without the second, a blur of 8px spreads a tab's letters up and down
+   into a smear that the layer's own top and bottom then cut off square, and
+   the band showed as a box with hard lids. Above and below the letters there
+   is only the page, so letting the layer thin out there shows nothing sharp
+   through it. */
+.glide-fade-l {
+    left: 0;
+    -webkit-mask-image: linear-gradient(to right, #000 50%, transparent),
+                        linear-gradient(to bottom, transparent, #000 30%, #000 70%, transparent);
+    -webkit-mask-composite: source-in;
+            mask-image: linear-gradient(to right, #000 50%, transparent),
+                        linear-gradient(to bottom, transparent, #000 30%, #000 70%, transparent);
+            mask-composite: intersect;
+}
+.glide-fade-r {
+    right: 0;
+    -webkit-mask-image: linear-gradient(to left, #000 50%, transparent),
+                        linear-gradient(to bottom, transparent, #000 30%, #000 70%, transparent);
+    -webkit-mask-composite: source-in;
+            mask-image: linear-gradient(to left, #000 50%, transparent),
+                        linear-gradient(to bottom, transparent, #000 30%, #000 70%, transparent);
+            mask-composite: intersect;
+}
+
+/* ---- The tabs themselves fade out at an end that goes on ----
+   The last thing with an edge was the row: the tabs are clipped square where
+   the row ends, so blurred letters stopped in a straight line at the outer
+   side of the band, under the chevron. A mask on the scroller fades them out
+   into that end instead, so they blur and thin away together and there is no
+   edge left to see.
+
+   A mask on a scrolling box belongs to the box and not to what is scrolled in
+   it, so it stays at the ends while the tabs slide under it; it is the one
+   thing drawn on .dash-tabs itself that does. 3rem of the band's 4, so the
+   tabs are faint but still there under the strongest blur, which is what
+   makes the end read as glass rather than as an empty patch. Only at an end
+   that can be slid to: a row that fits is never faded. */
+.dash-tabs-glide.can-left .dash-tabs {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 3rem);
+            mask-image: linear-gradient(to right, transparent, #000 3rem);
+}
+.dash-tabs-glide.can-right .dash-tabs {
+    -webkit-mask-image: linear-gradient(to left, transparent, #000 3rem);
+            mask-image: linear-gradient(to left, transparent, #000 3rem);
+}
+.dash-tabs-glide.can-left.can-right .dash-tabs {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 3rem, #000 calc(100% - 3rem), transparent);
+            mask-image: linear-gradient(to right, transparent, #000 3rem, #000 calc(100% - 3rem), transparent);
+}
+.dash-tabs-glide.can-left .glide-fade-l,
+.dash-tabs-glide.can-right .glide-fade-r { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+    .dash-tabs-glide::before,
+    .dash-tabs-glide::after,
+    .glide-fade { transition: none; }
+}
+/* Quick Settings now hangs out of .dash-tools, which scrolls in no direction and
+   so clips in none either. It used to be the last child of .dash-tabs, and
+   overflow-x on its own clips the other axis too (it computes to auto, never
+   visible), so the panel was cut to the row's own height: it opened, and
+   nothing of it could be seen or pressed, on every dashboard that has this bar.
+   Taking the buttons out of the scrolling box is what retired that rule; do not
+   put them back inside it. */
 .dash-tab {
     flex: 0 0 auto;
     display: inline-flex; align-items: center; gap: .3rem;
@@ -96,7 +301,7 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
 .dash-shell .toolbar-btn:hover { background: var(--cream); color: var(--maroon); }
 /* Quick Settings now sits on the left of the bar, so the panel opens to the
    right instead of hanging off the left edge. */
-.dash-tabs .quick-settings-dropdown { left: 0; right: auto; }
+.dash-tools .quick-settings-dropdown { left: 0; right: auto; }
 .dash-shell .card-tool:hover { background: var(--cream); }
 .dash-tab .count { font-size: .6875rem; color: var(--grey); }
 /* ===== Paper cards =====
@@ -361,9 +566,43 @@ html[data-view="rows"] .paper-list .paper-card-toggle { display: none; }
     .card-track { grid-template-columns: 1fr; gap: .75rem; }
 }
 @media (max-width: 600px) {
-    .dash-top { flex-direction: column; align-items: stretch; }
+    /* column-reverse, so Upload Paper stands above the search box. On a wide
+       screen the two share a row and the eye takes the button at the end of it;
+       stacked, the search box was first and the one thing a student comes here
+       to do was below the fold of the card. The markup keeps the search first,
+       so the keyboard still reaches it before the button: with two controls,
+       both plainly labelled, that is a smaller price than burying the action. */
+    .dash-top { flex-direction: column-reverse; align-items: stretch; }
     .btn-upload { justify-content: center; }
     .card-head { grid-template-columns: 1fr; }
     .card-status { text-align: left; }
+
+    /* ---- The tab bar: tabs on one line, controls under them ----
+       The tabs keep a single line and are reached by sliding that line
+       sideways; under it the three buttons sit at the left and the count and
+       pager at the right.
+
+       What this replaced: the buttons used to be the last children of
+       .dash-tabs, so they rode the same scrolling line as the tabs. Measured
+       on the student dashboard at 390px the tabs alone overran the row, which
+       left Refresh, Help and Quick Settings parked past its right-hand end
+       with nothing on screen to say they existed. They are their own box in
+       the markup now (.dash-tools, in student_dashboard.php and
+       review_console.php), which is what lets the line scroll without taking
+       them with it. */
+    .dash-bar { flex-wrap: wrap; row-gap: .375rem; }
+    /* The whole first row. The wrapper is the flex item now, the scrolling
+       box being inside it (see the chevrons above); the row it takes is the
+       only thing here that scrolls. */
+    .dash-tabs-glide { flex: 1 1 100%; }
+    .dash-tabs { flex-wrap: nowrap; overflow-x: auto; }
+    /* Second row, in the Public Repository's order: the count and the pager at
+       the left, the tools at the right. The DOM has the tools first, because on
+       a wide screen they belong against the tabs, so the two swap by `order`
+       here rather than by being moved. Both are reached by the keyboard in DOM
+       order either way, and on this row that is the three buttons before the
+       pager, which is the order the wide layout reads in too. */
+    .dash-bar > .toolbar-right { order: 1; margin-left: 0; padding-left: 0; }
+    .dash-tools { order: 2; margin-left: auto; }
 }
 </style>

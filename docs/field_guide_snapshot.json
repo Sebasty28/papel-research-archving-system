@@ -1,5 +1,5 @@
 {
- "built": "2026-11-04 15:30",
+ "built": "2026-11-04 22:30",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -110,7 +110,7 @@
    "lines": 104
   },
   "app/student/student_dashboard.php": {
-   "lines": 891
+   "lines": 933
   },
   "app/student/student_draft_delete.php": {
    "lines": 139
@@ -140,7 +140,7 @@
    "lines": 954
   },
   "archive/index.php": {
-   "lines": 1359
+   "lines": 1313
   },
   "archive/login.php": {
    "lines": 1081
@@ -149,7 +149,7 @@
    "lines": 1075
   },
   "config/config.php": {
-   "lines": 237
+   "lines": 265
   },
   "config/core.php": {
    "lines": 4353
@@ -176,7 +176,7 @@
    "lines": 12
   },
   "includes/accessibility.php": {
-   "lines": 1209
+   "lines": 1298
   },
   "includes/action_dialogs.php": {
    "lines": 337
@@ -188,16 +188,16 @@
    "lines": 190
   },
   "includes/browse_console.php": {
-   "lines": 977
+   "lines": 1063
   },
   "includes/browse_console_js.php": {
-   "lines": 980
+   "lines": 1191
   },
   "includes/card_collapse.php": {
    "lines": 94
   },
   "includes/console_shell.php": {
-   "lines": 370
+   "lines": 609
   },
   "includes/docx_writer.php": {
    "lines": 230
@@ -272,7 +272,7 @@
    "lines": 486
   },
   "includes/review_console.php": {
-   "lines": 1747
+   "lines": 1774
   },
   "includes/scroll_jump.php": {
    "lines": 93
@@ -281,13 +281,13 @@
    "lines": 894
   },
   "includes/site_footer.php": {
-   "lines": 513
+   "lines": 529
   },
   "includes/site_head.php": {
-   "lines": 1573
+   "lines": 1634
   },
   "includes/site_header.php": {
-   "lines": 662
+   "lines": 666
   },
   "includes/skeleton.php": {
    "lines": 602
@@ -344,7 +344,7 @@
    "lines": 219
   },
   "pages/settings.php": {
-   "lines": 735
+   "lines": 754
   },
   "pages/terms_and_conditions.php": {
    "lines": 172

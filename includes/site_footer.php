@@ -8,15 +8,31 @@
 ?>
 <footer class="site-footer">
     <div class="wrap footer-inner">
-        <span>&copy; <?= date('Y') ?> <?= e(APP_NAME) ?> &middot; PUP Bi&ntilde;an Campus</span>
+        <?php /* The campus is in a span of its own because a phone drops it: the
+                 whole line wants 486px and a 390px phone has 358, so it wrapped and
+                 the links fell to a second line at the left-hand end. See the footer
+                 block in includes/site_head.php. */ ?>
+        <span class="footer-copy">&copy; <?= date('Y') ?> <?= e(APP_NAME) ?><span class="footer-campus"> &middot; PUP Bi&ntilde;an Campus</span></span>
         <nav class="footer-links">
             <a href="<?= e(BASE_URL) ?>/pages/terms_and_conditions.php">Terms &amp; Conditions</a>
             <a href="<?= e(BASE_URL) ?>/pages/privacy.php">Privacy</a>
             <?php /* Which build this is. Last in the row, after the links, and quiet:
                      it is for whoever is reporting a fault, not for a reader. Nothing
-                     is printed at all where there is no VERSION file to read. */ ?>
-            <?php if ($ver = app_version_label()): ?>
-            <span class="footer-version"><?= e($ver) ?></span>
+                     is printed at all where there is no VERSION file to read.
+
+                     In its pieces (app_version_parts()), not as the one string
+                     app_version_label() returns, so a phone can drop some of them:
+                     there it reads "0.13.0 - bb41a6c", the number and the commit
+                     being what a fault report has to quote, while which copy of the
+                     site it is already shows on the chip beside the logo.
+
+                     Each piece carries its own leading space and its own bracket, so
+                     hiding one takes its punctuation with it and never strands a
+                     separator. The separator belongs to the commit for that reason:
+                     a staging build with no commit stamped must read "(staging)" and
+                     not "(staging - )". */ ?>
+            <?php if ($verParts = app_version_parts()): ?>
+            <span class="footer-version"><span class="footer-version-word"><?= e($verParts['word']) ?> </span><?= e($verParts['number']) ?><?php if ($verParts['env'] !== ''): ?><span class="footer-version-env"> (<?= e($verParts['env']) ?></span><?php if ($verParts['build'] !== ''): ?><span class="footer-version-build"> &middot; <?= e($verParts['build']) ?></span><?php endif; ?><span class="footer-version-env">)</span><?php endif; ?></span>
             <?php endif; ?>
         </nav>
     </div>

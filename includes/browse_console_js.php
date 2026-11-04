@@ -977,3 +977,214 @@
     });
 })();
 </script>
+
+<?php
+/* ===== The Browse & Filters drawer =====
+   On a narrow screen the right-hand <aside> stops being a column and becomes a
+   drawer, opened by the tune button in the toolbar. This used to live in
+   archive/index.php alone; the dashboards and the four review desks have the
+   same <aside id="sidebarCol">, and on a phone theirs was just as far down the
+   page, so the whole thing moved here and all of them get it.
+
+   Printed once per page. Every page that has a drawer requires this file
+   exactly once, but the guard is cheap and a second backdrop would sit over the
+   first with nothing closing it. */
+if (!defined('PAPEL_TOOLS_DRAWER_DONE')):
+    define('PAPEL_TOOLS_DRAWER_DONE', 1);
+?>
+<div class="tools-backdrop" id="toolsBackdrop"></div>
+<?php /* Outside the <aside>, because everything inside it is replaced whenever a
+         filter is applied and a close button in there would be swept away. */ ?>
+<button type="button" class="btn-tools-close" id="toolsClose" aria-label="Close Browse and Filters">
+    <span class="material-symbols-outlined">close</span>
+</button>
+<script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
+/* Everything here is delegated or bound to elements outside the <aside>,
+   because applying a filter replaces the whole inside of it and any listener
+   attached in there would go with it. */
+(function () {
+    var root = document.documentElement;
+    var btn  = document.getElementById('toolsToggle');
+    if (!btn) { return; }          // a page with no drawer to open
+
+    function setOpen(on) {
+        root.classList.toggle('tools-open', on);
+        btn.setAttribute('aria-expanded', on ? 'true' : 'false');
+    }
+    function isOpen() { return root.classList.contains('tools-open'); }
+
+    btn.addEventListener('click', function () { setOpen(!isOpen()); });
+
+    /* Delegated, not bound. This block runs where it stands and the backdrop
+       and the close button are printed just above it, but a page may yet print
+       its own later; delegation does not care when they arrive. */
+    document.addEventListener('click', function (e) {
+        if (!isOpen() || !e.target.closest) { return; }
+        if (e.target.closest('#toolsClose, #toolsBackdrop')) { setOpen(false); }
+    });
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && isOpen()) { setOpen(false); }
+    });
+
+    /* Choosing a filter refreshes the list behind the drawer, so get out of the
+       way and let the results be the thing on screen. */
+    document.addEventListener('change', function (e) {
+        if (isOpen() && e.target.closest('#sidebarCol')) { setOpen(false); }
+    });
+    document.addEventListener('click', function (e) {
+        if (isOpen() && e.target.closest('#sidebarCol a[href]')) { setOpen(false); }
+    });
+
+    /* Back on a wide screen the sidebar is a column again and the drawer means
+       nothing, but the open class would still be holding the page's scroll. */
+    window.addEventListener('resize', function () {
+        if (window.innerWidth > 900 && isOpen()) { setOpen(false); }
+    });
+})();
+</script>
+<?php endif; ?>
+
+<?php
+/* ===== The tab row's chevrons =====
+   .dash-tabs is one line that slides sideways when the tabs do not fit, and
+   this says which way it can go: a chevron at the end the line carries on
+   past, none at an end that is already there, so a row that fits shows
+   neither and a row in the middle shows both. The look is in
+   includes/console_shell.php, on .dash-tabs-glide, the wrapper round the
+   scrolling box.
+
+   Here rather than on one page because the student dashboard and the four
+   review desks draw the same row, out of two files, and both already require
+   this one. A page with no such row prints the block and does nothing. */
+if (!defined('PAPEL_TABS_GLIDE_DONE')):
+    define('PAPEL_TABS_GLIDE_DONE', 1);
+?>
+<script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
+(function () {
+    /* Slack at each end, and nothing more than that: any row with something
+       out of sight says so. A row scrolled fully to one end still reports a
+       fraction of a pixel to go under a fractional zoom, which this site meets
+       from 110% up, so a chevron measured exactly would never come off; 2px
+       covers that and no real overrun.
+
+       It was 8px for a day, to spare a row that overruns by four the chevron
+       and the fade that cover more than four pixels of it. What that missed is
+       that the tabs are not the same from tab to tab: the student dashboard
+       shows Drafts and Archived only while they hold something or are the tab
+       being read, so the same row overruns by 4px on Approved and by 74 on
+       Drafts. The sign came and went as the student moved along the row,
+       which reads as a fault in the page. Owner's call, and the right one: a
+       row that slides at all says so. */
+    var EDGE = 2;
+
+    /* Every row set up so far, with the function that measures it. Rows are
+       thrown away and replaced (see the MutationObserver at the end), so the
+       window's listeners walk this list rather than each row adding its own:
+       a row replaced on every tab click would otherwise leave a resize
+       listener behind each time, measuring a row that is no longer there. */
+    var rows = [];
+
+    function setUp(wrap) {
+        var box = wrap.querySelector('.dash-tabs');
+        if (!box) { return; }
+        /* Marked as done on the element itself, so the observer below never
+           sets a row up twice: appending the layers is itself a change it
+           hears. */
+        wrap.setAttribute('data-glide', '1');
+
+        /* The blur layers at each end (.glide-fade, includes/console_shell.php),
+           three to a side, weakest first. Made here rather than written into
+           the two pages that draw the row: they are decoration and nothing
+           else, and they only mean anything once this script is deciding when
+           they show. Appended after the row and as siblings of one another, in
+           that order, because the order is what makes them work: each one
+           blurs whatever was painted before it, so the row has to come first
+           and each layer has to come after the weaker one it builds on. */
+        ['l', 'r'].forEach(function (side) {
+            [1, 2, 3].forEach(function (step) {
+                var layer = document.createElement('span');
+                layer.className = 'glide-fade glide-fade-' + side + ' is-' + step;
+                layer.setAttribute('aria-hidden', 'true');
+                wrap.appendChild(layer);
+            });
+        });
+
+        function mark() {
+            var max = box.scrollWidth - box.clientWidth;
+            wrap.classList.toggle('can-left', box.scrollLeft > EDGE);
+            wrap.classList.toggle('can-right', box.scrollLeft < max - EDGE);
+        }
+
+        box.addEventListener('scroll', mark, { passive: true });
+
+        /* Every tab is watched, and not only the row. The row's box keeps its
+           size when what is in it grows, and a ResizeObserver on the box hears
+           nothing then; what changes is the tabs. The one that matters is the
+           font: the tabs are first laid out in the fallback face, which is
+           narrower, and the real one arrives later. Measured at 390px on
+           Approved, the row fits by 0px in the fallback and overruns by 4px
+           in the real face. Lengthening one tab's count by script shows it:
+           26px over and no chevron, with only the box watched. */
+        if (window.ResizeObserver) {
+            var watch = new ResizeObserver(mark);
+            watch.observe(box);
+            Array.prototype.forEach.call(box.children, function (tab) { watch.observe(tab); });
+        }
+
+        rows.push({ wrap: wrap, mark: mark });
+        mark();
+    }
+
+    function scan() {
+        Array.prototype.forEach.call(
+            document.querySelectorAll('.dash-tabs-glide:not([data-glide])'), setUp);
+    }
+
+    function markAll() {
+        /* Rows the page has thrown away are dropped here, which is what lets
+           them, their observers and their layers be collected. */
+        rows = rows.filter(function (r) { return r.wrap.isConnected; });
+        rows.forEach(function (r) { r.mark(); });
+    }
+
+    scan();
+
+    window.addEventListener('resize', markAll);
+    /* document.fonts.ready alone does not cover a late face. It resolves at
+       once if no font has started loading when this runs, and a face is only
+       fetched once some text is laid out in it, so ready can be long gone by
+       the time the real face lands. loadingdone hears every one that does. */
+    if (document.fonts) {
+        if (document.fonts.ready) { document.fonts.ready.then(markAll); }
+        if (document.fonts.addEventListener) { document.fonts.addEventListener('loadingdone', markAll); }
+    }
+    /* And once everything is in, and again when a page comes back from the
+       back-forward cache, which runs no script but may come back at a
+       different width. */
+    window.addEventListener('load', markAll);
+    window.addEventListener('pageshow', markAll);
+
+    /* **A tab click is not a page load.** On the student dashboard and every
+       review desk, a tab, a page of results, a search and a filter all fetch
+       the new list and swap the whole of #mainCol by innerHTML, and the tab
+       row is inside #mainCol. So after the first click the row on screen was
+       new markup that nothing had set up: no layers, no listeners and no
+       classes, which is no chevron at all, on every tab but the one the page
+       was opened on. Clicking from tab to tab with real mouse events showed
+       it at every width the row overruns at; opening each tab's address
+       directly, which is how it had been checked, never could.
+
+       Watched for here rather than called from the two loaders, so a third
+       page that swaps a row in, or a loader written later, needs nothing
+       done. The callback runs as a microtask straight after the swap and
+       before the next paint, so the new row is never drawn bare first; and
+       what it does is one selector that finds nothing on almost every call.
+       Only where there was a row to begin with: the Public Repository
+       requires this file too and has none, and swaps its own results often. */
+    if (rows.length && window.MutationObserver && document.body) {
+        new MutationObserver(scan).observe(document.body, { childList: true, subtree: true });
+    }
+})();
+</script>
+<?php endif; ?>

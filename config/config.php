@@ -142,13 +142,41 @@ function app_version_build(): string {
  * the logo follows, so neither says anything on the live site.
  */
 function app_version_label(): string {
+    $p = app_version_parts();
+    if (!$p) return '';
+    $out = $p['word'] . ' ' . $p['number'];
+    if ($p['env'] !== '') {
+        $out .= ' (' . $p['env']
+              . ($p['build'] !== '' ? " \u{00B7} " . $p['build'] : '') . ')';
+    }
+    return $out;
+}
+
+/**
+ * The same line in the pieces a footer can drop separately, or [] where there
+ * is no VERSION file.
+ *
+ * ['word' => 'Version', 'number' => '0.13.0', 'env' => 'staging',
+ *  'build' => 'a1b2c3d'], with 'env' empty on production and 'build' empty
+ * where no deploy stamped one.
+ *
+ * Split because a phone cannot hold the whole line: measured, it wants 486.3px
+ * and a 390px phone has 358. The word and the copy go there, and the number
+ * and the commit stay, those being what someone reporting a fault has to
+ * quote; which copy of the site it is, is already on the chip beside the logo.
+ * Keeping the rule here rather than cutting the string up in the template is
+ * what lets app_version_label() stay built from the same pieces.
+ */
+function app_version_parts(): array {
     $v = app_version();
-    if ($v === '') return '';
+    if ($v === '') return [];
     $badge = app_env_badge();
-    if ($badge === '') return 'Version ' . $v;
-    $build = app_version_build();
-    return 'Version ' . $v . ' (' . strtolower($badge)
-         . ($build !== '' ? " \u{00B7} " . $build : '') . ')';
+    return [
+        'word'   => 'Version',
+        'number' => $v,
+        'env'    => $badge === '' ? '' : strtolower($badge),
+        'build'  => $badge === '' ? '' : app_version_build(),
+    ];
 }
 define('BASE_URL', $_ENV['BASE_URL'] ?? 'http://localhost/capstone');
 

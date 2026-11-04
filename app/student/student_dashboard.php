@@ -283,6 +283,20 @@ $PAGE_SKELETON = 'console';
 </head>
 <body>
 
+<?php /* The sidebar's two lists offered in the phone's menu sheet as well, the
+         way the Public Repository does it (archive/index.php). On a phone the
+         sidebar is below the whole list of papers, so the places a student can
+         go were a long scroll away from the only menu on screen.
+
+         browse_card.php is required here rather than left to the sidebar below,
+         because site_header.php is what reads $nav_panel and it is printed
+         first. It is a require_once, so the one further down is then a no-op
+         and the sidebar still gets its helpers. */ ?>
+<?php require_once ROOT_PATH.'/includes/browse_card.php'; ?>
+<?php $nav_panel = ['label' => 'Control Panel', 'items' => array_merge(
+          browse_card_links($u ?? null),
+          quick_action_links($u ?? null)
+      )]; ?>
 <?php require ROOT_PATH.'/includes/site_header.php'; ?>
 
 <!-- Breadcrumb -->
@@ -339,6 +353,12 @@ $PAGE_SKELETON = 'console';
 
             <!-- Tabs + toolbar -->
             <div class="dash-bar">
+                <?php /* The wrapper is what the chevrons are drawn on: the row itself
+                         is the scrolling box, and anything painted on a scrolling box
+                         slides away with its contents. See includes/console_shell.php
+                         for the look and includes/browse_console_js.php for the
+                         measuring. */ ?>
+                <div class="dash-tabs-glide">
                 <div class="dash-tabs">
                     <?php foreach ($tabs as $key => $label): ?>
                         <?php /* Drafts and Archived appear only when there is something
@@ -352,14 +372,36 @@ $PAGE_SKELETON = 'console';
                             <?= e($label) ?> <span class="count"><?= (int)$counts[$key] ?></span>
                         </a>
                     <?php endforeach; ?>
-                    <?php /* Refresh clears the search box and every filter, then
-                             reloads the list for the tab you are on. */ ?>
+                </div>
+                </div>
+                <?php /* The three buttons are a box of their own beside .dash-tabs, not
+                         the last three children of it. On a phone the tabs are one line
+                         that scrolls sideways, and anything inside that line scrolls out
+                         of reach with it: these used to sit past the right-hand end with
+                         nothing to say they were there. Out here they stay put, and the
+                         phone puts them on a row under the tabs (includes/console_shell.php).
+
+                         Refresh clears the search box and every filter, then reloads the
+                         list for the tab you are on. */ ?>
+                <div class="dash-tools">
                     <a class="toolbar-btn" href="student_dashboard.php?tab=<?= e($tab) ?>" title="Refresh (clears search and filters)">
                         <span class="material-symbols-outlined">refresh</span>
                     </a>
                     <a class="toolbar-btn" href="<?= e(BASE_URL) ?>/pages/help_center.php" title="Help">
                         <span class="material-symbols-outlined">help</span>
                     </a>
+                    <?php /* Only ever seen on a narrow screen; the stylesheet hides it the
+                             moment the sidebar is a column again and the cards are simply
+                             there. One more tool beside Quick Settings, and the drawer it
+                             opens is closed by its own X, the backdrop or Escape, since
+                             the drawer covers this button while it is open. Shared with
+                             the Public Repository: includes/browse_console.php for the
+                             look, includes/browse_console_js.php for the working. */ ?>
+                    <button type="button" class="toolbar-btn btn-tools-toggle" id="toolsToggle"
+                            aria-controls="sidebarCol" aria-expanded="false"
+                            title="Browse &amp; Filters" aria-label="Browse and Filters">
+                        <span class="material-symbols-outlined">tune</span>
+                    </button>
                     <div class="quick-settings">
                         <button class="toolbar-btn" type="button" id="quickSettingsBtn" title="Quick Settings" aria-haspopup="true" aria-expanded="false">
                             <span class="material-symbols-outlined">settings</span>

@@ -128,8 +128,34 @@ body {
 #a11y-toggle.panel-open { background: var(--maroon-surface, #820707); }
 /* Hidden from Settings, for someone who never uses it and would rather not
    have it on the edge of every page. Only the tab goes: the tools stay, and
-   Settings' "Open" still brings the panel up. */
-html.a11y-tab-hidden #a11y-toggle { display: none; }
+   Settings' "Open" still brings the panel up.
+
+   Two queries rather than one rule, because the answer is not the same at
+   every width and each width reads only its own switch:
+
+   - above a phone the tab is there until it is hidden (papel_a11y_tab_hidden,
+     the class below);
+   - on a phone it is not there until it is asked for (papel_a11y_tab_phone,
+     .a11y-tab-phone). A phone is the screen the text runs edge to edge on, so
+     a tab down the side of it is always sitting on top of something to read,
+     and nobody should have to find the right-click menu to get their reading
+     back. Settings > Appearance is the way to put it there.
+
+   The switch for the width you are not at is deliberately not consulted, so
+   hiding it on a desktop does not reach into the phone's answer or the other
+   way about. The two are the same browser only when a window is dragged
+   across the breakpoint, which is not a phone.
+
+   "not all and (max-width: 900px)" rather than "min-width: 901px": the pair
+   has to cover every width between them, and a window 900.5px wide
+   (fractional zoom, which this site meets from 110% up) matches neither of
+   the integer pair, so the tab would reappear in the gap. */
+@media not all and (max-width: 900px) {
+    html.a11y-tab-hidden #a11y-toggle { display: none; }
+}
+@media (max-width: 900px) {
+    html:not(.a11y-tab-phone) #a11y-toggle { display: none; }
+}
 /* With the tab hidden, the panel opens against whatever button asked for it
    (Settings' "Open") instead of at the edge where the tab would have been:
    above or below that button, placed by positionAgainst(). Fixed to the
@@ -332,15 +358,23 @@ body.a11y-big-cursor * { cursor: url("data:image/svg+xml;utf8,<svg xmlns='http:/
          browser, not per account, so signing out (or a guest pass running out)
          would otherwise leave the next visitor on that browser with no tab and
          no way to get it back. It is still stored, and returns at sign-in. */ ?>
-<?php if ($a11yCanRestore): ?>
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 try {
+<?php if ($a11yCanRestore): ?>
     if (localStorage.getItem('papel_a11y_tab_hidden') === '1') {
         document.documentElement.classList.add('a11y-tab-hidden');
     }
+<?php endif; ?>
+    /* The phone's switch is read for everyone, signed in or not. The gate
+       above is there because a stored *hide* with no way back would leave the
+       next visitor on that browser with no tab at all; this one can only ever
+       put the tab there, so there is nothing to be stranded by. On a phone
+       with nothing stored the stylesheet above hides it, which is the point. */
+    if (localStorage.getItem('papel_a11y_tab_phone') === '1') {
+        document.documentElement.classList.add('a11y-tab-phone');
+    }
 } catch (e) {}
 </script>
-<?php endif; ?>
 
 <div id="a11y-widget">
     <div id="a11y-menu" role="dialog" aria-label="Accessibility options">
@@ -449,21 +483,34 @@ try {
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 (function () {
     var STORAGE_KEY = 'papel_a11y';
-    var TAB_KEY     = 'papel_a11y_tab_hidden';
+    var TAB_KEY     = 'papel_a11y_tab_hidden';   // above a phone: set means hidden
+    var PHONE_KEY   = 'papel_a11y_tab_phone';    // on a phone: set means shown
     /* Whether the reader can get a hidden tab back from Settings; see the
        PHP at the top of this file. */
     var CAN_RESTORE  = <?= $a11yCanRestore ? 'true' : 'false' ?>;
     var SETTINGS_URL = <?= json_encode($a11ySettingsUrl, JSON_UNESCAPED_SLASHES) ?>;
 
+    /* The same query the stylesheet switches on, asked of the browser rather
+       than worked out from innerWidth. The two have to agree about which side
+       of the line the window is on, or at the boundary the switch would write
+       one width's answer while the stylesheet was reading the other's. */
+    var PHONE_Q  = '(max-width: 900px)';
+    var phoneMQ  = window.matchMedia ? window.matchMedia(PHONE_Q) : null;
+    function onPhone() { return phoneMQ ? phoneMQ.matches : window.innerWidth <= 900; }
+
     // Hidden or shown in another tab: follow it here too, on the same terms
     // as the read before the tab is drawn.
-    if (CAN_RESTORE) {
-        window.addEventListener('storage', function (e) {
-            if (e.key === TAB_KEY) {
-                document.documentElement.classList.toggle('a11y-tab-hidden', e.newValue === '1');
-            }
-        });
-    }
+    window.addEventListener('storage', function (e) {
+        if (CAN_RESTORE && e.key === TAB_KEY) {
+            document.documentElement.classList.toggle('a11y-tab-hidden', e.newValue === '1');
+        }
+        if (e.key === PHONE_KEY) {
+            document.documentElement.classList.toggle('a11y-tab-phone', e.newValue === '1');
+        }
+        if (e.key === TAB_KEY || e.key === PHONE_KEY) {
+            document.dispatchEvent(new CustomEvent('papel:a11y-tab', { detail: { hidden: null } }));
+        }
+    });
 
     /* ---- Move widget + guide to <html> so body { filter:... } never
             breaks position:fixed (CSS spec: a filtered element becomes
@@ -556,8 +603,15 @@ try {
         /* Set while the panel is open against a button rather than the tab. */
         var anchorEl = null;
 
+        /* Whether the tab is away *at the width being read*, which is the only
+           question anything asks: Settings labels its button from it, and the
+           panel decides from it whether to open at the edge or against the
+           button that called for it. Each width reads its own class, matching
+           the pair of media queries in the stylesheet above. */
         function tabHidden() {
-            return document.documentElement.classList.contains('a11y-tab-hidden');
+            var html = document.documentElement;
+            return onPhone() ? !html.classList.contains('a11y-tab-phone')
+                             :  html.classList.contains('a11y-tab-hidden');
         }
 
         /* Below the button when the whole panel fits there, otherwise on
@@ -656,13 +710,26 @@ try {
                 menu.classList.contains('visible') ? closePanel() : openPanel(anchor);
             },
             /* The tab on the edge of the page, hidden or shown: Settings has
-               the switch. Saved per browser, like everything else here. */
+               the switch. Saved per browser, like everything else here, and
+               per width: the press answers for the screen it was made on, so
+               a phone is given the tab without a desktop losing it. The two
+               keys are stored the opposite way round, each holding the answer
+               that is *not* its width's default, so a browser that has never
+               been asked carries nothing at all. */
             tabHidden: tabHidden,
             setTabHidden: function (hide) {
-                document.documentElement.classList.toggle('a11y-tab-hidden', !!hide);
+                hide = !!hide;
+                var html = document.documentElement, key, store;
+                if (onPhone()) {
+                    key = PHONE_KEY; store = !hide;
+                    html.classList.toggle('a11y-tab-phone', store);
+                } else {
+                    key = TAB_KEY;   store = hide;
+                    html.classList.toggle('a11y-tab-hidden', store);
+                }
                 try {
-                    if (hide) localStorage.setItem(TAB_KEY, '1');
-                    else      localStorage.removeItem(TAB_KEY);
+                    if (store) localStorage.setItem(key, '1');
+                    else       localStorage.removeItem(key);
                 } catch (e) {}
                 /* Placed while hidden, it was measured at no size at all; now
                    that it has one again, keep it inside the window. */
@@ -672,6 +739,14 @@ try {
                 document.dispatchEvent(new CustomEvent('papel:a11y-tab', { detail: { hidden: !!hide } }));
             }
         };
+
+        /* Said once as soon as there is something to ask. A page carrying the
+           switch (Settings) has its own script in the body, and this file comes
+           in with the footer below it, so that page paints its button before
+           papelAccessibility exists and has to fall back to reading a class,
+           which only ever answers for the wider screen. On a phone that came
+           out as "Hide bar" against a bar that was not there. */
+        document.dispatchEvent(new CustomEvent('papel:a11y-tab', { detail: { hidden: tabHidden() } }));
 
         /* Close on outside click: listener on <html> since widget is there */
         document.documentElement.addEventListener('click', function (e) {
@@ -749,8 +824,11 @@ try {
            tab someone put out of their way stays out of their way. */
         /* Below this the page is full-bleed, so there is no margin for the
            tab to sit in and every position is over something. */
-        var NARROW = 900;
-        function isNarrow() { return window.innerWidth <= NARROW; }
+        /* onPhone(), not a second reading of innerWidth: where the tab rests
+           and whether it is there at all are the same question about the same
+           line, and two ways of asking it disagree by the width of a
+           scrollbar. */
+        var isNarrow = onPhone;
 
         /* A spot chosen on a desktop means nothing on a phone. A drag that
            parked the tab halfway down a wide window leaves it sitting on top
@@ -995,8 +1073,14 @@ try {
                 closePanel();
                 if (CAN_RESTORE && window.papelAccessibility) {
                     window.papelAccessibility.setTabHidden(true);
+                } else if (onPhone()) {
+                    /* This page only: nothing stored, so the next page brings
+                       it back. On a phone the tab is only ever here because
+                       the phone's switch is on, so putting it away is taking
+                       that class off rather than adding the other one, which
+                       the stylesheet does not read at this width. */
+                    document.documentElement.classList.remove('a11y-tab-phone');
                 } else {
-                    // This page only: nothing stored, so the next page brings it back.
                     document.documentElement.classList.add('a11y-tab-hidden');
                 }
                 // Focus was on the menu, which has gone; not left on a hidden tab either.
@@ -1058,6 +1142,11 @@ try {
                 if (isNarrow() !== wasNarrow) {
                     wasNarrow = isNarrow();
                     restorePosition();
+                    /* The two widths keep separate answers about whether the
+                       tab is there, so crossing the line changes what
+                       tabHidden() says without anything having been switched.
+                       Settings is showing that answer as a button label. */
+                    document.dispatchEvent(new CustomEvent('papel:a11y-tab', { detail: { hidden: tabHidden() } }));
                     return;
                 }
                 reclamp();

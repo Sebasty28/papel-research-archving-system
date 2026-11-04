@@ -1010,6 +1010,12 @@ html[data-view="rows"] .paper-list .card-status .paper-action { display: none; }
             </div>
 
             <div class="dash-bar">
+                <?php /* The wrapper is what the chevrons are drawn on: the row itself
+                         is the scrolling box, and anything painted on a scrolling box
+                         slides away with its contents. See includes/console_shell.php
+                         for the look and includes/browse_console_js.php for the
+                         measuring. */ ?>
+                <div class="dash-tabs-glide">
                 <div class="dash-tabs">
                     <?php foreach ($rc_tabs as $key => $def): ?>
                         <a class="dash-tab <?= $tab === $key ? 'active' : '' ?>"
@@ -1017,12 +1023,33 @@ html[data-view="rows"] .paper-list .card-status .paper-action { display: none; }
                             <?= e($def['label']) ?> <span class="count"><?= (int)$counts[$key] ?></span>
                         </a>
                     <?php endforeach; ?>
+                </div>
+                </div>
+                <?php /* The three buttons are a box of their own beside .dash-tabs, not
+                         the last three children of it. On a phone the tabs are one line
+                         that scrolls sideways, and anything inside that line scrolls out
+                         of reach with it: these used to sit past the right-hand end with
+                         nothing to say they were there. Out here they stay put, and the
+                         phone puts them on a row under the tabs (includes/console_shell.php). */ ?>
+                <div class="dash-tools">
                     <a class="toolbar-btn" href="<?= e($rc_self) ?>?tab=<?= e($tab) ?>" title="Refresh (clears search and filters)">
                         <span class="material-symbols-outlined">refresh</span>
                     </a>
                     <a class="toolbar-btn" href="<?= e(BASE_URL) ?>/pages/help_center.php" title="Help">
                         <span class="material-symbols-outlined">help</span>
                     </a>
+                    <?php /* Only ever seen on a narrow screen; the stylesheet hides it the
+                             moment the sidebar is a column again and the cards are simply
+                             there. One more tool beside Quick Settings, and the drawer it
+                             opens is closed by its own X, the backdrop or Escape, since
+                             the drawer covers this button while it is open. Shared with
+                             the Public Repository: includes/browse_console.php for the
+                             look, includes/browse_console_js.php for the working. */ ?>
+                    <button type="button" class="toolbar-btn btn-tools-toggle" id="toolsToggle"
+                            aria-controls="sidebarCol" aria-expanded="false"
+                            title="Browse &amp; Filters" aria-label="Browse and Filters">
+                        <span class="material-symbols-outlined">tune</span>
+                    </button>
                     <div class="quick-settings">
                         <button class="toolbar-btn" type="button" id="quickSettingsBtn" title="Quick Settings" aria-haspopup="true" aria-expanded="false">
                             <span class="material-symbols-outlined">settings</span>

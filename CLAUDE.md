@@ -767,6 +767,55 @@ dark theme's `img { filter: brightness(.92) }` has to be switched off for it
 (`#id img { filter: none }`, the id being for specificity) or the picture comes
 out darker than its plate.
 
+### The accessibility tab is off by default on a phone
+
+`includes/accessibility.php` draws the tab down the edge of every page. Whether
+it is there is **two switches, not one**, and they are stored the opposite way
+round, each holding the answer that is *not* its width's default, so a browser
+nobody has asked carries nothing at all:
+
+| Width | Key | Set means | Class on `<html>` |
+|---|---|---|---|
+| above 900px | `papel_a11y_tab_hidden` | hidden | `a11y-tab-hidden` |
+| 900px and under | `papel_a11y_tab_phone` | **shown** | `a11y-tab-phone` |
+
+A phone is the screen the text runs edge to edge on, so a tab down the side of
+it is always over something to read. Settings > Appearance is the way to put it
+there; the tools themselves are never lost, since that page's **Open** brings
+the panel up with no tab at all.
+
+The stylesheet reads one switch per width, in two queries that cover every
+width between them: `@media not all and (max-width: 900px)` and
+`@media (max-width: 900px)`. **Not `min-width: 901px`**: a window 900.5px wide
+(fractional zoom, which this site meets from 110% up) matches neither integer
+and the tab reappears in the gap.
+
+- `tabHidden()` and `setTabHidden()` answer and write for the width being read,
+  so the switch for the width you are not at is never touched. Hiding it on a
+  desktop does not reach into the phone's answer, or the other way about.
+- `onPhone()` asks `matchMedia` the **same query string the stylesheet uses**,
+  never `innerWidth`: at the boundary the two disagree by a scrollbar, and the
+  switch would then write one width's answer while the stylesheet read the
+  other's. `isNarrow()`, which decides where the tab rests, is the same
+  function, so the two cannot drift.
+- The phone's key is read **before paint for everyone**, signed in or not. The
+  desktop key's read is gated on being signed in, because a stored *hide* with
+  no way back would strand the next visitor on that browser; a key that can
+  only ever reveal the tab strands nobody.
+- **Any page carrying the switch paints its label before the widget exists**
+  (`accessibility.php` comes in with the footer, under the page's own script),
+  so the widget raises `papel:a11y-tab` as soon as it has published
+  `window.papelAccessibility`, and again when a resize crosses 900px, since
+  that changes the answer with nothing having been pressed. Settings read a
+  class directly once and showed "Hide bar" on a phone against a bar that was
+  not there.
+
+Checked against the running site at 390, 900, 901 and 1280px, signed out and
+signed in, including that the tab is never painted and then pulled away. Force
+a real reload between steps: `Page.navigate` to a URL that differs only by its
+fragment is not a load, and a no-flash check then passes on a page that never
+reloaded.
+
 ### Styling
 
 Use the CSS custom properties — `--maroon`, `--dark-maroon`, `--soft-maroon`,

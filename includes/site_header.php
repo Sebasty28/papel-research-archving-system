@@ -272,7 +272,11 @@ $login_notif_popup_items = $show_login_notif_popup
             <?php if ($u): ?>
                 <div class="nav-account">
                     <div class="nav-account-id">
-                        <span class="nav-account-avatar" aria-hidden="true"><?= e($initial) ?></span>
+                        <?php /* No disc with an initial in it here. That is the
+                                 bar's way of standing for a name where there is
+                                 no room to print one, and the sheet prints the
+                                 name right beside it, so the two said the same
+                                 thing twice. The row is the name and the role. */ ?>
                         <span class="nav-account-who">
                             <span class="nav-account-name"><?= e($display_name) ?></span>
                             <span class="nav-account-role"><?= e(role_label($u)) ?></span>

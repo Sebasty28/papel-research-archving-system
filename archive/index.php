@@ -1298,59 +1298,13 @@ window.addEventListener('popstate', function () {
 
 }); // end DOMContentLoaded
 </script>
-<script nonce="<?= csp_nonce() ?>">
-/* The Browse & Filters drawer. Everything here is delegated or bound to
-   elements outside the <aside>, because applying a filter replaces the whole
-   inside of it and any listener attached in there would go with it. */
-(function () {
-    var root = document.documentElement;
-    var btn  = document.getElementById('toolsToggle');
-    if (!btn) { return; }
-
-    function setOpen(on) {
-        root.classList.toggle('tools-open', on);
-        btn.setAttribute('aria-expanded', on ? 'true' : 'false');
-    }
-    function isOpen() { return root.classList.contains('tools-open'); }
-
-    btn.addEventListener('click', function () { setOpen(!isOpen()); });
-
-    /* Delegated, not bound. This block runs where it stands, and both the
-       backdrop and the close button are printed *after* it, at the end of the
-       page: getElementById returned null for each of them, no listener was ever
-       attached, and the X and the backdrop did nothing at all. The toggle above
-       is earlier in the page, which is why that one worked and hid it. */
-    document.addEventListener('click', function (e) {
-        if (!isOpen() || !e.target.closest) { return; }
-        if (e.target.closest('#toolsClose, #toolsBackdrop')) { setOpen(false); }
-    });
-
-    document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape' && isOpen()) { setOpen(false); }
-    });
-
-    /* Choosing a filter refreshes the list behind the drawer, so get out of
-       the way and let the results be the thing on screen. */
-    document.addEventListener('change', function (e) {
-        if (isOpen() && e.target.closest('#sidebarCol')) { setOpen(false); }
-    });
-    document.addEventListener('click', function (e) {
-        if (isOpen() && e.target.closest('#sidebarCol a[href]')) { setOpen(false); }
-    });
-
-    /* Back on a wide screen the sidebar is a column again and the drawer means
-       nothing, but the open class would still be holding the page's scroll. */
-    window.addEventListener('resize', function () {
-        if (window.innerWidth > 900 && isOpen()) { setOpen(false); }
-    });
-
-})();
-</script>
-
-<div class="tools-backdrop" id="toolsBackdrop"></div>
-<button type="button" class="btn-tools-close" id="toolsClose" aria-label="Close Browse and Filters">
-    <span class="material-symbols-outlined">close</span>
-</button>
+<?php /* The Browse & Filters drawer, its backdrop, its close button and the
+         script that works them are shared now: includes/browse_console_js.php,
+         required just below. The dashboards and the four review desks have the
+         same <aside id="sidebarCol"> and wanted the same drawer, so the copy
+         that used to stand here moved there whole. The drawer's styling stays
+         in this page's own stylesheet above, tangled as it is with the banner
+         rules; only the behaviour is shared. */ ?>
 
 <?php require ROOT_PATH.'/includes/browse_console_js.php'; ?>
 <?php require ROOT_PATH.'/includes/site_footer.php'; ?>

@@ -1000,6 +1000,52 @@ html.nav-open .nav-burger .burger-open { display: inline-flex; }
    dimmer than they are, and no hover of its own. */
 .footer-version { color: rgba(255,255,255,.55); }
 
+/* ===== The footer on a phone =====
+   One row, as on every wider screen: the copyright at the left-hand end and the
+   links at the right. Measured on the repository page, the line wants 486.3px
+   (the copyright 186.8, the two links and the build number 287.5, and 12
+   between the two groups) and a 390px phone has 358 once the gutters are off.
+   So it wrapped, and the links fell to a second line at the *left*, which reads
+   as a list of things to do rather than as the end of the page.
+
+   Nothing is shrunk to fit: 486.3 into 358 is about 8px type, which is smaller
+   than anything else on the site and below what a phone should ask anyone to
+   read. Two pieces go instead, and both are the part nobody is reading:
+
+   - the campus, which the header's own mark and every page already say;
+   - the word "Version", which the number beside it looks like anyway;
+   - and "(staging", with its closing bracket, leaving the number and the
+     commit: "0.13.0 - bb41a6c". Which copy of the site this is already shows
+     on the chip beside the logo, while the commit shows nowhere else, and a
+     fault reported from a phone needs it.
+
+   That last one is not tidiness. The line is longest on staging, where the
+   label is "Version 0.13.0 (staging - bb41a6c)" and not the "(local)" a dev
+   box shows, and with only the first two dropped it ran 33.5px past a 360px
+   screen and 7.5px past a 390px one. Past, not wrapped: the row is nowrap
+   here, so it took the whole page into a sideways scroll. Measure this at 360
+   with the staging label, never on a dev box with "(local)", which is 60px
+   shorter and hides it completely.
+
+   520px, not the site's usual 600: the line stops fitting at about 518px of
+   viewport (486.3 plus the 32 of gutter), and above that there is nothing to
+   gain by abbreviating. */
+@media (max-width: 520px) {
+    .footer-inner { flex-wrap: nowrap; gap: .5rem; }
+    .footer-campus,
+    .footer-version-word,
+    .footer-version-env { display: none; }
+    /* 1.25rem three times over is 60px of a row that has 358. */
+    .footer-links { gap: .75rem; flex-wrap: nowrap; }
+    /* Neither end may be squeezed into a second line of its own: with the row
+       set to nowrap a flex item still shrinks, and the first thing it does is
+       break "Terms & Conditions" across two lines inside its own box, which
+       puts the footer back to two rows by another route. */
+    .footer-copy,
+    .footer-links a,
+    .footer-version { flex: 0 0 auto; white-space: nowrap; }
+}
+
 /* ===== Login modal / slide-in panel =====
    This used to be called .modal-backdrop: the same class Bootstrap generates
    for its own dialogs. Every Bootstrap modal in PAPEL therefore picked up this
@@ -1120,13 +1166,17 @@ html.nav-open .nav-burger .burger-open { display: inline-flex; }
 .role-card:not(.active):hover { opacity: .85; }
 /* Inside the tile (see site_header.php), so it is placed against the thing it
    marks rather than against the card, which is wider than the tile below
-   600px. 8px in from each edge clears the tile's own 8px corner: a dot of
-   radius 5.5 centred at 13.5 is 15.8px from the nearest point of that curve,
-   where 7px put its edge on it. */
+   600px. 8px in from each edge clears the tile's own 8px corner.
+
+   8px across, not the 11 it began at. It is a tick saying which tile is
+   chosen, and on a phone the tile is 64px holding a 28px glyph, where 13px of
+   dot and border read as a second thing sitting on the tile rather than as a
+   mark on the first. The inset stays at 8: a smaller dot only moves further
+   from the corner it was already clear of. */
 .role-dot {
     position: absolute;
     top: 8px; left: 8px;
-    width: 11px; height: 11px;
+    width: 8px; height: 8px;
     border-radius: 50%;
     background: var(--pup-maroon);
     border: 1px solid var(--maroon);
@@ -1367,25 +1417,15 @@ select.lf-input {
         text-transform: uppercase;
         color: var(--grey);
     }
+    /* The name and the role, and no avatar disc: the disc stands for a name
+       where there is no room to print one, which is the bar, and here the name
+       is printed. No gap either, there being one child left to space. */
     .nav-account-id {
         display: flex;
         align-items: center;
-        gap: .625rem;
         /* The rows below are .main-nav a's 1.25rem, so the name lines up with
            Settings and Logout under it. */
         padding: .5rem 1.25rem .375rem;
-    }
-    .nav-account-avatar {
-        width: 34px; height: 34px;
-        flex-shrink: 0;
-        border-radius: 50%;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        background: var(--maroon-surface);
-        color: #fff;
-        font-weight: 700;
-        font-size: .9375rem;
     }
     .nav-account-who { display: flex; flex-direction: column; min-width: 0; }
     .nav-account-name {
@@ -1519,6 +1559,27 @@ select.lf-input {
     .nav-more-dropdown a { padding: .8rem 1.25rem; }
 
     .login-panel { width: 100%; }
+
+    /* ---- The panel's top bar on a phone ----
+       The expand button goes, and the mark takes its place at the left-hand
+       end. Expanding is "make the panel the width of the window", and the rule
+       above has already done that: at this width .expanded sets width:100% on
+       something that is 100% and left:0 on something already at 0, so the
+       control's whole effect was to swap its own icon. A button that answers a
+       press by changing nothing but itself is worse than no button.
+
+       (Between about 480 and 900px one thing did still happen: .expanded caps
+       the body at 480px and centres it. That is a small change to make a
+       control for, and it is gone with the button; the body simply keeps the
+       panel's own width, as it does on a narrower screen.)
+
+       The mark is not a replacement for it. It is the same mark the navbar
+       carries, which this panel covers at this width, so without it the panel
+       is a page with no sign of whose site it belongs to. It was already in
+       the markup and already written to sit at the left (margin-right: auto),
+       shown only while expanded; it is simply shown always here. */
+    #expandBtn { display: none; }
+    .panel-topbar-brand { display: flex; align-items: center; gap: .5rem; }
 }
 @media (max-width: 600px) {
     .wrap, .wrap-wide { padding: 0 1rem; }

@@ -607,6 +607,92 @@ html[data-view="rows"] .paper-list .paper-item .paper-program { display: inline;
     border-radius: var(--r-card, 8px);
     padding: .625rem;
 }
+
+/* ---- The drawer that column becomes on a narrow screen ----
+   In one column the sidebar's cards land underneath every result: a long
+   scroll from the search box they belong to, which is where the eye is. On a
+   narrow screen they become a drawer instead, opened by the tune button in the
+   toolbar and closed by its own X, the backdrop or Escape.
+
+   The <aside> is not moved in the DOM to do this. An AJAX filter replaces its
+   innerHTML in place, so the element has to stay exactly where the script goes
+   looking for it; only its painting changes.
+
+   Here rather than on one page, because the repository, the student dashboard
+   and the four review desks all carry <aside id="sidebarCol"> and all wanted
+   the same drawer. The behaviour is shared too, in browse_console_js.php.
+   archive/index.php still states these rules in its own stylesheet, where they
+   sit among the banner rules; they are the same declarations and that page is
+   later in the document, so it keeps deciding for itself and nothing about the
+   repository changes. */
+.btn-tools-toggle,
+.tools-backdrop,
+.btn-tools-close { display: none; }
+
+@media (max-width: 900px) {
+    /* Everything else about it comes from .toolbar-btn, which it is; all this
+       width decides is whether there is a drawer to open at all. */
+    .btn-tools-toggle { display: inline-flex; }
+    /* Marked while its drawer is open, the way a pressed tool button would be.
+       The drawer covers this button at a phone's width, so this is seen on the
+       way out rather than the way in, and on a tablet both are on screen. */
+    html.tools-open .btn-tools-toggle { background: var(--cream); color: var(--dark-maroon); }
+
+    .sidebar-right {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: min(88vw, 360px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        margin: 0;
+        padding: 3rem 1rem 2rem;
+        background: var(--cream);
+        box-shadow: -4px 0 24px rgba(51, 0, 0, .18);
+        transform: translateX(100%);
+        transition: transform .3s cubic-bezier(.4, 0, .2, 1);
+        /* Under the login slide-in (1200) on purpose: signing in should still
+           come out on top of a drawer left open behind it. */
+        z-index: 1090;
+    }
+    html.tools-open .sidebar-right { transform: translateX(0); }
+
+    .tools-backdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: rgba(51, 0, 0, .40);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .3s;
+        z-index: 1085;
+    }
+    html.tools-open .tools-backdrop { opacity: 1; pointer-events: auto; }
+
+    /* Outside the <aside>, because everything inside it is replaced whenever a
+       filter is applied and a close button in there would be swept away. */
+    html.tools-open .btn-tools-close {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        position: fixed;
+        top: .5rem;
+        right: .5rem;
+        width: 38px;
+        height: 38px;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        color: var(--maroon);
+        cursor: pointer;
+        z-index: 1095;
+    }
+    html.tools-open { overflow: hidden; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .sidebar-right, .tools-backdrop { transition: none; }
+}
 /* No border. A white card on the tinted panel is already separated from it,
    so the outline was a second frame around the same edge - which is most of
    what made this column read as bulky. A hairline shadow does the lifting. */

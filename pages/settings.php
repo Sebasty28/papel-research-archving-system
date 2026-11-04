@@ -483,7 +483,12 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
             <div class="option-row">
                 <div class="option-text">
                     <strong>Accessibility tools</strong>
-                    <span>Text size, contrast, dyslexia-friendly font, and reading guide. Hide the bar at the side of the screen and they stay here, under Open.</span>
+                    <?php /* The bar's default is not the same on every screen,
+                             so the line says which way round it is here: the
+                             button beside it is labelled by what it will do,
+                             and on a phone that is "Show bar" on a first
+                             visit. */ ?>
+                    <span>Text size, contrast, dyslexia-friendly font, and reading guide. They are always here, under Open. The bar at the side of the screen is a shortcut to them: off on a phone, where the reading runs edge to edge, and on elsewhere until you hide it.</span>
                 </div>
                 <div class="option-actions">
                     <?php /* Labelled by what it will do; the script sets it to
@@ -679,8 +684,21 @@ document.addEventListener('DOMContentLoaded', function () {
        before the bar is drawn; this button only flips it and says which way
        the next press goes. */
     var a11yTabBtn = document.getElementById('a11yTabBtn');
+    /* The widget's own answer, because the two widths keep separate switches:
+       a phone has no bar until it is asked for, a wider screen has one until
+       it is hidden. The widget is pulled in with the footer, below this
+       script, so the first paint here happens before it exists and reads the
+       classes itself on the same terms; it says so on arrival
+       (papel:a11y-tab, listened for below) and the label is painted again from
+       the real answer. */
     function a11yTabHidden() {
-        return document.documentElement.classList.contains('a11y-tab-hidden');
+        if (window.papelAccessibility && window.papelAccessibility.tabHidden) {
+            return window.papelAccessibility.tabHidden();
+        }
+        var html = document.documentElement;
+        return window.matchMedia('(max-width: 900px)').matches
+            ? !html.classList.contains('a11y-tab-phone')
+            :  html.classList.contains('a11y-tab-hidden');
     }
     function paintA11yTabBtn() {
         a11yTabBtn.textContent = a11yTabHidden() ? 'Show bar' : 'Hide bar';
@@ -702,7 +720,8 @@ document.addEventListener('DOMContentLoaded', function () {
         });
         // Switched in another tab: the widget follows, and so does the label.
         window.addEventListener('storage', function (e) {
-            if (e.key === 'papel_a11y_tab_hidden') paintA11yTabBtn();
+            if (e.key === 'papel_a11y_tab_hidden' ||
+                e.key === 'papel_a11y_tab_phone') paintA11yTabBtn();
         });
         /* Or on this page, from the tab's own right-click menu: the storage
            event above only ever fires in the other tabs. */
