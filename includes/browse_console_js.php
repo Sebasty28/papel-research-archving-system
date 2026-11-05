@@ -21,7 +21,96 @@
         var btn = document.getElementById('quickSettingsBtn');
         if (dd) dd.classList.remove('open');
         if (btn) btn.setAttribute('aria-expanded', 'false');
+        if (dd) { unfit(dd); }
     }
+
+    /* ===== Keeping an open panel inside the window =====
+
+       A panel hangs off the control that opens it, and where that control
+       sits is a thing the layout decides, not the panel. Quick Settings is
+       the case that showed it: the gear is at the left of the toolbar on a
+       wide screen, so the panel opens rightwards (includes/console_shell.php),
+       and under 600px the stylesheet sends the tools to the right-hand end of
+       their row, where opening rightwards walks off the screen. Measured at
+       390px: 220px of panel starting at x=326, so 156px of it past the right
+       edge, 77px past the bottom, and the page itself able to scroll sideways
+       while it was open, which is how a cut-off panel announces itself.
+
+       A breakpoint of its own would have fixed that one width and waited to
+       be wrong at the next. This measures instead, in the order the three
+       things depend on each other: a panel wider than the window can never be
+       placed, so it is taken in first; then it is slid along until both sides
+       are inside; then, with its final width and place known, its height is
+       capped and it scrolls inside itself rather than running past the foot of
+       the screen.
+
+       Written on the panel's own style and nowhere else: an inline left and a
+       max-height on one small element, not a custom property on :root, which
+       is a restyle of the whole page (see CLAUDE.md). The CSS says where the
+       panel belongs and keeps a max-width of its own, so a browser that never
+       runs this still cannot draw one wider than the screen; this is the part
+       that puts it somewhere it fits. */
+    var FIT_GAP = 8;          /* the breathing room left at the window's edge */
+    var FIT_MIN_H = 140;      /* no point capping a panel below this */
+
+    function unfit(panel) {
+        var S = panel.style;
+        S.maxWidth = ''; S.maxHeight = ''; S.left = ''; S.right = ''; S.overflowY = '';
+    }
+
+    function fitPanel(panel) {
+        if (!panel || !panel.getClientRects().length) { return; }
+        var S = panel.style;
+        /* Cleared first, so what is measured is the box the stylesheet asks
+           for and not the one a narrower window was given a moment ago. */
+        unfit(panel);
+
+        var vw = document.documentElement.clientWidth;
+        var vh = document.documentElement.clientHeight;
+        var r = panel.getBoundingClientRect();
+
+        if (r.width > vw - FIT_GAP * 2) {
+            S.maxWidth = (vw - FIT_GAP * 2) + 'px';
+            r = panel.getBoundingClientRect();
+        }
+
+        var want = r.left;
+        if (want + r.width > vw - FIT_GAP) { want = vw - FIT_GAP - r.width; }
+        if (want < FIT_GAP) { want = FIT_GAP; }
+        if (Math.abs(want - r.left) > 0.5) {
+            /* `left` is measured from the containing block's padding box,
+               which is the offset parent's rect plus its border. */
+            var host = panel.offsetParent;
+            var edge = host ? host.getBoundingClientRect().left + host.clientLeft : 0;
+            S.right = 'auto';
+            S.left = Math.round(want - edge) + 'px';
+            r = panel.getBoundingClientRect();
+        }
+
+        if (r.bottom > vh - FIT_GAP) {
+            var room = Math.max(FIT_MIN_H, vh - FIT_GAP - r.top);
+            S.maxHeight = Math.round(room) + 'px';
+            /* The stylesheet's own overflow is hidden, so this makes the panel
+               scroll down and still clip sideways: `hidden` and `auto` is a
+               legal pair, and only a `visible` would have been turned into a
+               second scrollbar. */
+            S.overflowY = 'auto';
+        }
+    }
+
+    /* For anything else that opens a panel. */
+    window.papelFitPanel = fitPanel;
+
+    /* While one is open the window can still change under it: a phone turned
+       on its side, a desktop window dragged narrower, or the page scrolled,
+       which moves an absolutely placed panel up the screen and changes how
+       much room is left below it. */
+    function refitOpen() {
+        var dd = document.getElementById('quickSettingsDropdown');
+        if (dd && dd.classList.contains('open')) { fitPanel(dd); }
+    }
+    window.addEventListener('resize', refitOpen);
+    window.addEventListener('scroll', refitOpen, { passive: true });
 
     /* The palettes, in the order they are offered: Old Classic, and Old Night,
        its dark twin. The swatch is the colour people recognise the palette by.
@@ -389,6 +478,10 @@
             if (dd) {
                 var open = dd.classList.toggle('open');
                 btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                /* Placed the moment it is shown and before the frame is
+                   painted, so it is never drawn hanging off the screen and
+                   then pulled back. */
+                if (open) { fitPanel(dd); } else { unfit(dd); }
             }
             return;
         }
@@ -1078,6 +1171,11 @@ if (!defined('PAPEL_TABS_GLIDE_DONE')):
        row that slides at all says so. */
     var EDGE = 2;
 
+    /* How long after a row is drawn it may still put itself right. Long
+       enough for a face fetched over the network, short enough that it is
+       over before anyone has read the page and started using it. */
+    var SETTLE = 4000;
+
     /* Every row set up so far, with the function that measures it. Rows are
        thrown away and replaced (see the MutationObserver at the end), so the
        window's listeners walk this list rather than each row adding its own:
@@ -1085,13 +1183,43 @@ if (!defined('PAPEL_TABS_GLIDE_DONE')):
        listener behind each time, measuring a row that is no longer there. */
     var rows = [];
 
+    /* Where each row was left, by its place in the page.
+
+       A tab, a filter, a search and a page of results all swap the whole of
+       #mainCol by innerHTML, and the tab row is inside it, so the row on
+       screen after a click is not the row that was clicked: it is fresh
+       markup, and a fresh scrolling box starts at its left-hand end. On a
+       phone, where the line does not fit, that put the line back at All and
+       Approved every time a student pressed a tab further along it: the tab
+       opened correctly, but the row under their finger jumped, which reads
+       as the page having reloaded.
+
+       Kept here, by index, because the element it belongs to is gone by the
+       time its replacement arrives; an array keyed on the row's position
+       survives that, and a page drawing more than one row keeps them apart.
+       The order of .dash-tabs-glide in the document is what that position
+       is, and these pages redraw a row in the same place every time. */
+    var left = [];
+
+    function placeOf(wrap) {
+        return Array.prototype.indexOf.call(
+            document.querySelectorAll('.dash-tabs-glide'), wrap);
+    }
+
     function setUp(wrap) {
         var box = wrap.querySelector('.dash-tabs');
         if (!box) { return; }
+        var slot = placeOf(wrap);
+        /* Nothing kept for this row's place means this is a full page load
+           and not a column swapped in: there is no position to go back to,
+           and the row has to find the tab being read for itself. */
+        var fresh = left[slot] == null;
         /* Marked as done on the element itself, so the observer below never
            sets a row up twice: appending the layers is itself a change it
            hears. */
         wrap.setAttribute('data-glide', '1');
+        var wrote = null, touched = false;
+        var born = Date.now(), sized = -1;
 
         /* The blur layers at each end (.glide-fade, includes/console_shell.php),
            three to a side, weakest first. Made here rather than written into
@@ -1116,7 +1244,83 @@ if (!defined('PAPEL_TABS_GLIDE_DONE')):
             wrap.classList.toggle('can-right', box.scrollLeft < max - EDGE);
         }
 
-        box.addEventListener('scroll', mark, { passive: true });
+        /* Put the line back where its predecessor was left; failing that,
+           find the tab being read.
+
+           The second is for a full load of ?tab=archived, where the row
+           would otherwise open at its left-hand end with the tab the student
+           asked for out of sight past the right. It is deliberately **not**
+           applied on top of a restored position, which was the first build:
+           a search, a filter and a page of results swap the column without
+           changing the tab, so hunting the active tab there dragged the row
+           back to the left-hand end, which is the very jump this is here to
+           stop, moved to another button. Where a position is restored the tab that
+           was pressed is on screen already, it being the one the student's
+           finger was on; and Drafts and Archived, the two tabs that come and
+           go, are at the end of the row, so losing one shortens the line
+           without moving anything before it.
+
+           The tab's place is worked out from the rectangles and the scroll
+           as they stand, not from offsetLeft, which is measured against
+           .dash-tabs-glide rather than the scrolling box.
+
+           Written straight to scrollLeft, never scrollIntoView and never
+           `behavior: 'smooth'`: the observer below calls this as a microtask
+           after the swap and before the next paint, so the row is drawn once,
+           already in place. A row that slides into position afterwards is the
+           movement being got rid of; and scrollIntoView scrolls every box
+           round its target, the window included. */
+        function place() {
+            var max = box.scrollWidth - box.clientWidth;
+            var want = left[slot] == null ? box.scrollLeft : left[slot];
+            if (want > max) { want = max; }
+            if (want < 0) { want = 0; }
+            var on = fresh ? box.querySelector('.dash-tab.active') : null;
+            if (on) {
+                /* Clear of the ends by a little, so the tab being read is not
+                   left sitting under the blur the chevrons are drawn in. */
+                var pad = 12;
+                var edge = box.getBoundingClientRect().left;
+                var here = on.getBoundingClientRect();
+                var from = box.scrollLeft + here.left - edge - pad;
+                var to = box.scrollLeft + here.right - edge + pad;
+                /* The far edge first and the near one second, so a tab wider
+                   than the row shows its name rather than its count. */
+                if (want < to - box.clientWidth) { want = to - box.clientWidth; }
+                if (want > from) { want = from; }
+                if (want > max) { want = max; }
+                if (want < 0) { want = 0; }
+            }
+            if (want !== box.scrollLeft) { wrote = want; box.scrollLeft = want; }
+            left[slot] = box.scrollLeft;
+        }
+
+        /* Place it again, the measurements having changed under it. The tabs
+           are first laid out in the fallback face, which is narrower, so a
+           row placed at parse time is placed against widths that are about
+           to change: a first load of the last tab put the line 17px short of
+           where that tab needed it and left its count cut off at the edge.
+
+           Not while the reader has hold of the row, and not after the first
+           few seconds: by then nothing is still arriving, and anything that
+           calls this is a window being resized rather than the page coming
+           up. */
+        function settle() {
+            if (!touched && Date.now() - born < SETTLE) { place(); }
+            mark();
+        }
+
+        /* A scroll the reader made, as against one place() wrote: only the
+           first means hands off from here on. Told apart by the figure and
+           not by a flag, because two writes in one frame raise a single
+           scroll event between them and a flag would still be standing
+           afterwards, ready to swallow the reader's first real scroll. */
+        box.addEventListener('scroll', function () {
+            if (wrote !== null && box.scrollLeft === wrote) { wrote = null; }
+            else { touched = true; }
+            left[slot] = box.scrollLeft;
+            mark();
+        }, { passive: true });
 
         /* Every tab is watched, and not only the row. The row's box keeps its
            size when what is in it grows, and a ResizeObserver on the box hears
@@ -1127,13 +1331,36 @@ if (!defined('PAPEL_TABS_GLIDE_DONE')):
            in the real face. Lengthening one tab's count by script shows it:
            26px over and no chevron, with only the box watched. */
         if (window.ResizeObserver) {
-            var watch = new ResizeObserver(mark);
+            var watch = new ResizeObserver(function () {
+                /* The tabs changing width, and not the window changing size.
+                   scrollWidth is how much there is to slide past and does not
+                   move when the viewport does, so this tells the font from an
+                   address bar sliding away, and that matters both ways round:
+                   the font is the one thing that can make a placement made at
+                   parse time wrong, and a row that jumped back to the tab
+                   being read every time the student scrolled the page would
+                   be a worse fault than the one this fixes.
+
+                   Measured against what the row was when it was placed, and
+                   not by counting the first callback out: a callback is
+                   delivered at the next frame, which on a cold load can be
+                   after the face has already landed, and a row that spent its
+                   only chance that way sat at its left-hand end until
+                   document.fonts caught up two frames later. */
+                var now = box.scrollWidth;
+                if (now !== sized) { sized = now; settle(); return; }
+                mark();
+            });
             watch.observe(box);
             Array.prototype.forEach.call(box.children, function (tab) { watch.observe(tab); });
         }
 
-        rows.push({ wrap: wrap, mark: mark });
+        rows.push({ wrap: wrap, mark: mark, settle: settle });
+        /* Placed before it is measured: the chevrons say which way the line
+           can still go, and that depends on where it is standing. */
+        place();
         mark();
+        sized = box.scrollWidth;
     }
 
     function scan() {
@@ -1148,6 +1375,14 @@ if (!defined('PAPEL_TABS_GLIDE_DONE')):
         rows.forEach(function (r) { r.mark(); });
     }
 
+    /* markAll's companion for the font: it measures the row again and, where
+       the reader has not touched it, puts it where the new measurements say
+       it belongs. */
+    function settleAll() {
+        rows = rows.filter(function (r) { return r.wrap.isConnected; });
+        rows.forEach(function (r) { r.settle(); });
+    }
+
     scan();
 
     window.addEventListener('resize', markAll);
@@ -1156,13 +1391,13 @@ if (!defined('PAPEL_TABS_GLIDE_DONE')):
        fetched once some text is laid out in it, so ready can be long gone by
        the time the real face lands. loadingdone hears every one that does. */
     if (document.fonts) {
-        if (document.fonts.ready) { document.fonts.ready.then(markAll); }
-        if (document.fonts.addEventListener) { document.fonts.addEventListener('loadingdone', markAll); }
+        if (document.fonts.ready) { document.fonts.ready.then(settleAll); }
+        if (document.fonts.addEventListener) { document.fonts.addEventListener('loadingdone', settleAll); }
     }
     /* And once everything is in, and again when a page comes back from the
        back-forward cache, which runs no script but may come back at a
        different width. */
-    window.addEventListener('load', markAll);
+    window.addEventListener('load', settleAll);
     window.addEventListener('pageshow', markAll);
 
     /* **A tab click is not a page load.** On the student dashboard and every

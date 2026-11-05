@@ -370,6 +370,14 @@ html[data-view="rows"] .paper-list .paper-item .paper-program { display: inline;
     border-radius: var(--r-control, 4px);
     box-shadow: var(--shadow-md);
     width: 220px;
+    /* Never wider than the screen it is drawn on, whatever happens to the
+       script that places it: 220px is the width this panel wants, and on a
+       320px phone with the gear near one edge that is most of the window. The
+       script in includes/browse_console_js.php is what slides it along until
+       both sides are inside and caps its height; this is the floor under that,
+       so a browser that runs none of it still cannot draw a panel wider than
+       the window. */
+    max-width: calc(100vw - 1rem);
     z-index: 1000;
     display: none;
     overflow: hidden;

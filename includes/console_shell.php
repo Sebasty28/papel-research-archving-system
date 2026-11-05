@@ -302,6 +302,15 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
 /* Quick Settings now sits on the left of the bar, so the panel opens to the
    right instead of hanging off the left edge. */
 .dash-tools .quick-settings-dropdown { left: 0; right: auto; }
+/* Except where the bar has wrapped and the tools have gone to the right-hand
+   end of their own row (below), which puts the gear against the edge of the
+   screen and a panel opening rightwards straight off it. The script measures
+   and places it anyway; this is so the first paint is already on the right
+   side, and so a browser running no script is too. The width is the same one
+   the rule above is written for. */
+@media (max-width: 600px) {
+    .dash-tools .quick-settings-dropdown { left: auto; right: 0; }
+}
 .dash-shell .card-tool:hover { background: var(--cream); }
 .dash-tab .count { font-size: .6875rem; color: var(--grey); }
 /* ===== Paper cards =====
@@ -477,13 +486,56 @@ html[data-view="rows"] .paper-list .paper-card > .card-actions,
 /* The fold chevron folds what a row has already folded. */
 html[data-view="rows"] .paper-list .paper-card-toggle { display: none; }
 /* Below this the three columns have nowhere to go, so a row is a card
-   again rather than a line squeezed to nothing. */
+   again rather than a line squeezed to nothing.
+
+   **Everything the row did to stay on one line has to be undone with it**,
+   and this block undid three things out of eight. What was left behind, on a
+   390px phone: the status still had its nowrap and, worse, still had the
+   `grid-column: 4` it was given for the row's five-column grid, which in the
+   head's own two-column grid makes a fourth column out of nothing and pushed
+   it 164px past the right-hand edge of the list, where it showed as "St" and
+   then nothing; the authors still had their ellipsis; and the meta still had
+   the mask that fades out its last 1.75rem, so the date line ended at
+   "Unpublished Pape". The public repository's rows (includes/browse_console.php)
+   met this exactly and are the list this was written against.
+
+   There is no line to protect at this width, so the text wraps like any
+   other text, and the cells go back to being the card's own two. */
 @media (max-width: 820px) {
     html[data-view="rows"] .paper-list .paper-card { display: block; padding: .875rem 1rem; }
     html[data-view="rows"] .paper-list .card-head { display: grid; }
     html[data-view="rows"] .paper-list .card-head > :not(.card-status) { display: block; }
-    html[data-view="rows"] .paper-list .paper-card .paper-title { white-space: normal; }
-    html[data-view="rows"] .paper-list .paper-card .paper-meta { max-width: none; }
+
+    /* A column written for a grid this is no longer in. The head is the
+       card's own `minmax(0,1fr) auto` again, so anything still asking for
+       column 3, 4 or 5 invents the columns to sit in. */
+    html[data-view="rows"] .paper-list .paper-card .paper-title,
+    html[data-view="rows"] .paper-list .paper-card .paper-authors,
+    html[data-view="rows"] .paper-list .paper-card .paper-meta,
+    html[data-view="rows"] .paper-list .card-status,
+    html[data-view="rows"] .paper-list .paper-card-body { grid-column: auto; }
+
+    html[data-view="rows"] .paper-list .paper-card .paper-title,
+    html[data-view="rows"] .paper-list .paper-card .paper-authors {
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+    }
+    html[data-view="rows"] .paper-list .paper-card .paper-meta {
+        max-width: none;
+        flex-wrap: wrap;
+        white-space: normal;
+        overflow: visible;
+        -webkit-mask-image: none;
+                mask-image: none;
+    }
+    /* Back in the head's second column, where the card puts it: right-aligned,
+       wrapping, and keeping the gutter the fold chevron sits in. */
+    html[data-view="rows"] .paper-list .card-status {
+        white-space: normal;
+        text-align: right;
+        padding-right: 1.625rem;
+    }
 }
 /* ===== Progress tracker ===== */
 .card-track { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 1.5rem; align-items: center; margin-top: 1rem; }

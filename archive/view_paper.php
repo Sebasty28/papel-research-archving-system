@@ -440,9 +440,15 @@ $PAGE_SKELETON = 'reader';
                     <?= $isArchived ? 'Archived' : 'Published' ?>
                 </span>
                 <br>
-                <button type="button" class="pd-rail-toggle" id="pdRailToggle"
-                        title="Hide the contents and citation panel" aria-label="Hide the contents and citation panel" aria-pressed="false">
-                    <span class="material-symbols-outlined" id="pdRailToggleIcon">right_panel_close</span>
+                <?php /* The way back to a rail that has been put away, and
+                         nothing else: the control that puts it away is inside
+                         the rail, on the contents' heading, where it is next to
+                         what it acts on. Shipped hidden because a record always
+                         opens with its rail showing (includes/paper_record_css.php
+                         draws and swaps the pair). */ ?>
+                <button type="button" class="pd-rail-toggle" id="pdRailToggle" hidden
+                        title="Open Table of Contents" aria-pressed="false">
+                    <span class="pd-rail-toggle-text">Open Table of Contents</span>
                 </button>
                 <?php if ($canArchive): ?>
                     <?php /* Under the panel toggle, because this is the other thing
@@ -467,7 +473,95 @@ $PAGE_SKELETON = 'reader';
             </div>
         </div>
 
+        <?php
+        /* What the record holds, worked out before either column is drawn,
+           because both of them read it: the cards below, and the table of
+           contents beside them, which is now written out first.
+
+           The paper as its authors wrote it, stored as sanitised HTML per
+           section; papers filed before the section editors existed have only
+           the plain abstract, which stands in for the whole. The six standard
+           sections come first and any the author added for themselves after,
+           and $sectionLabels holds every name the paper can have, in order. */
+        $keywords = array_values(array_filter(array_map('trim', explode(',', (string)($paper['keywords'] ?? '')))));
+        $shown = paper_sections_for_display($paper['imrad_content'] ?? null, $paper['abstract'] ?? '');
+        $sectionLabels = $shown['labels'];
+        $sections = $shown['sections'];
+        ?>
+
         <div class="pd-layout" id="pdLayout">
+
+        <?php /* The rail is written before the record, not after it.
+
+                 Beside the record it is a column either way, and which column
+                 it lands in is set by `order` in includes/paper_record_css.php.
+                 Stacked, which is every screen of 1050px or less, the source
+                 order is what you get, and a table of contents printed after
+                 the paper it indexes is 11,000px down a phone: past the whole
+                 manuscript, which is the one place nobody looking for it will
+                 scroll. Here it is the first thing under the title, and the
+                 heading a screen reader meets before the record rather than
+                 after it. */ ?>
+        <aside class="pd-side">
+
+            <?php
+            /* One entry per card actually on the page, plus one per written
+               section inside "The Paper": a paper filed before every section
+               had an editor might only have an abstract, so this walks the
+               same $sections the card itself rendered rather than assuming
+               all six exist. */
+            $toc = [
+                ['id' => 'pd-sec-info',       'label' => 'Basic Information', 'children' => []],
+                ['id' => 'pd-sec-manuscript', 'label' => 'Manuscript',        'children' => []],
+            ];
+            if ($keywords) {
+                $toc[] = ['id' => 'pd-sec-keywords', 'label' => 'Keywords', 'children' => []];
+            }
+            if ($sections) {
+                $children = [];
+                foreach ($sectionLabels as $key => $label) {
+                    if (empty($sections[$key])) continue;
+                    $children[] = ['id' => 'pd-sub-' . $key, 'label' => $label];
+                }
+                $toc[] = ['id' => 'pd-sec-paper', 'label' => 'The Paper', 'children' => $children];
+            }
+            if (!empty($paper['ai_summary'])) {
+                $toc[] = ['id' => 'pd-sec-glance', 'label' => 'At a Glance', 'children' => []];
+            }
+            ?>
+            <div class="pd-card pd-toc">
+                <h2><span class="material-symbols-outlined">toc</span><span class="pd-card-title"> Table of Contents</span></h2>
+                <nav class="pd-toc-nav" aria-label="Sections on this page">
+                    <ul class="pd-toc-list">
+                        <?php foreach ($toc as $item): ?>
+                            <li>
+                                <a href="#<?= e($item['id']) ?>" class="pd-toc-link" data-toc-target="<?= e($item['id']) ?>"><?= e($item['label']) ?></a>
+                                <?php if ($item['children']): ?>
+                                    <ul class="pd-toc-sublist">
+                                        <?php foreach ($item['children'] as $child): ?>
+                                            <li><a href="#<?= e($child['id']) ?>" class="pd-toc-link pd-toc-sublink" data-toc-target="<?= e($child['id']) ?>"><?= e($child['label']) ?></a></li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                <?php endif; ?>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                </nav>
+            </div>
+
+            <?php $citation = paper_apa_citation($paper, rtrim(BASE_URL, '/') . '/archive/view_paper.php?id=' . $id); ?>
+            <div class="pd-card pd-cite" data-collapse-default="closed">
+                <h2><span class="material-symbols-outlined">format_quote</span><span class="pd-card-title"> Cite This Paper</span></h2>
+                <p class="pd-cite-label">APA (7th Edition)</p>
+                <blockquote class="pd-cite-text" id="pdCiteText"><?= e($citation) ?></blockquote>
+                <button type="button" class="pd-cite-copy" id="pdCiteCopy" data-copy-text="<?= e($citation) ?>">
+                    <span class="material-symbols-outlined" id="pdCiteCopyIcon">content_copy</span>
+                    <span id="pdCiteCopyLabel">Copy citation</span>
+                </button>
+            </div>
+
+        </aside>
+
         <div class="pd-main">
 
         <div class="pd-card" id="pd-sec-info">
@@ -632,7 +726,6 @@ $PAGE_SKELETON = 'reader';
             <?php endif; ?>
         </div>
 
-        <?php $keywords = array_values(array_filter(array_map('trim', explode(',', (string)($paper['keywords'] ?? ''))))); ?>
         <?php if ($keywords): ?>
         <div class="pd-card" id="pd-sec-keywords">
             <h2><span class="material-symbols-outlined">sell</span> Keywords</h2>
@@ -642,16 +735,6 @@ $PAGE_SKELETON = 'reader';
         </div>
         <?php endif; ?>
 
-        <?php
-        /* The paper as its authors wrote it. Stored as sanitised HTML per
-           section; papers filed before the section editors existed have only
-           the plain abstract, which stands in for the whole. */
-        /* The six standard sections, then any the author added for themselves.
-           $sectionLabels holds every name the paper can have, in order. */
-        $shown = paper_sections_for_display($paper['imrad_content'] ?? null, $paper['abstract'] ?? '');
-        $sectionLabels = $shown['labels'];
-        $sections = $shown['sections'];
-        ?>
         <?php if ($sections): ?>
         <div class="pd-card" id="pd-sec-paper">
             <h2><span class="material-symbols-outlined">article</span> The Paper</h2>
@@ -730,65 +813,6 @@ $PAGE_SKELETON = 'reader';
 
         </div><!-- /.pd-main -->
 
-        <aside class="pd-side">
-
-            <?php
-            /* One entry per card actually on the page, plus one per written
-               section inside "The Paper": a paper filed before every section
-               had an editor might only have an abstract, so this walks the
-               same $sections the card itself rendered rather than assuming
-               all six exist. */
-            $toc = [
-                ['id' => 'pd-sec-info',       'label' => 'Basic Information', 'children' => []],
-                ['id' => 'pd-sec-manuscript', 'label' => 'Manuscript',        'children' => []],
-            ];
-            if ($keywords) {
-                $toc[] = ['id' => 'pd-sec-keywords', 'label' => 'Keywords', 'children' => []];
-            }
-            if ($sections) {
-                $children = [];
-                foreach ($sectionLabels as $key => $label) {
-                    if (empty($sections[$key])) continue;
-                    $children[] = ['id' => 'pd-sub-' . $key, 'label' => $label];
-                }
-                $toc[] = ['id' => 'pd-sec-paper', 'label' => 'The Paper', 'children' => $children];
-            }
-            if (!empty($paper['ai_summary'])) {
-                $toc[] = ['id' => 'pd-sec-glance', 'label' => 'At a Glance', 'children' => []];
-            }
-            ?>
-            <div class="pd-card pd-toc">
-                <h2><span class="material-symbols-outlined">toc</span><span class="pd-card-title"> Table of Contents</span></h2>
-                <nav class="pd-toc-nav" aria-label="Sections on this page">
-                    <ul class="pd-toc-list">
-                        <?php foreach ($toc as $item): ?>
-                            <li>
-                                <a href="#<?= e($item['id']) ?>" class="pd-toc-link" data-toc-target="<?= e($item['id']) ?>"><?= e($item['label']) ?></a>
-                                <?php if ($item['children']): ?>
-                                    <ul class="pd-toc-sublist">
-                                        <?php foreach ($item['children'] as $child): ?>
-                                            <li><a href="#<?= e($child['id']) ?>" class="pd-toc-link pd-toc-sublink" data-toc-target="<?= e($child['id']) ?>"><?= e($child['label']) ?></a></li>
-                                        <?php endforeach; ?>
-                                    </ul>
-                                <?php endif; ?>
-                            </li>
-                        <?php endforeach; ?>
-                    </ul>
-                </nav>
-            </div>
-
-            <?php $citation = paper_apa_citation($paper, rtrim(BASE_URL, '/') . '/archive/view_paper.php?id=' . $id); ?>
-            <div class="pd-card pd-cite" data-collapse-default="closed">
-                <h2><span class="material-symbols-outlined">format_quote</span><span class="pd-card-title"> Cite This Paper</span></h2>
-                <p class="pd-cite-label">APA (7th Edition)</p>
-                <blockquote class="pd-cite-text" id="pdCiteText"><?= e($citation) ?></blockquote>
-                <button type="button" class="pd-cite-copy" id="pdCiteCopy" data-copy-text="<?= e($citation) ?>">
-                    <span class="material-symbols-outlined" id="pdCiteCopyIcon">content_copy</span>
-                    <span id="pdCiteCopyLabel">Copy citation</span>
-                </button>
-            </div>
-
-        </aside>
 
         </div><!-- /.pd-layout -->
 
@@ -833,14 +857,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
     /* ----- Show/hide the contents & citation rail ----- */
     var railToggle = document.getElementById('pdRailToggle');
-    var railIcon   = document.getElementById('pdRailToggleIcon');
     var layout     = document.getElementById('pdLayout');
     if (railToggle && layout) {
         function setRail(collapsed) {
             layout.classList.toggle('is-rail-collapsed', collapsed);
-            railIcon.textContent = collapsed ? 'right_panel_open' : 'right_panel_close';
-            railToggle.title = collapsed ? 'Show the contents and citation panel' : 'Hide the contents and citation panel';
-            railToggle.setAttribute('aria-label', railToggle.title);
+            /* No aria-label: the button says "Open Table of Contents" in
+               words now, and that is its name. A label written over it would
+               be a name a voice user cannot read off the screen. The title is
+               the pointer's tooltip and nothing else. */
+            railToggle.title = collapsed ? 'Open Table of Contents' : 'Hide the contents and citation panel';
             railToggle.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
         }
 
@@ -951,7 +976,12 @@ document.addEventListener('DOMContentLoaded', function () {
             var target = document.getElementById(link.getAttribute('data-toc-target'));
             if (!target) return;
             e.preventDefault();
-            var top = target.getBoundingClientRect().top + window.pageYOffset - HEADER_OFFSET;
+            /* Folded first, and the room it leaves measured after: open, the
+               contents are most of a phone's screen and the section would be
+               scrolled to a place that is behind them. */
+            papelRecord.foldContents();
+            var top = target.getBoundingClientRect().top + window.pageYOffset
+                      - papelRecord.headerOffset(HEADER_OFFSET);
             window.scrollTo({ top: top, behavior: 'smooth' });
             history.replaceState(null, '', '#' + target.id);
         });

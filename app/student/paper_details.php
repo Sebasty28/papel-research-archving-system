@@ -229,9 +229,15 @@ $PAGE_SKELETON = 'reader';
                     <?= e(workflow_status_badge_text($status, (bool)$returned)) ?>
                 </span>
                 <br>
-                <button type="button" class="pd-rail-toggle" id="pdRailToggle"
-                        title="Hide the contents panel" aria-label="Hide the contents panel" aria-pressed="false">
-                    <span class="material-symbols-outlined" id="pdRailToggleIcon">right_panel_close</span>
+                <?php /* The way back to a rail that has been put away, and
+                         nothing else: the control that puts it away is inside
+                         the rail, on the contents' heading, where it is next to
+                         what it acts on. Shipped hidden because a record always
+                         opens with its rail showing (includes/paper_record_css.php
+                         draws and swaps the pair). */ ?>
+                <button type="button" class="pd-rail-toggle" id="pdRailToggle" hidden
+                        title="Open Table of Contents" aria-pressed="false">
+                    <span class="pd-rail-toggle-text">Open Table of Contents</span>
                 </button>
                 <?php /* The published copy, in the corner that holds what can be
                          done with the record rather than what is written in it,
@@ -295,6 +301,67 @@ $PAGE_SKELETON = 'reader';
         <?php endif; ?>
 
         <div class="pd-layout" id="pdLayout">
+
+        <?php /* The rail is written before the record, not after it. Beside the
+                 record it is a column either way, and which column it lands in is
+                 set by `order` in includes/paper_record_css.php. Stacked, which is
+                 every screen of 1050px or less, the source order is what you get,
+                 and a table of contents printed after the record it indexes is
+                 thousands of pixels down a phone, past everything anybody would be
+                 looking for it to reach. Here it is the first thing under the
+                 title, and the heading a screen reader meets before the record
+                 rather than after it. The same is done on the two record pages
+                 that share this layout. */ ?>
+        <aside class="pd-side">
+            <?php
+            /* One entry per card actually on the page, plus one per written
+               section inside "Written Sections": mirrors the public paper
+               view's table of contents (archive/view_paper.php), minus the
+               "Cite This Paper" card, which has no place on a student's own
+               working copy of an unpublished submission. Order matches the
+               cards on the page: what was filed and whether it is complete
+               comes before the words themselves. */
+            $toc = [
+                ['id' => 'pd-sec-progress', 'label' => 'Where It Stands', 'children' => [
+                    ['id' => 'pd-sub-adviser',     'label' => 'Research Adviser'],
+                    ['id' => 'pd-sub-coordinator', 'label' => 'Research Coordinator'],
+                ]],
+                ['id' => 'pd-sec-info',      'label' => 'Basic Information', 'children' => []],
+                ['id' => 'pd-sec-files',     'label' => 'Uploaded Files',    'children' => []],
+                ['id' => 'pd-sec-checklist', 'label' => 'Review Checklist',  'children' => []],
+            ];
+            if ($keywords) {
+                $toc[] = ['id' => 'pd-sec-keywords', 'label' => 'Keywords', 'children' => []];
+            }
+            if ($sections) {
+                $children = [];
+                foreach ($sectionLabels as $key => $label) {
+                    if (empty($sections[$key])) continue;
+                    $children[] = ['id' => 'pd-sub-' . $key, 'label' => $label];
+                }
+                $toc[] = ['id' => 'pd-sec-paper', 'label' => 'Written Sections', 'children' => $children];
+            }
+            ?>
+            <div class="pd-card pd-toc">
+                <h2><span class="material-symbols-outlined">toc</span><span class="pd-card-title"> Table of Contents</span></h2>
+                <nav class="pd-toc-nav" aria-label="Sections on this page">
+                    <ul class="pd-toc-list">
+                        <?php foreach ($toc as $item): ?>
+                            <li>
+                                <a href="#<?= e($item['id']) ?>" class="pd-toc-link" data-toc-target="<?= e($item['id']) ?>"><?= e($item['label']) ?></a>
+                                <?php if ($item['children']): ?>
+                                    <ul class="pd-toc-sublist">
+                                        <?php foreach ($item['children'] as $child): ?>
+                                            <li><a href="#<?= e($child['id']) ?>" class="pd-toc-link pd-toc-sublink" data-toc-target="<?= e($child['id']) ?>"><?= e($child['label']) ?></a></li>
+                                        <?php endforeach; ?>
+                                    </ul>
+                                <?php endif; ?>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                </nav>
+            </div>
+        </aside>
         <div class="pd-main">
 
         <!-- Where it stands -->
@@ -494,56 +561,6 @@ $PAGE_SKELETON = 'reader';
 
         </div><!-- /.pd-main -->
 
-        <aside class="pd-side">
-            <?php
-            /* One entry per card actually on the page, plus one per written
-               section inside "Written Sections": mirrors the public paper
-               view's table of contents (archive/view_paper.php), minus the
-               "Cite This Paper" card, which has no place on a student's own
-               working copy of an unpublished submission. Order matches the
-               cards on the page: what was filed and whether it is complete
-               comes before the words themselves. */
-            $toc = [
-                ['id' => 'pd-sec-progress', 'label' => 'Where It Stands', 'children' => [
-                    ['id' => 'pd-sub-adviser',     'label' => 'Research Adviser'],
-                    ['id' => 'pd-sub-coordinator', 'label' => 'Research Coordinator'],
-                ]],
-                ['id' => 'pd-sec-info',      'label' => 'Basic Information', 'children' => []],
-                ['id' => 'pd-sec-files',     'label' => 'Uploaded Files',    'children' => []],
-                ['id' => 'pd-sec-checklist', 'label' => 'Review Checklist',  'children' => []],
-            ];
-            if ($keywords) {
-                $toc[] = ['id' => 'pd-sec-keywords', 'label' => 'Keywords', 'children' => []];
-            }
-            if ($sections) {
-                $children = [];
-                foreach ($sectionLabels as $key => $label) {
-                    if (empty($sections[$key])) continue;
-                    $children[] = ['id' => 'pd-sub-' . $key, 'label' => $label];
-                }
-                $toc[] = ['id' => 'pd-sec-paper', 'label' => 'Written Sections', 'children' => $children];
-            }
-            ?>
-            <div class="pd-card pd-toc">
-                <h2><span class="material-symbols-outlined">toc</span><span class="pd-card-title"> Table of Contents</span></h2>
-                <nav class="pd-toc-nav" aria-label="Sections on this page">
-                    <ul class="pd-toc-list">
-                        <?php foreach ($toc as $item): ?>
-                            <li>
-                                <a href="#<?= e($item['id']) ?>" class="pd-toc-link" data-toc-target="<?= e($item['id']) ?>"><?= e($item['label']) ?></a>
-                                <?php if ($item['children']): ?>
-                                    <ul class="pd-toc-sublist">
-                                        <?php foreach ($item['children'] as $child): ?>
-                                            <li><a href="#<?= e($child['id']) ?>" class="pd-toc-link pd-toc-sublink" data-toc-target="<?= e($child['id']) ?>"><?= e($child['label']) ?></a></li>
-                                        <?php endforeach; ?>
-                                    </ul>
-                                <?php endif; ?>
-                            </li>
-                        <?php endforeach; ?>
-                    </ul>
-                </nav>
-            </div>
-        </aside>
 
         </div><!-- /.pd-layout -->
 
@@ -567,14 +584,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
     /* ----- Show/hide the contents rail ----- */
     var railToggle = document.getElementById('pdRailToggle');
-    var railIcon   = document.getElementById('pdRailToggleIcon');
     var layout     = document.getElementById('pdLayout');
     if (railToggle && layout) {
         function setRail(collapsed) {
             layout.classList.toggle('is-rail-collapsed', collapsed);
-            railIcon.textContent = collapsed ? 'right_panel_open' : 'right_panel_close';
-            railToggle.title = collapsed ? 'Show the contents panel' : 'Hide the contents panel';
-            railToggle.setAttribute('aria-label', railToggle.title);
+            /* No aria-label: the button says "Open Table of Contents" in
+               words now, and that is its name. A label written over it would
+               be a name a voice user cannot read off the screen. The title is
+               the pointer's tooltip and nothing else. */
+            railToggle.title = collapsed ? 'Open Table of Contents' : 'Hide the contents panel';
             railToggle.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
         }
 
@@ -643,7 +661,14 @@ document.addEventListener('DOMContentLoaded', function () {
             var target = document.getElementById(link.getAttribute('data-toc-target'));
             if (!target) return;
             e.preventDefault();
-            var top = target.getBoundingClientRect().top + window.pageYOffset - HEADER_OFFSET;
+            /* Folded first, and the room it leaves measured after: on a narrow
+               screen the contents are a panel over the record, and the section
+               would be scrolled to a place that is behind them. Both of these
+               are the shared rail's (includes/paper_record_css.php), and on a
+               wide screen the offset is HEADER_OFFSET as it always was. */
+            papelRecord.foldContents();
+            var top = target.getBoundingClientRect().top + window.pageYOffset
+                      - papelRecord.headerOffset(HEADER_OFFSET);
             window.scrollTo({ top: top, behavior: 'smooth' });
             history.replaceState(null, '', '#' + target.id);
         });

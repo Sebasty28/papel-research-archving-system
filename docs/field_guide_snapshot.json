@@ -1,5 +1,5 @@
 {
- "built": "2026-11-04 22:30",
+ "built": "2026-11-05 18:24",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -92,10 +92,10 @@
    "lines": 155
   },
   "app/review_paper.php": {
-   "lines": 785
+   "lines": 810
   },
   "app/student/paper_details.php": {
-   "lines": 693
+   "lines": 718
   },
   "app/student/paper_preview.php": {
    "lines": 97
@@ -146,7 +146,7 @@
    "lines": 1081
   },
   "archive/view_paper.php": {
-   "lines": 1075
+   "lines": 1105
   },
   "config/config.php": {
    "lines": 265
@@ -188,16 +188,16 @@
    "lines": 190
   },
   "includes/browse_console.php": {
-   "lines": 1063
+   "lines": 1071
   },
   "includes/browse_console_js.php": {
-   "lines": 1191
+   "lines": 1426
   },
   "includes/card_collapse.php": {
    "lines": 94
   },
   "includes/console_shell.php": {
-   "lines": 609
+   "lines": 661
   },
   "includes/docx_writer.php": {
    "lines": 230
@@ -245,7 +245,7 @@
    "lines": 241
   },
   "includes/paper_record_css.php": {
-   "lines": 421
+   "lines": 806
   },
   "includes/password_audit_tab.php": {
    "lines": 201
