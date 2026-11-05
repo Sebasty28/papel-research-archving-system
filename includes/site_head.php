@@ -496,6 +496,46 @@ body:has(.crumb-bar) .nav-photo { height: calc(var(--nav-h) + var(--crumb-h)); }
         pointer-events: none;
     }
 }
+
+/* On a phone the name is simply there, beside the mark, behind a rule of its
+   own: [P] | PAPEL.
+
+   Sliding it out on hover is a pointer's trick and a phone has no pointer, so
+   below 900px the word could never be seen at all and the bar carried an
+   unexplained monogram. 900px is the width the nav folds into the burger
+   (.nav-burger, further down), which is what frees the room: between 901 and
+   1099px the links are still in the bar, centred in what is left beside the
+   mark, and a word in the flow there would shove them off centre.
+
+   In the flow, not slid out: the absolute placing exists so the link keeps the
+   mark's width while the word passes over whatever sits beside it, and here
+   there is nothing to pass over and nothing to keep still. So the transform,
+   the clip and the fade all come off, and the rule is the word's own left
+   border rather than .brand::after, which is placed at the link's right edge
+   and would now fall after the word instead of between the two.
+
+   Hover is given the same values rather than left alone: the block above
+   closes the word on hover, which on a touch screen sticks after a tap, and
+   the name would vanish when it was pressed. */
+@media (max-width: 900px) {
+    .site-header .brand::after { display: none; }
+    .site-header .brand-word,
+    .site-header .brand:hover .brand-word,
+    .site-header .brand:focus-visible .brand-word {
+        position: static;
+        clip-path: none;
+        opacity: 1;
+        transform: none;
+        transition: color .2s;
+        margin-left: .5rem;
+        padding-left: .5rem;
+        border-left: 1px solid var(--soft-maroon);
+        /* Smaller than the 1.5rem it opens to on a desktop: that is a word
+           arriving in space the bar has to spare, this one shares a 36px band
+           with the bell and the burger. */
+        font-size: 1.25rem;
+    }
+}
 @media (prefers-reduced-motion: reduce) {
     .brand-word,
     .brand:hover .brand-word,

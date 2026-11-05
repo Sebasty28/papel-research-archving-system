@@ -721,9 +721,30 @@ $PAGE_SKELETON = 'repository';
     :root { --hero-h: 115px; --hero-overlap: 32px; }
     .section-heading { font-size: 1.375rem; }
     .paper-foot { grid-template-columns: 1fr; gap: .25rem; }
+    /* Cards give the title and metadata the whole line. The action and
+       programme share a footer without squeezing the date. Rows use the
+       aligned, sideways scrolling columns in browse_console.php. */
+    .paper-item .paper-side {
+        display: flex; align-items: baseline; justify-content: space-between;
+        flex-wrap: wrap; gap: .125rem .5rem;
+    }
+    .paper-item .paper-program {
+        order: -1; flex: 1 1 8rem; min-width: 0;
+        overflow-wrap: anywhere;
+    }
+    .paper-meta > span { overflow-wrap: anywhere; }
     /* The page's gutter drops to 1rem here and the menu button goes with it. */
     .crumb-inner .btn-banner-toggle,
     .crumb-inner .btn-banner-toggle.is-guest { right: calc(1rem + 11px); }
+}
+@media (max-width: 900px) {
+    /* The card footer above has a different job in Rows: each part returns
+       to the same column as the corresponding part in the next result. */
+    html[data-view="rows"] .paper-list .paper-foot { display: contents; }
+    html[data-view="rows"] .paper-list .paper-item .paper-side { display: block; flex-wrap: nowrap; }
+    html[data-view="rows"] .paper-list .paper-item .paper-program {
+        order: 0; flex: none; overflow-wrap: normal;
+    }
 }
 /* The narrowest phones: .75rem of gutter, and the menu button's own padding
    down from 7px to 5px (includes/site_head.php). */

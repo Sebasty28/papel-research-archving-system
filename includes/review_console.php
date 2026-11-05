@@ -756,6 +756,28 @@ html[data-view="rows"] .paper-list .paper-card > .rc-reviewers { display: none; 
    only be saying it twice; the row already carries the decision. */
 html[data-view="rows"] .paper-list .card-status .paper-action { display: none; }
 
+/* Below 900px console_shell.php drops the body column, so the Approve and
+   Return buttons are not on the row and it no longer carries the decision:
+   one link back in earns its place. Only the last, which is the record or the
+   repository where there is one. A desk row can list a link per manuscript
+   file as well, and three links beside a title is the sideways scroll this
+   change exists to remove.
+
+   Written here rather than beside the rest of the phone rows in
+   console_shell.php because this sheet is required after that one (line 522),
+   so the rule above would beat an identical selector there on load order
+   alone. */
+@media (max-width: 900px) {
+    html[data-view="rows"] .paper-list .card-status .paper-action { display: none; }
+    html[data-view="rows"] .paper-list .card-status .paper-action:last-of-type {
+        display: block;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-size: .75rem;
+    }
+}
+
 .rc-actions .rc-spacer { margin-left: auto; }
 .rc-docs { display: flex; gap: .375rem; flex-wrap: wrap; margin-top: .625rem; }
 .rc-doc-chip {

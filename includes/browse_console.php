@@ -100,6 +100,10 @@
 html[data-mode="dark"] { --search-clear: #CFC3AE; }
 
 /* ===== Paper list ===== */
+/* The sidebar can leave the results column narrower at 1024px than it is at
+   900px, when the sidebar has become a drawer. Rows therefore respond to the
+   list's own width, not just the window's width. */
+.paper-list { container: paper-results / inline-size; }
 /* Row hover bleeds slightly past the column, so the cream block reads as a
    card while the text stays aligned with the heading rule above it. */
 .paper-item {
@@ -191,36 +195,32 @@ html[data-mode="dark"] { --search-clear: #CFC3AE; }
    first paint. */
 html[data-view="rows"] .paper-list .paper-item {
     display: grid;
-    /* Shares of the line rather than content widths. Letting the middle
-       column take what it wanted left the title at 144px of its 716; giving
-       the title everything clipped the date mid-word. The title is what the
-       row is read by, so it gets the larger share and the rest is capped. */
-    grid-template-columns: minmax(10rem, 1.3fr) minmax(0, 1fr) auto;
+    /* Match the dashboard's fixed author and metadata columns, leaving the
+       rest for the title. Each field starts at the same place on every row. */
+    grid-template-columns: minmax(0, 1fr) minmax(0, 9rem) minmax(0, 10.5rem) minmax(0, 8.5rem);
     align-items: center;
-    column-gap: 1rem;
+    column-gap: .75rem;
     padding: .45rem 1.25rem;
 }
-html[data-view="rows"] .paper-list .paper-foot { display: contents; }
+html[data-view="rows"] .paper-list .paper-foot,
+html[data-view="rows"] .paper-list .paper-info { display: contents; }
 /* A row sets its own padding, which would otherwise outrank the density
    rules above and leave that setting doing nothing at all here. */
 html[data-view="rows"][data-density="compact"] .paper-list .paper-item { padding: .3rem 1.25rem; }
 html[data-view="rows"][data-density="comfortable"] .paper-list .paper-item { padding: .7rem 1.25rem; }
 html[data-view="rows"] .paper-list .paper-item .paper-title {
+    grid-column: 1; min-width: 0;
     margin: 0; font-size: .875rem;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-html[data-view="rows"] .paper-list .paper-item .paper-info {
-    display: flex; align-items: baseline; gap: .5rem;
-    min-width: 0; overflow: hidden;
-}
 html[data-view="rows"] .paper-list .paper-item .paper-authors {
-    margin: 0; flex: 0 0 auto; min-width: 0; max-width: 10rem;
+    grid-column: 2; margin: 0; min-width: 0;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 /* The meta is a flex row that wraps by default. Left to do that inside a
    narrow column it stacks three deep and the row stops being a row. */
 html[data-view="rows"] .paper-list .paper-item .paper-meta {
-    flex: 0 1 auto; min-width: 0; flex-wrap: nowrap;
+    grid-column: 3; min-width: 0; flex-wrap: nowrap;
     white-space: nowrap; overflow: hidden;
     /* A row of separate spans, so text-overflow has nothing to put an
        ellipsis on: it would cut a word in half at the edge and read as a
@@ -229,41 +229,52 @@ html[data-view="rows"] .paper-list .paper-item .paper-meta {
             mask-image: linear-gradient(to right, #000 calc(100% - 1.75rem), transparent);
 }
 html[data-view="rows"] .paper-list .paper-item .paper-side {
-    display: flex; align-items: center; gap: .75rem;
+    grid-column: 4; display: block; overflow: hidden;
     white-space: nowrap; line-height: 1.4;
 }
-html[data-view="rows"] .paper-list .paper-item .paper-program { display: inline; }
-/* Below this the three columns have nowhere to go, so a row is a block
-   again rather than a line squeezed to nothing. */
-@media (max-width: 820px) {
+html[data-view="rows"] .paper-list .paper-item .paper-action,
+html[data-view="rows"] .paper-list .paper-item .paper-program {
+    display: block; overflow: hidden; text-overflow: ellipsis;
+}
+/* A sidebar can make the results column narrow just above 900px. Stack rows
+   there so their title stays readable; phones use the sideways grid below. */
+@container paper-results (max-width: 760px) {
     /* The same padding a card gets at this width, written out because the
        rows selector outranks it: switching views should change how a result
        reads, not where the page's text begins. */
-    html[data-view="rows"] .paper-list .paper-item { display: block; padding: .75rem .5rem; }
-    html[data-view="rows"] .paper-list .paper-foot { display: grid; }
-    html[data-view="rows"] .paper-list .paper-item .paper-info { display: block; }
-    html[data-view="rows"] .paper-list .paper-item .paper-title { white-space: normal; }
+    html[data-view="rows"] .paper-list .paper-item { display: block; padding: .875rem 1.25rem; }
+    html[data-view="rows"] .paper-list .paper-foot { display: grid; grid-template-columns: minmax(0, 1fr) 38%; }
+    html[data-view="rows"] .paper-list .paper-item .paper-info { display: block; min-width: 0; }
+    html[data-view="rows"] .paper-list .paper-item .paper-title {
+        grid-column: auto; white-space: normal; overflow: visible;
+        text-overflow: clip; overflow-wrap: anywhere;
+    }
 
-    /* Everything above that keeps a row on one line has to go with the row.
-       It did not: the authors kept their 10rem cap and their ellipsis and the
-       meta kept its nowrap and the fade over its last 1.75rem, so on a phone a
-       block of four lines' worth of room showed "Lilac Erica Begino, Justine..."
-       and a date that faded out at "Unpublished P". There is no line to protect
-       here, so they wrap like any other text. */
+    /* The stacked fallback needs the full author and date again. Retaining
+       the grid's ellipsis and mask clips words even though there is room to
+       wrap them. Below 900px neither is shown at all: see the phone rows at
+       the foot of this file. */
     html[data-view="rows"] .paper-list .paper-item .paper-authors {
-        max-width: none;
+        grid-column: auto;
         white-space: normal;
         overflow: visible;
         text-overflow: clip;
     }
     html[data-view="rows"] .paper-list .paper-item .paper-meta {
+        grid-column: auto;
         flex-wrap: wrap;
         white-space: normal;
         overflow: visible;
         -webkit-mask-image: none;
                 mask-image: none;
     }
-    html[data-view="rows"] .paper-list .paper-item .paper-side { white-space: normal; }
+    html[data-view="rows"] .paper-list .paper-item .paper-side {
+        grid-column: auto; overflow: visible; white-space: normal;
+    }
+    html[data-view="rows"] .paper-list .paper-item .paper-action,
+    html[data-view="rows"] .paper-list .paper-item .paper-program {
+        overflow: visible; text-overflow: clip;
+    }
     html[data-view="rows"] .paper-list .paper-item .paper-program { display: block; }
 }
 
@@ -1066,5 +1077,53 @@ html.sidebar-left .js-side-swap .side-icon-right { display: inline-flex; }
    below. Both consoles that print a count mark the words with this class. */
 @media (max-width: 400px) {
     .count-words { display: none; }
+}
+
+/* Rows stay rows on a phone, and a phone row is two columns: the title, which
+   is what a result is read by and reads perfectly well cut short, and the one
+   thing there is to do with it. The authors, the date line and the programme
+   go: four columns at a legible type size need about 35rem, and the only ways
+   to find that on a 390px screen are type too small to read or a well that
+   scrolls sideways, which hides half of every row behind a gesture nothing on
+   the page suggests. Cards is the view that shows the rest, one result at a
+   time, and it is a tap away on the same toolbar. */
+@media (max-width: 900px) {
+    html[data-view="rows"] .paper-list .paper-item {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: baseline;
+        column-gap: .75rem;
+        padding: .45rem 1.25rem;
+    }
+    html[data-view="rows"][data-density="compact"] .paper-list .paper-item { padding: .3rem 1.25rem; }
+    html[data-view="rows"][data-density="comfortable"] .paper-list .paper-item { padding: .7rem 1.25rem; }
+    html[data-view="rows"] .paper-list .paper-foot,
+    html[data-view="rows"] .paper-list .paper-item .paper-info,
+    html[data-view="rows"] .paper-list .paper-item .paper-side { display: contents; }
+    html[data-view="rows"] .paper-list .paper-item .paper-title {
+        grid-column: 1;
+        margin: 0;
+        min-width: 0;
+        font-size: .8125rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        /* The stacked block above lets a title break mid-word. One line has
+           nowhere to break, and the ellipsis is the cut. */
+        overflow-wrap: normal;
+    }
+    /* Held off the grid rather than hidden with `display: none` on the parts
+       themselves: .paper-info and .paper-side are `display: contents` above,
+       so these are the grid's own children now and nothing else is left to
+       hide them by. */
+    html[data-view="rows"] .paper-list .paper-item .paper-authors,
+    html[data-view="rows"] .paper-list .paper-item .paper-meta,
+    html[data-view="rows"] .paper-list .paper-item .paper-program { display: none; }
+    html[data-view="rows"] .paper-list .paper-item .paper-action {
+        grid-column: 2;
+        display: block;
+        white-space: nowrap;
+        font-size: .75rem;
+    }
 }
 </style>

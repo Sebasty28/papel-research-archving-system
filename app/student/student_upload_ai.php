@@ -1912,6 +1912,11 @@ html.doc-expanded:has(.doc-editor.is-expanded) > body { overflow: visible !impor
   html.sections-hidden-main .doc-editor.is-expanded:not(.in-pane[data-pane="side"]) .doc-sections-toggle .when-hidden { display: inline; }
 }
 
+/* The cue that the row of sections slides. Drawn only where the row is a row and its
+   scrollbar is hidden (the phone block below); in the column the thin scrollbar says it.
+   Over the row's last tab, not beside it: it is in the same grid cell, pushed to the end,
+   and takes no width of its own so nothing moves when it comes and goes. */
+.doc-tabs-slide { display: none; }
 /* On a phone a column of names would leave no room to write in, so the tabs are a row
    across the top instead, scrolled sideways. */
 @media (max-width: 700px) {
@@ -1926,7 +1931,46 @@ html.doc-expanded:has(.doc-editor.is-expanded) > body { overflow: visible !impor
     scrollbar-width: none;
   }
   .doc-editor.is-expanded .doc-tabs::-webkit-scrollbar { display: none; }
+  .doc-editor.is-expanded .doc-tabs-slide {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    grid-row: 1;
+    justify-self: end;
+    align-self: stretch;
+    /* Positioned, or it does not cover what it is meant to fade. Both this and the row
+       are ordinary grid items, and for those the browser paints every block background
+       before any inline text: the cue came later in the markup and its gradient still
+       went under the names, so "Methodology" and its dot read straight through it.
+       Positioning lifts it into the layer that paints after that text. */
+    position: relative;
+    z-index: 1;
+    /* Wide enough that the chevron stands on cream and not on a name. At 2.25rem the
+       fade only reached full cream under the chevron's own right half, so the left of
+       it sat over "Methodology" and read as a mark printed on the word. */
+    width: 3rem;
+    padding-right: .25rem;
+    /* The tabs pass under it, so it fades them out rather than sitting on them as a
+       block of cream with a tab cut in half behind it. */
+    background: linear-gradient(to right, transparent, var(--cream) 50%);
+    color: var(--soft-maroon);
+    opacity: 0;
+    pointer-events: none;            /* the row underneath is what is swiped */
+    transition: opacity .18s ease;
+  }
+  .doc-editor.is-expanded .doc-tabs-slide.is-on { opacity: 1; }
+  .doc-editor.is-expanded .doc-tabs-slide .material-symbols-outlined { font-size: 20px; }
+  @media (prefers-reduced-motion: reduce) {
+    .doc-editor.is-expanded .doc-tabs-slide { transition: none; }
+  }
   .doc-tabs-title { display: none; }
+  /* Every section's close is simply there on a phone. It is revealed by hover on a
+     desktop and by a long press here, which is a gesture nothing on the row suggests,
+     so the way to take a section off the paper was effectively hidden. It costs no
+     width: the button is `visibility: hidden` rather than `display: none`, so each tab
+     was already holding the room for it. The long press still works and still swallows
+     the tap that follows it, so a press-and-hold does not also change section. */
+  .doc-editor.is-expanded .doc-tabs .doc-tab-x { visibility: visible; }
   .doc-tab,
   .doc-tab-add { width: auto; flex: 0 0 auto; white-space: nowrap; }
   .doc-tab-add { padding: .4rem .6rem; }
@@ -3095,9 +3139,10 @@ html:root { --pdf-dock-gap: var(--dock-gap); }
     body.side-collapsed #chat-widget.is-docked:not([data-pane="main"]),
     body.side-collapsed #sideToc:not([data-pane="main"]) { visibility: hidden !important; pointer-events: none !important; }
     /* The viewer's hint makes itself visible, which beats a hidden inherited from the
-       panel: it showed over the form with the card folded away, or behind another tab. */
-    body.side-collapsed #pdfDock:not([data-pane="main"]) .papel-pdf-toast,
-    .side-hidden .papel-pdf-toast { visibility: hidden !important; }
+       panel: it showed over the form with the card folded away. Folding is something only
+       the side pane does, so that half stays here; the half about a panel that is merely
+       not the tab on view is below, outside the width, a phone having tabs of its own. */
+    body.side-collapsed #pdfDock:not([data-pane="main"]) .papel-pdf-toast { visibility: hidden !important; }
     /* A section in full view takes the window: no PDF beside it while the card is folded away. */
     body.side-collapsed.pdf-docked .doc-editor.is-expanded { right: 0; }
     /* On the left (papelSide's side): every panel, the contents and the rail there
@@ -3508,13 +3553,15 @@ body.doc-expanded .side-toc { display: none !important; }   /* the full view has
 .side-corpus:hover { transform: scale(1.06); }
 .side-corpus:focus-visible { outline: 2px solid var(--maroon); outline-offset: 2px; }
 .side-rail .side-rail-corpus { margin-top: auto; }
-@media (min-width: 901px) {
+/* No width gate: these are keyed on body.panes and html.side-locked, which papelSide
+   sets only while the panes are on. They sat inside @media (min-width: 901px) when the
+   panes were a desktop arrangement; a phone now runs the same machinery with a single
+   pane, and asking the width here would have left it without every rule below. */
     /* Where the side card is, it holds Corpus's button, so the floating one goes. */
     /* Where the panes are, his round button is in a tab strip (or the rail), so the floating
        one goes, whatever the side pane holds: keyed on the side pane, it came back once every
        tab had been moved out of it. */
     body.panes #chat-widget:not(.is-docked) { display: none; }
-}
 .side-tab-ico { flex: 0 0 auto; font-size: 18px; color: var(--maroon); }
 .side-tab-puppy { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; }
 .side-tab-x {
@@ -3533,6 +3580,24 @@ body.doc-expanded .side-toc { display: none !important; }   /* the full view has
 .side-tab:not(.is-active) .side-tab-x { visibility: hidden; }
 .side-tab:not(.is-active):hover .side-tab-x,
 .side-tab:not(.is-active) .side-tab-x:focus-visible { visibility: visible; }
+/* While the bar folds or opens, with the scroll being put back to match (setStuck):
+   the height has to be the one it is going to, not one it is animating through. */
+.upload-steps.is-folding,
+.upload-steps.is-folding .step-item,
+.upload-steps.is-folding .step-number,
+.upload-steps.is-folding .step-label,
+.upload-steps.is-folding .step-connector { transition: none !important; }
+/* One pane on a phone can hold six tabs, and six names on a 390px strip faded every
+   one of them to two letters and an ellipsis ("Uploa", "Writi", "Pr"), which names
+   nothing. So the tab you are on is named and the rest are their icons - the same
+   answer the step bar gives at the same width (.is-tight names only the step you are
+   on). The close goes with the name: you close the tab you are looking at, and the
+   rule above reveals an inactive tab's close on hover, which a phone has not got, so
+   on a phone it was only ever reserving room. */
+@media (max-width: 900px) {
+    body.panes .main-tabs .side-tab:not(.is-active) .side-tab-name,
+    body.panes .main-tabs .side-tab:not(.is-active) .side-tab-x { display: none; }
+}
 /* A section's place in the form while it is open in the Writing View beside it. */
 .doc-spacer-note {
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .5rem;
@@ -3553,7 +3618,10 @@ body.doc-expanded .side-toc { display: none !important; }   /* the full view has
    over its pane's body (.in-pane, at the box the script measures), so one panel shows
    in either pane without being moved in the page. */
 .main-tabs { display: none; }
-@media (min-width: 901px) {
+/* No width gate: these are keyed on body.panes and html.side-locked, which papelSide
+   sets only while the panes are on. They sat inside @media (min-width: 901px) when the
+   panes were a desktop arrangement; a phone now runs the same machinery with a single
+   pane, and asking the width here would have left it without every rule below. */
     /* The room, worked out by the script for whichever side the side pane is on. */
     html body.panes {
         padding-left: var(--room-l, 6px) !important;
@@ -3586,7 +3654,6 @@ body.doc-expanded .side-toc { display: none !important; }   /* the full view has
     }
     /* Another tab on view in the main pane: the form is under it, out of sight. */
     #mainBody.is-covered > * { visibility: hidden; }
-}
 .side-pane {
     position: fixed;
     z-index: 870;
@@ -3774,6 +3841,15 @@ body.tab-dragging #pdfDockScroll, body.tab-dragging .doc-surface, body.tab-dragg
 
 /* The panel not on view: kept, only hidden (its pages, its conversation). */
 .side-hidden { visibility: hidden !important; pointer-events: none !important; }
+/* ...and the viewer's hint with it. The hint gives itself `visibility: visible` when it
+   shows (.papel-pdf-toast.is-visible), and a visible set on the box itself is not something
+   an inherited hidden can overrule: the panel went away and the hint stayed, "Press H to
+   drag the page" sitting over Step 2 of the form. It fires when a PDF first draws, which
+   on a phone is ordinarily while the student is back on the form, so it is the usual way
+   to meet it rather than a corner. No width gate: the rule above it was written when only
+   a desktop had tabs to hide a panel behind, and a phone now has the same single pane and
+   hides panels the same way. */
+.side-hidden .papel-pdf-toast { visibility: hidden !important; }
 /* Beside a section in full view only the PDF has a place (Corpus steps out there),
    so it shows whichever tab was on view. */
 body.doc-expanded .pdf-dock.side-hidden { visibility: visible !important; pointer-events: auto !important; }
@@ -3788,7 +3864,12 @@ body.doc-expanded .pdf-dock.side-hidden { visibility: visible !important; pointe
 #chat-widget.is-docked #chat-window { flex: 1 1 auto; min-height: 0; height: auto; }
 @media (min-width: 901px) {
     body.chat-docked-right { --chat-dock-w: var(--pdf-dock-w, 460px); }
+}
 
+/* No width gate: these are keyed on body.panes and html.side-locked, which papelSide
+   sets only while the panes are on. They sat inside @media (min-width: 901px) when the
+   panes were a desktop arrangement; a phone now runs the same machinery with a single
+   pane, and asking the width here would have left it without every rule below. */
     /* The form's card held in place beside it (lockForm). */
     html.side-locked { overflow: hidden; }
     /* Below the held form only the footer was left, out of sight. A page taller
@@ -3814,7 +3895,6 @@ body.doc-expanded .pdf-dock.side-hidden { visibility: visible !important; pointe
         overscroll-behavior: contain;
         scrollbar-width: thin;
     }
-}
 
 /* Too narrow to share the screen: overlay instead of squeezing the form. */
 @media (max-width: 900px) {
@@ -3973,11 +4053,25 @@ body.doc-expanded .pdf-dock.side-hidden { visibility: visible !important; pointe
     padding: 1rem .75rem;
     flex-wrap: wrap;
     display: flex;
-    align-items: center;
+    /* The circles line up with each other, and the rules line up with the circles.
+
+       Centred, each step was centred on its own height, so a step whose name fits
+       one line sat lower than one whose name wrapped to two: at 390px "Paper
+       Details" put circle 1 six pixels below circles 2, 3 and 4. Started at the top,
+       every circle is the same distance down whatever its name does underneath. */
+    align-items: flex-start;
     justify-content: center;
     gap: 0;
+    /* The circle's size and the step's own top padding, in one place: the rule
+       between two circles is positioned from them (see .step-connector), so a
+       breakpoint that changes the circle has only to change this. */
+    --step-dot: 44px;
+    --step-pad-t: .25rem;
     transition: padding .22s ease, box-shadow .22s ease;
 }
+/* Folded, a step is a row and not a column, so there is no name below to push
+   anything out of line and the line centres on the row as it always did. */
+.upload-steps.is-stuck { align-items: center; }
 /* Outside the panes the window scrolls and the navbar is what it has to clear.
    Its measured bottom edge, never a number: the bar is 37px here and 61px on a
    phone, and it grows as the web fonts arrive. The breadcrumb strip is
@@ -4128,9 +4222,13 @@ html.side-locked .main-tabs:not([data-on="form"]) + .step-row { display: none; }
     background: var(--border);
     position: relative;
     z-index: 1;
-    /* centre on the 44px circle, not on the taller circle+label column */
+    /* On the circles' own centre, not on the middle of the taller circle-and-name
+       column. Worked out from the circle rather than written as a number: 21px was
+       right for a 44px circle but counted from the strip's top edge, and the step's
+       own .25rem of padding sits above the circle, so every rule was drawn 4px high
+       at every width. */
     align-self: flex-start;
-    margin-top: 21px;
+    margin-top: calc(var(--step-pad-t) + var(--step-dot) / 2 - 1px);
     flex-shrink: 1;
 }
 
@@ -4783,7 +4881,8 @@ html.side-locked .main-tabs:not([data-on="form"]) + .step-row { display: none; }
 @container uploadcol (max-width: 760px) {
     .upload-steps { padding: .875rem .5rem; }
     .step-number { width: 38px; height: 38px; font-size: .875rem; }
-    .step-connector { width: 46px; margin-top: 18px; }
+    .upload-steps { --step-dot: 38px; }
+    .step-connector { width: 46px; }
     .upload-card { padding: 1.5rem; }
     .supporting-docs-grid { grid-template-columns: 1fr; }
     /* Paired fields stack rather than squeezing into unusable columns. */
@@ -4830,6 +4929,115 @@ html.side-locked .main-tabs:not([data-on="form"]) + .step-row { display: none; }
         grid-template-columns: 1fr;
     }
 
+}
+
+/* Nothing on the form may be wider than the pane. #mainBody scrolls, and a box
+   that overhangs it makes the whole form a sideways scroller - overflow-y: auto
+   computes overflow-x to auto as well, which is the trap CLAUDE.md records as
+   "overflow-x clips the other axis too". Measured at 320, 360 and 390px, these
+   are the boxes that did not fit; each is made smaller or allowed to wrap, never
+   left to overhang. */
+@container uploadcol (max-width: 540px) {
+    /* The step's buttons. "Next: Supporting Documents" is a long label on a 264px
+       line: left to size itself it shrank to 131px and stood its text three lines
+       deep, an 87px block for one button. Back keeps its own width, the one that
+       moves the student on takes what is left, and a third button (Step 4 has
+       Save as Draft between them, 276px of buttons on a 264px line) drops to the
+       next line instead of pushing Submit Paper 36px off the card. */
+    .upload-section .d-flex.justify-content-between {
+        flex-wrap: wrap;
+        gap: .5rem;
+    }
+    .upload-section .d-flex.justify-content-between > .btn {
+        min-width: 0;
+        padding-left: .75rem;
+        padding-right: .75rem;
+        font-size: .8125rem;
+    }
+    .upload-section .d-flex.justify-content-between > .btn-lg {
+        padding-top: .5rem;
+        padding-bottom: .5rem;
+    }
+    /* The one that carries on is the wide one; the others are their own width. */
+    .upload-section .d-flex.justify-content-between > .btn-primary { flex: 1 1 9rem; }
+    .upload-section .d-flex.justify-content-between > .btn-outline-secondary { flex: 0 1 auto; }
+
+    /* Step 4 is the one with three. Submit Paper is what the student came for, so it
+       takes the first line to itself, with Back and Save as Draft sharing the second
+       in equal halves. Wrapping alone put it last, under two buttons that only go
+       backwards, which buried the one that files the paper.
+
+       `order` moves it on screen without moving it in the markup, so the Tab key still
+       reaches Back, then Save as Draft, then Submit: the reading order and the focus
+       order differ by this much on a phone, which is the price of the arrangement.
+       Only here - the other steps have two buttons and read Back, then onward. */
+    #step4 .d-flex.justify-content-between > .btn-primary {
+        order: -1;
+        flex: 1 1 100%;
+    }
+    #step4 .d-flex.justify-content-between > .btn-outline-secondary { flex: 1 1 0; }
+
+    /* Manuscript Type's "Other". The box is 13rem, and beside the tick and the
+       word on a 264px line that came to 23px more than there was. Its own row at
+       this width, with the box taking what the word leaves. */
+    .check-row .form-check.other-check { flex: 1 1 100%; min-width: 0; }
+    .check-row .other-input { flex: 1 1 auto; width: auto; min-width: 0; }
+
+    /* Step 4 reads back what was typed, and a title or a file name is as long as
+       the student made it: it wraps rather than setting the row's width. */
+    .review-summary, .review-item { min-width: 0; overflow-wrap: anywhere; }
+    .review-item > * { min-width: 0; }
+}
+
+/* The step bar fits the screen rather than running off it.
+
+   Measured on the page before this: at 390px the bar wanted 422px against the
+   362px it had, so "Review & Submit" was cut in half, and at 320px it was 130px
+   over. The connectors are not the cause - being flex items with no content they
+   had already shrunk to 0 - it is the four labels, which are `white-space: nowrap`
+   so each step is as wide as its name and the four together are wider than any
+   phone. Sideways scrolling was the fallback (`overflow-x: auto`, kept below as
+   one), but a bar you have to drag to read is a bar that hides half the journey.
+
+   So the four steps share the width equally and the names wrap inside it. Nothing
+   is dropped: every step keeps its name, which is what the bar is for.
+
+   Written as a container query, not a media query, because the upload column can
+   be narrow while the window is wide, and placed after the `max-width: 768px`
+   block above because that one sets .step-label's size and would otherwise have
+   the last word on a phone, where both match.
+
+   Only while the bar is open: once it folds (.is-stuck, on scroll) it is a single
+   row of circles that fit by their own rules, and fit()/.is-tight in the script
+   below drops the names it has no room for. Wrapping a name there would reopen the
+   bar it has just folded. */
+@container uploadcol (max-width: 540px) {
+    .upload-steps:not(.is-stuck) .step-item {
+        /* Equal shares of the line, and allowed to shrink below the name's own
+           width - without min-width a flex item will not go under min-content,
+           which for a nowrap label is the whole name. */
+        flex: 1 1 0;
+        min-width: 0;
+        padding-left: .125rem;
+        padding-right: .125rem;
+    }
+    /* The rules between the circles are what the names are competing with: at
+       60px apiece (the max-width: 768px block) three of them took 180px of a
+       320px screen, so each step was left about 28px and every name hung well
+       outside its own step, "Review & Submit" over three lines with the & alone
+       on one. Short and able to give way, so the width goes to the names. */
+    .upload-steps:not(.is-stuck) .step-connector {
+        width: 16px;
+        min-width: 8px;
+        flex: 0 1 16px;
+    }
+    .upload-steps:not(.is-stuck) .step-label {
+        white-space: normal;
+        overflow-wrap: break-word;
+        text-align: center;
+        font-size: .625rem;
+        line-height: 1.25;
+    }
 }
 
 /* ===== In-page message dialog (replaces the browser's alert box) ===== */
@@ -7604,10 +7812,42 @@ const papelDoc = (function () {
         });
 
         ed.root.appendChild(bar);
+
+        /* On a phone the list is a row scrolled sideways with no scrollbar drawn (the
+           site's own is a thick maroon bar and read as a rule under the tabs), so
+           nothing said there were more sections past the edge. A faint chevron sits over
+           the row's end while there are, and goes once the end is reached.
+
+           Beside the row rather than inside it: a child of a scroller scrolls with its
+           content, and an absolutely placed one does too, being positioned from the
+           padding box. It takes the same grid cell as the row instead (see the CSS),
+           which is also why the old one is cleared out here before a new row is built. */
+        const stale = ed.root.querySelector('.doc-tabs-slide');
+        if (stale) stale.remove();
+        const slide = document.createElement('span');
+        slide.className = 'doc-tabs-slide';
+        slide.setAttribute('aria-hidden', 'true');   // the row itself is what is read
+        const chev = document.createElement('span');
+        chev.className = 'material-symbols-outlined';
+        chev.textContent = 'chevron_right';
+        slide.appendChild(chev);
+        ed.root.appendChild(slide);
+        function syncSlide() {
+            const more = bar.scrollWidth - bar.clientWidth - bar.scrollLeft;
+            slide.classList.toggle('is-on', bar.scrollWidth > bar.clientWidth + 1 && more > 1);
+        }
+        bar.addEventListener('scroll', syncSlide, { passive: true });
+        window.addEventListener('resize', syncSlide, { passive: true });
+        /* After the row is laid out, and again once the web fonts land: the names are
+           what make it overflow, and measured before they arrive it believed it fitted. */
+        requestAnimationFrame(syncSlide);
+        if (document.fonts && document.fonts.ready) { document.fonts.ready.then(syncSlide); }
+
         const active = bar.querySelector('.doc-tab.is-active .doc-tab-main');
         if (active && active.scrollIntoView) {
             active.scrollIntoView({ block: 'nearest', inline: 'nearest' });
         }
+        requestAnimationFrame(syncSlide);   // the scroll above may have moved it already
     }
 
     /* ----- Putting the list of sections away (.doc-sections-toggle) -----
@@ -8885,7 +9125,22 @@ const papelDoc = (function () {
             if (!open) return;
             const key = open.getAttribute('data-section');
             if (!inScope(key) || open.classList.contains('is-out-of-scope')) {
-                collapseExpanded();
+                /* The section being written in has just come off the paper, so its box is
+                   hidden on the form and there is nothing left here to write in. The view
+                   used to close, which read as the X on one tab having shut the whole
+                   Writing View: the student pressed a close on Methodology and lost the
+                   place they were writing in. The paper still has the sections beside it -
+                   removeSectionFromPaper refuses to take the last one off - so the view
+                   stays and moves along to the next of them, exactly as pressing that
+                   section's own tab would, and only closes when none is left. */
+                const left = sectionsInOrder().filter(function (k) {
+                    return inScope(k) && !editors[k].root.classList.contains('is-out-of-scope');
+                });
+                const was = order.indexOf(key);
+                const next = left.filter(function (k) { return order.indexOf(k) > was; })[0]
+                          || left[left.length - 1];
+                if (next && editors[next]) { toggleExpand(editors[next]); }
+                else { collapseExpanded(); }
                 return;
             }
             const old = open.querySelector('.doc-tabs');
@@ -9841,18 +10096,62 @@ function closeDocFileMenu() {
         if (!tooWide(el)) { return; }
         el.classList.add('is-min');            // and the rules between them go
     }
+    /* The bar is a row of the pane, above the body that scrolls, so folding it is
+       that row getting shorter and the whole form below moving up by as much.
+
+       Folded at 12px of scroll that was a lurch: on a phone the row goes 118px to
+       45px, so two pixels of drag threw the form up by 73 and halved what was left
+       to scroll. Near the old 12/4 thresholds the compensation below would also
+       have put the scroll back under 4 and unfolded it again, which is a bar that
+       opens and shuts while a finger is still moving.
+
+       Two things fix it together, and neither works alone:
+
+         * the form is put back where it was (setStuck), by the height the row just
+           gained or lost, so folding changes the chrome and moves nothing else;
+         * the fold waits until the scroll is past the bar's own open height, which
+           is the one threshold that guarantees there is enough scrolled distance to
+           give back. Fold at `open + 8` and unfold at 8, and after either the scroll
+           sits between the two, so neither can trigger the other. */
+    let openH = 0;                    // the row's height while the bar is open
+    function rowH(el) {
+        const row = el.closest ? el.closest('.step-row') : null;
+        return (row || el).getBoundingClientRect().height;
+    }
+    function setStuck(el, on) {
+        const sc = scroller();
+        /* Where the scroll is *before* the row changes size. Folding makes the body
+           taller, so the browser clamps the scroll to the new, shorter range the
+           moment the class lands; reading it afterwards gives that clamped figure
+           and compensating from it overshoots. */
+        const y0 = sc ? sc.scrollTop : (window.scrollY || 0);
+        /* Measured with the animation off. The bar's padding, its circles and its
+           labels are all transitioned, so a height read straight after the class is
+           the height it is passing through, not the one it is going to: the first
+           build of this read a delta of 0 and compensated by nothing. */
+        el.classList.add('is-folding');
+        const before = rowH(el);
+        if (on) { el.classList.add('is-stuck'); fit(el); }
+        else { el.classList.remove('is-stuck', 'is-tight', 'is-min'); }
+        stuck = on;
+        const d = before - rowH(el);  // folded: what the row gave back
+        if (d) {
+            if (sc) { sc.scrollTop = Math.max(0, y0 - d); }
+            else { window.scrollTo(0, Math.max(0, y0 - d)); }
+        }
+        // Animations back on once the new size is painted.
+        requestAnimationFrame(function () { el.classList.remove('is-folding'); });
+    }
     function check() {
         queued = false;
         const el = steps();
         if (!el) { return; }
         const y = scrolled();
-        if (!stuck && y > 12) {
-            stuck = true;
-            el.classList.add('is-stuck');
-            fit(el);
-        } else if (stuck && y < 4) {
-            stuck = false;
-            el.classList.remove('is-stuck', 'is-tight', 'is-min');
+        if (!stuck) { openH = rowH(el) || openH; }
+        if (!stuck && y > openH + 8) {
+            setStuck(el, true);
+        } else if (stuck && y < 8) {
+            setStuck(el, false);
         }
     }
     // One check a frame at most: a scroll fires far more often than that.
@@ -11583,9 +11882,14 @@ window.papelSide = (function () {
     function writeEl() { return document.querySelector('.doc-editor.is-expanded'); }
     function pdfOpen()  { return !!(window.papelPdfDock && window.papelPdfDock.isOpen()); }
     function chatOpen() { const w = chatEl(); return !!w && w.classList.contains('is-docked'); }
-    function writeOpen() { return wide() && !!writeEl(); }
+    function writeOpen() { return !!writeEl(); }
     function shell()    { return document.querySelector('.col-lg-11.upload-shell'); }
+    /* Room for two panes. The panes themselves are on at every width: a phone gets
+       one pane holding every tab (see render()), which is why this is no longer the
+       test for whether there are panes at all. */
     function wide()     { return window.innerWidth > 900; }
+    // One pane, holding what the two would: a phone.
+    function onePane()  { return !wide(); }
     // The form's own scroller: the main pane's body while the page is held, else the page.
     function scroller() {
         const b = document.getElementById('mainBody');
@@ -11636,11 +11940,11 @@ window.papelSide = (function () {
         parking = false;
     }
     function isOpen(k) {
-        return k === 'form' ? true : k === 'write' ? (writeOpen() || (wide() && !!parked)) : k === 'pdf' ? pdfOpen()
-             : k === 'corpus' ? chatOpen() : k === 'toc' ? (wide() || pdfOpen() || chatOpen())
-             : k === 'preview' ? wide() : false;
+        return k === 'form' ? true : k === 'write' ? (writeOpen() || !!parked) : k === 'pdf' ? pdfOpen()
+             : k === 'corpus' ? chatOpen() : k === 'toc' ? true
+             : k === 'preview' ? true : false;
     }
-    function paneOf(k) { return order.main.indexOf(k) !== -1 ? 'main' : 'side'; }
+    function paneOf(k) { return onePane() ? 'main' : (order.main.indexOf(k) !== -1 ? 'main' : 'side'); }
     function elOf(k) {
         return k === 'pdf' ? pdfEl() : k === 'corpus' ? chatEl() : k === 'toc' ? toc : k === 'write' ? writeEl()
              : k === 'preview' ? preview : null;
@@ -11991,12 +12295,15 @@ window.papelSide = (function () {
             if (open && !wasOpen[k]) homeTab(k);
             wasOpen[k] = open;
         });
-        document.body.classList.toggle('panes', W);
-        placeStepBar(W);
-        const mainTabs = W ? openIn('main') : [];
-        const sideTabs = openIn('side').filter(function (k) { return W || k !== 'write'; });
-        // On a phone everything but the form is the side pane's, the full view aside.
-        if (!W) order.main.forEach(function (k) { if (k !== 'form' && k !== 'write' && isOpen(k) && sideTabs.indexOf(k) === -1) sideTabs.push(k); });
+        /* The panes are on at every width. A phone has one of them - the form's own
+           card - and every tab is in its strip: Upload Paper, the Writing View, the
+           PDFs and Preview as on a desktop, then Contents and Corpus, which have no
+           side pane to live in. The side pane is simply not drawn, so there is one
+           strip to read and one page under it rather than a panel over the page. */
+        document.body.classList.toggle('panes', true);
+        placeStepBar(true);
+        const mainTabs = W ? openIn('main') : openIn('main').concat(openIn('side'));
+        const sideTabs = W ? openIn('side') : [];
         latest = latest.filter(isOpen);
         ['pdf', 'corpus', 'write'].forEach(function (k) { if (isOpen(k) && latest.indexOf(k) === -1) latest.push(k); });
 
@@ -12008,11 +12315,12 @@ window.papelSide = (function () {
                 active[pane] = newest || tabs[0] || null;
             }
         });
-        const sideOn = sideTabs.length > 0 && (W || pdfOpen() || chatOpen());
-        document.body.classList.toggle('side-open', W && sideOn);
-        document.body.classList.toggle('side-collapsed', W && sideOn && collapsed);
-        document.body.classList.toggle('side-left', W && side === 'left');
-        document.body.classList.toggle('side-cover', !W && sideOn);
+        // One pane on a phone, so there is no side pane and nothing covering the page.
+        const sideOn = W && sideTabs.length > 0;
+        document.body.classList.toggle('side-open', sideOn);
+        document.body.classList.toggle('side-collapsed', sideOn && collapsed);
+        document.body.classList.toggle('side-left', sideOn && side === 'left');
+        document.body.classList.remove('side-cover');
 
         if (!sidePane.parentNode) document.body.appendChild(sidePane);
         if (!toc.parentNode) document.body.appendChild(toc);
@@ -12023,7 +12331,7 @@ window.papelSide = (function () {
         drawStrip('main', mainTabs);
         drawRail(sideOn ? sideTabs : []);
         room();
-        lockForm(W);
+        lockForm(true);
         layout();
         if (whereOnView('toc')) drawToc();
         fadeNames();
@@ -12046,12 +12354,12 @@ window.papelSide = (function () {
            pane at all. Folded away, the rail has his button, and one is enough. */
         const sideShown = document.body.classList.contains('side-open') && !collapsed;
         const here = pane === 'side' ? sideShown : !document.body.classList.contains('side-open');
-        if (wide() && !chatOpen() && here && (pane === 'main' || tabs.length)) strip.appendChild(corpusButton());
+        if (!chatOpen() && here && (pane === 'main' || tabs.length)) strip.appendChild(corpusButton());
     }
 
     // Which pane a tab is on view in, if it is.
     function whereOnView(k) {
-        if (active.main === k && wide()) return 'main';
+        if (active.main === k) return 'main';
         if (active.side === k && document.body.classList.contains('side-open') && !collapsed) return 'side';
         if (active.side === k && document.body.classList.contains('side-cover')) return 'side';
         return null;
@@ -12072,13 +12380,13 @@ window.papelSide = (function () {
             sidePane.style.top = sidePane.style.bottom = '';
         }
         const boxes = {
-            main: mainBody && W ? mainBody.getBoundingClientRect() : null,
+            main: mainBody ? mainBody.getBoundingClientRect() : null,
             side: !sidePane.hidden ? sideBody.getBoundingClientRect() : null
         };
-        mainBody && mainBody.classList.toggle('is-covered', W && active.main !== 'form');
+        mainBody && mainBody.classList.toggle('is-covered', active.main !== 'form');
         // The Writing View's section: out of the form while its tab is on view, back in it while not.
         let unparked = false;
-        if (W && isOpen('write')) {
+        if (isOpen('write')) {
             if (whereOnView('write')) { unparked = !!parked; unpark(); } else park();
         }
         /* A section given up for another in the Writing View, or put back in the form (after the
@@ -12094,7 +12402,6 @@ window.papelSide = (function () {
             if (!el) return;
             const where = isOpen(k) ? whereOnView(k) : null;
             const box = where ? boxes[where] : null;
-            if (k === 'write' && !W) { el.classList.remove('in-pane', 'side-hidden'); fromHolder(el); return; }
             if (!isOpen(k)) { el.classList.remove('in-pane', 'side-hidden'); if (k === 'write') fromHolder(el); return; }
             el.classList.add('in-pane');
             // Out of its step, so a step it does not belong to cannot hide it.
@@ -12144,7 +12451,7 @@ window.papelSide = (function () {
     function noteSpacer() {
         const ed = writeEl();
         const sp = ed && ed.previousElementSibling;
-        if (!sp || !sp.classList.contains('doc-editor-spacer') || !wide()) return;
+        if (!sp || !sp.classList.contains('doc-editor-spacer')) return;
         if (sp.querySelector('.doc-spacer-note')) return;
         const t = ed.querySelector('.doc-editor-title');
         const n = document.createElement('div');
@@ -12172,7 +12479,7 @@ window.papelSide = (function () {
     /* ----- Showing, folding, moving ----- */
     function show(key) {
         if (key === 'form') { active.main = 'form'; render(); return; }
-        const pane = wide() ? paneOf(key) : 'side';
+        const pane = paneOf(key);
         active[pane] = key;
         if (pane === 'side') { collapsed = false; remember(); }
         render();
@@ -12467,7 +12774,7 @@ window.papelSide = (function () {
     function lockForm(on) {
         const html = document.documentElement, sh = shell();
         if (!sh || !mainBody) return;
-        on = on && wide();
+        on = !!on;
         const was = html.classList.contains('side-locked');
         if (on) {
             if (!was) {
@@ -12612,7 +12919,7 @@ window.papelSide = (function () {
     /* To a step, as its number in the progress bar takes you there, then to the part,
        at the top of the form. The form's tab is put on view first if another was. */
     function go(stepNo, part) {
-        if (wide() && active.main !== 'form') { active.main = 'form'; render(); }
+        if (active.main !== 'form') { active.main = 'form'; render(); }
         let guard = 8;
         while (currentStep !== stepNo && guard-- > 0) {
             const before = currentStep;

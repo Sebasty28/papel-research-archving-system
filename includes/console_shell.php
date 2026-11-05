@@ -339,6 +339,9 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
     left: 1.25rem; right: 1.25rem; bottom: 0;
     border-bottom: 1px solid var(--border-soft);
 }
+/* Density changes the card's inset; the separator has to follow its text. */
+[data-density="compact"] .paper-card::after { left: .875rem; right: .875rem; }
+[data-density="comfortable"] .paper-card::after { left: 1.5rem; right: 1.5rem; }
 .paper-card:last-child::after { display: none; }
 /* The colour lives on the heading, not only on the link inside it: a draft's
    title is plain text, since the archive has nothing to link it to yet. */
@@ -485,24 +488,19 @@ html[data-view="rows"] .paper-list .paper-card > .card-feedback,
 html[data-view="rows"] .paper-list .paper-card > .card-actions,
 /* The fold chevron folds what a row has already folded. */
 html[data-view="rows"] .paper-list .paper-card-toggle { display: none; }
-/* Below this the three columns have nowhere to go, so a row is a card
-   again rather than a line squeezed to nothing.
-
-   **Everything the row did to stay on one line has to be undone with it**,
-   and this block undid three things out of eight. What was left behind, on a
-   390px phone: the status still had its nowrap and, worse, still had the
-   `grid-column: 4` it was given for the row's five-column grid, which in the
-   head's own two-column grid makes a fourth column out of nothing and pushed
-   it 164px past the right-hand edge of the list, where it showed as "St" and
-   then nothing; the authors still had their ellipsis; and the meta still had
-   the mask that fades out its last 1.75rem, so the date line ended at
-   "Unpublished Pape". The public repository's rows (includes/browse_console.php)
-   met this exactly and are the list this was written against.
-
-   There is no line to protect at this width, so the text wraps like any
-   other text, and the cells go back to being the card's own two. */
-@media (max-width: 820px) {
-    html[data-view="rows"] .paper-list .paper-card { display: block; padding: .875rem 1rem; }
+/* A sidebar can narrow the results column just above 900px. In that range
+   the grid gives the title too little room, so the row uses the card's
+   stacked layout. Every grid constraint must be reset together: leaving the
+   status in column 4 or keeping the metadata mask clips content in the
+   stacked layout. Below 900px the row is two columns instead: see the foot
+   of this file. */
+@container paper-results (max-width: 760px) {
+    html[data-view="rows"] .paper-list .paper-card { display: block; padding: 1rem 1.25rem; }
+    html[data-view="rows"] .paper-list .paper-card::after { left: 1.25rem; right: 1.25rem; }
+    html[data-view="rows"][data-density="compact"] .paper-list .paper-card { padding: .625rem .875rem; }
+    html[data-view="rows"][data-density="compact"] .paper-list .paper-card::after { left: .875rem; right: .875rem; }
+    html[data-view="rows"][data-density="comfortable"] .paper-list .paper-card { padding: 1.5rem; }
+    html[data-view="rows"][data-density="comfortable"] .paper-list .paper-card::after { left: 1.5rem; right: 1.5rem; }
     html[data-view="rows"] .paper-list .card-head { display: grid; }
     html[data-view="rows"] .paper-list .card-head > :not(.card-status) { display: block; }
 
@@ -656,5 +654,85 @@ html[data-view="rows"] .paper-list .paper-card-toggle { display: none; }
        pager, which is the order the wide layout reads in too. */
     .dash-bar > .toolbar-right { order: 1; margin-left: 0; padding-left: 0; }
     .dash-tools { order: 2; margin-left: auto; }
+}
+
+/* Rows stay rows on a phone, and a phone row is two columns: the title, which
+   is what a result is read by and reads perfectly well cut short, and the
+   status column, which carries where the paper stands and the way into its
+   record. The authors and the date line go. Five columns at a legible type
+   size need about 47rem, and the only ways to find that on a 390px screen are
+   type too small to read or a well that scrolls sideways, which hides half of
+   every row behind a gesture nothing on the page suggests. Cards is the view
+   that shows the rest, one result at a time, a tap away on the same toolbar. */
+@media (max-width: 900px) {
+    html[data-view="rows"] .paper-list .paper-card {
+        display: grid;
+        /* fit-content, so the status track is its own content wide and no more,
+           capped at 11rem so a long link on a desk cannot take the row. The two
+           obvious spellings are both wrong and both were measured: `auto` lets a
+           long link push the title to 83px, and `minmax(0, 11rem)` is a fixed
+           11rem whatever the content, which left the title 94px to hold a column
+           padded with 43px of nothing. Nor does max-width on .card-status work:
+           it resolves against that track's own content width, and ellipsised
+           "View Details" down to "V...". */
+        grid-template-columns: minmax(0, 1fr) fit-content(11rem);
+        align-items: baseline;
+        column-gap: .75rem;
+        padding: .45rem 1.25rem;
+    }
+    html[data-view="rows"][data-density="compact"] .paper-list .paper-card { padding: .3rem 1.25rem; }
+    html[data-view="rows"][data-density="comfortable"] .paper-list .paper-card { padding: .7rem 1.25rem; }
+    html[data-view="rows"] .paper-list .paper-card::after { left: 1.25rem; right: 1.25rem; }
+    html[data-view="rows"][data-density="compact"] .paper-list .paper-card::after { left: 1.25rem; right: 1.25rem; }
+    html[data-view="rows"][data-density="comfortable"] .paper-list .paper-card::after { left: 1.25rem; right: 1.25rem; }
+    html[data-view="rows"] .paper-list .card-head,
+    html[data-view="rows"] .paper-list .card-head > :not(.card-status) { display: contents; }
+    html[data-view="rows"] .paper-list .paper-card .paper-title {
+        grid-column: 1;
+        margin: 0;
+        min-width: 0;
+        font-size: .8125rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    /* Held off the grid rather than left to the rules above: .card-head and
+       its first child are `display: contents` here, so these are the grid's
+       own children now and nothing else is left to hide them by. The body is
+       the desk's Approve and Return buttons, which do not fit beside a title
+       at this width; the row's title opens the review page, where they are. */
+    html[data-view="rows"] .paper-list .paper-card .paper-authors,
+    html[data-view="rows"] .paper-list .paper-card .paper-meta,
+    html[data-view="rows"] .paper-list .paper-card-body { display: none; }
+    html[data-view="rows"] .paper-list .card-status {
+        grid-column: 2;
+        display: flex;
+        align-items: baseline;
+        gap: .5rem;
+        min-width: 0;
+        padding-right: 0;
+        text-align: left;
+        white-space: nowrap;
+        font-size: .625rem;
+    }
+    /* The word "Status:" is a label for a value that needs none: APPROVED is
+       plainly a status, and it is the one word of the two worth the room. The
+       label is a bare text node in the span, so there is nothing to hide it by
+       but shrinking the span and giving the value its size back. Shrunk rather
+       than hidden on purpose: zero-size text is still read out, so a screen
+       reader still hears "Status: APPROVED". */
+    html[data-view="rows"] .paper-list .card-status > span { font-size: 0; }
+    html[data-view="rows"] .paper-list .card-status .status-value { font-size: .625rem; }
+    /* The desks hide this link in rows, having the Approve and Return buttons
+       in the body column instead. The body is gone here, so it comes back as
+       the row's way into the paper. The desks have to say this again in
+       includes/review_console.php, whose sheet loads after this one. */
+    html[data-view="rows"] .paper-list .card-status .paper-action {
+        display: block;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-size: .75rem;
+    }
 }
 </style>

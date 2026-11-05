@@ -1083,6 +1083,15 @@ document.addEventListener('DOMContentLoaded', function () {
     top: 1.25rem;
     max-height: min(calc(100vh - 2.5rem), var(--pd-main-h, calc(100vh - 2.5rem)));
 }
+/* Stacked, the rail stops being a column beside the paper and becomes a bar pinned
+   over it, with the paper scrolling underneath. A gap above it is then a strip of
+   the paper showing through above the contents, which on the real page the navbar
+   covers and here nothing does. Flush with the top instead: there is nothing up
+   there to clear. The cap goes with it, for the reason includes/paper_record_css.php
+   gives at this width - the rail is a bar, not a box that scrolls. */
+@media (max-width: 1050px) {
+    .pd-side { top: 0; max-height: none; }
+}
 </style>
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 /* A preview inside the upload form: it is to be looked at, not used. Every way out
