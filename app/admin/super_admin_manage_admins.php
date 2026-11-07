@@ -94,7 +94,7 @@ function admin_table(array $rows, string $position): void {
     ?>
     <div class="mgmt-panel">
         <div class="mgmt-scroll">
-            <table class="mgmt-table">
+            <table class="mgmt-table mgmt-mobile-cards">
                 <thead>
                     <tr>
                         <th>Admin</th>
@@ -121,16 +121,18 @@ function admin_table(array $rows, string $position): void {
                         data-faculty-id="<?= e($r['faculty_id'] ?? '') ?>"
                         data-email="<?= e($r['email']) ?>"
                         data-position="<?= e(staff_position_of($r)) ?>">
-                        <td class="mgmt-name">
+                        <td class="mgmt-name" data-label="Admin">
                             <?= e($r['full_name']) ?>
                             <?php if ($off): ?><span class="mgmt-tag">Archived</span><?php endif; ?>
                             <span class="mgmt-sub" title="<?= e($r['email']) ?>"><?= e($r['email']) ?></span>
                         </td>
-                        <td class="mgmt-id">
-                            <?= e($r['faculty_id'] ?: 'N/A') ?>
-                            <span class="mgmt-sub">Added <?= e(date('M j, Y', strtotime($r['created_at']))) ?></span>
+                        <td class="mgmt-id" data-label="ID">
+                            <span class="mgmt-value">
+                                <?= e($r['faculty_id'] ?: 'N/A') ?>
+                                <span class="mgmt-sub">Added <?= e(date('M j, Y', strtotime($r['created_at']))) ?></span>
+                            </span>
                         </td>
-                        <td>
+                        <td data-label="Actions">
                             <div class="mgmt-actions">
                                 <?php if ($off): ?>
                                     <form method="post">

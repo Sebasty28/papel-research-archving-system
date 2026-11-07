@@ -21,23 +21,47 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
 .layout {
     display: grid;
     grid-template-columns: 1fr var(--sidebar-w, 226px);
-    gap: var(--col-gap, 36px);
+    gap: var(--col-gap, 6px);
     align-items: start;
     padding-top: 1.5rem;
     padding-bottom: 3rem;
 }
 .main-col { position: relative; min-width: 0; }
-/* The console sits on the page. It used to sit on a soft-cream panel with the
-   white cards on top of it, which is one tint too many: the page already has
-   a colour, and a block of a second one behind every list was doing nothing
-   the cards and the rules below them do not do themselves. The padding stays,
-   so everything inside keeps the inset it was laid out with. */
+/* The same cream frame as the sidebar, around the search, tabs and results. */
 /* Named as a container so the toolbar inside it can be sized against the
    console rather than against the window: the sidebar takes a third of the
    page, which no viewport media query can see. */
 .dash-shell {
     container-type: inline-size; container-name: desk;
-    background: none; border-radius: var(--r-card, 8px); padding: .875rem;
+    background: var(--cream); border-radius: var(--r-card, 8px); padding: .375rem;
+}
+.dash-shell .paper-list {
+    background: var(--white);
+    border-radius: var(--r-card, 8px);
+    box-shadow: 0 1px 2px rgba(51, 0, 0, .06);
+}
+.dash-shell .paper-list.is-scrollable { padding-right: .25rem; }
+/* On wide dashboards, let the sidebar set the column height. The results
+   well takes the remaining room and scrolls when there are more papers. */
+@media (min-width: 901px) {
+    .layout:has(.dash-shell) { align-items: stretch; }
+    .layout:has(.dash-shell) > .main-col {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+    }
+    .layout:has(.dash-shell) > .sidebar-right { align-self: start; }
+    .dash-shell {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+    .dash-shell .paper-list.is-scrollable {
+        height: 0;
+        min-height: 10rem;
+        flex: 1 1 auto;
+    }
 }
 /* ===== Search + upload row ===== */
 .dash-top { display: flex; align-items: center; gap: .75rem; margin-bottom: .75rem; }
@@ -293,12 +317,10 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
     border: none; background: none; font-family: inherit; cursor: pointer;
     transition: background .2s, color .2s;
 }
-/* Cream, the same highlight the rest of the site uses. These were white for
-   contrast against the cream panel that used to be under them; with that gone
-   a white pill on a white page marks nothing at all. */
-.dash-tab:hover { background: var(--cream); color: var(--maroon); }
-.dash-tab.active { background: var(--cream); color: var(--maroon); }
-.dash-shell .toolbar-btn:hover { background: var(--cream); color: var(--maroon); }
+/* White stands clear of the cream frame behind the tab strip. */
+.dash-tab:hover { background: var(--white); color: var(--maroon); }
+.dash-tab.active { background: var(--white); color: var(--maroon); }
+.dash-shell .toolbar-btn:hover { background: var(--white); color: var(--maroon); }
 /* Quick Settings now sits on the left of the bar, so the panel opens to the
    right instead of hanging off the left edge. */
 .dash-tools .quick-settings-dropdown { left: 0; right: auto; }
@@ -325,14 +347,28 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
    browse_console.php. */
 .paper-card {
     position: relative;
+    isolation: isolate;
     background: none;
     border: 0;
     border-radius: var(--r-card, 8px);
     padding: 1rem 1.25rem;
     margin: 0;
-    transition: background .2s ease;
 }
-.paper-card:hover { background: var(--cream); }
+.paper-card::before {
+    content: '';
+    position: absolute;
+    inset: 7px 10px;
+    z-index: -1;
+    border-radius: var(--r-card, 8px);
+    background: var(--cream);
+    opacity: 0;
+    transition: opacity .2s ease;
+    pointer-events: none;
+}
+@media (hover: hover) {
+    .paper-card:hover::before { opacity: 1; }
+}
+html[data-view="rows"] .paper-list .paper-card::before { inset-block: 3px; }
 .paper-card::after {
     content: '';
     position: absolute;
@@ -735,4 +771,22 @@ html[data-view="rows"] .paper-list .paper-card-toggle { display: none; }
         font-size: .75rem;
     }
 }
+
+/* The white results card has a smaller text inset than the old open list.
+   Keep the three density settings and the row separators in step with it. */
+.dash-shell { --paper-inset: .875rem; }
+html[data-density="compact"] .dash-shell { --paper-inset: .625rem; }
+html[data-density="comfortable"] .dash-shell { --paper-inset: 1.25rem; }
+html[data-view="rows"] .dash-shell { --paper-inset: .625rem; }
+html[data-view="rows"][data-density="compact"] .dash-shell { --paper-inset: .5rem; }
+html[data-view="rows"][data-density="comfortable"] .dash-shell { --paper-inset: .875rem; }
+@media (max-width: 900px) {
+    html[data-view="rows"] .dash-shell { --paper-inset: .75rem; }
+    html[data-view="rows"][data-density="compact"] .dash-shell { --paper-inset: .625rem; }
+    html[data-view="rows"][data-density="comfortable"] .dash-shell { --paper-inset: .875rem; }
+}
+.dash-shell .paper-list .paper-card { padding-inline: var(--paper-inset); }
+.dash-shell .paper-list .paper-card::after { left: var(--paper-inset); right: var(--paper-inset); }
+html[data-view="rows"] .dash-shell .paper-list .paper-card { padding-inline: var(--paper-inset); }
+html[data-view="rows"] .dash-shell .paper-list .paper-card::after { left: var(--paper-inset); right: var(--paper-inset); }
 </style>

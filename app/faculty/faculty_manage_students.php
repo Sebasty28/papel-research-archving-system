@@ -434,7 +434,7 @@ function mgmt_student_row(array $r, array $programs): void {
         data-student-id="<?= e($r['student_id'] ?? '') ?>"
         data-email="<?= e($r['email']) ?>"
         data-academic-year="<?= e($r['academic_year'] ?? '') ?>">
-        <td class="mgmt-name">
+        <td class="mgmt-name" data-label="Student">
             <?= e($r['full_name']) ?>
             <?php if ($state === 'archived'): ?>
                 <span class="mgmt-tag">Archived</span>
@@ -443,27 +443,31 @@ function mgmt_student_row(array $r, array $programs): void {
             <?php endif; ?>
             <span class="mgmt-sub" title="<?= e($r['email']) ?>"><?= e($r['email']) ?></span>
         </td>
-        <td class="mgmt-id">
-            <?= e($r['student_id'] ?: 'N/A') ?>
-            <?php if ($expTs): ?>
-                <span class="mgmt-sub <?= $lapsed ? 'is-lapsed' : ($closing ? 'is-closing' : '') ?>"
-                      title="<?= e(student_account_years($r['section'])) ?>-year account for section <?= e($r['section']) ?>">
-                    <?= $lapsed ? 'Expired' : 'Until' ?> <?= e(date('M j, Y', $expTs)) ?>
-                </span>
-            <?php else: ?>
-                <span class="mgmt-sub">No expiry</span>
-            <?php endif; ?>
+        <td class="mgmt-id" data-label="Student ID">
+            <span class="mgmt-value">
+                <?= e($r['student_id'] ?: 'N/A') ?>
+                <?php if ($expTs): ?>
+                    <span class="mgmt-sub <?= $lapsed ? 'is-lapsed' : ($closing ? 'is-closing' : '') ?>"
+                          title="<?= e(student_account_years($r['section'])) ?>-year account for section <?= e($r['section']) ?>">
+                        <?= $lapsed ? 'Expired' : 'Until' ?> <?= e(date('M j, Y', $expTs)) ?>
+                    </span>
+                <?php else: ?>
+                    <span class="mgmt-sub">No expiry</span>
+                <?php endif; ?>
+            </span>
         </td>
-        <td class="mgmt-prog" title="<?= e($r['program'] ?? '') ?>">
+        <td class="mgmt-prog" data-label="Program" title="<?= e($r['program'] ?? '') ?>">
             <?= e($programs[$r['program'] ?? ''] ?? ($r['program'] ?: 'N/A')) ?>
         </td>
-        <td class="mgmt-cohort">
-            <?= e($r['section'] ?: 'N/A') ?>
-            <?php if (!empty($r['academic_year'])): ?>
-                <span class="mgmt-sub">A.Y. <?= e($r['academic_year']) ?></span>
-            <?php endif; ?>
+        <td class="mgmt-cohort" data-label="Section">
+            <span class="mgmt-value">
+                <?= e($r['section'] ?: 'N/A') ?>
+                <?php if (!empty($r['academic_year'])): ?>
+                    <span class="mgmt-sub">A.Y. <?= e($r['academic_year']) ?></span>
+                <?php endif; ?>
+            </span>
         </td>
-        <td>
+        <td data-label="Actions">
             <div class="mgmt-actions">
                 <?php if ($state === 'archived'): ?>
                     <form method="post">
@@ -738,7 +742,7 @@ $PAGE_SKELETON = 'table';
 
                 <div class="mgmt-panel">
                     <div class="mgmt-scroll">
-                        <table class="mgmt-table" id="activeStudentsTable">
+                        <table class="mgmt-table mgmt-mobile-cards" id="activeStudentsTable">
                             <thead>
                                 <tr>
                                     <th>Student</th>
@@ -781,7 +785,7 @@ $PAGE_SKELETON = 'table';
 
                 <div class="mgmt-panel">
                     <div class="mgmt-scroll">
-                        <table class="mgmt-table" id="archivedStudentsTable">
+                        <table class="mgmt-table mgmt-mobile-cards" id="archivedStudentsTable">
                             <thead>
                                 <tr>
                                     <th>Student</th>

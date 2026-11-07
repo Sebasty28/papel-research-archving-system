@@ -23,7 +23,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
 .faq-item { border: 1px solid var(--border); border-radius: var(--r-card, 8px); overflow: hidden; }
 .faq-trigger {
     width: 100%; display: flex; align-items: center; justify-content: space-between;
-    padding: 1.125rem 1.25rem; background: var(--white);
+    padding: 1.125rem .75rem; background: var(--white);
     border: none; text-align: left; cursor: pointer; font-family: inherit;
     font-size: .9375rem; font-weight: 400; color: var(--ink);
     transition: background .15s; gap: 1rem;
@@ -32,7 +32,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
 .faq-trigger.open { background: var(--cream); color: var(--maroon); border-bottom: 1px solid var(--border); }
 .faq-trigger .faq-icon { flex-shrink: 0; font-size: 1rem; color: var(--grey); transition: transform .25s; }
 .faq-trigger.open .faq-icon { transform: rotate(45deg); color: var(--maroon); }
-.faq-body { display: none; padding: 1.125rem 1.25rem; background: var(--white); color: var(--ink); font-size: .9375rem; line-height: 1.75; }
+.faq-body { display: none; padding: 1.125rem .75rem; background: var(--white); color: var(--ink); font-size: .9375rem; line-height: 1.75; }
 .faq-body.open { display: block; }
 .faq-body ol, .faq-body ul { padding-left: 1.25rem; margin-top: .5rem; }
 .faq-body li { margin-bottom: .5rem; }
@@ -57,13 +57,10 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
 .help-layout {
     display: grid;
     grid-template-columns: 14rem minmax(0, 1fr);
-    gap: .75rem;
+    gap: .375rem;
     align-items: start;
-    /* No tinted panel behind the two cards: they have edges of their own, and
-       the cream slab only drew a second one around them. */
-    background: none;
-    padding: 0;
 }
+.help-layout .page-card-body { padding: .75rem; }
 /* Each card is alone in its column, so the gap page_theme puts under a
    stacked card would only pad out the grid, and, on a phone where the two
    stack, double the gap between them. */
@@ -80,7 +77,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
     display: flex;
     align-items: center;
     gap: .625rem;
-    padding: .625rem 1.25rem;
+    padding: .625rem .75rem;
     color: var(--ink);
     font-size: .875rem;
     text-decoration: none;
@@ -139,7 +136,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
         <p>Guides and answers for using the repository.</p>
     </div>
 
-    <div class="page-shell help-layout">
+    <div class="page-shell resource-shell help-layout">
 
     <?php /* The quick links in the left column, where the section list
              stood: one list of places to go, beside the answers, rather

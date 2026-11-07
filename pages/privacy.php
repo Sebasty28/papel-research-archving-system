@@ -73,7 +73,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
         <p>How the repository collects, uses, and protects your information.</p>
     </div>
 
-    <div class="page-shell">
+    <div class="page-shell resource-shell legal-shell">
 
 
     <div class="page-card">

@@ -95,25 +95,38 @@
             mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M1.5 1.5l9 9M10.5 1.5l-9 9' stroke='%23000' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
 }
 .search-input::-webkit-search-cancel-button:hover { opacity: 1; }
-/* Light on a dark field, for the same reason it is dark on a light one: a
-   warm parchment grey, to match Old Night's surfaces (10.10:1 on #1E1813). */
-html[data-mode="dark"] { --search-clear: #CFC3AE; }
+/* A light neutral clear icon remains visible on Old Night's charcoal field. */
+html[data-mode="dark"] { --search-clear: #C8C9CB; }
 
 /* ===== Paper list ===== */
 /* The sidebar can leave the results column narrower at 1024px than it is at
    900px, when the sidebar has become a drawer. Rows therefore respond to the
    list's own width, not just the window's width. */
 .paper-list { container: paper-results / inline-size; }
-/* Row hover bleeds slightly past the column, so the cream block reads as a
-   card while the text stays aligned with the heading rule above it. */
+/* The hover fill sits inside the row without moving its text or actions. */
 .paper-item {
     position: relative;
+    isolation: isolate;
     padding: .875rem 1.25rem;
     margin: 0 -.75rem;
     border-radius: var(--r-card, 8px);
-    transition: background .2s ease;
 }
-.paper-item:hover { background: var(--cream); }
+.paper-item::before {
+    content: '';
+    position: absolute;
+    inset: 7px 1.375rem;
+    z-index: -1;
+    border-radius: var(--r-card, 8px);
+    background: var(--cream);
+    opacity: 0;
+    transition: opacity .2s ease;
+    pointer-events: none;
+}
+@media (hover: hover) {
+    .paper-item:hover::before { opacity: 1; }
+}
+html[data-view="rows"] .paper-list .paper-item::before { inset-block: 3px; }
+.paper-item:has(.paper-action.js-open-modal) { cursor: pointer; }
 /* Separator drawn inside the padding so it lines up with the column edges */
 .paper-item::after {
     content: '';
@@ -363,7 +376,7 @@ html[data-view="rows"] .paper-list .paper-item .paper-program {
     /* And the result itself. Now that an entry has no ground of its own, a
        cream block left behind across a whole one is the most visible stuck
        hover on the page. */
-    .paper-item:hover { background-color: transparent; }
+    .paper-item:hover::before { opacity: 0; }
 }
 /* --border is all but invisible against a dark surface (1.25:1 measured);
    a disabled control should read as muted, not absent. */
@@ -624,7 +637,7 @@ html[data-view="rows"] .paper-list .paper-item .paper-program {
 .sidebar-right {
     background: var(--cream);
     border-radius: var(--r-card, 8px);
-    padding: .625rem;
+    padding: .375rem;
 }
 
 /* ---- The drawer that column becomes on a narrow screen ----

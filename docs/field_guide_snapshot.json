@@ -1,5 +1,5 @@
 {
- "built": "2026-11-06 01:51",
+ "built": "2026-11-07 15:10",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -26,7 +26,7 @@
    "lines": 240
   },
   "app/admin/admin_manage_faculty.php": {
-   "lines": 541
+   "lines": 544
   },
   "app/admin/admin_review_dashboard.php": {
    "lines": 139
@@ -35,13 +35,13 @@
    "lines": 368
   },
   "app/admin/super_admin_manage_admins.php": {
-   "lines": 518
+   "lines": 521
   },
   "app/admin/super_admin_review_dashboard.php": {
    "lines": 135
   },
   "app/auth/login.php": {
-   "lines": 1109
+   "lines": 1110
   },
   "app/auth/logout.php": {
    "lines": 36
@@ -50,7 +50,7 @@
    "lines": 214
   },
   "app/faculty/faculty_manage_students.php": {
-   "lines": 1187
+   "lines": 1191
   },
   "app/faculty/faculty_review_dashboard.php": {
    "lines": 166
@@ -176,7 +176,7 @@
    "lines": 12
   },
   "includes/accessibility.php": {
-   "lines": 1298
+   "lines": 1272
   },
   "includes/action_dialogs.php": {
    "lines": 337
@@ -188,16 +188,16 @@
    "lines": 190
   },
   "includes/browse_console.php": {
-   "lines": 1130
+   "lines": 1143
   },
   "includes/browse_console_js.php": {
-   "lines": 1426
+   "lines": 1438
   },
   "includes/card_collapse.php": {
    "lines": 94
   },
   "includes/console_shell.php": {
-   "lines": 739
+   "lines": 793
   },
   "includes/docx_writer.php": {
    "lines": 230
@@ -212,7 +212,7 @@
    "lines": 364
   },
   "includes/focus_ring.php": {
-   "lines": 182
+   "lines": 179
   },
   "includes/key_nav.php": {
    "lines": 232
@@ -227,7 +227,7 @@
    "lines": 252
   },
   "includes/manage_page.php": {
-   "lines": 772
+   "lines": 832
   },
   "includes/manage_save_confirm.php": {
    "lines": 168
@@ -242,7 +242,7 @@
    "lines": 183
   },
   "includes/page_theme.php": {
-   "lines": 241
+   "lines": 248
   },
   "includes/paper_record_css.php": {
    "lines": 806
@@ -296,7 +296,7 @@
    "lines": 167
   },
   "includes/theme.php": {
-   "lines": 336
+   "lines": 316
   },
   "includes/theme_welcome.php": {
    "lines": 140
@@ -323,10 +323,10 @@
    "lines": 109
   },
   "pages/about_us.php": {
-   "lines": 222
+   "lines": 220
   },
   "pages/contact_support.php": {
-   "lines": 851
+   "lines": 849
   },
   "pages/error_page.php": {
    "lines": 227
@@ -335,7 +335,7 @@
    "lines": 37
   },
   "pages/help_center.php": {
-   "lines": 328
+   "lines": 325
   },
   "pages/index.php": {
    "lines": 15
@@ -347,7 +347,7 @@
    "lines": 754
   },
   "pages/terms_and_conditions.php": {
-   "lines": 172
+   "lines": 164
   },
   "reset_system_data.php": {
    "lines": 161

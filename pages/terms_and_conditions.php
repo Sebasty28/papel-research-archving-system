@@ -8,7 +8,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Terms &amp; Conditions · <?= e(APP_NAME) ?></title>
+<title>Terms and Conditions · <?= e(APP_NAME) ?></title>
 <?php require_once ROOT_PATH.'/includes/site_head.php'; ?>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.min.css" rel="stylesheet">
 <?php require_once ROOT_PATH.'/includes/page_theme.php'; ?>
@@ -34,10 +34,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
     content: ''; position: absolute; left: .25rem; top: .6rem;
     width: 6px; height: 6px; border-radius: 50%; background: var(--soft-maroon);
 }
-.terms-section li strong, .terms-section p strong { color: var(--ink); }
-
-@media(max-width:600px) {
-}
+.page-card-body p, .terms-section li { text-align: justify; }
 </style>
 </head>
 <body>
@@ -50,122 +47,117 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
     <div class="wrap crumb-inner">
         <a href="<?= e(BASE_URL) ?>/archive/index.php">Home</a>
         <span class="material-symbols-outlined crumb-arrow">chevron_right</span>
-        <span class="crumb-current">Terms &amp; Conditions</span>
+        <span class="crumb-current">Terms and Conditions</span>
     </div>
 </div>
 
 <!-- ===== Body ===== -->
-<div class="page-body">
-
+<main class="page-body">
     <div class="page-intro">
-        <h1>Terms &amp; Conditions</h1>
-        <p>The rules that govern your use of the PUP Bi&ntilde;an Digital Research Repository.</p>
+        <h1>PAPEL Terms and Conditions</h1>
+        <p>Rules for using the repository, submitting research, and accessing published work.</p>
     </div>
 
-    <div class="page-shell">
+    <div class="page-shell resource-shell legal-shell">
+        <div class="page-card">
+            <div class="page-card-body">
+                <p class="updated-note">Last Updated: November 7, 2026</p>
+                <p class="lead-text">PAPEL is a digital research repository for the Polytechnic University of the Philippines – Biñan Campus. These Terms and Conditions explain the rules for using the repository, submitting research, and accessing published work. Please read them before using PAPEL.</p>
+            </div>
+        </div>
 
+        <div class="page-card">
+            <div class="page-card-header">
+                <i class="bi bi-file-earmark-text" aria-hidden="true"></i>
+                <h2>The Agreement</h2>
+            </div>
+            <div class="page-card-body">
+                <section class="terms-section">
+                    <h2><span class="num">1.</span> Who may use PAPEL</h2>
+                    <p>Visitors may browse material made available in the public repository. Students, faculty, staff, and approved guests may use the features available to their assigned roles.</p>
+                    <p>PAPEL does not offer public account registration. Authorized university personnel create accounts and issue temporary Library Pass credentials. You must use only an account issued to you, keep your credentials confidential, and promptly report suspected unauthorized access through Contact Support.</p>
+                </section>
 
-    <div class="page-card">
-        <div class="page-card-body">
-        <p class="updated-note">Last updated: <?= date('F d, Y') ?></p>
-        <p class="lead-text">Welcome to <strong><?= e(APP_NAME) ?></strong>, a digital research repository built for the <em>Polytechnic University of the Philippines – Biñan Campus</em>. These Terms &amp; Conditions govern your access to and use of the platform. By logging in or using any part of the system, you agree to be bound by the terms below.</p>
+                <section class="terms-section">
+                    <h2><span class="num">2.</span> Research submissions</h2>
+                    <p>When you submit a paper or supporting document, you confirm that, to the best of your knowledge:</p>
+                    <ul>
+                        <li>The information you provide is accurate and complete.</li>
+                        <li>The work identifies its authors and properly acknowledges sources.</li>
+                        <li>You have obtained any required ethics clearance, consent, and permission to include third-party material.</li>
+                        <li>You have the authority to submit the work and authorize its proposed repository use on behalf of all copyright holders, including coauthors where applicable.</li>
+                    </ul>
+                    <p>You remain responsible for the content you submit. PAPEL may return a submission for correction or decline material that violates these terms, university policy, or applicable law.</p>
+                </section>
+
+                <section class="terms-section">
+                    <h2><span class="num">3.</span> Review and publication</h2>
+                    <p>Student submissions pass through a Research Adviser review followed by a Research Coordinator review. A reviewer may forward the submission or return it with feedback. A student submission is published only after the Research Coordinator gives final approval.</p>
+                    <p>Authorized institutional roles may have a different publication path for their own submissions. Where PAPEL permits direct publication, the person using that permission remains responsible for checking the work and its publication settings before publishing it.</p>
+                    <p>Publication does not mean that PAPEL or the university guarantees the accuracy, originality, or conclusions of a paper.</p>
+                </section>
+
+                <section class="terms-section">
+                    <h2><span class="num">4.</span> What the public can see</h2>
+                    <p>Before publication, the submission interface should identify the visibility selected for the work. If <em>Abstract only</em> is selected, the public repository displays the approved descriptive information and abstract, but does not make the full manuscript publicly available through that setting. If a <em>full-text</em> option is selected and approved, the manuscript may be available for public viewing as indicated in the interface.</p>
+                    <p>Descriptive information may include the paper’s title, authors, abstract, keywords, academic program, paper type, and year. Supporting documents, such as consent forms and ethics clearances, are used for review and should not be made public unless the submitter is separately told and the disclosure is authorized.</p>
+                    <p>If the published record does not match its approved visibility setting, contact PAPEL promptly to request a review.</p>
+                </section>
+
+                <section class="terms-section">
+                    <h2><span class="num">5.</span> Copyright and permission to use submitted work</h2>
+                    <p>Authors retain their copyright. Submission does not transfer ownership of a paper to PAPEL or the university.</p>
+                    <p>By submitting work that is approved for the repository, you grant the university a non-exclusive, royalty-free permission to store it, make preservation copies, organize and index it, display its descriptive information, and provide access to it according to the approved visibility setting. This permission is for academic, educational, research, and archival purposes.</p>
+                    <p>You must have permission from coauthors and other rights holders for the uses you authorize. If you believe a published work infringes your rights or was made public without the required authority, contact PAPEL so the record can be reviewed and, where appropriate, restricted or removed from public view.</p>
+                </section>
+
+                <section class="terms-section">
+                    <h2><span class="num">6.</span> Storage and availability</h2>
+                    <p>PAPEL uses the institution’s connected cloud storage to hold submitted files. The university takes reasonable steps to protect and preserve repository records, but maintenance, technical faults, or third-party service interruptions may temporarily affect access. Keep your own copy of every file you submit.</p>
+                    <p>A returned or declined submission may lose its uploaded files as part of the repository workflow. Approved records may be retained for archival purposes under applicable university policy. The <a href="<?= e(BASE_URL) ?>/pages/privacy.php">Privacy Policy</a> explains how personal information is handled.</p>
+                </section>
+
+                <section class="terms-section">
+                    <h2><span class="num">7.</span> AI-assisted features</h2>
+                    <p>PAPEL may use AI-assisted tools to extract details from a paper, suggest metadata, or generate a summary. These results can contain errors. Submitters and reviewers should check them before relying on them or approving a record. PAPEL’s use of an external AI processing service is described in the Privacy Policy.</p>
+                    <p>AI output does not replace academic review, authorship checks, or the submitter’s responsibility for the work.</p>
+                </section>
+
+                <section class="terms-section">
+                    <h2><span class="num">8.</span> Acceptable use</h2>
+                    <p>You must not:</p>
+                    <ul>
+                        <li>Upload malware or files intended to disrupt the service.</li>
+                        <li>Submit unlawful, plagiarized, or infringing material.</li>
+                        <li>Access or attempt to access another person’s account or information without authorization.</li>
+                        <li>Interfere with the security or normal operation of PAPEL.</li>
+                        <li>Share assigned credentials or use another person’s account.</li>
+                        <li>Download, copy, or redistribute repository material in a way that violates copyright, the stated access restrictions, or applicable law.</li>
+                    </ul>
+                    <p>PAPEL may restrict access or refer suspected misuse to the appropriate university office for review.</p>
+                </section>
+
+                <section class="terms-section">
+                    <h2><span class="num">9.</span> Privacy and requests</h2>
+                    <p>PAPEL processes account information, submissions, review records, and usage information as described in its <a href="<?= e(BASE_URL) ?>/pages/privacy.php">Privacy Policy</a>. The Privacy Policy explains the purposes of processing, service providers, retention, and how users can make privacy requests.</p>
+                    <p>These Terms and Conditions do not replace any separate notice, permission, or consent that may be required for a particular use of personal information.</p>
+                </section>
+
+                <section class="terms-section">
+                    <h2><span class="num">10.</span> Changes to these terms</h2>
+                    <p>PAPEL may update these terms when its features or university policies change. The last updated date above identifies the version currently in force. Material changes should be brought to users’ attention before they take effect; where a new acknowledgment or permission is required, PAPEL should request it separately. If you do not agree with revised terms, stop using the affected features and contact PAPEL about your account or submitted work.</p>
+                </section>
+
+                <section class="terms-section">
+                    <h2><span class="num">11.</span> Contact</h2>
+                    <p>For account, submission, copyright, or terms questions, use <a href="<?= e(BASE_URL) ?>/pages/contact_support.php">Contact Support</a>. For privacy requests, use the contact route identified in the Privacy Policy.</p>
+                </section>
+
+                <p>These terms operate alongside applicable university policies and Philippine law.</p>
+            </div>
         </div>
     </div>
-
-    <div class="page-card">
-        <div class="page-card-header">
-            <i class="bi bi-file-earmark-text"></i>
-            <h2>The Agreement</h2>
-        </div>
-        <div class="page-card-body">
-        
-
-        <div class="terms-section">
-            <h2><span class="num">1.</span> Acceptance of These Terms</h2>
-            <p>By accessing <?= e(APP_NAME) ?>, whether to browse the public repository or to log in to an account, you accept these Terms &amp; Conditions in full. If you do not agree with any part of these terms, please discontinue use of the platform.</p>
-        </div>
-
-        <div class="terms-section">
-            <h2><span class="num">2.</span> Accounts &amp; Access</h2>
-            <p>PAPEL does not offer public self-registration. Accounts are provisioned within the institution's role hierarchy:</p>
-            <ul>
-                <li><strong>Students</strong> are onboarded by their faculty adviser.</li>
-                <li><strong>Faculty advisers</strong> are created by the Research Coordinator.</li>
-                <li><strong>Administrators</strong> are created by the Director.</li>
-                <li><strong>Guests</strong> are issued temporary, time-limited credentials by an administrator to view the repository.</li>
-            </ul>
-            <p>You log in using your assigned credentials together with the required verification details for your role (for example, students and staff verify with their date of birth). You are responsible for keeping your credentials confidential and for all activity that occurs under your account. Each account may only be used by the individual it was issued to, and only through the login section that matches its role.</p>
-        </div>
-
-        <div class="terms-section">
-            <h2><span class="num">3.</span> Research Submissions</h2>
-            <p>When you upload a paper and its supporting documents, you certify that:</p>
-            <ul>
-                <li>The work is your own original research and properly attributes any sources used.</li>
-                <li>You have secured any required ethics clearances and consent or permission forms.</li>
-                <li>The submission does not infringe the copyright or intellectual property rights of others.</li>
-                <li>The information you provide, including title, authors, abstract, program, and year, is accurate and complete.</li>
-            </ul>
-            <p>You retain ownership of your work and remain responsible for its content and accuracy.</p>
-        </div>
-
-        <div class="terms-section">
-            <h2><span class="num">4.</span> The Review &amp; Approval Process</h2>
-            <p>Submitted papers are not published automatically. Each submission is read first by your Research Adviser and then by the Research Coordinator, whose approval publishes it. The Head of Academic Programs and the Director read what comes out of that process; they do not approve submissions. You agree that:</p>
-            <ul>
-                <li>A reviewer at either stage may approve your paper and pass it on, or return it to you with feedback for correction and resubmission.</li>
-                <li>A paper only becomes visible in the public repository after the Research Coordinator approves it.</li>
-                <li>Declined submissions are returned to draft, and their uploaded files may be permanently removed from cloud storage to conserve space. You should keep your own copy of any work you submit.</li>
-            </ul>
-        </div>
-
-        <div class="terms-section">
-            <h2><span class="num">5.</span> Intellectual Property &amp; Publishing License</h2>
-            <p>Authors retain the copyright to their research. By submitting to <?= e(APP_NAME) ?> and receiving approval, you grant the university a non-exclusive, royalty-free license to store, preserve, and make your work accessible through the repository for academic, educational, and reference purposes. Approved papers may be made publicly viewable, and the university may display associated metadata (such as title, authors, abstract, and program) for discovery and search.</p>
-        </div>
-
-        <div class="terms-section">
-            <h2><span class="num">6.</span> File Storage</h2>
-            <p>Uploaded documents are stored on the institution's cloud storage (Google Drive) connected to the system. Approved papers are made available for online viewing. The university takes reasonable measures to safeguard stored files but does not guarantee uninterrupted availability of third-party storage services.</p>
-        </div>
-
-        <div class="terms-section">
-            <h2><span class="num">7.</span> Acceptable Use</h2>
-            <p>When using PAPEL, you agree <strong>not</strong> to:</p>
-            <ul>
-                <li>Upload malware, viruses, or any harmful or corrupted files.</li>
-                <li>Submit content that is unlawful, plagiarized, or that violates another person's rights.</li>
-                <li>Attempt to access accounts, data, or dashboards you are not authorized to use.</li>
-                <li>Interfere with, probe, or attempt to disrupt the security or normal operation of the system.</li>
-                <li>Share your account credentials or use another person's account.</li>
-            </ul>
-        </div>
-
-        <div class="terms-section">
-            <h2><span class="num">8.</span> Data Privacy</h2>
-            <p>Personal information collected by the system (such as names, email addresses, student IDs, programs, and dates of birth) is used solely to operate the repository, verify identities, route submissions, and send notifications. Our handling of personal data is described further in our <a href="privacy.php">Privacy Policy</a>.</p>
-        </div>
-
-        <div class="terms-section">
-            <h2><span class="num">9.</span> Disclaimer</h2>
-            <p>The materials and research papers on <?= e(APP_NAME) ?> are provided "as is" for academic reference. While submissions are reviewed before publication, the university makes no warranty as to the accuracy, completeness, or fitness for any particular purpose of the content, and is not liable for any use made of it.</p>
-        </div>
-
-        <div class="terms-section">
-            <h2><span class="num">10.</span> Changes to These Terms</h2>
-            <p>The university may update these Terms &amp; Conditions from time to time to reflect changes in the system or its policies. The "Last updated" date above indicates the latest revision. Continued use of the platform after changes are posted constitutes your acceptance of the revised terms.</p>
-        </div>
-
-        <div class="terms-section">
-            <h2><span class="num">11.</span> Contact</h2>
-            <p>If you have questions about these Terms &amp; Conditions, please reach out through our <a href="contact_support.php">Contact Support</a> page.</p>
-        </div>
-        </div>
-    </div>
-    </div><!-- /.page-shell -->
-
-</div>
-
+</main>
 <?php require ROOT_PATH.'/includes/site_footer.php'; ?>
 </body>
 </html>

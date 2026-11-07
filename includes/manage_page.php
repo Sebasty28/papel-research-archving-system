@@ -94,6 +94,7 @@
     gap: 1.125rem;
     align-items: start;
 }
+.mgmt-grid > * { min-width: 0; }
 
 /* ---- Panels ---- */
 .mgmt-panel {
@@ -329,8 +330,9 @@ html[data-mode="dark"] { --search-clear: #CFC3AE; }
 }
 
 /* ---- Roll ---- */
-.mgmt-scroll { overflow-x: auto; }
+.mgmt-scroll { max-width: 100%; overflow-x: auto; }
 .mgmt-table { width: 100%; border-collapse: collapse; font-size: .8125rem; color: var(--ink); }
+.mgmt-table tbody tr.is-search-off { display: none; }
 .mgmt-table th {
     text-align: left; white-space: nowrap;
     padding: .6rem .625rem;
@@ -583,12 +585,70 @@ html.mgmt-form-folded .mgmt-dock-fold:focus-visible .mgmt-dock-word {
 }
 
 @media (max-width: 1100px) {
-    .mgmt-grid { grid-template-columns: 1fr; }
-    /* One column either way down here, so there is nothing to choose. */
-    .mgmt-dock { display: none; }
+    .mgmt-grid,
+    html.mgmt-dock-right .mgmt-grid,
+    html.mgmt-dock-center .mgmt-grid,
+    html.mgmt-form-folded .mgmt-grid { grid-template-columns: minmax(0, 1fr); }
+    /* A saved right dock belongs to the desktop layout. Keep the form above
+       the roll when the two columns stack. */
+    html.mgmt-dock-right .mgmt-grid > #formPanel,
+    html.mgmt-dock-right .mgmt-grid > :not(#formPanel) { order: 0; }
+    /* Position choices need two columns; the fold control still needs to be
+       reachable when a form was folded on a wider screen. */
+    .mgmt-dock-btn:not(.mgmt-dock-fold) { display: none; }
 }
 @media (max-width: 600px) {
     .mgmt-pair { grid-template-columns: 1fr; }
+    .mgmt-grid { gap: .75rem; }
+    .mgmt-panel-body { padding: .875rem; }
+    /* Keep the table's headings available to assistive technology, while each
+       account reads as one card with its actions in view on a narrow screen. */
+    .mgmt-mobile-cards { display: block; width: 100%; }
+    .mgmt-mobile-cards thead {
+        position: absolute; width: 1px; height: 1px; padding: 0;
+        overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+    }
+    .mgmt-mobile-cards tbody { display: block; }
+    .mgmt-mobile-cards tbody tr {
+        display: block;
+        padding: .75rem .875rem;
+        border-bottom: 1px solid var(--border);
+    }
+    .mgmt-mobile-cards tbody tr:last-child { border-bottom: 0; }
+    .mgmt-mobile-cards tbody tr[hidden],
+    .mgmt-mobile-cards tbody tr.is-search-off { display: none; }
+    .mgmt-mobile-cards tbody td {
+        display: grid;
+        grid-template-columns: 5.5rem minmax(0, 1fr);
+        gap: .5rem;
+        width: auto;
+        min-width: 0;
+        padding: .25rem 0;
+        border: 0 !important;
+        white-space: normal;
+        overflow-wrap: anywhere;
+    }
+    .mgmt-mobile-cards tbody td:last-child { width: auto; }
+    .mgmt-mobile-cards .mgmt-value { min-width: 0; }
+    .mgmt-mobile-cards tbody td::before {
+        content: attr(data-label);
+        font-size: .625rem;
+        font-weight: 600;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+        color: var(--grey);
+    }
+    .mgmt-mobile-cards tbody td.mgmt-name,
+    .mgmt-mobile-cards tbody td[data-label="Actions"],
+    .mgmt-mobile-cards tbody td[colspan] { display: block; }
+    .mgmt-mobile-cards tbody td.mgmt-name::before,
+    .mgmt-mobile-cards tbody td[colspan]::before { display: none; }
+    .mgmt-mobile-cards .mgmt-name { font-size: .875rem; padding-bottom: .5rem; }
+    .mgmt-mobile-cards .mgmt-sub { max-width: none; white-space: normal; overflow-wrap: anywhere; }
+    .mgmt-mobile-cards tbody td[data-label="Actions"] { padding-top: .625rem; }
+    .mgmt-mobile-cards tbody td[data-label="Actions"]::before { display: block; margin-bottom: .25rem; }
+    .mgmt-mobile-cards .mgmt-actions { justify-content: flex-start; flex-wrap: wrap; white-space: normal; }
+    .mgmt-mobile-cards .mgmt-empty { padding: 1.5rem .5rem; }
 }
 
 /* ---- The row a link arrived for ----

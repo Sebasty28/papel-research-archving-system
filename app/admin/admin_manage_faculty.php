@@ -121,7 +121,7 @@ function staff_table(array $rows, string $which): void {
     ?>
     <div class="mgmt-panel">
         <div class="mgmt-scroll">
-            <table class="mgmt-table">
+            <table class="mgmt-table mgmt-mobile-cards">
                 <thead>
                     <tr>
                         <th>Staff</th>
@@ -152,16 +152,18 @@ function staff_table(array $rows, string $which): void {
                         data-faculty-id="<?= e($r['faculty_id'] ?? '') ?>"
                         data-email="<?= e($r['email']) ?>"
                         data-position="<?= e($r['title'] ?: staff_position_of($r)) ?>">
-                        <td class="mgmt-name">
+                        <td class="mgmt-name" data-label="Staff">
                             <?= e($r['full_name']) ?>
                             <span class="mgmt-sub" title="<?= e($r['email']) ?>"><?= e($r['email']) ?></span>
                         </td>
-                        <td class="mgmt-id">
-                            <?= e($r['faculty_id'] ?: 'N/A') ?>
-                            <span class="mgmt-sub">Added <?= e(date('M j, Y', strtotime($r['created_at']))) ?></span>
+                        <td class="mgmt-id" data-label="ID">
+                            <span class="mgmt-value">
+                                <?= e($r['faculty_id'] ?: 'N/A') ?>
+                                <span class="mgmt-sub">Added <?= e(date('M j, Y', strtotime($r['created_at']))) ?></span>
+                            </span>
                         </td>
-                        <td class="mgmt-prog"><?= e($r['title'] ?: staff_position_of($r)) ?></td>
-                        <td>
+                        <td class="mgmt-prog" data-label="Position"><?= e($r['title'] ?: staff_position_of($r)) ?></td>
+                        <td data-label="Actions">
                             <div class="mgmt-actions">
                                 <?php if ($which === 'archived'): ?>
                                     <form method="post">

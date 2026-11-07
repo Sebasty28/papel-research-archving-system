@@ -56,15 +56,12 @@
     --scroll-thumb-strong: var(--maroon-surface-hover, #630000);
 }
 html[data-color="classic"]   { --border-control: #A68C86; }   /* 3.13:1 on white */
-/* Old Night's surface is a warm espresso, so the outline is a muted gold
-   rather than the grey-blue the old blue-black dark used. */
-html[data-mode="dark"]       { --border-control: #8A7F7C; }   /* 4.52:1 on #1E1813 */
-/* A dark maroon thumb on Old Night's near-black page would be barely there,
-   so the dark palette keeps its own accent: muted gold, brightening as the
-   thumb is pointed at or dragged. */
+/* A neutral outline stays visible on Old Night's charcoal controls. */
+html[data-mode="dark"]       { --border-control: #9C9EA1; }
+/* The scroll thumb uses the lighter maroon when pointed at or dragged. */
 html[data-mode="dark"] {
-    --scroll-thumb:        var(--accent-soft, #8A7348);
-    --scroll-thumb-strong: var(--accent-light, #D8B472);
+    --scroll-thumb:        var(--accent-soft, #987C83);
+    --scroll-thumb-strong: var(--accent-light, #CB98A5);
 }
 
 /* Applied narrowly: the things you type into or choose from. */

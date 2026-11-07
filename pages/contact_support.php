@@ -288,11 +288,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <style nonce="<?= $nonce ?>">
 /* ===== Hero ===== */
 /* ===== Layout ===== */
-.contact-flat { background: none; padding: 0; }
+.contact-flat { width: fit-content; max-width: 100%; }
 /* Trimmed where it costs nothing to read, so the page still clears the fold on
    a shorter laptop screen than this one. */
 .page-intro { margin-bottom: .625rem; }
-.contact-layout .page-card-body { padding: 1rem 1.25rem; }
+.contact-layout .page-card-body { padding: .75rem; }
 /* Against the left of the shell rather than centred in it, and only as wide
    as it needs to be: the card grows sideways when a topic is chosen. */
 .contact-layout { width: fit-content; max-width: 100%; margin: 0; }
@@ -393,9 +393,7 @@ textarea.form-control { resize: vertical; min-height: 104px; }
         <p>Ask for a new password, or for a correction to your account.</p>
     </div>
 
-    <?php /* No tinted panel behind the card: it has edges of its own, as on
-             the Help Center. */ ?>
-    <div class="page-shell contact-flat">
+    <div class="page-shell resource-shell contact-flat">
 
     <?php if ($m = flash('success')): ?>
         <div class="alert-box success"><i class="bi bi-check-circle me-2"></i><?= e($m) ?></div>

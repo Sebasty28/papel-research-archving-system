@@ -14,8 +14,7 @@
  * thing nobody had designed. Now the palette says whether it is light or dark.
  *
  * Two palettes, one of each: Old Classic, and Old Night, which is Old Classic
- * after dark: the same maroon and gold on warm espresso surfaces rather than
- * a generic dark theme. Seven used to be offered; the other five were
+ * after dark: maroon text on charcoal surfaces. Seven used to be offered; the other five were
  * withdrawn, and anyone still holding one is moved across (see the script).
  *
  * Two attributes on <html> carry it:
@@ -96,8 +95,7 @@
    same lightness, pulled back towards the maroon, so the warmth comes from
    the palette's own colour instead of from a second one.
 
-   The gold has not left the site: it is still the colour of the seal in the
-   mark, and still the accent Old Night reads by. It is only off the chrome.
+   Gold remains in the seal; Old Night uses a lighter maroon for readable text.
 
    Measured on #FFFFFF, and on the tint where text sits:
      --grey  #545054  7.92:1 on white, 7.39:1 on the tint   (AAA both)
@@ -114,35 +112,17 @@ html[data-color="classic"] {
     --border-base:  #EADFDC;
 }
 
-/* Old Night: Old Classic after dark. The same two colours carry it: the
-   maroon still fills the buttons and the crumb strip, and the gold that was
-   Old Classic's muted accent becomes the accent read as text, since maroon
-   text on a dark page cannot be read. The surfaces (section 3b) are a warm
-   espresso rather than the generic blue-black, so the page keeps the parchment
-   feel of its daytime twin instead of turning into somebody else's theme.
-
-   The muted tone and the wash followed Old Classic across: the maroon drained
-   almost to a neutral rather than a true grey, for the same reason. The accent
-   did not follow: --accent-light is the only colour this palette has for text,
-   and a neutral one would have been within a shade of --ink, leaving headings
-   and links indistinguishable from body copy. Gold earns its place here, which
-   is exactly the argument for taking it off the daylight chrome.
-
-   Measured against the surface #1E1813 and the tint over it (#2D2621):
-     --accent-light  #D8B472   8.94:1 and 7.60:1   (text, so held to AAA)
-     --ink           #F0E6D4   14.20:1 and 12.07:1
-     --grey          #C4B69C   8.80:1 and 7.48:1
-     --accent-soft   #8A7470   4.03:1 on the surface (a border, not text)
-     white on --accent       #7A1A1A  10.55:1
-     white on --accent-dark  #5A1010  13.85:1      (the crumb strip, pressed) */
+/* Old Night keeps the deep maroon for button fills and the breadcrumb, while
+   a lighter maroon carries headings and links on ash charcoal surfaces. The
+   text accent clears 4.5:1 on both the card and its lighter cream wash. */
 html[data-color="old-night"] {
     --accent:       #7A1A1A;
     --accent-dark:  #5A1010;
-    --accent-soft:  #8A7470;
-    --accent-tint:  rgba(238, 218, 212, .07);
-    --accent-light: #D8B472;
-    --ink-base:     #F0E6D4;
-    --border-base:  #3B3026;
+    --accent-soft:  #987C83;
+    --accent-tint:  rgba(255, 255, 255, .06);
+    --accent-light: #CB98A5;
+    --ink-base:     #E8E8E9;
+    --border-base:  #44464A;
 }
 
 /* ---------------------------------------------------------------
@@ -279,17 +259,17 @@ html[data-mode="dark"] body { background: #14171E; }
    comes from the block above.
    --------------------------------------------------------------- */
 html[data-mode="dark"][data-color="old-night"] {
-    --white:        #1E1813;      /* warm espresso rather than blue-black      */
-    --cream:        rgba(238, 218, 212, .07);   /* a warm wash; #2D2621 over --white */
-    --ink:          #F0E6D4;      /* parchment: 14.20:1 on the surface, 12.07:1 on the tint */
-    --grey:         #C4B69C;      /*  8.80:1 and 7.48:1, so AAA on both         */
-    --border:       #3B3026;
-    --border-soft:  rgba(240, 230, 212, .12);
-    --header-frost:        rgba(30, 24, 19, .74);
-    --header-frost-solid:  rgba(30, 24, 19, .97);
-    --header-frost-edge:   rgba(240, 230, 212, .12);
+    --white:        #2D2F32;
+    --cream:        rgba(255, 255, 255, .06);
+    --ink:          #E8E8E9;
+    --grey:         #C7C9CC;
+    --border:       #44464A;
+    --border-soft:  rgba(255, 255, 255, .13);
+    --header-frost:        rgba(45, 47, 50, .74);
+    --header-frost-solid:  rgba(45, 47, 50, .97);
+    --header-frost-edge:   rgba(255, 255, 255, .13);
 }
-html[data-mode="dark"][data-color="old-night"] body { background: #16110D; }
+html[data-mode="dark"][data-color="old-night"] body { background: #292B2E; }
 
 /* A few places paint a literal white that would glare on a dark page. */
 html[data-mode="dark"] .doc-surface,

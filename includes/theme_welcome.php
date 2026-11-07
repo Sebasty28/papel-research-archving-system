@@ -88,7 +88,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // The same two palettes, and the same swatches, as Quick Settings.
     var COLOURS = [
         ['classic', '#6B0F0F', 'Old Classic'],
-        ['old-night', 'linear-gradient(135deg, #6B0F0F 0 50%, #1E1813 50% 100%)', 'Old Night']
+        ['old-night', 'linear-gradient(135deg, #6B0F0F 0 50%, #2D2F32 50% 100%)', 'Old Night']
     ];
     var DARK_COLOURS = { 'old-night': 1 };
     function modeFor(c) { return DARK_COLOURS[c] ? 'dark' : 'light'; }

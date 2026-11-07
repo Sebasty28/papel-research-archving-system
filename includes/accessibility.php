@@ -1,8 +1,7 @@
 <!-- Accessibility Widget -->
 <?php
-/* Whether whoever is reading can get a hidden tab back. Settings is the way,
-   and only someone signed in can reach it; for anyone else a right-click hide
-   lasts only for the page they are on, rather than for good with no way back. */
+/* Signed-in readers can restore the tab in Settings. Public readers use the
+   footer's restore button, so their hide choice can persist too. */
 $a11ySettingsUrl = defined('BASE_URL') ? BASE_URL . '/pages/settings.php#appearance' : '';
 $a11yCanRestore  = $a11ySettingsUrl !== '' && function_exists('current_user') && current_user();
 ?>
@@ -352,24 +351,17 @@ body.a11y-big-cursor,
 body.a11y-big-cursor * { cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='black' stroke='white' stroke-width='2'><path d='M5.5 3.21l10.8 15.66-5.2 1.1-2.8 6.03-3.6-1.6 2.8-6.03-5.5-2.4V3.21z'/></svg>"), auto !important; }
 </style>
 
-<?php /* Read before the tab below is parsed, so a hidden tab is never
-         drawn for a frame first and then pulled away. Only for someone signed
-         in, who can reach Settings to bring it back: the choice is kept per
-         browser, not per account, so signing out (or a guest pass running out)
-         would otherwise leave the next visitor on that browser with no tab and
-         no way to get it back. It is still stored, and returns at sign-in. */ ?>
+<?php /* Read before the tab below is parsed, so a hidden tab is never drawn
+         for a frame first and then pulled away. The footer offers a restore
+         control on public pages as well as signed-in ones. */ ?>
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 try {
-<?php if ($a11yCanRestore): ?>
     if (localStorage.getItem('papel_a11y_tab_hidden') === '1') {
         document.documentElement.classList.add('a11y-tab-hidden');
     }
-<?php endif; ?>
-    /* The phone's switch is read for everyone, signed in or not. The gate
-       above is there because a stored *hide* with no way back would leave the
-       next visitor on that browser with no tab at all; this one can only ever
-       put the tab there, so there is nothing to be stranded by. On a phone
-       with nothing stored the stylesheet above hides it, which is the point. */
+    /* The phone's switch is separate: with nothing stored, the stylesheet
+       hides the tab at that width. Both switches are read for every visitor;
+       the footer can restore a hidden desktop tab without Settings. */
     if (localStorage.getItem('papel_a11y_tab_phone') === '1') {
         document.documentElement.classList.add('a11y-tab-phone');
     }
@@ -485,8 +477,7 @@ try {
     var STORAGE_KEY = 'papel_a11y';
     var TAB_KEY     = 'papel_a11y_tab_hidden';   // above a phone: set means hidden
     var PHONE_KEY   = 'papel_a11y_tab_phone';    // on a phone: set means shown
-    /* Whether the reader can get a hidden tab back from Settings; see the
-       PHP at the top of this file. */
+    /* Signed-in readers have Settings; public readers have the footer. */
     var CAN_RESTORE  = <?= $a11yCanRestore ? 'true' : 'false' ?>;
     var SETTINGS_URL = <?= json_encode($a11ySettingsUrl, JSON_UNESCAPED_SLASHES) ?>;
 
@@ -498,10 +489,9 @@ try {
     var phoneMQ  = window.matchMedia ? window.matchMedia(PHONE_Q) : null;
     function onPhone() { return phoneMQ ? phoneMQ.matches : window.innerWidth <= 900; }
 
-    // Hidden or shown in another tab: follow it here too, on the same terms
-    // as the read before the tab is drawn.
+    // Hidden or shown in another tab: follow the stored desktop choice here too.
     window.addEventListener('storage', function (e) {
-        if (CAN_RESTORE && e.key === TAB_KEY) {
+        if (e.key === TAB_KEY) {
             document.documentElement.classList.toggle('a11y-tab-hidden', e.newValue === '1');
         }
         if (e.key === PHONE_KEY) {
@@ -943,13 +933,8 @@ try {
             }, true);
 
             /* ---- Right-click: hide the tab ----
-               Someone who never uses it can put it away from the tab itself,
-               rather than having to find the switch in Settings. Signed in, it
-               stays hidden and Settings > Appearance brings it back; a visitor
-               who is not signed in has no way back, so for them it is hidden
-               on this page only and returns on the next. The Menu key and
-               Shift+F10 send the same event to the focused tab, so this is
-               reached from the keyboard as well. */
+               The choice persists at either width. The footer restores it
+               without an account; the Menu key and Shift+F10 reach this too. */
             var ctx = null, ctxItem = null;
 
             function buildCtx() {
@@ -970,7 +955,7 @@ try {
                     + '<path d="M2 12s3.6-7 10-7c2 0 3.7.6 5.1 1.5M22 12s-3.6 7-10 7c-2 0-3.7-.6-5.1-1.5"/>'
                     + '<path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="M3 3l18 18"/></svg>';
                 var label = document.createElement('span');
-                label.textContent = CAN_RESTORE ? 'Hide this tab' : 'Hide on this page';
+                label.textContent = 'Hide this tab';
                 ctxItem.appendChild(label);
 
                 var note = document.createElement('div');
@@ -979,7 +964,7 @@ try {
                 note.setAttribute('aria-hidden', 'true');   // read out as the item's description
                 note.textContent = CAN_RESTORE
                     ? 'Bring it back any time in Settings > Appearance.'
-                    : 'It comes back on the next page you open.';
+                    : 'Bring it back from the footer on any page.';
 
                 ctx.appendChild(ctxItem);
                 ctx.appendChild(note);
@@ -1064,25 +1049,14 @@ try {
                 } else if (typeof window.papelNote === 'function') {
                     window.papelNote(CAN_RESTORE
                         ? 'Accessibility tab hidden. Bring it back any time in Settings > Appearance.'
-                        : 'Accessibility tab hidden on this page. It comes back on the next page you open.', true);
+                        : 'Accessibility tab hidden. Bring it back from the footer on any page.', true);
                 }
             }
 
             function hideFromCtx() {
                 closeCtx(false);
                 closePanel();
-                if (CAN_RESTORE && window.papelAccessibility) {
-                    window.papelAccessibility.setTabHidden(true);
-                } else if (onPhone()) {
-                    /* This page only: nothing stored, so the next page brings
-                       it back. On a phone the tab is only ever here because
-                       the phone's switch is on, so putting it away is taking
-                       that class off rather than adding the other one, which
-                       the stylesheet does not read at this width. */
-                    document.documentElement.classList.remove('a11y-tab-phone');
-                } else {
-                    document.documentElement.classList.add('a11y-tab-hidden');
-                }
+                window.papelAccessibility.setTabHidden(true);
                 // Focus was on the menu, which has gone; not left on a hidden tab either.
                 if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
                 tellHidden();

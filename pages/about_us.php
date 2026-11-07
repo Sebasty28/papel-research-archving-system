@@ -28,10 +28,8 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
     background: rgba(129,4,3,.08); color: var(--maroon); white-space: nowrap;
 }
 
-/* ===== One page, read straight down =====
-   No card around each part, and no panel behind them: headings and text, the
-   way a page of writing is set. The parts keep their ids, so a link to one
-   (about_us.php#why) still lands on it. */
+/* One continuous reading card; section anchors remain in their original places. */
+.about-doc { padding: .75rem; }
 .about-doc section + section { margin-top: 2.25rem; }
 .about-doc h2 {
     font-family: var(--font-head); font-size: 1.125rem; font-weight: 500;
@@ -87,10 +85,9 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
         <p>The PUP Bi&ntilde;an Digital Research Repository, preserving and sharing the intellectual outputs of our academic community.</p>
     </div>
 
-    <?php /* One page: the three parts read in order, one after another, with
-             nothing boxed. The ids stay, so about_us.php#why still lands on
-             that part. */ ?>
-    <div class="about-doc">
+    <?php /* Keep the three sections in one reading card and retain their anchors. */ ?>
+    <div class="page-shell resource-shell">
+    <div class="page-card about-doc">
 
     <section id="sec-mission">
         <h2>Our Mission</h2>
@@ -213,6 +210,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
     </section>
 
     </div><!-- /.about-doc -->
+    </div><!-- /.resource-shell -->
 
 </div>
 

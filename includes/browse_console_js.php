@@ -119,7 +119,7 @@
        a second, unrelated maroon. */
     var COLOURS = [
         { id: 'classic',   label: 'Old Classic', swatch: '#6B0F0F' },
-        { id: 'old-night', label: 'Old Night',   swatch: 'linear-gradient(135deg, #6B0F0F 0 50%, #1E1813 50% 100%)' }
+        { id: 'old-night', label: 'Old Night',   swatch: 'linear-gradient(135deg, #6B0F0F 0 50%, #2D2F32 50% 100%)' }
     ];
     /* Which of them is dark. The same list is in theme.php, which has to know
        before this file has loaded so the first paint is already right. */
@@ -969,18 +969,15 @@
         name  = back.querySelector(".row-view-name");
         go    = back.querySelector("[data-go]");
 
-        /* The page inside brings its own navbar, breadcrumb and footer, and in a
-           window of this size that is a second set of site furniture wrapped
-           around the one thing being looked at. They are hidden through the
-           frame's own DOM (same origin, so this is allowed) rather than by
-           asking the page to render differently: no shared include has to learn
-           about being embedded, and a style element injected there would be
-           refused by the CSP for having no nonce. Re-run on every load, since
-           the reader can follow links inside the window. */
+        /* The framed page can paint before load fires. Keep it invisible until
+           its navbar and other site furniture are removed, or those bars flash
+           in the preview whenever the paper takes a moment to load. Re-run on
+           every load, since the reader can follow links inside the window. */
         frame.addEventListener("load", function () {
+            if (back.hidden) return;             // about:blank after closing
             var doc;
-            try { doc = frame.contentDocument; } catch (err) { return; }   // not ours
-            if (!doc) return;
+            try { doc = frame.contentDocument; } catch (err) { shut(); return; }
+            if (!doc) { shut(); return; }
             /* The same goes for the furniture fixed to the window's edge. Inside the
                frame it is pinned to the frame's edge instead, so the accessibility tab
                and the "Make it yours" card showed twice, one copy just inside the
@@ -1001,7 +998,14 @@
 
             /* And if the frame ends up anywhere that is not a paper's record,
                there is nothing left for the window to be showing. */
-            if (!doc.querySelector(".pd-heading")) shut();
+            if (!doc.querySelector(".pd-heading")) { shut(); return; }
+            /* Following a link inside the frame starts another document. Hide
+               the old one before that navigation, then reveal the new paper
+               only after its own furniture has been removed. */
+            frame.contentWindow.addEventListener("beforeunload", function () {
+                frame.style.visibility = "hidden";
+            }, { once: true });
+            frame.style.visibility = "visible";
         });
 
         back.addEventListener("click", function (e) {
@@ -1014,6 +1018,7 @@
         if (!back || back.hidden) return;
         back.classList.remove("is-open");
         back.hidden = true;
+        frame.style.visibility = "hidden";
         // Emptied, so the page inside stops running the moment it is closed.
         frame.setAttribute("src", "about:blank");
         document.body.style.overflow = "";
@@ -1026,6 +1031,7 @@
         var title = row.querySelector(".paper-title");
         name.textContent = title ? title.textContent.replace(/\s+/g, " ").trim() : "Paper";
         go.setAttribute("href", url);
+        frame.style.visibility = "hidden";
         frame.setAttribute("src", url);
         p.hidden = false;
         document.body.style.overflow = "hidden";
@@ -1043,7 +1049,7 @@
 
     document.addEventListener("click", function (e) {
         var row = rowFor(e);
-        if (!row) return;
+        if (!row || e.button !== 0) return;
         if (e.detail > 1) return;             // the second of a pair; dblclick has it
         // A click that dismisses the right-click menu is not a click on the row.
         var menu = document.querySelector(".qs-context");
@@ -1051,6 +1057,12 @@
         // Nor is the one that ends a drag across the text.
         var sel = window.getSelection && window.getSelection();
         if (sel && String(sel).trim() !== "") return;
+
+        /* A public paper has no record URL until sign-in. Use the button the
+           row already carries, which opens the shared login panel and gives
+           that panel a visible control to return focus to when it closes. */
+        var loginAction = row.querySelector('.paper-action.js-open-modal');
+        if (loginAction) { loginAction.click(); return; }
 
         clearTimeout(timer);
         timer = setTimeout(function () { show(row); }, WAIT);

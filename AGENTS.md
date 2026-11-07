@@ -780,9 +780,8 @@ nobody has asked carries nothing at all:
 | 900px and under | `papel_a11y_tab_phone` | **shown** | `a11y-tab-phone` |
 
 A phone is the screen the text runs edge to edge on, so a tab down the side of
-it is always over something to read. Settings > Appearance is the way to put it
-there; the tools themselves are never lost, since that page's **Open** brings
-the panel up with no tab at all.
+it is always over something to read. Signed-in readers can restore the tab in
+Settings > Appearance. Settings' **Open** brings the panel up with no tab at all.
 
 The stylesheet reads one switch per width, in two queries that cover every
 width between them: `@media not all and (max-width: 900px)` and
@@ -798,10 +797,9 @@ and the tab reappears in the gap.
   switch would then write one width's answer while the stylesheet read the
   other's. `isNarrow()`, which decides where the tab rests, is the same
   function, so the two cannot drift.
-- The phone's key is read **before paint for everyone**, signed in or not. The
-  desktop key's read is gated on being signed in, because a stored *hide* with
-  no way back would strand the next visitor on that browser; a key that can
-  only ever reveal the tab strands nobody.
+- Both keys are read **before paint for everyone**, signed in or not. A signed-in
+  reader can restore the tab in Settings > Appearance. Right-click hiding
+  persists at either width.
 - **Any page carrying the switch paints its label before the widget exists**
   (`accessibility.php` comes in with the footer, under the page's own script),
   so the widget raises `papel:a11y-tab` as soon as it has published
@@ -1423,6 +1421,9 @@ describe the dev box, not the cloud checkout.
 - Match surrounding code density and idiom.
 - Prefer fixing the shared include over patching one page — that is how the
   three management consoles ended up consistent.
+- For cream background frames around white cards, keep the outer cream rim thin
+  (6px) and the white card's content padding modest (about 12px). Apply this
+  consistently to dashboard, sidebar, and Resources layouts, including mobile.
 
 ---
 

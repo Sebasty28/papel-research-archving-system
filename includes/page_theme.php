@@ -72,6 +72,12 @@ body {
     border-radius: var(--r-card, 8px);
     padding: .75rem;
 }
+/* Resource pages use the same thin cream rim as the dashboard and sidebar. */
+.page-shell.resource-shell { padding: .375rem; }
+.resource-shell > .page-card,
+.resource-shell > .contact-layout > .page-card { border: 0; margin-bottom: 0; }
+.legal-shell > .page-card + .page-card { margin-top: .375rem; }
+.resource-shell .page-card-header { padding-inline: .75rem; }
 
 .page-card {
     background: var(--white);
@@ -120,6 +126,7 @@ body {
 .page-card-header .hint { margin-left: auto; font-size: .75rem; color: var(--grey); font-weight: 400; }
 
 .page-card-body { padding: 1.25rem; }
+.resource-shell .page-card-body { padding: .75rem; }
 
 /* ===== Body copy inside cards: nothing bolded ===== */
 .page-card-body p { color: var(--ink); line-height: 1.75; font-size: .875rem; margin-bottom: .875rem; }
