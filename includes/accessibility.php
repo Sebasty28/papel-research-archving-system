@@ -21,7 +21,15 @@ body {
 #a11y-widget {
     position: fixed;
     top: 50%;
-    right: 0;
+    /* The left edge, not the right. This is only the resting place of a tab
+       nobody has dragged yet, but it is the one almost everybody sees: the
+       right-hand edge is where this site puts things to be read (the Browse
+       and Filter rail on the repository, the account rail on a dashboard),
+       so a tab parked there sat against the content rather than beside it.
+       The left margin is empty on every page. A saved drag still wins, and
+       restorePosition() below places the same default in script so the tab
+       also carries its edge-left class. */
+    left: 0;
     transform: translateY(-50%);
     /* Above everything the app itself draws, but below the start-up splash
        (includes/splash.php), which covers the whole window for a moment and
@@ -43,7 +51,7 @@ body {
     gap: .25rem;
     padding: .75rem .5rem;
     border: none;
-    border-radius: var(--r-control, 4px) 0 0 var(--r-control, 4px);
+    border-radius: 0 var(--r-control, 4px) var(--r-control, 4px) 0;
     /* --maroon-surface, not --maroon. The plain token lifts on a dark
        palette so it stays legible as text; a tab filled with it becomes a
        bright band down the side of the page. The surface pair does not
@@ -54,7 +62,7 @@ body {
     font-size: .625rem;
     letter-spacing: .04em;
     cursor: pointer;
-    box-shadow: -2px 0 10px rgba(51, 0, 0, .22);
+    box-shadow: 2px 0 10px rgba(51, 0, 0, .22);
     transition: background .15s, padding .15s;
     position: relative;
     z-index: 1;
@@ -67,6 +75,9 @@ body {
 #a11y-widget.edge-left #a11y-toggle { border-radius: 0 var(--r-control, 4px) var(--r-control, 4px) 0; }
 #a11y-widget.edge-left #a11y-toggle:hover { padding-right: .5rem; padding-left: .75rem; }
 #a11y-widget.edge-right #a11y-toggle { border-radius: var(--r-control, 4px) 0 0 var(--r-control, 4px); }
+/* The base shadow leans right, away from the left edge it now rests on, so
+   the tab dragged to the right edge has to lean the other way again. */
+#a11y-widget.edge-right #a11y-toggle { box-shadow: -2px 0 10px rgba(51, 0, 0, .22); }
 
 /* Along the top or bottom it lies flat: a word set vertically down there reads
    badly and needs far more height than the tab should take. */
@@ -861,14 +872,19 @@ try {
                     (edge === 'left' || edge === 'right') ? saved.top : saved.left, true);
                 return;
             }
-            /* Never moved: the stylesheet's centred right edge. Whatever a
-               placement wrote is taken off first (a long press that wobbled
-               into a drag, or the phone position once the window widens), or
-               it would hold the tab wherever that left it. */
+            /* Never moved: the left edge, vertically centred, which is what
+               the stylesheet also rests it at. Placed here rather than left to
+               the stylesheet so the tab carries its edge-left class on a first
+               visit: the class is what gives it the curve facing into the page,
+               the shadow leaning the right way and the hover that grows away
+               from the edge. Cleared first, because a placement may already
+               have written an edge (a long press that wobbled into a drag, or
+               the phone position once the window widens) and it would otherwise
+               hold the tab wherever that left it. */
             widget.classList.remove('edge-left', 'edge-right', 'edge-top', 'edge-bottom');
             widget.style.left = widget.style.right = widget.style.top = widget.style.bottom = '';
             widget.style.transform = '';
-            updateAnchors();
+            placeWidget('left', Math.max(0, (window.innerHeight - widgetSize().h) / 2), false);
         }
 
         /* Flip the panel toward whichever side of the screen has space. */

@@ -2484,7 +2484,7 @@ hr {
 }
 
 .progress-bar {
-  background: linear-gradient(90deg, var(--maroon), var(--dark-maroon));
+  background: linear-gradient(90deg, var(--maroon-surface), var(--maroon-surface-hover));
   font-weight: 500;
   font-size: 1rem;
   transition: width 0.4s ease;
@@ -2548,7 +2548,7 @@ hr {
     width: 56px;
     height: 56px;
     border-radius: 50%;
-    background: var(--maroon);
+    background: var(--maroon-surface);
     color: #fff;
     border: none;
     box-shadow: 0 4px 16px rgba(130,7,7,.35);
@@ -2799,7 +2799,7 @@ hr {
     background: var(--white);
 }
 .send-btn {
-    background: var(--maroon);
+    background: var(--maroon-surface);
     color: #fff;
     border: none;
     border-radius: var(--r-control, 4px);
@@ -2812,7 +2812,7 @@ hr {
     cursor: pointer;
     transition: background .2s;
 }
-.send-btn:hover { background: var(--dark-maroon); }
+.send-btn:hover { background: var(--maroon-surface-hover); }
 
 /* The input + send button share one row; the wrapper is the form element. */
 .chat-input-wrapper {
@@ -3499,7 +3499,7 @@ body.doc-expanded .side-toc { display: none !important; }   /* the full view has
     border: 1px solid var(--border); font-size: .6875rem; color: var(--grey);
 }
 .side-toc-step.is-current > .side-toc-link { color: var(--maroon); }
-.side-toc-step.is-current .side-toc-num { background: var(--maroon); border-color: var(--maroon); color: #fff; }
+.side-toc-step.is-current .side-toc-num { background: var(--maroon-surface); border-color: var(--maroon-surface); color: #fff; }
 .side-toc-step.is-done .side-toc-num { background: var(--cream); color: var(--maroon); }
 .side-toc-link.is-here { background: var(--cream); color: var(--maroon); }
 .side-tab {
@@ -3918,7 +3918,7 @@ body.doc-expanded .pdf-dock.side-hidden { visibility: visible !important; pointe
     word-wrap: break-word;
 }
 .message.user {
-    background: var(--maroon);
+    background: var(--maroon-surface);
     color: #fff;
     align-self: flex-end;
     border-bottom-right-radius: 3px;
@@ -4193,7 +4193,7 @@ html.side-locked .main-tabs:not([data-on="form"]) + .step-row { display: none; }
 }
 
 .step-item.active .step-number {
-    background: var(--maroon);
+    background: var(--maroon-surface);
     color: #fff;
     border-color: var(--maroon);
 }
@@ -4299,7 +4299,7 @@ html.side-locked .main-tabs:not([data-on="form"]) + .step-row { display: none; }
 }
 
 .step-badge {
-    background: var(--maroon);
+    background: var(--maroon-surface);
     color: #fff;
     padding: .2rem .625rem;
     border-radius: 999px;
@@ -4404,7 +4404,7 @@ html.side-locked .main-tabs:not([data-on="form"]) + .step-row { display: none; }
 }
 .form-check-input[type="radio"] { border-radius: 50%; }
 .form-check-input[type="checkbox"] { border-radius: var(--r-control, 4px); }
-.form-check-input:checked { background-color: var(--pup-maroon); }
+.form-check-input:checked { background-color: var(--maroon-surface); }
 /* Material Symbols "check" glyph, drawn in white once ticked. */
 .form-check-input[type="checkbox"]:checked {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -960 960 960' fill='%23ffffff'%3E%3Cpath d='M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z'/%3E%3C/svg%3E");
@@ -4505,7 +4505,7 @@ html.side-locked .main-tabs:not([data-on="form"]) + .step-row { display: none; }
 #step2 .section-header { margin-bottom: 1.25rem; }
 
 .btn-ai {
-    background: var(--maroon);
+    background: var(--maroon-surface);
     color: #fff;
     font-weight: 400;
     padding: .75rem 1.75rem;
@@ -4515,7 +4515,7 @@ html.side-locked .main-tabs:not([data-on="form"]) + .step-row { display: none; }
     transition: background .2s;
 }
 
-.btn-ai:hover { background: var(--dark-maroon); color: #fff; }
+.btn-ai:hover { background: var(--maroon-surface-hover); color: #fff; }
 
 .btn-ai .ai-icon {
     display: inline-block;

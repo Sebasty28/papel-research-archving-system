@@ -682,6 +682,9 @@
         var dragging = false, dragId = null, startX = 0, startY = 0, startLeft = 0, startTop = 0;
 
         scroller.addEventListener('pointerdown', function (e) {
+            // A finger always uses the scroller's native one-finger movement,
+            // regardless of the mouse's select/drag mode.
+            if (e.pointerType === 'touch') return;
             var wantsPan = (e.button === 1) || (panMode && e.button === 0);
             if (!wantsPan) return;
             e.preventDefault();                 // also suppresses middle-click autoscroll
@@ -715,6 +718,35 @@
         scroller.addEventListener('auxclick', function (e) {
             if (e.button === 1) e.preventDefault();
         });
+
+        /* Let one finger scroll normally. Two fingers change the PDF's own
+           zoom when released, rather than enlarging the entire website. A
+           single redraw at the end avoids rerendering every page on each
+           touchmove from a long thesis. */
+        var pinchDistance = 0, pinchScale = 1, pinchZoom = 1;
+        function distance(touches) {
+            var dx = touches[0].clientX - touches[1].clientX;
+            var dy = touches[0].clientY - touches[1].clientY;
+            return Math.hypot(dx, dy);
+        }
+        scroller.addEventListener('touchstart', function (e) {
+            if (e.touches.length !== 2 || !pdfDoc) return;
+            pinchDistance = distance(e.touches);
+            pinchScale = 1;
+            pinchZoom = zoom;
+        }, { passive: true });
+        scroller.addEventListener('touchmove', function (e) {
+            if (!pinchDistance || e.touches.length !== 2) return;
+            e.preventDefault();
+            pinchScale = distance(e.touches) / pinchDistance;
+        }, { passive: false });
+        function finishPinch(e) {
+            if (!pinchDistance || e.touches.length >= 2) return;
+            pinchDistance = 0;
+            setZoom(pinchZoom * pinchScale);
+        }
+        scroller.addEventListener('touchend', finishPinch);
+        scroller.addEventListener('touchcancel', function () { pinchDistance = 0; });
 
         /* Ctrl/Cmd + wheel zooms, matching every other document viewer. A plain
            wheel is left alone so scrolling through the pages still works.
@@ -808,8 +840,13 @@
                     if (!drawn) return;
                     // Announced once per page load, not on every document, so it
                     // informs the first time and never nags afterwards.
-                    var intro = options.intro !== undefined ? options.intro
-                        : 'Press H to drag the page, T or Esc to select and copy text';
+                    var touchScreen = global.matchMedia &&
+                        global.matchMedia('(max-width: 600px), (pointer: coarse)').matches;
+                    var intro = touchScreen
+                        ? (options.introTouch !== undefined ? options.introTouch
+                            : 'Drag with one finger to move the page. Pinch with two fingers to zoom in or out.')
+                        : (options.intro !== undefined ? options.intro
+                            : 'Press H to drag the page, T or Esc to select and copy text');
                     if (!introShown && intro) {
                         introShown = true;
                         // Ten seconds: it is the one hint that teaches the keys,

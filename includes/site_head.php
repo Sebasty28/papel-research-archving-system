@@ -444,37 +444,6 @@ body:has(.crumb-bar) .nav-photo { height: calc(var(--nav-h) + var(--crumb-h)); }
 }
 .brand:hover .brand-word { color: var(--maroon); }
 
-/* The copy-of-the-site chip: STAGING, or whatever APP_ENV says. It sits
-   beside the logo rather than inside the link, because .brand-word slides out
-   from behind the mark on hover and would pass straight over it.
-
-   Outlined rather than filled, and in the accent rather than a warning red:
-   it has to be unmistakable at a glance without shouting over the masthead of
-   every page. Tokens only, so it follows the palette and dark mode like
-   everything else. */
-.brand-env {
-    flex-shrink: 0;
-    margin-left: .5rem;
-    padding: .1rem .4rem;
-    border: 1px solid var(--soft-maroon, var(--pup-maroon));
-    border-radius: var(--r-control, 4px);
-    font-family: var(--font-body);
-    font-size: .625rem;
-    font-weight: 700;
-    letter-spacing: .09em;
-    line-height: 1.4;
-    text-transform: uppercase;
-    color: var(--pup-maroon);
-    background: var(--cream);
-    white-space: nowrap;
-    /* The navbar is a 36px band, so the chip must not stretch it. */
-    align-self: center;
-}
-/* On a phone the header gives its room to the nav toggle, and the chip is the
-   first thing that can go: the page title still says which site this is. */
-@media (max-width: 420px) {
-    .brand-env { display: none; }
-}
 /* The navbar's stays shut below 1100px. Being out of the flow, the word
    overlays whatever is beside the mark rather than moving it, and in the bar
    something is: under 900px the header's controls sit straight after the
@@ -831,7 +800,8 @@ html.nav-open .nav-burger .burger-open { display: inline-flex; }
 }
 .dd-close:hover { background: var(--cream); color: var(--maroon); }
 .dd-actions { padding: .375rem 0; }
-.user-dropdown .dd-actions a {
+.user-dropdown .dd-actions a,
+.user-dropdown .dd-actions button {
     display: flex;
     align-items: center;
     gap: .625rem;
@@ -843,10 +813,12 @@ html.nav-open .nav-burger .burger-open { display: inline-flex; }
     background: none;
     border: none;
     font-family: inherit;
+    text-align: left;
     cursor: pointer;
     transition: background .15s, color .15s;
 }
-.user-dropdown .dd-actions a:hover { background: var(--cream); color: var(--maroon); }
+.user-dropdown .dd-actions a:hover,
+.user-dropdown .dd-actions button:hover { background: var(--cream); color: var(--maroon); }
 
 /* Notification dropdown */
 .notif-dropdown {
@@ -1484,15 +1456,48 @@ select.lf-input {
        as the browser's blue underlined default. Ink rather than maroon, and the
        glyph and the word on one line, as in the avatar dropdown these two are
        taken from: they are the sheet's quiet end, under the pages above. */
-    .nav-account a {
+    .nav-account a,
+    .nav-account button[data-profile-theme-toggle] {
         display: flex;
         align-items: center;
         gap: .5rem;
+        width: 100%;
+        padding: .8rem 1.25rem;
+        background: none;
+        border: 0;
+        font-family: var(--font-body);
+        text-align: left;
         color: var(--ink);
         text-decoration: none;
         font-size: .9375rem;
+        cursor: pointer;
     }
-    .nav-account a .material-symbols-outlined { color: var(--maroon); }
+    .nav-account a .material-symbols-outlined,
+    .nav-account button[data-profile-theme-toggle] .material-symbols-outlined { color: var(--maroon); }
+    /* Keep the glyph and word on one measured line. A rule under the pair
+       gives these navigation actions the same clean underline as the links
+       above, while the entire row remains the touch target. */
+    .nav-action-content {
+        display: inline-flex; align-items: center; gap: .5rem;
+        position: relative; min-height: 20px;
+    }
+    .nav-action-content > .material-symbols-outlined {
+        display: inline-flex; align-items: center; justify-content: center;
+        flex: 0 0 20px; width: 20px; height: 20px;
+        font-size: 20px; line-height: 1;
+    }
+    .nav-action-text { line-height: 20px; }
+    .nav-action-content::after {
+        content: ''; position: absolute; left: 0; right: 0; bottom: -.3rem;
+        height: 2px; border-radius: 2px; background: var(--soft-maroon);
+        transform: scaleX(0); transition: transform .2s ease;
+    }
+    .nav-account a:hover .nav-action-content::after,
+    .nav-account a:focus-visible .nav-action-content::after,
+    .nav-account button[data-profile-theme-toggle]:hover .nav-action-content::after,
+    .nav-account button[data-profile-theme-toggle]:focus-visible .nav-action-content::after,
+    .nav-login-btn:hover .nav-action-content::after,
+    .nav-login-btn:focus-visible .nav-action-content::after { transform: scaleX(1); }
 
     /* Login is a button, since it opens the panel rather than going anywhere,
        and the Control Panel's rows are links. Both are painted as one of the
@@ -1554,6 +1559,7 @@ select.lf-input {
     .nav-more-label::after { display: none; }
     .main-nav > a:hover,
     .nav-account a:hover,
+    .nav-account button[data-profile-theme-toggle]:hover,
     .nav-login-btn:hover,
     .nav-panel-item:hover,
     .nav-more-dropdown a:hover {
@@ -1572,6 +1578,9 @@ select.lf-input {
         text-underline-offset: .4em;
         text-decoration-color: var(--maroon);
     }
+    .nav-account a:hover,
+    .nav-account button[data-profile-theme-toggle]:hover,
+    .nav-login-btn:hover { text-decoration: none; }
 
     /* No menu inside a menu on a phone. The Resources group is flattened into
        the list and its button, which exists only to open the thing that is now

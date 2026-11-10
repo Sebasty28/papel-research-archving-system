@@ -119,7 +119,7 @@
        a second, unrelated maroon. */
     var COLOURS = [
         { id: 'classic',   label: 'Old Classic', swatch: '#6B0F0F' },
-        { id: 'old-night', label: 'Old Night',   swatch: 'linear-gradient(135deg, #6B0F0F 0 50%, #2D2F32 50% 100%)' }
+        { id: 'old-night', label: 'Old Night',   swatch: 'linear-gradient(135deg, #6E2E2E 0 50%, #2D2F32 50% 100%)' }
     ];
     /* Which of them is dark. The same list is in theme.php, which has to know
        before this file has loaded so the first paint is already right. */
@@ -204,11 +204,32 @@
        review desks had the switch, and is read as a fallback so nobody who
        set rows there is handed cards back. */
     var VIEW_KEY = 'papel_view';
-    var VIEW_OPTIONS = [['cards', 'Cards'], ['rows', 'Rows']];
+
+    /* Shelf only where the console can draw one, which it says by marking its
+       column data-view-console="shelf" (the repository and the student
+       dashboard; see includes/shelf_view.php). The stored setting is one per
+       device and shared by every console, so everything that reads it has to
+       cope with a value this page does not offer: currentView() hands back
+       cards, exactly as the pre-paint script in browse_console.php does, and
+       the two must keep agreeing. */
+    function shelfOffered() {
+        var col = document.querySelector('#mainCol[data-view-console]');
+        return !!col && col.getAttribute('data-view-console') === 'shelf';
+    }
+    function viewOptions() {
+        var o = [['cards', 'Cards'], ['rows', 'Rows']];
+        if (shelfOffered()) { o.push(['shelf', 'Shelf']); }
+        return o;
+    }
+    /* What a stored value means on this page. */
+    function asView(v) {
+        if (v === 'rows') { return 'rows'; }
+        if (v === 'shelf' && shelfOffered()) { return 'shelf'; }
+        return 'cards';
+    }
 
     function currentView() {
-        var v = getStored(VIEW_KEY, '') || getStored('papel_desk_view', '');
-        return v === 'rows' ? 'rows' : 'cards';
+        return asView(getStored(VIEW_KEY, '') || getStored('papel_desk_view', ''));
     }
 
     /* Marked on #mainCol rather than looked for in the list itself: the three
@@ -229,7 +250,7 @@
             label.textContent = 'View';
             section.appendChild(label);
 
-            VIEW_OPTIONS.forEach(function (opt) {
+            viewOptions().forEach(function (opt) {
                 var row = document.createElement('label');
                 row.className = 'qs-radio';
                 var input = document.createElement('input');
@@ -367,7 +388,7 @@
         var m = ctxBox();
         m.innerHTML = '';
         if (document.querySelector('#mainCol[data-view-console]')) {
-            m.appendChild(ctxGroup('View', 'qs_view', VIEW_OPTIONS, currentView()));
+            m.appendChild(ctxGroup('View', 'qs_view', viewOptions(), currentView()));
         }
         m.appendChild(ctxGroup('Density', 'qs_density', DENSITY_OPTIONS,
                                getStored('papel_density', 'default')));
@@ -496,7 +517,7 @@
     // Every one of these takes effect at once and is remembered.
     document.addEventListener('change', function (e) {
         if (e.target.name === 'qs_view') {
-            var view = e.target.value === 'rows' ? 'rows' : 'cards';
+            var view = asView(e.target.value);
             document.documentElement.setAttribute('data-view', view);
             try { localStorage.setItem(VIEW_KEY, view); } catch (err) {}
             /* The same switch is drawn in more than one panel on a page that
@@ -940,6 +961,22 @@
     var WAIT = 260;
     var timer = null, back = null, frame = null, name = null, go = null;
 
+    /* The window is white while the frame is between documents, and the one
+       navigation a reader starts themselves - the manuscript request, which
+       posts and is answered with a redirect - takes as long as the server
+       takes to send the librarian their email, which is seconds, not frames.
+       With nothing moving anywhere that reads as the window having died. The
+       bar along the top of the page is the site's one loading indicator, so
+       it reports this as it reports every other wait; a spinner of our own
+       here would be the second one. Held behind a flag because start/done
+       count, and an unmatched start leaves the bar running over the page. */
+    var waiting = false;
+    function wait(on) {
+        if (on === waiting || !window.papelLoading) return;
+        waiting = on;
+        if (on) { window.papelLoading.start(); } else { window.papelLoading.done(); }
+    }
+
     function recordUrl(row) {
         var a = row.querySelector(".paper-title a[href]");
         return a ? a.getAttribute("href") : null;
@@ -977,7 +1014,21 @@
             if (back.hidden) return;             // about:blank after closing
             var doc;
             try { doc = frame.contentDocument; } catch (err) { shut(); return; }
-            if (!doc) { shut(); return; }
+            /* Not every load is a page arriving. Submitting a form inside the
+               window - the manuscript request is the one a student actually
+               meets - navigates the frame, and the browser fires load for the
+               document it is tearing down, with contentDocument already null.
+               Read as a failure, that closed the window, and the about:blank
+               shut() writes cancelled the navigation the student had just
+               started: the request was filed and the page that said so was
+               thrown away, so pressing the button looked like it did nothing
+               but turn the window white. The frame also starts on a blank
+               document of its own, which can arrive after the window is
+               already open and has no record in it either. Neither is a page
+               that failed to be a record, so neither closes anything: wait
+               for the load that brings one. */
+            if (!doc) return;
+            if (!doc.location || doc.location.href === "about:blank") return;
             /* The same goes for the furniture fixed to the window's edge. Inside the
                frame it is pinned to the frame's edge instead, so the accessibility tab
                and the "Make it yours" card showed twice, one copy just inside the
@@ -987,6 +1038,11 @@
              "#a11y-widget", "#themeWelcome"].forEach(function (sel) {
                 doc.querySelectorAll(sel).forEach(function (el) { el.style.display = "none"; });
             });
+            /* The paper skeleton normally starts below those bars. Once they
+               are hidden in this preview, that offset leaves the real title
+               visible above the loading shapes. Cover the frame from its top. */
+            var skeleton = doc.getElementById("papelSkel");
+            if (skeleton) skeleton.style.top = "0px";
 
             /* Back belongs to the page, and inside a window the page's "back"
                is the window itself: following it would leave the list showing
@@ -1004,8 +1060,10 @@
                only after its own furniture has been removed. */
             frame.contentWindow.addEventListener("beforeunload", function () {
                 frame.style.visibility = "hidden";
+                wait(true);
             }, { once: true });
             frame.style.visibility = "visible";
+            wait(false);
         });
 
         back.addEventListener("click", function (e) {
@@ -1019,6 +1077,7 @@
         back.classList.remove("is-open");
         back.hidden = true;
         frame.style.visibility = "hidden";
+        wait(false);
         // Emptied, so the page inside stops running the moment it is closed.
         frame.setAttribute("src", "about:blank");
         document.body.style.overflow = "";
@@ -1032,6 +1091,7 @@
         name.textContent = title ? title.textContent.replace(/\s+/g, " ").trim() : "Paper";
         go.setAttribute("href", url);
         frame.style.visibility = "hidden";
+        wait(true);
         frame.setAttribute("src", url);
         p.hidden = false;
         document.body.style.overflow = "hidden";
@@ -1109,16 +1169,22 @@ if (!defined('PAPEL_TOOLS_DRAWER_DONE')):
    attached in there would go with it. */
 (function () {
     var root = document.documentElement;
-    var btn  = document.getElementById('toolsToggle');
-    if (!btn) { return; }          // a page with no drawer to open
+    if (!document.getElementById('toolsToggle')) { return; } // no drawer on this page
 
     function setOpen(on) {
         root.classList.toggle('tools-open', on);
-        btn.setAttribute('aria-expanded', on ? 'true' : 'false');
+        var btn = document.getElementById('toolsToggle');
+        if (btn) btn.setAttribute('aria-expanded', on ? 'true' : 'false');
     }
     function isOpen() { return root.classList.contains('tools-open'); }
 
-    btn.addEventListener('click', function () { setOpen(!isOpen()); });
+    /* An AJAX tab or filter refresh replaces #mainCol, including this button.
+       Listen on the document so the new button opens the same drawer. */
+    document.addEventListener('click', function (e) {
+        if (e.target.closest && e.target.closest('#toolsToggle')) {
+            setOpen(!isOpen());
+        }
+    });
 
     /* Delegated, not bound. This block runs where it stands and the backdrop
        and the close button are printed just above it, but a page may yet print

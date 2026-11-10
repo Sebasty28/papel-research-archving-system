@@ -52,6 +52,21 @@ function browse_card_links(?array $u): array
         'tab'   => $role === 'student' ? '' : null,
     ];
 
+    /* Browse is about going somewhere else, and a reader's saved papers are
+       one of the places they go. Under their own desk rather than above it: a
+       shelf is somewhere to return to, not where the work is. A Library Pass
+       guest has no library (user_has_library()) and never reaches this line
+       anyway, the guard above having returned already. */
+    if (function_exists('user_has_library') && user_has_library($u)) {
+        $links[] = [
+            'label' => 'My Library',
+            'href'  => BASE_URL . '/app/my_library.php',
+            'match' => ['my_library.php'],
+            // Saved, Requests and History are all My Library.
+            'tab'   => null,
+        ];
+    }
+
     return $links;
 }
 

@@ -247,10 +247,24 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
    attributes, which the CSP drops, so the gap they asked for never showed. */
 .settings-note { margin-top: 1rem; }
 
+/* Keep explanatory copy even across the card without stretching labels or values. */
+.page-intro p, .option-text span, .settings-note, .pw-notify, .profile-hint {
+    text-align: justify;
+    text-justify: inter-word;
+}
+.option-text span { display: block; }
+
 @media (max-width: 700px) {
     .profile-grid { grid-template-columns: 1fr; }
     .option-row { flex-direction: column; align-items: flex-start; gap: .625rem; }
     .page-intro h1 { font-size: 1.375rem; }
+    .page-card-header { flex-wrap: wrap; row-gap: .25rem; }
+    .page-card-header .hint {
+        flex-basis: 100%;
+        margin-left: 0;
+        line-height: 1.4;
+        text-align: left;
+    }
 }
 </style>
 </head>
@@ -287,6 +301,7 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
              than links: they switch what is on this page instead of going
              anywhere, though each also sets the address's #fragment so a
              section can be linked to and survives a reload. */ ?>
+    <div class="page-sections-glide">
     <nav class="page-sections-nav" role="tablist" aria-label="Settings sections" aria-orientation="vertical">
         <button type="button" class="page-sections-tab" role="tab" id="tab-personal" aria-controls="sec-personal" aria-selected="true" data-section="personal">
             <span class="material-symbols-outlined">badge</span> Personal Information
@@ -301,13 +316,13 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
             <span class="material-symbols-outlined">notifications</span> Notifications
         </button>
     </nav>
+    </div>
 
     <div class="page-sections-panels">
 
     <!-- ===== Personal information ===== -->
     <section class="page-card" id="sec-personal" role="tabpanel" aria-labelledby="tab-personal">
         <div class="page-card-header">
-            <span class="material-symbols-outlined">badge</span>
             <h2>Personal Information</h2>
             <span class="hint">Managed by your administrator</span>
         </div>
@@ -379,7 +394,6 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
     <!-- ===== Password ===== -->
     <section class="page-card" id="sec-password" role="tabpanel" aria-labelledby="tab-password">
         <div class="page-card-header">
-            <span class="material-symbols-outlined">lock</span>
             <h2>Password</h2>
         </div>
         <div class="page-card-body">
@@ -447,7 +461,6 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
     <!-- ===== Appearance ===== -->
     <section class="page-card" id="sec-appearance" role="tabpanel" aria-labelledby="tab-appearance">
         <div class="page-card-header">
-            <span class="material-symbols-outlined">palette</span>
             <h2>Appearance</h2>
             <span class="hint">Saved on this device</span>
         </div>
@@ -503,7 +516,6 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
     <!-- ===== Notifications ===== -->
     <section class="page-card" id="sec-notifications" role="tabpanel" aria-labelledby="tab-notifications">
         <div class="page-card-header">
-            <span class="material-symbols-outlined">notifications</span>
             <h2>Notifications</h2>
             <span class="hint">Saved on this device</span>
         </div>

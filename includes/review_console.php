@@ -85,10 +85,11 @@ function rc_from_for(string $src): string {
         : "FROM research_papers rp JOIN users u ON u.user_id = rp.uploaded_by";
 }
 
-/* Which tab is open decides which table everything below reads, so this is
-   settled before the first query rather than with the rest of the view state. */
+/* Search suggestions can use the first tab before the counts are loaded. The
+   page itself chooses its default from those counts below. */
 $rc_tabs = $RC['tabs'];
-$tab     = isset($_GET['tab']) && isset($rc_tabs[$_GET['tab']]) ? $_GET['tab'] : array_key_first($rc_tabs);
+$rc_requested_tab = isset($_GET['tab']) && isset($rc_tabs[$_GET['tab']]) ? $_GET['tab'] : null;
+$tab     = $rc_requested_tab ?? array_key_first($rc_tabs);
 $rc_src  = $rc_tabs[$tab]['src'] ?? 'papers';
 $rc_from = rc_from_for($rc_src);
 
@@ -125,6 +126,34 @@ if (isset($_GET['ajax_search'])) {
         echo json_encode(array_values(array_unique($out)));
     } catch (Exception $e) { echo json_encode([]); }
     exit;
+}
+
+/* ---- Counts per tab ---------------------------------------------------- */
+/* One query per table rather than one for the lot: the tabs no longer all
+   count rows of the same thing. These counts also choose the first view. */
+$counts   = [];
+$rc_bySrc = [];
+foreach ($rc_tabs as $k => $def) {
+    $counts[$k] = 0;
+    $rc_bySrc[$def['src'] ?? 'papers'][$k] = $def['where'];
+}
+foreach ($rc_bySrc as $src => $defs) {
+    $sums = [];
+    foreach ($defs as $k => $w) $sums[] = "SUM($w) AS `$k`";
+    $cs = $conn->prepare("SELECT " . implode(', ', $sums) . " " . rc_from_for($src)
+                       . " WHERE ({$rc_scope['sql']})");
+    if ($rc_scope['types'] !== '') $cs->bind_param($rc_scope['types'], ...$rc_scope['params']);
+    $cs->execute();
+    if ($row = $cs->get_result()->fetch_assoc()) {
+        foreach ($defs as $k => $_) $counts[$k] = (int)($row[$k] ?? 0);
+    }
+    $cs->close();
+}
+if ($rc_requested_tab === null) {
+    /* The first tab wins a tie, including the all-empty case. */
+    $tab = array_search(max($counts), $counts, true);
+    $rc_src = $rc_tabs[$tab]['src'] ?? 'papers';
+    $rc_from = rc_from_for($rc_src);
 }
 
 /* ---- View state -------------------------------------------------------- */
@@ -198,28 +227,6 @@ if ($filter_ay)      { $where .= " AND u.academic_year = ?"; $params[] = $filter
 if ($filter_year) { $where .= " AND COALESCE(YEAR(rp.research_date), rp.year) = ?"; $params[] = $filter_year; $types .= 'i'; }
 if ($filter_month >= 1 && $filter_month <= 12) { $where .= " AND MONTH(rp.research_date) = ?"; $params[] = $filter_month; $types .= 'i'; }
 if ($filter_day   >= 1 && $filter_day   <= 31) { $where .= " AND DAY(rp.research_date) = ?";   $params[] = $filter_day;   $types .= 'i'; }
-
-/* ---- Counts per tab ---------------------------------------------------- */
-/* One query per table rather than one for the lot: the tabs no longer all
-   count rows of the same thing. */
-$counts   = [];
-$rc_bySrc = [];
-foreach ($rc_tabs as $k => $def) {
-    $counts[$k] = 0;
-    $rc_bySrc[$def['src'] ?? 'papers'][$k] = $def['where'];
-}
-foreach ($rc_bySrc as $src => $defs) {
-    $sums = [];
-    foreach ($defs as $k => $w) $sums[] = "SUM($w) AS `$k`";
-    $cs = $conn->prepare("SELECT " . implode(', ', $sums) . " " . rc_from_for($src)
-                       . " WHERE ({$rc_scope['sql']})");
-    if ($rc_scope['types'] !== '') $cs->bind_param($rc_scope['types'], ...$rc_scope['params']);
-    $cs->execute();
-    if ($row = $cs->get_result()->fetch_assoc()) {
-        foreach ($defs as $k => $_) $counts[$k] = (int)($row[$k] ?? 0);
-    }
-    $cs->close();
-}
 
 /* ---- Export: CSV, Excel, Word, PDF: the same four formats and the same
    includes/*_writer.php classes analytics/analytics_dashboard.php exports
@@ -478,8 +485,9 @@ $ayq->close();
 
 /** The query string carried across tabs, filters and pagination. */
 function rc_qs(array $over = []): string {
+    global $tab;
     $base = [
-        'tab'  => $_GET['tab']  ?? null, 'q'       => $_GET['q']       ?? null,
+        'tab'  => $tab,                    'q'       => $_GET['q']       ?? null,
         'type' => $_GET['type'] ?? null, 'program' => $_GET['program'] ?? null,
         'year' => $_GET['year'] ?? null, 'month'   => $_GET['month']   ?? null,
         'day'  => $_GET['day']  ?? null, 'sort'    => $_GET['sort']    ?? null,

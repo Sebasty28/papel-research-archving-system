@@ -185,55 +185,41 @@ html.sidebar-left .pd-side-swap .side-icon-right { display: inline-flex; }
     background: var(--white); color: var(--maroon); font-size: .75rem; font-weight: 500; cursor: pointer;
     transition: background .15s, color .15s;
 }
-.pd-cite-copy:hover { background: var(--maroon); color: #fff; }
+.pd-cite-copy:hover { background: var(--maroon-surface); color: #fff; }
 .pd-cite-copy .material-symbols-outlined { font-size: 16px; }
-.pd-cite-copy.is-copied { background: var(--maroon); color: #fff; border-color: var(--maroon); }
+.pd-cite-copy.is-copied { background: var(--maroon-surface); color: #fff; border-color: var(--maroon-surface); }
 
 @media (max-width: 1050px) {
     .pd-layout { grid-template-columns: 1fr; gap: 1.125rem; }
 
-    /* Stacked, the rail is a bar across the top of the paper and stays there.
+    /* The sticky contents cards meet the navbar exactly. The navbar's frosted
+       fill otherwise lets a thin line of manuscript text show through above
+       them while scrolling, which reads as a gap between the two bars. */
+    body:has(.pd-wrap.has-rail) .site-header.scrolled {
+        background: var(--white);
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
 
-       It is the first thing in the layout at this width (the markup order,
-       see archive/view_paper.php), and it is pinned under the navbar, so a
-       reader a third of the way down a 12,000px manuscript still has the
-       contents a tap away. Before this it was laid out after the record: on
-       a phone the Table of Contents began 11,627px down a 12,191px page,
-       under the whole paper it indexes.
-
-       Under the bars and over the paper: the navbar is 900 and the record's
-       cards make no stacking context of their own, so a small number is
-       enough and a large one would reach over the header.
-
-       The top is the navbar's own measured bottom edge and never a figure:
-       the bar is 37px on a desktop and 61px on a phone, and in the upload
-       page's preview there is no navbar at all. pdf_dock.php keeps that
-       measurement on <html>. */
+    /* The contents and citation cards lead the paper in the narrow layout
+       and remain within reach below the navbar as the record scrolls. */
     .pd-side {
         position: sticky;
         top: var(--pdf-dock-top, 57px);
         z-index: 3;
         gap: .5rem;
-        /* The paper runs underneath it, so it needs a ground of its own; the
-           page's own white, with the shadow rather than a line to say which
-           of the two is in front. The negative margin takes the ground out to
-           the full width of the column: the cards sit at the column's edges
-           and a ground flush with them reads as part of the card below. */
+        /* The cards share one ground across the width of the column. */
         margin: 0 -.75rem;
         padding: .5rem .75rem;
         background: var(--white);
         box-shadow: 0 .5rem .75rem -.6rem rgba(0, 0, 0, .28);
-        /* Both undone from the column above, and the second of them matters:
-           the rail is a scrolling box up there, capped to the height of the
-           record beside it, and a scrolling box clips what hangs out of it in
-           both directions. The panel below drops past the bar's own bottom
-           edge, and with the cap still in force it was cut off level with it:
-           two entries of the contents showed and the rest was sheared away. */
+        /* The column's height cap and overflow belong only to the wide rail.
+           Here the opened contents list can extend beyond its card. */
         max-height: none;
         overflow: visible;
     }
 
-    /* **A card in the pinned rail is the same height open or shut**, and what
+    /* A card in the contents group is the same height open or shut, and what
        it holds is drawn over the paper rather than in it.
 
        Folded in the flow, the contents of a long paper take 454px down to
@@ -265,10 +251,8 @@ html.sidebar-left .pd-side-swap .side-icon-right { display: inline-flex; }
         border-top: 0;
         border-radius: 0 0 var(--r-card, 8px) var(--r-card, 8px);
         box-shadow: 0 .6rem 1rem -.5rem rgba(0, 0, 0, .3);
-        /* A paper with many sections has a longer list than a phone is tall,
-           and a panel hanging off a pinned bar cannot be scrolled to the end
-           of by scrolling the page: it scrolls inside itself, and 1rem of the
-           page is left showing below it to say so. */
+        /* A long contents list scrolls inside its panel, leaving some of the
+           page visible below it on a phone. */
         max-height: calc(100vh - var(--pdf-dock-top, 57px) - 10rem);
         overflow-y: auto; overflow-x: hidden;
     }
@@ -277,6 +261,11 @@ html.sidebar-left .pd-side-swap .side-icon-right { display: inline-flex; }
        (visibility, not display) because the bar's height is the one thing
        here that must not change. */
     .pd-side .pd-card[data-collapsed="0"] ~ .pd-card { visibility: hidden; }
+
+    /* The inline PDF's loading ring and navigation hint have their own high
+       z-indices. Contain them inside the viewer's layer so the sticky rail
+       stays in front of the entire viewer, not just its page and toolbar. */
+    .pd-layout .pdf-dock.is-inline { z-index: 0; }
 
     /* Stacked full-width, there is no "side" left to send it to. */
     .pd-side-swap { display: none; }
@@ -290,11 +279,7 @@ html.sidebar-left .pd-side-swap .side-icon-right { display: inline-flex; }
    Stands". */
 .pd-card[id], .pd-section[id], [id^="pd-sec-"], [id^="pd-sub-"] { scroll-margin-top: 76px; }
 @media (max-width: 1050px) {
-    /* The contents bar is pinned under the navbar at this width, so a heading
-       has both to clear. The bar's height is measured and written out by the
-       script at the foot of this file: it is two cards on the public paper
-       page and would be one on a paper with no citation, which is not
-       something a figure written here could know. The fallback is the two. */
+    /* A section link clears both the navbar and the pinned contents rail. */
     .pd-card[id], .pd-section[id], [id^="pd-sec-"], [id^="pd-sub-"] {
         scroll-margin-top: calc(var(--pdf-dock-top, 57px) + var(--pd-rail-h, 9rem) + .75rem);
     }
@@ -592,22 +577,23 @@ html.sidebar-left .pd-side-swap .side-icon-right { display: inline-flex; }
     .pd-repo-link { margin-top: 0; font-size: .6875rem; }
     .pd-status .pd-archive-form { margin-top: 0; }
 
+    /* The pinned Contents/Citation group should leave room for the paper on a
+       phone. Only its card headers shrink; the opened panels keep their space. */
+    .pd-side { gap: .25rem; margin: 0 -.5rem; padding: 0 .5rem .125rem; }
+    .pd-side .pd-card { padding: .125rem .625rem; }
+    .pd-side .pd-card > h2 { min-height: 1.5rem; }
+    .pd-side .pd-card > h2 > button { min-width: 1.5rem; min-height: 1.5rem; }
+
     .pd-card { padding: 1.125rem; }
 }
 </style>
 
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
-/* How tall the record is, handed to the stylesheet above so the rail beside
-   it can be capped to the same height, and how tall the rail is, which is what
-   a heading has to clear when the rail is pinned across the top of a narrow
-   screen. CSS cannot ask a sibling, and the answers change as cards are folded
-   and unfolded, so they are measured and re-measured rather than worked out
-   once.
-
-   Writing either cannot start a loop: the first feeds the rail's max-height,
-   and the rail getting shorter does not change the record; the second feeds
-   scroll-margin, which lays nothing out. Both are written on .pd-layout and
-   never on :root, where a custom property is a restyle of the whole page. */
+/* The wide rail is capped to the height of the record beside it. On a narrow
+   screen, section links must clear the pinned rail's current height. CSS
+   cannot ask a sibling for either size, so both are measured as they change.
+   Keep the values on .pd-layout rather than :root, where a custom property
+   change would restyle the whole page. */
 (function () {
     /* What the three record pages call for the rail, answered as if there were
        no rail. railControls() below replaces it where there is one. A record
@@ -729,14 +715,11 @@ html.sidebar-left .pd-side-swap .side-icon-right { display: inline-flex; }
             }
         }
 
-        /* ----- The contents, pinned across the top of a narrow screen -----
+        /* ----- The contents pinned above a narrow record -----
 
            Below 1051px the rail is not a column beside the record but a bar
-           above it, pinned under the navbar (the stylesheet above). Open, the
-           contents of a long paper fill most of a phone, which is right for
-           the top of the page and wrong for anywhere else, so the card follows
-           the scroll: open while the reader is at the top, folded the moment
-           they are reading, and one tap from being open again.
+           above it, pinned beneath the navbar. Open, the contents of a long
+           paper can fill most of a phone, so a scroll folds the list.
 
            Open, it is a panel hanging off the bar and covering the record, so
            a scroll shuts it, as a scroll shuts any menu: the reader has gone
@@ -771,17 +754,14 @@ html.sidebar-left .pd-side-swap .side-icon-right { display: inline-flex; }
                the screen the section is about to land on. */
             foldContents: function () { if (fold && narrowQ.matches) { setOpen(false); } },
 
-            /* How far down the window a heading must come to rest. On a wide
-               screen that is the navbar the page scrolls under; on a narrow one
-               the pinned bar is under the navbar and the heading has to clear
-               both, so it is measured rather than written down: the bar is two
-               cards on the public paper page and one on the other two. */
+            /* A narrow target heading clears the navbar, contents rail and
+               a small gap, using the rail's measured current height. */
             headerOffset: function (wide) {
                 if (!narrowQ.matches) { return wide; }
-                var seen = rail.getClientRects().length
-                    ? rail.getBoundingClientRect().height : 0;
                 var bar = parseFloat(getComputedStyle(document.documentElement)
                             .getPropertyValue('--pdf-dock-top')) || 57;
+                var seen = rail.getClientRects().length
+                    ? rail.getBoundingClientRect().height : 0;
                 return bar + seen + 12;
             }
         };

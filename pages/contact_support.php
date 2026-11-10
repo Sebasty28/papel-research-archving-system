@@ -339,13 +339,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 textarea.form-control { resize: vertical; min-height: 104px; }
 .btn-submit {
     width: 100%; padding: .75rem 1rem;
-    background: var(--maroon); color: #fff;
+    background: var(--maroon-surface); color: #fff;
     border: none; border-radius: var(--r-control, 4px);
     font-size: .9375rem; font-weight: 400; cursor: pointer;
     font-family: inherit; transition: background .2s;
     display: flex; align-items: center; justify-content: center; gap: .5rem;
 }
-.btn-submit:hover { background: var(--dark-maroon); }
+.btn-submit:hover { background: var(--maroon-surface-hover); }
 /* The same button, sized for the header strip rather than the width of a column. */
 .btn-submit-head { width: auto; margin-left: auto; padding: .5rem 1rem; font-size: .875rem; }
 /* The header strip paints every icon in it maroon, for the ones that sit beside

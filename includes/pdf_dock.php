@@ -159,6 +159,7 @@ $PDF_DOCK_SIDES     = array_values(array_intersect(['left', 'right'], (array)($P
 .pdf-dock-btn:disabled { opacity: .45; cursor: default; background: none; }
 
 /* Zoom, and where in the document the reader is. */
+.pdf-dock-readout { display: contents; }
 .pdf-dock-page {
     flex: 0 0 auto; font-size: .75rem; opacity: .85;
     font-variant-numeric: tabular-nums; white-space: nowrap;
@@ -215,6 +216,29 @@ $PDF_DOCK_SIDES     = array_values(array_intersect(['left', 'right'], (array)($P
 .pdf-dock { container-type: inline-size; }
 @container (max-width: 600px) { .pdf-dock-page { display: none; } }
 @container (max-width: 470px) { .pdf-dock-zoom { display: none; } }
+
+/* On a phone the page and zoom controls form the small tab attached to the
+   lower-right edge of the header. It lies over the stage's top margin, as in
+   the paper viewer, leaving the Manuscript title and actions on one line. */
+@media (max-width: 600px) {
+    .pdf-dock-head { position: relative; z-index: 7; }
+    .pdf-dock-readout {
+        position: absolute; top: 100%; right: 0;
+        display: flex; align-items: center; gap: .125rem;
+        min-height: 1.5rem; padding: 0 .25rem 0 .5rem;
+        border-radius: 0 0 0 var(--r-control, 4px);
+        background: var(--maroon-surface-hover); color: #fff;
+    }
+    .pdf-dock-page {
+        display: block; font-size: .625rem; opacity: .95;
+    }
+    .pdf-dock-zoom {
+        display: inline-flex; margin: 0; padding: 0; border: 0;
+    }
+    .pdf-dock-zoom .pdf-dock-btn { width: 1.5rem; height: 1.5rem; }
+    .pdf-dock-zoom .material-symbols-outlined { font-size: 15px; }
+    .pdf-dock-zoom-level { min-width: 2.5rem; height: 1.5rem; padding: 0 .125rem; font-size: .625rem; }
+}
 
 /* No printing the paper from the page: the browser's print would otherwise
    happily put every drawn page on paper. */
@@ -384,7 +408,7 @@ body.pdf-docked.pdf-over-strip .crumb-bar { z-index: 1; }
 .pdf-dock-drop span {
     padding: .45rem .9rem;
     border-radius: 999px;
-    background: var(--maroon); color: #fff;
+    background: var(--maroon-surface); color: #fff;
     font-size: .8125rem; font-weight: 600;
     box-shadow: 0 4px 14px rgba(51, 0, 0, .2);
 }
@@ -456,14 +480,16 @@ body.pdf-dragging, body.pdf-dragging * {
         <?php endif; ?>
         <span class="material-symbols-outlined">picture_as_pdf</span>
         <span class="pdf-dock-name" id="pdfDockName">Document</span>
-        <span class="pdf-dock-page" id="pdfDockPage" aria-live="polite"></span>
-        <span class="pdf-dock-zoom">
-            <button type="button" class="pdf-dock-btn" id="pdfDockZoomOut"
-                    title="Zoom out" aria-label="Zoom out"><span class="material-symbols-outlined">zoom_out</span></button>
-            <button type="button" class="pdf-dock-zoom-level" id="pdfDockZoomLevel"
-                    title="Fit to width" aria-label="Zoom level; fit to width">100%</button>
-            <button type="button" class="pdf-dock-btn" id="pdfDockZoomIn"
-                    title="Zoom in" aria-label="Zoom in"><span class="material-symbols-outlined">zoom_in</span></button>
+        <span class="pdf-dock-readout">
+            <span class="pdf-dock-page" id="pdfDockPage" aria-live="polite"></span>
+            <span class="pdf-dock-zoom">
+                <button type="button" class="pdf-dock-btn" id="pdfDockZoomOut"
+                        title="Zoom out" aria-label="Zoom out"><span class="material-symbols-outlined">zoom_out</span></button>
+                <button type="button" class="pdf-dock-zoom-level" id="pdfDockZoomLevel"
+                        title="Fit to width" aria-label="Zoom level; fit to width">100%</button>
+                <button type="button" class="pdf-dock-btn" id="pdfDockZoomIn"
+                        title="Zoom in" aria-label="Zoom in"><span class="material-symbols-outlined">zoom_in</span></button>
+            </span>
         </span>
         <button type="button" class="pdf-dock-btn" id="pdfDockNewTab"
                 title="Open in a new tab" aria-label="Open in a new tab"><span class="material-symbols-outlined">open_in_new</span></button>
@@ -601,6 +627,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     workerSrc: ASSETS.worker,
                     failMessage: FAIL_SERVER,
                     intro: 'Press H to drag the page, T to select text. Ctrl + scroll zooms.',
+                    introTouch: 'Drag with one finger to move the page. Pinch with two fingers to zoom in or out.',
                     loadingText: '',                  // the ring says it
                     onBusy: setBusy,
                     onZoom: function (z) { zoomEl.textContent = Math.round(z * 100) + '%'; }

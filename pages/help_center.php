@@ -32,7 +32,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
 .faq-trigger.open { background: var(--cream); color: var(--maroon); border-bottom: 1px solid var(--border); }
 .faq-trigger .faq-icon { flex-shrink: 0; font-size: 1rem; color: var(--grey); transition: transform .25s; }
 .faq-trigger.open .faq-icon { transform: rotate(45deg); color: var(--maroon); }
-.faq-body { display: none; padding: 1.125rem .75rem; background: var(--white); color: var(--ink); font-size: .9375rem; line-height: 1.75; }
+.faq-body { display: none; padding: 1.125rem .75rem; background: var(--white); color: var(--ink); font-size: .9375rem; line-height: 1.75; text-align: justify; text-justify: inter-word; }
 .faq-body.open { display: block; }
 .faq-body ol, .faq-body ul { padding-left: 1.25rem; margin-top: .5rem; }
 .faq-body li { margin-bottom: .5rem; }

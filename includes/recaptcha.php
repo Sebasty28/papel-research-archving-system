@@ -157,6 +157,82 @@ function recaptcha_scripts(): string
     } else {
         wireReveal();
     }
+
+    /* Google appends the image challenge directly to <body>, separately from
+       the scaled checkbox. On a phone it positions that frame at the checkbox's
+       left edge, which can put half of it off-screen. Move the outer box into
+       the viewport, but leave its iframe unscaled so touch targets keep their
+       native coordinates. Observe only that box after it appears. */
+    function wireChallenge() {
+        var popup = null;
+        var frame = null;
+        var fitted = false;
+        var queued = false;
+        var finder = new MutationObserver(find);
+
+        function fit() {
+            if (!popup || !frame || !frame.getClientRects().length ||
+                getComputedStyle(popup).visibility !== 'visible' ||
+                frame.offsetHeight < 200) return;
+
+            var view = window.visualViewport;
+            var width = view ? view.width : document.documentElement.clientWidth;
+            var height = view ? view.height : document.documentElement.clientHeight;
+            if (width > 600 && !fitted) return;
+
+            /* Google's 1px frame border is the only excess on a 320px phone.
+               Remove it so the actual iframe fits without scaling its tiles. */
+            if (popup.style.border !== '0px') popup.style.border = '0px';
+            var left = Math.round((view ? view.offsetLeft : 0) +
+                                  Math.max(0, (width - popup.offsetWidth) / 2));
+            var top = Math.round((view ? view.offsetTop : 0) +
+                                 Math.max(0, (height - popup.offsetHeight) / 2));
+            var wanted = {
+                position: 'fixed', left: left + 'px', top: top + 'px',
+                transform: 'none'
+            };
+            Object.keys(wanted).forEach(function (name) {
+                if (popup.style.getPropertyValue(name) !== wanted[name]) {
+                    popup.style.setProperty(name, wanted[name]);
+                }
+            });
+            fitted = true;
+        }
+
+        function schedule() {
+            if (queued) return;
+            queued = true;
+            requestAnimationFrame(function () { queued = false; fit(); });
+        }
+
+        function find() {
+            frame = document.querySelector('iframe[src*="/recaptcha/api2/bframe"]');
+            if (!frame) return;
+            popup = frame;
+            while (popup.parentElement && popup.parentElement !== document.body) {
+                popup = popup.parentElement;
+            }
+            if (popup.parentElement !== document.body) { popup = null; return; }
+            finder.disconnect();
+            new MutationObserver(schedule).observe(popup, {
+                attributes: true, attributeFilter: ['style']
+            });
+            schedule();
+        }
+
+        finder.observe(document.body, { childList: true, subtree: true });
+        find();
+        window.addEventListener('resize', schedule);
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', schedule);
+            window.visualViewport.addEventListener('scroll', schedule);
+        }
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', wireChallenge);
+    } else {
+        wireChallenge();
+    }
 })();
 </script>
 <script src="https://www.google.com/recaptcha/api.js" async defer nonce="{$n}"></script>

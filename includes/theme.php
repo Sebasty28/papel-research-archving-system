@@ -112,15 +112,34 @@ html[data-color="classic"] {
     --border-base:  #EADFDC;
 }
 
-/* Old Night keeps the deep maroon for button fills and the breadcrumb, while
-   a lighter maroon carries headings and links on ash charcoal surfaces. The
-   text accent clears 4.5:1 on both the card and its lighter cream wash. */
+/* Old Night carries a muted maroon for button fills and the breadcrumb, while
+   the accent as text turns plain white on the ash charcoal surfaces.
+
+   The fills were #7A1A1A / #5A1010, the same saturation the light palette
+   uses. A saturated maroon on white reads calmer than the same maroon on
+   charcoal, where there is no bright ground to hold it down, and the
+   breadcrumb band in particular sits over the hero photo at 82% and glared
+   against it. About a third of the saturation is taken out and the lightness
+   left alone, so it is the same colour with the edge off rather than a new
+   one. White on either still clears AAA (10.03:1 and 12.72:1). Old Classic is
+   deliberately not changed: on white it does not have the problem.
+
+   It was a lifted maroon (#CB98A5) and read as pink rather than as the
+   palette: every heading, every active icon and every filled radio on a
+   dark page carried it, so the one colour the reader saw most of was a
+   tint the light palette never shows. White is the same role taken to its
+   end (21:1 on the card against 6.4:1) and leaves the maroon to the places
+   that are actually maroon: button fills, the navbar, the breadcrumb.
+   Those come from --maroon-surface and do not lift, so they are unchanged.
+   Anything filled from --maroon that carries literal white text was moved
+   to --maroon-surface when this changed; a new one must do the same, or it
+   is white on white here. */
 html[data-color="old-night"] {
-    --accent:       #7A1A1A;
-    --accent-dark:  #5A1010;
+    --accent:       #6E2E2E;
+    --accent-dark:  #552323;
     --accent-soft:  #987C83;
     --accent-tint:  rgba(255, 255, 255, .06);
-    --accent-light: #CB98A5;
+    --accent-light: #FFFFFF;
     --ink-base:     #E8E8E9;
     --border-base:  #44464A;
 }

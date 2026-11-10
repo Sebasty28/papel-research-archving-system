@@ -94,7 +94,7 @@ function admin_table(array $rows, string $position): void {
     ?>
     <div class="mgmt-panel">
         <div class="mgmt-scroll">
-            <table class="mgmt-table mgmt-mobile-cards">
+            <table class="mgmt-table">
                 <thead>
                     <tr>
                         <th>Admin</th>
@@ -256,8 +256,8 @@ $PAGE_SKELETON = 'table';
             </div>
             <?php /* One field for every tab (includes/manage_search.php): the counts
                      become what each tab holds of the matches, and Enter walks to a tab
-                     that has one. Up here rather than on the tab row, which has no room
-                     left for it: see .mgmt-head-row .mgmt-search in manage_page.php. */ ?>
+                     that has one. The shared layout puts it in the heading on
+                     desktop and below the form on phones. */ ?>
             <?php mgmt_search_field('Search name, ID or email'); ?>
         </div>
     </div>
@@ -355,7 +355,9 @@ $PAGE_SKELETON = 'table';
              asked of this page. An archived account keeps its level and says so
              on the row instead. -->
         <section>
-            <div class="mgmt-tabs" role="tablist">
+            <div class="mgmt-tabs-row">
+              <div class="mgmt-tabs-glide">
+               <div class="mgmt-tabs" role="tablist">
                 <?php $first = true; foreach ($OFFERED as $i => $pos): ?>
                     <button type="button" class="mgmt-tab <?= $first ? 'is-on' : '' ?>"
                             data-pane="pane<?= $i ?>" role="tab">
@@ -364,6 +366,8 @@ $PAGE_SKELETON = 'table';
                     </button>
                 <?php $first = false; endforeach; ?>
                 <?php password_audit_tab($password_rows); ?>
+               </div>
+              </div>
 
                 <span class="mgmt-sort" id="sortChips">
                     <span class="mgmt-chips-label">Sort</span>

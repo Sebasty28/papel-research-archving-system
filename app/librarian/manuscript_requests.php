@@ -42,38 +42,82 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $duration = (int)($_POST['duration'] ?? 2);
         $duration = max(MANUSCRIPT_MIN_HOURS, min(MANUSCRIPT_MAX_HOURS, $duration));
 
-        $find = $conn->prepare("SELECT * FROM manuscript_requests WHERE request_id = ? AND status = 'pending'");
-        $find->bind_param('i', $reqId);
-        $find->execute();
-        $row = $find->get_result()->fetch_assoc();
-        $find->close();
+        /* One row or many, the way delete below takes them: the row's own
+           Grant posts a single id in the same array, so there is one path to
+           keep correct rather than two that can drift apart. request_id, the
+           singular name the row used to post, is still read, for a page a
+           librarian had open before this changed. */
+        $ids = array_values(array_unique(array_filter(array_map('intval', (array)($_POST['request_ids'] ?? [])))));
+        if (!$ids && (int)($_POST['request_id'] ?? 0) > 0) { $ids = [(int)$_POST['request_id']]; }
 
-        if (!$row) {
-            flash('error', 'That request is no longer pending.');
-        } elseif (student_manuscript_active_count((int)$row['student_user_id']) >= MANUSCRIPT_ACTIVE_CAP) {
-            flash('error', 'This student already has ' . MANUSCRIPT_ACTIVE_CAP
-                          . ' manuscripts unlocked at once. Let one expire, or deny this request.');
+        if (!$ids) {
+            flash('error', 'Nothing was selected to grant.');
         } else {
-            $expires = date('Y-m-d H:i:s', strtotime("+$duration hours"));
-            /* The WHERE repeats status='pending' so two librarians racing to
-               act on the same row can't both succeed: whichever UPDATE lands
-               second affects nothing. */
-            $upd = $conn->prepare(
-                "UPDATE manuscript_requests
-                    SET status='granted', duration_hours=?, granted_by=?, granted_at=NOW(), expires_at=?
-                  WHERE request_id = ? AND status='pending'");
-            $upd->bind_param('iisi', $duration, $u['user_id'], $expires, $reqId);
-            $upd->execute();
-            if ($upd->affected_rows > 0) {
-                create_notification((int)$row['student_user_id'], (int)$row['paper_id'], 'manuscript',
-                    'Your request for manuscript access was granted, until '
-                    . date('F j, Y g:i A', strtotime($expires)) . '.',
-                    'Your Manuscript Request Was Granted');
-                flash('success', 'Access granted.');
-            } else {
-                flash('error', 'That request is no longer pending.');
+            $granted = 0;   // actually unlocked
+            $capped  = 0;   // left pending: the student is already at the cap
+            $gone    = 0;   // someone else answered it first
+
+            foreach ($ids as $reqId) {
+                $find = $conn->prepare("SELECT * FROM manuscript_requests WHERE request_id = ? AND status = 'pending'");
+                $find->bind_param('i', $reqId);
+                $find->execute();
+                $row = $find->get_result()->fetch_assoc();
+                $find->close();
+
+                if (!$row) { $gone++; continue; }
+
+                /* Counted per request rather than once for the batch, and
+                   from the database rather than from a tally held here: a
+                   grant made earlier in this very loop is already in the
+                   count, so selecting four papers for one student who has
+                   none open unlocks three and leaves the fourth pending,
+                   which is the cap doing its job. */
+                if (student_manuscript_active_count((int)$row['student_user_id']) >= MANUSCRIPT_ACTIVE_CAP) {
+                    $capped++;
+                    continue;
+                }
+
+                $expires = date('Y-m-d H:i:s', strtotime("+$duration hours"));
+                /* The WHERE repeats status='pending' so two librarians racing to
+                   act on the same row can't both succeed: whichever UPDATE lands
+                   second affects nothing. */
+                $upd = $conn->prepare(
+                    "UPDATE manuscript_requests
+                        SET status='granted', duration_hours=?, granted_by=?, granted_at=NOW(), expires_at=?
+                      WHERE request_id = ? AND status='pending'");
+                $upd->bind_param('iisi', $duration, $u['user_id'], $expires, $reqId);
+                $upd->execute();
+                if ($upd->affected_rows > 0) {
+                    $granted++;
+                    create_notification((int)$row['student_user_id'], (int)$row['paper_id'], 'manuscript',
+                        'Your request for manuscript access was granted, until '
+                        . date('F j, Y g:i A', strtotime($expires)) . '.',
+                        'Your Manuscript Request Was Granted');
+                } else {
+                    $gone++;
+                }
+                $upd->close();
             }
-            $upd->close();
+
+            /* Said piece by piece, because a batch can end three ways at once
+               and "Access granted." over a request that was in fact left
+               pending is the kind of thing nobody checks until a student asks
+               why they still cannot read the paper. */
+            $say = [];
+            if ($granted) {
+                $say[] = $granted === 1
+                    ? 'Access granted.'
+                    : $granted . ' requests granted for ' . $duration . ' hour' . ($duration === 1 ? '' : 's') . '.';
+            }
+            if ($capped) {
+                $say[] = $capped . ($capped === 1 ? ' request was' : ' requests were')
+                       . ' left pending: that student already has ' . MANUSCRIPT_ACTIVE_CAP
+                       . ' manuscripts unlocked at once. Let one expire, or deny it.';
+            }
+            if ($gone) {
+                $say[] = $gone . ($gone === 1 ? ' request is' : ' requests are') . ' no longer pending.';
+            }
+            flash($granted ? 'success' : 'error', implode(' ', $say));
         }
     } elseif ($action === 'deny') {
         $find = $conn->prepare("SELECT * FROM manuscript_requests WHERE request_id = ? AND status = 'pending'");
@@ -155,7 +199,7 @@ function manuscript_row_search(array $r): string {
  * and its bulk-delete bar, identical in every pane bar what they act on:
  * pulled out once rather than written three times over.
  */
-function manuscript_toolbar(): void {
+function manuscript_toolbar(bool $canGrant = false): void {
     ?>
     <div class="mgmt-toolbar">
         <span class="mgmt-sort js-sort">
@@ -165,6 +209,31 @@ function manuscript_toolbar(): void {
         </span>
         <span class="mgmt-bulk-bar" hidden>
             <span class="js-sel-count">0 selected</span>
+            <?php if ($canGrant): ?>
+                <?php /* Pending only: there is nothing to grant on the Granted or
+                         History tabs, and a button that can only fail is worse than
+                         no button. One duration for the whole batch, since that is
+                         the single thing a librarian would otherwise set row by row
+                         before pressing Grant on each; the per-row select stays for
+                         answering one request on its own terms. */ ?>
+                <form method="post" class="js-grant-form">
+                    <?= csrf_field(); ?>
+                    <input type="hidden" name="action" value="grant">
+                    <label class="mr-bulk-label" for="bulkDuration<?= $GLOBALS['mr_toolbar_n'] = ($GLOBALS['mr_toolbar_n'] ?? 0) + 1 ?>">for</label>
+                    <select name="duration" id="bulkDuration<?= $GLOBALS['mr_toolbar_n'] ?>"
+                            class="mr-duration-select js-bulk-duration" required>
+                        <?php for ($h = 1; $h <= 24; $h++): ?>
+                            <option value="<?= $h ?>" <?= $h === 2 ? 'selected' : '' ?>>
+                                <?= $h ?> hour<?= $h === 1 ? '' : 's' ?>
+                            </option>
+                        <?php endfor; ?>
+                    </select>
+                    <button type="submit" class="mgmt-act"
+                            data-confirm="Grant the selected requests?">
+                        <span class="material-symbols-outlined mi-18">lock_open</span> Grant selected
+                    </button>
+                </form>
+            <?php endif; ?>
             <form method="post" class="js-delete-form">
                 <?= csrf_field(); ?>
                 <input type="hidden" name="action" value="delete">
@@ -229,6 +298,18 @@ $PAGE_SKELETON = 'table';
     padding: .625rem .875rem; border-bottom: 1px solid var(--border);
 }
 .mgmt-bulk-bar { display: flex; align-items: center; gap: .75rem; }
+/* "2 selected  for [2 hours] Grant selected   Delete selected": the word is
+   what makes the duration read as part of the grant rather than as a stray
+   control sitting in the bar. Tokens only, and the same muted tone the count
+   beside it uses. */
+.mgmt-bulk-bar .mr-bulk-label { font-size: .75rem; color: var(--grey); margin-left: .25rem; }
+/* The bar carries four things now rather than two, and at the width the
+   toolbar actually gets they broke onto two lines each ("Grant / selected"),
+   which reads as three ragged stacks rather than one row of controls. They
+   are all short, fixed labels, so none of them has any business wrapping. */
+.mgmt-bulk-bar .js-sel-count,
+.mgmt-bulk-bar .mr-bulk-label,
+.mgmt-bulk-bar .mgmt-act { white-space: nowrap; }
 .mgmt-bulk-bar .js-sel-count { font-size: .75rem; color: var(--grey); }
 .mgmt-bulk-bar form { display: contents; }
 /* .mgmt-sort's own margin-left:auto (manage_page.php) is built for riding at
@@ -356,7 +437,7 @@ $PAGE_SKELETON = 'table';
 
         <div id="pendingPane" class="js-pane">
             <div class="mgmt-panel">
-                <?php manuscript_toolbar(); ?>
+                <?php manuscript_toolbar(true); ?>
                 <div class="mgmt-scroll">
                     <table class="mgmt-table">
                         <thead>
@@ -405,7 +486,7 @@ $PAGE_SKELETON = 'table';
                                         <form method="post">
                                             <?= csrf_field(); ?>
                                             <input type="hidden" name="action" value="grant">
-                                            <input type="hidden" name="request_id" value="<?= (int)$r['request_id'] ?>">
+                                            <input type="hidden" name="request_ids[]" value="<?= (int)$r['request_id'] ?>">
                                             <select name="duration" class="mr-duration-select" required>
                                                 <?php for ($h = 1; $h <= 24; $h++): ?>
                                                     <option value="<?= $h ?>" <?= $h === 2 ? 'selected' : '' ?>>
@@ -622,7 +703,27 @@ document.addEventListener('DOMContentLoaded', function () {
         var countEl    = bar ? bar.querySelector('.js-sel-count') : null;
         var deleteForm = bar ? bar.querySelector('.js-delete-form') : null;
         var deleteBtn  = deleteForm ? deleteForm.querySelector('button') : null;
+        /* Pending only; the other two panes have no such form and everything
+           below that touches it is guarded. */
+        var grantForm  = bar ? bar.querySelector('.js-grant-form') : null;
+        var grantBtn   = grantForm ? grantForm.querySelector('button') : null;
+        var grantHours = grantForm ? grantForm.querySelector('.js-bulk-duration') : null;
         if (!bar || !deleteForm) return;
+
+        /* Both bulk forms carry the same ids, so they are filled from one
+           place. Rebuilt on every change rather than gathered at submit time,
+           for the reason above: a confirmed dialog submits with form.submit(),
+           which fires no submit event. */
+        function fillIds(form, boxes) {
+            form.querySelectorAll('input[name="request_ids[]"]').forEach(function (i) { i.remove(); });
+            boxes.forEach(function (b) {
+                var input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'request_ids[]';
+                input.value = b.value;
+                form.appendChild(input);
+            });
+        }
 
         /* Only the rows the search is showing. Select all ticking a row the
            search had taken out would have put it in Delete selected's payload,
@@ -648,14 +749,20 @@ document.addEventListener('DOMContentLoaded', function () {
                 deleteBtn.setAttribute('data-confirm',
                     'Delete ' + n + ' selected request' + (n === 1 ? '' : 's') + '? This cannot be undone.');
             }
-            deleteForm.querySelectorAll('input[name="request_ids[]"]').forEach(function (i) { i.remove(); });
-            checked.forEach(function (b) {
-                var input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = 'request_ids[]';
-                input.value = b.value;
-                deleteForm.appendChild(input);
-            });
+            fillIds(deleteForm, checked);
+            if (grantForm) {
+                fillIds(grantForm, checked);
+                if (grantBtn) {
+                    var hrs = grantHours ? (+grantHours.value || 2) : 2;
+                    /* Granting is not destructive, so the row's own Grant asks
+                       nothing. A batch is worth confirming: it unlocks files
+                       and writes to every one of those students, and the count
+                       and the hours are exactly what is easy to get wrong. */
+                    grantBtn.setAttribute('data-confirm',
+                        'Grant ' + n + ' selected request' + (n === 1 ? '' : 's')
+                        + ' for ' + hrs + ' hour' + (hrs === 1 ? '' : 's') + '?');
+                }
+            }
             if (selectAll) {
                 selectAll.checked = n > 0 && n === boxes.length;
                 selectAll.indeterminate = n > 0 && n < boxes.length;
@@ -670,6 +777,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         pane.addEventListener('change', function (e) {
             if (e.target.classList.contains('js-row-check')) syncBulk();
+            /* So the question the dialog asks matches the hours now chosen. */
+            if (e.target === grantHours) syncBulk();
         });
         syncBulk();
         pane.papelSync = syncBulk;

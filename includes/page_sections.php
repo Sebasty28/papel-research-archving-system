@@ -42,6 +42,7 @@
     border: 1px solid rgba(177, 125, 125, .22);
     border-radius: var(--r-card, 8px);
 }
+.page-sections-glide { min-width: 0; }
 .page-sections-tab {
     position: relative;
     display: flex;
@@ -95,6 +96,40 @@
        sideways when they do not all fit, and the bar goes back to lying under
        the label, as it does in the navbar. */
     .page-sections { grid-template-columns: 1fr; }
+    .page-sections-glide { position: relative; }
+    .page-sections-glide::before,
+    .page-sections-glide::after {
+        font-family: 'Material Symbols Outlined';
+        font-size: 20px;
+        line-height: 1;
+        color: var(--maroon);
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        display: flex;
+        align-items: center;
+        width: 2rem;
+        pointer-events: none;
+        opacity: 0;
+        z-index: 1;
+        transition: opacity .18s ease;
+    }
+    .page-sections-glide::before { content: '\e5cb'; left: .25rem; justify-content: flex-start; }
+    .page-sections-glide::after { content: '\e5cc'; right: .25rem; justify-content: flex-end; }
+    .page-sections-glide.can-left::before,
+    .page-sections-glide.can-right::after { opacity: 1; }
+    .page-sections-glide.can-left .page-sections-nav {
+        -webkit-mask-image: linear-gradient(to right, transparent, #000 2rem);
+                mask-image: linear-gradient(to right, transparent, #000 2rem);
+    }
+    .page-sections-glide.can-right .page-sections-nav {
+        -webkit-mask-image: linear-gradient(to left, transparent, #000 2rem);
+                mask-image: linear-gradient(to left, transparent, #000 2rem);
+    }
+    .page-sections-glide.can-left.can-right .page-sections-nav {
+        -webkit-mask-image: linear-gradient(to right, transparent, #000 2rem, #000 calc(100% - 2rem), transparent);
+                mask-image: linear-gradient(to right, transparent, #000 2rem, #000 calc(100% - 2rem), transparent);
+    }
     .page-sections-nav {
         flex-direction: row;
         overflow-x: auto;
@@ -112,14 +147,42 @@
     .page-sections-tab:hover::before,
     .page-sections-tab[aria-selected="true"]::before { transform: scaleX(1); }
 }
+@media (prefers-reduced-motion: reduce) {
+    .page-sections-glide::before, .page-sections-glide::after { transition: none; }
+}
 </style>
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 document.addEventListener('DOMContentLoaded', function () {
     var shell = document.querySelector('.page-sections');
     if (!shell) return;
     var tabs   = Array.prototype.slice.call(shell.querySelectorAll('.page-sections-tab'));
+    var nav    = shell.querySelector('.page-sections-nav');
+    var glide  = shell.querySelector('.page-sections-glide');
     var panels = shell.querySelector('.page-sections-panels');
     if (!tabs.length || !panels) return;
+
+    function markOverflow() {
+        if (!glide || !nav) return;
+        nav.setAttribute('aria-orientation', window.innerWidth <= 700 ? 'horizontal' : 'vertical');
+        var max = nav.scrollWidth - nav.clientWidth;
+        glide.classList.toggle('can-left', nav.scrollLeft > 2);
+        glide.classList.toggle('can-right', nav.scrollLeft < max - 2);
+    }
+    function revealTab(tab) {
+        if (!nav || window.innerWidth > 700) return;
+        var navBox = nav.getBoundingClientRect();
+        var tabBox = tab.getBoundingClientRect();
+        var pad = 12;
+        if (tabBox.right > navBox.right - pad)
+            nav.scrollLeft += tabBox.right - navBox.right + pad;
+        else if (tabBox.left < navBox.left + pad)
+            nav.scrollLeft -= navBox.left - tabBox.left + pad;
+        markOverflow();
+    }
+    if (nav) nav.addEventListener('scroll', markOverflow, { passive: true });
+    window.addEventListener('resize', markOverflow);
+    if (window.ResizeObserver && nav) new ResizeObserver(markOverflow).observe(nav);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(markOverflow);
 
     function showSection(name, moveFocus) {
         var tab = tabs.filter(function (t) { return t.dataset.section === name; })[0] || tabs[0];
@@ -132,6 +195,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (panel) panel.hidden = !on;
         });
         if (moveFocus) tab.focus();
+        revealTab(tab);
         return tab.dataset.section;
     }
     /* The #fragment is usually a section's own name, but it can also be the id
@@ -158,6 +222,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     panels.classList.add('is-tabbed');
     showSection(sectionFor(location.hash), false);
+    markOverflow();
 
     tabs.forEach(function (t) {
         t.addEventListener('click', function () {

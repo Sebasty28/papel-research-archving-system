@@ -77,6 +77,7 @@ $filter_type  = trim($_GET['type'] ?? '');
 $filter_program = trim($_GET['program'] ?? '');
 $filter_month = (int)($_GET['month'] ?? 0);
 $filter_day   = (int)($_GET['day'] ?? 0);
+$filter_saved = ($_GET['saved'] ?? '') === '1';
 // Whitelisted so it can be interpolated into ORDER BY safely
 $sort_dir     = (($_GET['sort'] ?? '') === 'asc') ? 'ASC' : 'DESC';
 $sort_param   = $sort_dir === 'ASC' ? 'asc' : 'desc';
@@ -85,6 +86,16 @@ $is_searching = true;
 
 // Papers are only openable by signed-in users (or an active guest session)
 $can_view = $u || isset($_SESSION['guest_login']);
+
+/* Which of the papers on this page the reader has already saved, in one query
+   for the whole list, and only for a reader who has a library to save into:
+   an account, not a Library Pass (see user_has_library()). */
+$can_save  = user_has_library($u);
+$saved_ids = $can_save ? saved_paper_ids((int)$u['user_id']) : [];
+/* Nobody without a library can narrow the repository to one, whatever the
+   query string says: dropped here rather than guarded at each of the four
+   places below that read it. */
+if (!$can_save) { $filter_saved = false; }
 // Signed-in members get the full browse console (toolbar + extended filters)
 $is_member = (bool)$u;
 
@@ -132,6 +143,14 @@ if ($filter_month >= 1 && $filter_month <= 12) {
 if ($filter_day >= 1 && $filter_day <= 31) {
     $where_extra .= " AND DAY(research_date) = ?";
     $params[] = $filter_day;
+    $types .= 'i';
+}
+if ($filter_saved) {
+    /* A subquery rather than a join, so a paper appears once however the
+       rest of the WHERE is built, and so the page's existing count and fetch
+       statements take it without being rewritten. */
+    $where_extra .= " AND paper_id IN (SELECT paper_id FROM paper_favorites WHERE user_id = ?)";
+    $params[] = (int)$u['user_id'];
     $types .= 'i';
 }
 if ($filter_program === 'Uncategorized') {
@@ -197,15 +216,32 @@ while ($row = $used_res->fetch_assoc()) {
 $uncat_res = $conn->query("SELECT COUNT(*) FROM research_papers WHERE $base_where AND (program_category IS NULL OR program_category = '')");
 if ($uncat_res && $uncat_res->fetch_row()[0] > 0) $active_programs['Uncategorized'] = '⚠️ Uncategorized';
 
+/* How many of this reader's saved papers are in the repository right now:
+   the number beside the switch. Not count($saved_ids), which also counts the
+   ones that have since been archived out of it and would promise results the
+   filter cannot show. */
+$saved_count = 0;
+if ($can_save && $saved_ids) {
+    $sc = $conn->prepare("SELECT COUNT(*) FROM research_papers
+                           WHERE $base_where AND paper_id IN (
+                                 SELECT paper_id FROM paper_favorites WHERE user_id = ?)");
+    $sc->bind_param('i', $u['user_id']);
+    $sc->execute();
+    $sc->bind_result($saved_count);
+    $sc->fetch();
+    $sc->close();
+}
+
 $start_item = $offset + 1;
 $end_item   = min($offset + $per_page, $total_papers);
-$has_filters = $search || $filter_year || $filter_type || $filter_program || $filter_month || $filter_day;
+$has_filters = $search || $filter_year || $filter_type || $filter_program || $filter_month || $filter_day || $filter_saved;
 
 // Query string carried across pagination links
 $qs = http_build_query(array_filter([
     'q' => $search, 'year' => $filter_year ?: null, 'type' => $filter_type,
     'program' => $filter_program, 'month' => $filter_month ?: null,
-    'day' => $filter_day ?: null, 'sort' => $sort_param, 'browse' => '1'
+    'day' => $filter_day ?: null, 'sort' => $sort_param,
+    'saved' => $filter_saved ? '1' : null, 'browse' => '1'
 ]));
 
 // AJAX result refresh: search/filter/pagination fetch just the results
@@ -226,9 +262,17 @@ ob_start();
    head, which is where the skeleton reads it. */
 $PAGE_SKELETON = 'repository';
 ?>
+<?php /* Shelf is offered here, so the pre-paint view script may apply a
+         stored one. Set before browse_console.php, which reads it. */ ?>
+<?php $VIEW_SHELF = true; ?>
 <?php require_once ROOT_PATH.'/includes/site_head.php'; ?>
 <?php require_once ROOT_PATH.'/includes/browse_console.php'; ?>
+<?php require_once ROOT_PATH.'/includes/shelf_view.php'; ?>
 <?php require_once ROOT_PATH.'/includes/browse_card.php'; ?>
+<?php /* Only where there is a library to save into: the include prints a
+         stylesheet and a script as well as defining save_paper_button(), and
+         a guest has no bookmark on any row for either to act on. */ ?>
+<?php if ($can_save) { require_once ROOT_PATH.'/includes/save_paper.php'; } ?>
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 /* =========================================================
    PAPEL: Public Repository landing page
@@ -841,6 +885,7 @@ $PAGE_SKELETON = 'repository';
                 <?php if ($filter_program): ?><input type="hidden" name="program" value="<?= e($filter_program) ?>"><?php endif; ?>
                 <?php if ($filter_month): ?><input type="hidden" name="month" value="<?= $filter_month ?>"><?php endif; ?>
                 <?php if ($filter_day): ?><input type="hidden" name="day" value="<?= $filter_day ?>"><?php endif; ?>
+                <?php if ($filter_saved): ?><input type="hidden" name="saved" value="1"><?php endif; ?>
                 <?php if ($is_member): ?><input type="hidden" name="sort" value="<?= e($sort_param) ?>"><?php endif; ?>
                 <input type="hidden" name="browse" value="1">
                 <div class="search-form">
@@ -862,7 +907,7 @@ $PAGE_SKELETON = 'repository';
     <?php /* The list here can be read as cards or as rows, so Quick Settings
              draws the switch: see buildViewSection() in browse_console_js.php
              for why the marker sits on the column rather than on the list. */ ?>
-    <div class="main-col" id="mainCol" data-view-console="1">
+    <div class="main-col" id="mainCol" data-view-console="shelf">
         <?php ob_start(); ?>
         <h1 class="section-heading"><?= $has_filters ? 'Search Results' : 'Recent Researches' ?></h1>
 
@@ -928,6 +973,21 @@ $PAGE_SKELETON = 'repository';
         <div class="paper-list is-scrollable">
             <?php while ($r = $result->fetch_assoc()): ?>
             <article class="paper-item">
+                <?php /* The same paper as a book, for the Shelf view. One of the
+                         two is shown and the other is display:none; see
+                         includes/shelf_view.php for why there are two. */ ?>
+                <?= shelf_book_html([
+                    'paper_id' => (int)$r['paper_id'],
+                    'title'    => (string)$r['title'],
+                    'cover'    => shelf_cover_index($r['program_category'] ?? ''),
+                    'top'      => implode(' · ', array_filter([
+                                      program_code($r['program_category'] ?? ''),
+                                      (string)($r['year'] ?? ''),
+                                  ], 'strlen')) ?: APP_NAME,
+                    'by'       => shelf_cover_byline($r['author_names'] ?? ''),
+                    // Nothing to open for a reader who is not signed in.
+                    'href'     => $can_view ? 'view_paper.php?id=' . (int)$r['paper_id'] : null,
+                ]) ?>
                 <h2 class="paper-title">
                     <?php if ($can_view): ?>
                         <a href="view_paper.php?id=<?= $r['paper_id'] ?>"><?= e($r['title']) ?></a>
@@ -935,6 +995,14 @@ $PAGE_SKELETON = 'repository';
                         <span><?= e($r['title']) ?></span>
                     <?php endif; ?>
                 </h2>
+
+                <?php /* A child of the result itself, not of the title or of
+                         .paper-side: the two views want it in two different
+                         places (the card's top right corner, the row's last
+                         column) and only a direct child can be put in either.
+                         After the title in the markup, so it is read as
+                         belonging to the paper it saves. */ ?>
+                <?php if ($can_save): ?><?= save_paper_button((int)$r['paper_id'], isset($saved_ids[(int)$r['paper_id']])) ?><?php endif; ?>
 
                 <div class="paper-foot">
                     <div class="paper-info">
@@ -969,9 +1037,19 @@ $PAGE_SKELETON = 'repository';
 
             <?php if ($result->num_rows === 0): ?>
             <div class="empty-state">
-                <span class="material-symbols-outlined">search_off</span>
-                <p>No papers found matching your criteria.</p>
-                <a href="index.php">Clear filters</a>
+                <?php /* Narrowed to saved papers with none saved, the general
+                         "nothing matched your criteria" is answering a question
+                         nobody asked: what is missing is a saved paper, not a
+                         better search. */ ?>
+                <?php if ($filter_saved && $saved_count === 0): ?>
+                    <span class="material-symbols-outlined">bookmark_add</span>
+                    <p>You have not saved any papers yet. Press the bookmark on a paper to keep it.</p>
+                    <a href="index.php?browse=1">Show all papers</a>
+                <?php else: ?>
+                    <span class="material-symbols-outlined">search_off</span>
+                    <p>No papers found matching your criteria.</p>
+                    <a href="index.php">Clear filters</a>
+                <?php endif; ?>
             </div>
             <?php endif; ?>
         </div>
@@ -1003,6 +1081,25 @@ $PAGE_SKELETON = 'repository';
             <form id="filterForm" action="index.php" method="get">
                 <?php if ($search): ?><input type="hidden" name="q" value="<?= e($search) ?>"><?php endif; ?>
                 <input type="hidden" name="browse" value="1">
+
+                <?php if ($can_save): ?>
+                <?php /* First in the card, because it is the broadest cut of the
+                         lot: everything below narrows whichever of the two this
+                         is set to. Radios rather than a tick box, to match the
+                         rest of the card and because the form is submitted from
+                         a change handler that listens for radios and selects
+                         (see the foot of this file). */ ?>
+                <div class="filter-section">
+                    <span class="filter-section-label">Show</span>
+                    <label class="filter-radio">
+                        <input type="radio" name="saved" value="" <?= $filter_saved ? '' : 'checked' ?>> All papers
+                    </label>
+                    <label class="filter-radio">
+                        <input type="radio" name="saved" value="1" <?= $filter_saved ? 'checked' : '' ?>>
+                        Saved papers <span class="filter-count"><?= (int)$saved_count ?></span>
+                    </label>
+                </div>
+                <?php endif; ?>
 
                 <div class="filter-section">
                     <span class="filter-section-label">Paper Type</span>

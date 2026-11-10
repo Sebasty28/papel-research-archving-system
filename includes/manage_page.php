@@ -21,7 +21,7 @@
    from the site's own tokens, so the page inherits whatever palette and theme
    the reader has chosen. */
 
-.mgmt-wrap { padding: 1.5rem 0 3rem; }
+.mgmt-wrap { padding-block: 1.5rem 3rem; }
 
 /* ---- Page heading ---- */
 .mgmt-head { margin-bottom: 1.25rem; }
@@ -187,14 +187,49 @@
 /* The row being edited is marked, so it is obvious which one the panel holds. */
 .mgmt-table tbody tr.is-editing > td { background: var(--cream); }
 
-/* ---- Tabs, matching the dashboard's ---- */
-.mgmt-tabs {
-    display: flex; align-items: center; gap: .25rem;
+/* ---- Sliding tabs, with the dashboard's edge chevrons ---- */
+.mgmt-tabs-row {
+    display: flex; align-items: center; min-width: 0;
     border-bottom: 1px solid var(--border);
     margin-bottom: .875rem;
 }
+.mgmt-tabs-glide { position: relative; flex: 1 1 auto; min-width: 0; }
+.mgmt-tabs {
+    display: flex; align-items: center; gap: .25rem;
+    min-width: 0; overflow-x: auto; scrollbar-width: none;
+}
+.mgmt-tabs::-webkit-scrollbar { display: none; }
+.mgmt-tabs-glide::before,
+.mgmt-tabs-glide::after {
+    font-family: 'Material Symbols Outlined';
+    font-size: 20px; line-height: 1;
+    color: color-mix(in srgb, var(--maroon) 75%, transparent);
+    position: absolute; top: 0; bottom: 0;
+    display: flex; align-items: center; width: 4rem;
+    pointer-events: none; opacity: 0; z-index: 1;
+    transition: opacity .18s ease;
+}
+.mgmt-tabs-glide::before { content: '\e5cb'; left: 0; justify-content: flex-start; }
+.mgmt-tabs-glide::after { content: '\e5cc'; right: 0; justify-content: flex-end; }
+.mgmt-tabs-glide.can-left::before,
+.mgmt-tabs-glide.can-right::after { opacity: 1; }
+.mgmt-tabs-glide.can-left .mgmt-tabs {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 3rem);
+            mask-image: linear-gradient(to right, transparent, #000 3rem);
+}
+.mgmt-tabs-glide.can-right .mgmt-tabs {
+    -webkit-mask-image: linear-gradient(to left, transparent, #000 3rem);
+            mask-image: linear-gradient(to left, transparent, #000 3rem);
+}
+.mgmt-tabs-glide.can-left.can-right .mgmt-tabs {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 3rem, #000 calc(100% - 3rem), transparent);
+            mask-image: linear-gradient(to right, transparent, #000 3rem, #000 calc(100% - 3rem), transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+    .mgmt-tabs-glide::before, .mgmt-tabs-glide::after { transition: none; }
+}
 .mgmt-tab {
-    display: inline-flex; align-items: center; gap: .3rem;
+    display: inline-flex; align-items: center; gap: .3rem; flex: 0 0 auto;
     padding: .5rem .7rem;
     border: none; background: none; cursor: pointer;
     font-family: var(--font-body); font-size: .75rem;
@@ -230,7 +265,7 @@
     border-radius: var(--r-control, 4px);
     transition: border-color .2s, box-shadow .2s;
 }
-/* ---- Where the field goes ----
+/* ---- Where the field goes on a wide screen ----
    On the heading's row, at the far end, standing on the line of the description
    under the title. Not on the tab row, where the Manuscript Requests desk has
    it: that desk's roll is the whole page and carries three short tabs, while
@@ -241,7 +276,7 @@
    Sort into two lines, which left the tab on view underlining nothing, eight
    pixels clear of its own rule. The heading's row is the full width of the page
    and holds the title and one line of prose, so there it fits with room to
-   spare. */
+   spare. On a phone the shared script moves the input below the form. */
 .mgmt-head-row .mgmt-search { align-self: flex-end; }
 .mgmt-search:hover { border-color: var(--soft-maroon); }
 .mgmt-search:focus-within {
@@ -298,13 +333,15 @@ html[data-mode="dark"] { --search-clear: #CFC3AE; }
 }
 .mgmt-sort .mgmt-chip { padding: .25rem .7rem; }
 @media (max-width: 780px) {
-    .mgmt-tabs { flex-wrap: wrap; }
-    /* Wrapping between tabs is fine on a narrow screen; wrapping inside one is
-       what looked broken, so that stays prevented. */
+    .mgmt-tabs-row { flex-wrap: wrap; row-gap: .5rem; }
+    .mgmt-tabs-glide { flex: 1 1 100%; }
     .mgmt-tab { padding-left: .55rem; padding-right: .55rem; }
     .mgmt-sort { margin-left: 0; width: 100%; padding-bottom: .5rem; }
-    /* On a phone the heading's row is two lines and the field is the width of
-       the page. */
+    /* The search field lives above the tabs after the form on narrow screens.
+       Hide its heading position until the shared script moves the same input. */
+    .mgmt-head-row > .mgmt-search { display: none; }
+    .mgmt-search-mobile { margin-bottom: .75rem; }
+    .mgmt-search-mobile .mgmt-search { width: 100%; }
     .mgmt-head-row .mgmt-search { width: 100%; }
     .mgmt-search input { width: 100%; }
 }
@@ -503,8 +540,12 @@ html.mgmt-dock-center .mgmt-grid > #formPanel { width: 100%; }
    fourth position when it was flush against them; on the left because that
    is where it stays once the panel is folded, so it does not jump across the
    page as it is pressed. */
-.mgmt-dock-fold { margin-right: auto; }
+.mgmt-dock-fold { width: auto; min-width: 26px; padding: 0 .25rem; gap: .375rem; margin-right: auto; }
 .mgmt-dock-fold .material-symbols-outlined { transition: transform .18s ease; }
+.mgmt-dock-label {
+    color: var(--maroon); font-family: var(--font-body);
+    font-size: .75rem; font-weight: 500; white-space: nowrap;
+}
 
 /* Folded: the card goes altogether, not just its contents. What is left is the
    chevron that brings it back, at the left where the panel began, and the roll
@@ -531,59 +572,6 @@ html.mgmt-form-folded .mgmt-dock-btn:not(.mgmt-dock-fold) { display: none; }
 html.mgmt-form-folded .mgmt-dock-fold { margin-left: 0; }
 html.mgmt-form-folded .mgmt-dock-fold .material-symbols-outlined { transform: rotate(-90deg); }
 
-/* Folded, the chevron is the only thing left on the page saying what it does,
-   so it says it: Show form slides out from behind a thin rule beside it, the
-   way the mark in the navbar draws out the name (.brand-word in site_head.php,
-   where the mechanics are explained at length). Absolutely placed, so the
-   button keeps its 26px either way and the roll below does not shift as the
-   label opens. Out is quicker than in; leaving should not make anyone wait. */
-.mgmt-dock-word { display: none; }
-html.mgmt-form-folded .mgmt-dock-fold { position: relative; }
-html.mgmt-form-folded .mgmt-dock-fold::after {
-    content: "";
-    position: absolute;
-    left: 100%;
-    top: 50%;
-    width: 1rem;
-    height: 1.125rem;
-    transform: translateY(-50%);
-    background: linear-gradient(var(--soft-maroon), var(--soft-maroon)) center / 1px 100% no-repeat;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity .22s ease-in;
-}
-html.mgmt-form-folded .mgmt-dock-fold:hover::after,
-html.mgmt-form-folded .mgmt-dock-fold:focus-visible::after {
-    opacity: 1;
-    transition: opacity .3s ease-out;
-}
-html.mgmt-form-folded .mgmt-dock-word {
-    display: block;
-    position: absolute;
-    left: calc(100% + .5rem);
-    top: 50%;
-    padding-left: .5rem;
-    font-family: var(--font-head);
-    font-size: .8125rem;
-    font-weight: 500;
-    line-height: 1;
-    white-space: nowrap;
-    color: var(--maroon);
-    clip-path: inset(-.3rem 100% -.3rem .6rem);
-    opacity: 0;
-    transform: translate(-.6rem, -50%);
-    pointer-events: none;
-    transition: clip-path .22s ease-in, opacity .22s ease-in, transform .22s ease-in;
-}
-html.mgmt-form-folded .mgmt-dock-fold:hover .mgmt-dock-word,
-html.mgmt-form-folded .mgmt-dock-fold:focus-visible .mgmt-dock-word {
-    clip-path: inset(-.3rem -.25rem -.3rem 0);
-    opacity: 1;
-    transform: translate(0, -50%);
-    transition: clip-path .38s cubic-bezier(.2, .8, .2, 1), opacity .3s ease-out,
-                transform .38s cubic-bezier(.2, .8, .2, 1);
-}
-
 @media (max-width: 1100px) {
     .mgmt-grid,
     html.mgmt-dock-right .mgmt-grid,
@@ -601,54 +589,9 @@ html.mgmt-form-folded .mgmt-dock-fold:focus-visible .mgmt-dock-word {
     .mgmt-pair { grid-template-columns: 1fr; }
     .mgmt-grid { gap: .75rem; }
     .mgmt-panel-body { padding: .875rem; }
-    /* Keep the table's headings available to assistive technology, while each
-       account reads as one card with its actions in view on a narrow screen. */
-    .mgmt-mobile-cards { display: block; width: 100%; }
-    .mgmt-mobile-cards thead {
-        position: absolute; width: 1px; height: 1px; padding: 0;
-        overflow: hidden; clip-path: inset(50%); white-space: nowrap;
-    }
-    .mgmt-mobile-cards tbody { display: block; }
-    .mgmt-mobile-cards tbody tr {
-        display: block;
-        padding: .75rem .875rem;
-        border-bottom: 1px solid var(--border);
-    }
-    .mgmt-mobile-cards tbody tr:last-child { border-bottom: 0; }
-    .mgmt-mobile-cards tbody tr[hidden],
-    .mgmt-mobile-cards tbody tr.is-search-off { display: none; }
-    .mgmt-mobile-cards tbody td {
-        display: grid;
-        grid-template-columns: 5.5rem minmax(0, 1fr);
-        gap: .5rem;
-        width: auto;
-        min-width: 0;
-        padding: .25rem 0;
-        border: 0 !important;
-        white-space: normal;
-        overflow-wrap: anywhere;
-    }
-    .mgmt-mobile-cards tbody td:last-child { width: auto; }
-    .mgmt-mobile-cards .mgmt-value { min-width: 0; }
-    .mgmt-mobile-cards tbody td::before {
-        content: attr(data-label);
-        font-size: .625rem;
-        font-weight: 600;
-        letter-spacing: .04em;
-        text-transform: uppercase;
-        color: var(--grey);
-    }
-    .mgmt-mobile-cards tbody td.mgmt-name,
-    .mgmt-mobile-cards tbody td[data-label="Actions"],
-    .mgmt-mobile-cards tbody td[colspan] { display: block; }
-    .mgmt-mobile-cards tbody td.mgmt-name::before,
-    .mgmt-mobile-cards tbody td[colspan]::before { display: none; }
-    .mgmt-mobile-cards .mgmt-name { font-size: .875rem; padding-bottom: .5rem; }
-    .mgmt-mobile-cards .mgmt-sub { max-width: none; white-space: normal; overflow-wrap: anywhere; }
-    .mgmt-mobile-cards tbody td[data-label="Actions"] { padding-top: .625rem; }
-    .mgmt-mobile-cards tbody td[data-label="Actions"]::before { display: block; margin-bottom: .25rem; }
-    .mgmt-mobile-cards .mgmt-actions { justify-content: flex-start; flex-wrap: wrap; white-space: normal; }
-    .mgmt-mobile-cards .mgmt-empty { padding: 1.5rem .5rem; }
+}
+@media (max-width: 380px) {
+    body:has(.mgmt-wrap) .crumb-inner { flex-wrap: wrap; }
 }
 
 /* ---- The row a link arrived for ----
@@ -722,6 +665,58 @@ html.mgmt-form-folded .mgmt-dock-fold:focus-visible .mgmt-dock-word {
     });
 })();
 
+/* ---- The tab the reader is on, kept for the length of the visit ----
+
+   Every action on these consoles - create, edit, archive, restore, delete,
+   and the password changes - posts and is answered with a redirect back to
+   the page. A redirect is a fresh load, and a fresh load starts on the first
+   tab, so archiving a student while reading the Archived tab, or deleting a
+   librarian from the Librarian tab, threw the reader back to Active and left
+   them to find their way again after every single action. On Manage Admins,
+   where the tabs are whole roles, it meant the Librarian list could not be
+   worked through at all without re-selecting it each time.
+
+   sessionStorage, not localStorage: where someone is in a console is a
+   position, not a preference like the form's side below, and it should not
+   outlive the visit or reach into another window. Keyed on the path, so the
+   four consoles remember separately.
+
+   Pressed rather than revealed, and a tick after DOMContentLoaded, for the
+   reason the ?q= opener above gives: each console wires its own tabs in a
+   listener registered after this one, so the console stays the only thing
+   deciding what a selected tab looks like. The skeleton (shape 'table') is
+   still over the page at that point, so nothing is seen to change. */
+(function () {
+    var KEY = 'papel_mgmt_tab:' + location.pathname;
+
+    /* Delegated, so it holds whatever a console does with its own tabs and
+       whichever order the two listeners were registered in. It also records
+       the tab the ?q= opener presses, which is correct: that is where the
+       reader has been put. */
+    document.addEventListener('click', function (e) {
+        var tab = e.target && e.target.closest ? e.target.closest('.mgmt-tab[data-pane]') : null;
+        if (!tab) return;
+        try { sessionStorage.setItem(KEY, tab.dataset.pane); } catch (err) {}
+    });
+
+    /* A deep link names the tab itself, so it wins over the remembered one. */
+    if (new URLSearchParams(location.search).get('q')) return;
+
+    document.addEventListener('DOMContentLoaded', function () {
+        var want = null;
+        try { want = sessionStorage.getItem(KEY); } catch (err) {}
+        if (!want) return;
+        setTimeout(function () {
+            var tabs = document.querySelectorAll('.mgmt-tab[data-pane]');
+            Array.prototype.forEach.call(tabs, function (tab) {
+                /* Gone since it was remembered - the last account on a tab
+                   deleted, say - and the console keeps its own default. */
+                if (tab.dataset.pane === want && !tab.classList.contains('is-on')) tab.click();
+            });
+        }, 0);
+    });
+})();
+
 /* ---- Where the form sits: left, centre or right ----
    Three buttons in the form panel's top right corner. The choice is kept on
    this device and applied to all four consoles, so a reader sets it once.
@@ -771,6 +766,7 @@ html.mgmt-form-folded .mgmt-dock-fold:focus-visible .mgmt-dock-word {
             var say = on ? 'Show the form' : 'Hide the form';
             b.title = say;
             b.setAttribute('aria-label', say);
+            b.querySelector('.mgmt-dock-label').textContent = on ? '| Show Form' : '| Hide Form';
         });
     }
 
@@ -803,10 +799,10 @@ html.mgmt-form-folded .mgmt-dock-fold:focus-visible .mgmt-dock-word {
         chev.type = 'button';
         chev.className = 'mgmt-dock-btn mgmt-dock-fold';
         chev.setAttribute('aria-controls', 'formPanel');
-        /* The word is for the eye only: the button already says what it does
-           through aria-label, and reading both would say it twice. */
+        /* The visible label follows the fold state; aria-label gives the same
+           action to screen readers without reading it twice. */
         chev.innerHTML = '<span class="material-symbols-outlined">expand_more</span>'
-                       + '<span class="mgmt-dock-word" aria-hidden="true">Show form</span>';
+                       + '<span class="mgmt-dock-label" aria-hidden="true">| Hide Form</span>';
         chev.addEventListener('click', function () {
             fold(!root.classList.contains('mgmt-form-folded'), true);
         });
@@ -828,4 +824,72 @@ html.mgmt-form-folded .mgmt-dock-fold:focus-visible .mgmt-dock-word {
 
     document.addEventListener('DOMContentLoaded', addControl);
 })();
+</script>
+<script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
+/* The three account consoles share one search input across their tabs. On a
+   phone it belongs after the create form, immediately above the account tabs.
+   Moving the actual node keeps its value and the search listener on resize. */
+document.addEventListener('DOMContentLoaded', function () {
+    var search = document.querySelector('.mgmt-head-row > .mgmt-search');
+    var tabs = document.querySelector('.mgmt-grid .mgmt-tabs-row');
+    if (!search || !tabs || !window.matchMedia) return;
+
+    var home = search.parentNode;
+    var next = search.nextSibling;
+    var slot = document.createElement('div');
+    slot.className = 'mgmt-search-mobile';
+    tabs.parentNode.insertBefore(slot, tabs);
+    var narrow = window.matchMedia('(max-width: 780px)');
+
+    function place() {
+        if (narrow.matches) slot.appendChild(search);
+        else home.insertBefore(search, next);
+    }
+    place();
+    if (narrow.addEventListener) narrow.addEventListener('change', place);
+    else narrow.addListener(place);
+});
+</script>
+<script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
+/* Keep the edge cue in step with the part of each management tab row that is
+   still out of view. The tab strip itself remains touch and keyboard scrollable. */
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.mgmt-tabs-glide').forEach(function (glide) {
+        var strip = glide.querySelector('.mgmt-tabs');
+        if (!strip) return;
+
+        function mark() {
+            var max = strip.scrollWidth - strip.clientWidth;
+            glide.classList.toggle('can-left', strip.scrollLeft > 2);
+            glide.classList.toggle('can-right', strip.scrollLeft < max - 2);
+        }
+        function reveal(tab) {
+            var stripBox = strip.getBoundingClientRect();
+            var tabBox = tab.getBoundingClientRect();
+            var pad = 12;
+            if (tabBox.right > stripBox.right - pad)
+                strip.scrollLeft += tabBox.right - stripBox.right + pad;
+            else if (tabBox.left < stripBox.left + pad)
+                strip.scrollLeft -= stripBox.left - tabBox.left + pad;
+            mark();
+        }
+
+        strip.addEventListener('scroll', mark, { passive: true });
+        strip.addEventListener('click', function (event) {
+            var tab = event.target.closest('.mgmt-tab');
+            if (tab && strip.contains(tab)) requestAnimationFrame(function () { reveal(tab); });
+        });
+        if (window.ResizeObserver) {
+            var observer = new ResizeObserver(mark);
+            observer.observe(strip);
+            strip.querySelectorAll('.mgmt-tab').forEach(function (tab) { observer.observe(tab); });
+        }
+        window.addEventListener('resize', mark);
+        if (document.fonts) {
+            if (document.fonts.ready) document.fonts.ready.then(mark);
+            if (document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', mark);
+        }
+        mark();
+    });
+});
 </script>

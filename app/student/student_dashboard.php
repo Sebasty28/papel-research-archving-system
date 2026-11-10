@@ -53,7 +53,35 @@ $tabs = [
        row out of research_papers altogether. */
     'archived' => 'Archived',
 ];
-$tab = isset($_GET['tab']) && isset($tabs[$_GET['tab']]) ? $_GET['tab'] : 'approved';
+$declined_exists = "EXISTS (SELECT 1 FROM approval_workflow aw WHERE aw.paper_id = rp.paper_id AND aw.status = 'declined')";
+$process_list    = "'" . implode("','", workflow_process_statuses()) . "'";
+
+// Counts for the tab labels and the initial view. A tie keeps tab order.
+$counts = ['approved' => 0, 'process' => 0, 'declined' => 0, 'drafts' => 0, 'archived' => 0];
+$cs = $conn->prepare(
+    "SELECT
+        SUM(rp.current_status = 'approved') AS approved,
+        SUM(rp.current_status IN ($process_list)) AS process,
+        SUM(rp.current_status = 'draft' AND $declined_exists) AS declined,
+        SUM(rp.current_status = 'draft' AND NOT $declined_exists) AS drafts
+     FROM research_papers rp WHERE rp.uploaded_by = ?"
+);
+$cs->bind_param('i', $u['user_id']);
+$cs->execute();
+if ($row = $cs->get_result()->fetch_assoc()) {
+    foreach ($counts as $k => $_) $counts[$k] = (int)($row[$k] ?? 0);
+}
+$cs->close();
+
+/* Archived papers live in a separate table. */
+$ac = $conn->prepare("SELECT COUNT(*) AS n FROM papers_archive WHERE uploaded_by = ?");
+$ac->bind_param('i', $u['user_id']);
+$ac->execute();
+$counts['archived'] = (int)($ac->get_result()->fetch_assoc()['n'] ?? 0);
+$ac->close();
+
+$tab = isset($_GET['tab']) && isset($tabs[$_GET['tab']])
+    ? $_GET['tab'] : array_search(max($counts), $counts, true);
 
 /* Archiving is not a status: the row is moved to papers_archive and deleted
    from research_papers, so the archived tab reads the other table and every
@@ -79,9 +107,6 @@ $page     = max(1, (int)($_GET['page'] ?? 1));
 $offset   = ($page - 1) * $per_page;
 
 // ---- WHERE clause -----------------------------------------------------
-$declined_exists = "EXISTS (SELECT 1 FROM approval_workflow aw WHERE aw.paper_id = rp.paper_id AND aw.status = 'declined')";
-$process_list    = "'" . implode("','", workflow_process_statuses()) . "'";
-
 $where  = "rp.uploaded_by = ?";
 $params = [$u['user_id']];
 $types  = 'i';
@@ -102,31 +127,6 @@ if ($filter_type)  { $where .= " AND " . paper_type_filter_sql('rp.paper_type', 
 if ($filter_year)  { $where .= " AND COALESCE(YEAR(rp.research_date), rp.year) = ?"; $params[] = $filter_year; $types .= 'i'; }
 if ($filter_month >= 1 && $filter_month <= 12) { $where .= " AND MONTH(rp.research_date) = ?"; $params[] = $filter_month; $types .= 'i'; }
 if ($filter_day   >= 1 && $filter_day   <= 31) { $where .= " AND DAY(rp.research_date) = ?";   $params[] = $filter_day;   $types .= 'i'; }
-
-// ---- Counts per tab (for the tab labels) ------------------------------
-$counts = ['approved' => 0, 'process' => 0, 'declined' => 0, 'drafts' => 0, 'archived' => 0];
-$cs = $conn->prepare(
-    "SELECT
-        SUM(rp.current_status = 'approved') AS approved,
-        SUM(rp.current_status IN ($process_list)) AS process,
-        SUM(rp.current_status = 'draft' AND $declined_exists) AS declined,
-        SUM(rp.current_status = 'draft' AND NOT $declined_exists) AS drafts
-     FROM research_papers rp WHERE rp.uploaded_by = ?"
-);
-$cs->bind_param('i', $u['user_id']);
-$cs->execute();
-if ($row = $cs->get_result()->fetch_assoc()) {
-    foreach ($counts as $k => $_) $counts[$k] = (int)($row[$k] ?? 0);
-}
-$cs->close();
-
-/* Counted on its own, because it is the one tab whose papers are in the
-   other table. */
-$ac = $conn->prepare("SELECT COUNT(*) AS n FROM papers_archive WHERE uploaded_by = ?");
-$ac->bind_param('i', $u['user_id']);
-$ac->execute();
-$counts['archived'] = (int)($ac->get_result()->fetch_assoc()['n'] ?? 0);
-$ac->close();
 
 // ---- Total for the active view ----------------------------------------
 $ct = $conn->prepare("SELECT COUNT(*) AS total FROM $from_table rp WHERE $where");
@@ -216,8 +216,9 @@ $years = array_column($years_res->get_result()->fetch_all(MYSQLI_ASSOC), 'year')
 
 // Query string carried across pagination / tab links
 function dash_qs(array $over = []) {
+    global $tab;
     $base = [
-        'tab'  => $_GET['tab']  ?? null, 'q'    => $_GET['q']    ?? null,
+        'tab'  => $tab,                    'q'    => $_GET['q']    ?? null,
         'type' => $_GET['type'] ?? null, 'year' => $_GET['year'] ?? null,
         'month'=> $_GET['month']?? null, 'day'  => $_GET['day']  ?? null,
         'sort' => $_GET['sort'] ?? null, 'page' => $_GET['page'] ?? null,
@@ -238,10 +239,14 @@ ob_start();
 /* The loading skeleton's shape (includes/skeleton.php). Set before the shared
    head, which is where the skeleton reads it. */
 $PAGE_SKELETON = 'console';
+/* Shelf is offered here, so the pre-paint view script may apply a stored one.
+   Set before browse_console.php, which reads it. */
+$VIEW_SHELF = true;
 ?>
 <?php require_once ROOT_PATH.'/includes/site_head.php'; ?>
 <?php require_once ROOT_PATH.'/includes/browse_console.php'; ?>
 <?php require_once ROOT_PATH.'/includes/console_shell.php'; ?>
+<?php require_once ROOT_PATH.'/includes/shelf_view.php'; ?>
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 /* Delete sits apart from the actions, at the far end of the row, so it is never
    the button next to the one you meant to press. */
@@ -315,7 +320,7 @@ $PAGE_SKELETON = 'console';
              see includes/review_console.php's own copy of this comment for
              why browse_console_js.php needs it rather than checking for
              .paper-card directly. */ ?>
-    <div class="main-col" id="mainCol" data-card-console="1" data-view-console="1">
+    <div class="main-col" id="mainCol" data-card-console="1" data-view-console="shelf">
         <?php ob_start(); ?>
 
         <?php /* Deleting, withdrawing and submitting all land back here, and
@@ -456,8 +461,40 @@ $PAGE_SKELETON = 'console';
                        here rather than inside .card-head, where it used to be, because the
                        link over the card is written before that. */
                     $isDraftOnly = ($status === 'draft' && !$fb);
+
+                    /* The same paper as a book, for the Shelf view. Here a cover
+                       says where the submission has got to rather than what
+                       programme it belongs to: that is what this page is for, and
+                       it is the one thing a card shows that a spine cannot. The
+                       approval track is a click away on the paper's own page,
+                       exactly as it is from a card. */
+                    $shelfBand = $is_archived_tab
+                        ? 'ARCHIVED'
+                        : workflow_status_badge_text($status, (bool)$fb);
+                    $shelfTone = [
+                        'ARCHIVED'   => 'archived',
+                        'APPROVED'   => 'approved',
+                        'DECLINED'   => 'declined',
+                        'DRAFT'      => 'draft',
+                        'ON PROCESS' => 'process',
+                    ][$shelfBand] ?? 'draft';
+                    /* Where the card's own title goes: the author's record of the
+                       submission, or straight back into the draft when there is
+                       nothing filed to read yet. */
+                    $shelfHref = $is_archived_tab
+                        ? BASE_URL . '/archive/view_paper.php?id=' . $pid
+                        : ($isDraftOnly ? 'student_upload_ai.php?draft=' . $pid
+                                        : 'paper_details.php?id=' . $pid);
                     ?>
                     <article class="paper-card">
+                        <?= shelf_book_html([
+                            'paper_id'  => $pid,
+                            'title'     => (string)$r['title'],
+                            'band'      => $shelfBand,
+                            'band_tone' => $shelfTone,
+                            'by'        => paper_date_display($r['research_date'] ?? null, $r['year'] ?? null),
+                            'href'      => $shelfHref,
+                        ]) ?>
                         <?php if ($isDraftOnly): ?>
                             <?php /* See .card-open: the mouse's way into the draft, and what gives
                                      the right-click menu its "Open in new tab". */ ?>

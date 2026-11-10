@@ -22,7 +22,15 @@
     var v;
     try { v = localStorage.getItem('papel_view') || localStorage.getItem('papel_desk_view'); }
     catch (e) {}
-    document.documentElement.setAttribute('data-view', v === 'rows' ? 'rows' : 'cards');
+    /* Shelf is offered by the repository and the student dashboard, not by
+       the review desks: a desk is a queue worked through by status, not a
+       shelf browsed. The setting is one per device and shared by every
+       console, so a page that cannot draw a shelf falls back to cards rather
+       than showing a list with no layout at all. The page says which it is by
+       setting $VIEW_SHELF before this file is included. */
+    var shelfOk = <?= !empty($VIEW_SHELF) ? 'true' : 'false' ?>;
+    if (v !== 'rows' && !(v === 'shelf' && shelfOk)) { v = 'cards'; }
+    document.documentElement.setAttribute('data-view', v);
 })();
 </script>
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
@@ -114,7 +122,15 @@ html[data-mode="dark"] { --search-clear: #C8C9CB; }
 .paper-item::before {
     content: '';
     position: absolute;
-    inset: 7px 1.375rem;
+    /* .75rem, which is the row's own negative margin, so the fill spans the
+       results column exactly: the row is pulled 12px wider than the list at
+       each side precisely so this can reach the column's edge. At 1.375rem it
+       stopped 2px short of the title on both sides - inside the text rather
+       than around it - and a highlight narrower than the line it is
+       highlighting reads as clipped. Now there is 8px of ground either side
+       of the text, and the fill lines up with the column rather than with
+       nothing. */
+    inset: 7px .75rem;
     z-index: -1;
     border-radius: var(--r-card, 8px);
     background: var(--cream);
@@ -531,6 +547,7 @@ html[data-view="rows"] .paper-list .paper-item .paper-program {
 .row-view {
     width: min(1690px, 96vw);
     height: min(766px, 88vh);
+    max-height: calc(100vh - 2rem);
     display: flex; flex-direction: column; overflow: hidden;
     background: var(--white);
     border: 1px solid var(--border);
@@ -538,6 +555,9 @@ html[data-view="rows"] .paper-list .paper-item .paper-program {
     box-shadow: 0 20px 56px rgba(51, 0, 0, .3);
     transform: translateY(.4rem);
     transition: transform .14s ease;
+}
+@supports (height: 100dvh) {
+    .row-view { height: min(766px, 88dvh); max-height: calc(100dvh - 2rem); }
 }
 .row-view-back.is-open .row-view { transform: none; }
 .row-view-head {
@@ -563,7 +583,17 @@ html[data-view="rows"] .paper-list .paper-item .paper-program {
 }
 .row-view-btn:hover { background: var(--white); }
 /* The frame carries the page's own scrolling, so this one has none of its own. */
-.row-view-frame { flex: 1 1 auto; width: 100%; border: 0; display: block; }
+.row-view-frame { flex: 1 1 auto; min-height: 0; width: 100%; border: 0; display: block; }
+/* On short laptop and landscape tablet screens, give the paper the available
+   height while retaining a small edge gap and a reachable title/close bar. */
+@media (max-height: 700px) {
+    .row-view-back { padding: .5rem; }
+    .row-view { height: calc(100vh - 1rem); max-height: calc(100vh - 1rem); }
+    .row-view-head { padding-block: .35rem; }
+    @supports (height: 100dvh) {
+        .row-view { height: calc(100dvh - 1rem); max-height: calc(100dvh - 1rem); }
+    }
+}
 @media (prefers-reduced-motion: reduce) {
     .row-view-back, .row-view { transition: none; }
 }
@@ -874,6 +904,10 @@ html.sidebar-left .js-side-swap .side-icon-right { display: inline-flex; }
     outline: 2px solid var(--maroon);
     outline-offset: 2px;
 }
+/* How many a choice would leave, beside its name: the same muted figure the
+   dashboard tabs carry (.dash-tab .count in includes/console_shell.php). */
+.filter-radio .filter-count { font-size: .6875rem; color: var(--grey); }
+.filter-radio input[type="radio"]:checked ~ .filter-count { color: var(--maroon); }
 .filter-select {
     width: auto;
     min-width: 118px;

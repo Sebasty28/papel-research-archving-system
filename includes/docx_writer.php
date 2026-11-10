@@ -19,6 +19,128 @@ class DocxWriter
 
     private string $body = '';
     private array $images = [];        // ['data' => png, 'w' => px, 'h' => px]
+    private bool $landscape = false;
+
+    /** Only text, formatting and references to the request's validated figures cross this boundary. */
+    public function editedDocument(array $document, array $figures): void
+    {
+        $pages = $document['pages'] ?? null;
+        if (!is_array($pages) || !$pages || count($pages) > 200) {
+            throw new InvalidArgumentException('The edited document has an invalid page count.');
+        }
+        $this->landscape = ($document['orientation'] ?? '') === 'landscape';
+        $usable = $this->landscape ? 14570 : self::USABLE_TWIPS;
+        $blocks = 0;
+        foreach ($pages as $pageIndex => $page) {
+            if (!is_array($page) || !is_array($page['blocks'] ?? null)) {
+                throw new InvalidArgumentException('The edited document contains an invalid page.');
+            }
+            if ($pageIndex > 0) $this->pageBreak();
+            foreach ($page['blocks'] as $block) {
+                if (!is_array($block) || ++$blocks > 10000) {
+                    throw new InvalidArgumentException('The edited document is too large.');
+                }
+                $type = $block['type'] ?? '';
+                if ($type === 'paragraph') {
+                    $this->body .= $this->editorParagraph($block);
+                } elseif ($type === 'table') {
+                    $this->body .= $this->editorTable($block, $usable);
+                } elseif ($type === 'image') {
+                    $index = $block['figure'] ?? -1;
+                    if (!is_int($index) || !isset($figures[$index]) || $figures[$index]['type'] !== 'png') continue;
+                    $figure = $figures[$index];
+                    $width = max(20, min(100, (float)($block['width'] ?? 100)));
+                    $this->image($figure['data'], max(1, $figure['w']), max(1, $figure['h']), '', [
+                        'width' => (int)round(($usable / 15) * $width / 100),
+                        'align' => $this->editorAlignment($block['align'] ?? 'center'),
+                    ]);
+                    $caption = $block['caption'] ?? [];
+                    $this->body .= $this->editorParagraph([
+                        'runs' => is_array($caption) ? $caption : [],
+                        'align' => $block['captionAlign'] ?? ($block['align'] ?? 'center'), 'kind' => 'caption',
+                    ]);
+                }
+            }
+        }
+    }
+
+    private function editorAlignment($value): string
+    {
+        return ['left' => 'left', 'center' => 'center', 'right' => 'right',
+                'justify' => 'both'][$value] ?? 'left';
+    }
+
+    private function editorRuns(array $runs, int $defaultSize = 20, string $color = '333333', bool $bold = false): string
+    {
+        if (count($runs) > 20000) throw new InvalidArgumentException('Too many text runs.');
+        $xml = '';
+        foreach ($runs as $run) {
+            if (!is_array($run) || !is_string($run['text'] ?? null)) continue;
+            $text = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/', '', $run['text']);
+            $size = isset($run['size']) ? (int)round(max(8, min(36, (float)$run['size'])) * 2) : $defaultSize;
+            $xml .= '<w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/>'
+                . '<w:sz w:val="' . $size . '"/><w:color w:val="' . $color . '"/>'
+                . ((array_key_exists('bold', $run) ? !empty($run['bold']) : $bold) ? '<w:b/>' : '')
+                . (!empty($run['italic']) ? '<w:i/>' : '')
+                . (!empty($run['underline']) ? '<w:u w:val="single"/>' : '') . '</w:rPr>';
+            $parts = preg_split('/\r\n|\r|\n/', $text);
+            foreach ($parts as $i => $part) {
+                if ($i) $xml .= '<w:br/>';
+                $xml .= '<w:t xml:space="preserve">' . $this->x($part) . '</w:t>';
+            }
+            $xml .= '</w:r>';
+        }
+        return $xml ?: '<w:r><w:t/></w:r>';
+    }
+
+    private function editorParagraph(array $block): string
+    {
+        $kind = $block['kind'] ?? 'text';
+        $size = $kind === 'title' ? 36 : ($kind === 'heading' ? 26 : ($kind === 'caption' ? 16 : 20));
+        $color = in_array($kind, ['title', 'heading'], true) ? '820707' : ($kind === 'caption' ? '6E6A6E' : '333333');
+        $runs = is_array($block['runs'] ?? null) ? $block['runs'] : [];
+        $line = $kind === 'title' ? 312 : ($kind === 'heading' ? 336 : 384);
+        return '<w:p><w:pPr><w:jc w:val="' . $this->editorAlignment($block['align'] ?? 'left') . '"/>'
+            . '<w:spacing w:after="180" w:line="' . $line . '" w:lineRule="auto"/>'
+            . (in_array($kind, ['title', 'heading'], true) ? '<w:keepNext/>' : '')
+            . '</w:pPr>' . $this->editorRuns($runs, $size, $color, in_array($kind, ['title', 'heading'], true)) . '</w:p>';
+    }
+
+    private function editorTable(array $block, int $usable): string
+    {
+        $rows = $block['rows'] ?? [];
+        if (!is_array($rows) || count($rows) > 10000) throw new InvalidArgumentException('Invalid table rows.');
+        $count = min(30, max(1, count($rows[0]['cells'] ?? [])));
+        $shares = [];
+        for ($i = 0; $i < $count; $i++) $shares[] = max(1, min(2000, (float)($block['widths'][$i] ?? 100)));
+        $total = array_sum($shares);
+        $widths = array_map(fn($share) => (int)round($usable * $share / $total), $shares);
+        $xml = '<w:tbl><w:tblPr><w:tblW w:w="' . $usable . '" w:type="dxa"/>'
+            . '<w:tblLayout w:type="fixed"/><w:tblBorders>'
+            . '<w:insideH w:val="single" w:sz="4" w:color="E6D4D4"/>'
+            . '</w:tblBorders><w:tblCellMar><w:top w:w="90" w:type="dxa"/>'
+            . '<w:bottom w:w="90" w:type="dxa"/><w:left w:w="120" w:type="dxa"/>'
+            . '<w:right w:w="120" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>';
+        foreach ($widths as $width) $xml .= '<w:gridCol w:w="' . $width . '"/>';
+        $xml .= '</w:tblGrid>';
+        foreach ($rows as $row) {
+            if (!is_array($row) || !is_array($row['cells'] ?? null)) continue;
+            $header = !empty($row['header']);
+            $xml .= '<w:tr>' . ($header ? '<w:trPr><w:tblHeader/></w:trPr>' : '');
+            for ($i = 0; $i < $count; $i++) {
+                $cell = is_array($row['cells'][$i] ?? null) ? $row['cells'][$i] : [];
+                $runs = is_array($cell['runs'] ?? null) ? $cell['runs'] : [];
+                $xml .= '<w:tc><w:tcPr><w:tcW w:w="' . $widths[$i] . '" w:type="dxa"/>'
+                    . ($header ? '<w:shd w:fill="820707"/>' : '') . '</w:tcPr><w:p><w:pPr>'
+                    . '<w:jc w:val="' . $this->editorAlignment($cell['align'] ?? 'left') . '"/>'
+                    . '<w:spacing w:line="384" w:lineRule="auto"/>'
+                    . '</w:pPr>' . $this->editorRuns($runs, 18, $header ? 'FFFFFF' : '333333', $header)
+                    . '</w:p></w:tc>';
+            }
+            $xml .= '</w:tr>';
+        }
+        return $xml . '</w:tbl><w:p><w:pPr><w:spacing w:after="120"/></w:pPr></w:p>';
+    }
 
     public function title(string $text, string $subtitle = ''): void
     {
@@ -103,18 +225,19 @@ class DocxWriter
     }
 
     /** A PNG figure, centred, with a caption under it. */
-    public function image(string $png, int $w, int $h, string $caption = ''): void
+    public function image(string $png, int $w, int $h, string $caption = '', array $options = []): void
     {
         $this->images[] = ['data' => $png, 'w' => $w, 'h' => $h];
         $id = count($this->images);
 
         // 600px across the page reads well; the height follows the aspect.
-        $drawW = 600;
+        $drawW = max(48, min(972, (int)($options['width'] ?? 600)));
         $drawH = (int)round($h * ($drawW / max(1, $w)));
         $cx = $drawW * 9525;
         $cy = $drawH * 9525;
 
-        $this->body .= '<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="120" w:after="60"/></w:pPr>'
+        $align = in_array($options['align'] ?? '', ['left', 'center', 'right'], true) ? $options['align'] : 'center';
+        $this->body .= '<w:p><w:pPr><w:jc w:val="' . $align . '"/><w:spacing w:before="120" w:after="60"/></w:pPr>'
             . '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">'
             . '<wp:extent cx="' . $cx . '" cy="' . $cy . '"/>'
             . '<wp:docPr id="' . $id . '" name="Figure ' . $id . '" descr="'
@@ -180,7 +303,9 @@ class DocxWriter
              . 'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
              . 'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">'
              . '<w:body>' . $this->body
-             . '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>'
+             . '<w:sectPr>' . ($this->landscape
+                 ? '<w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/>'
+                 : '<w:pgSz w:w="11906" w:h="16838"/>')
              . '<w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" '
              . 'w:header="708" w:footer="708" w:gutter="0"/></w:sectPr>'
              . '</w:body></w:document>';

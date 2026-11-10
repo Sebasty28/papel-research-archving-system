@@ -586,8 +586,8 @@ $PAGE_SKELETON = 'table';
             </div>
             <?php /* One field for every tab (includes/manage_search.php): the counts
                      become what each tab holds of the matches, and Enter walks to a tab
-                     that has one. Up here rather than on the tab row, which has no room
-                     left for it: see .mgmt-head-row .mgmt-search in manage_page.php. */ ?>
+                     that has one. The shared layout puts it in the heading on
+                     desktop and below the form on phones. */ ?>
             <?php mgmt_search_field('Search name, ID or programme'); ?>
         </div>
     </div>
@@ -713,7 +713,9 @@ $PAGE_SKELETON = 'table';
      the same row renderer. The second holds accounts not in use: archived by
      hand, or lapsed because their date has passed. -->
         <section>
-            <div class="mgmt-tabs" role="tablist">
+            <div class="mgmt-tabs-row">
+              <div class="mgmt-tabs-glide">
+               <div class="mgmt-tabs" role="tablist">
                 <button type="button" class="mgmt-tab is-on" data-pane="activePane" role="tab">
                     Active students
                     <span class="count"><?= count($active) ?></span>
@@ -723,6 +725,8 @@ $PAGE_SKELETON = 'table';
                     <span class="count"><?= count($archived) ?></span>
                 </button>
                 <?php password_audit_tab($password_rows); ?>
+               </div>
+              </div>
 
                 <!-- Sort rides on the tab row rather than under the chips: it is
                      not a way of choosing who to show, and it applies to both
@@ -742,7 +746,7 @@ $PAGE_SKELETON = 'table';
 
                 <div class="mgmt-panel">
                     <div class="mgmt-scroll">
-                        <table class="mgmt-table mgmt-mobile-cards" id="activeStudentsTable">
+                        <table class="mgmt-table" id="activeStudentsTable">
                             <thead>
                                 <tr>
                                     <th>Student</th>
@@ -785,7 +789,7 @@ $PAGE_SKELETON = 'table';
 
                 <div class="mgmt-panel">
                     <div class="mgmt-scroll">
-                        <table class="mgmt-table mgmt-mobile-cards" id="archivedStudentsTable">
+                        <table class="mgmt-table" id="archivedStudentsTable">
                             <thead>
                                 <tr>
                                     <th>Student</th>

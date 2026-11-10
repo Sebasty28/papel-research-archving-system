@@ -71,6 +71,39 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    // The profile menu uses the same palette choice as Settings and Quick Settings.
+    var themeToggles = document.querySelectorAll('[data-profile-theme-toggle]');
+    if (themeToggles.length) {
+        var themeRoot = document.documentElement;
+        var syncProfileTheme = function () {
+            var dark = themeRoot.getAttribute('data-mode') === 'dark';
+            themeToggles.forEach(function (button) {
+                var label = dark ? 'Light mode' : 'Dark mode';
+                button.querySelector('[data-theme-icon]').textContent = dark ? 'light_mode' : 'dark_mode';
+                button.querySelector('[data-theme-label]').textContent = label;
+                button.setAttribute('aria-label', label);
+            });
+        };
+        themeToggles.forEach(function (button) {
+            button.addEventListener('click', function () {
+                var colour = themeRoot.getAttribute('data-mode') === 'dark' ? 'classic' : 'old-night';
+                themeRoot.setAttribute('data-color', colour);
+                themeRoot.setAttribute('data-mode', colour === 'old-night' ? 'dark' : 'light');
+                try { localStorage.setItem('papel_color', colour); } catch (e) {}
+                if (window.papelSyncQuickSettings) window.papelSyncQuickSettings();
+                document.querySelectorAll('input[name="qs_color"]').forEach(function (input) {
+                    input.checked = input.value === colour;
+                });
+                syncProfileTheme();
+            });
+        });
+        new MutationObserver(syncProfileTheme).observe(themeRoot, {
+            attributes: true,
+            attributeFilter: ['data-mode', 'data-color']
+        });
+        syncProfileTheme();
+    }
+
     // Notification bell dropdown + mark-read
     var notifToggle = document.getElementById('notifToggle');
     var notifDropdown = document.getElementById('notifDropdown');
@@ -344,9 +377,32 @@ document.addEventListener('DOMContentLoaded', function () {
        behind, where a filter could be opened, and its menu then drew on top
        of the panel it had been opened from behind. `inert` takes clicks, the
        focus order and the accessibility tree away from all of it at once. */
+    /* reCAPTCHA's own containers are the exception. It puts the image
+       challenge in a div of its own at the end of <body>, a sibling of this
+       panel rather than a child of it, so the sweep reached it: the whole
+       challenge went inert, every click on a tile fell straight through it to
+       the backdrop underneath, and the backdrop's click closes the panel. The
+       one thing a reader has to do to sign in therefore both refused to
+       answer and shut the form on them.
+
+       It only happened when the panel was opened from the page, after
+       everything had settled and the container existed. Arriving at
+       ?login_modal=1 opens the panel before reCAPTCHA has built it, so there
+       was nothing to mark and the challenge worked, which is what made it
+       look intermittent.
+
+       Matched by what the element holds rather than by a class name: the
+       challenge div is anonymous (no id, no class), and only the small badge
+       carries one. Nothing else on the site frames recaptcha.com. */
+    function isRecaptchaLayer(el) {
+        return (el.classList && el.classList.contains('grecaptcha-badge'))
+            || !!(el.querySelector && el.querySelector('iframe[src*="recaptcha"]'));
+    }
+
     function setPageInert(on) {
         Array.prototype.forEach.call(document.body.children, function (el) {
             if (el === loginPanel || el === modalBackdrop) { return; }
+            if (isRecaptchaLayer(el)) { return; }
             if (on) { el.setAttribute('inert', ''); } else { el.removeAttribute('inert'); }
         });
     }

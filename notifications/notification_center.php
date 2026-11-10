@@ -108,15 +108,16 @@ $PAGE_SKELETON = 'console';
 <?php require_once ROOT_PATH.'/includes/flash_banner.php'; ?>
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 .nc-wrap { max-width: 52rem; margin: 0 auto; padding: 1.75rem 0 3rem; }
-.nc-head { display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 1.25rem; }
+.nc-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 1rem; }
+.nc-head { grid-column: 1; grid-row: 1; margin-bottom: 1.25rem; }
 .nc-head h1 {
     font-family: var(--font-head); font-size: 1.375rem; font-weight: 600;
     color: var(--maroon); margin: 0 0 .2rem;
 }
 .nc-head p { font-size: .8125rem; color: var(--grey); margin: 0; }
-.nc-head form { margin-left: auto; }
+.nc-markall-form { grid-column: 2; grid-row: 1; justify-self: end; }
 
-.nc-tabs { display: flex; gap: .375rem; margin-bottom: 1rem; }
+.nc-tabs { display: flex; gap: .375rem; grid-column: 1 / -1; grid-row: 2; margin-bottom: 1rem; }
 /* No outline, and the same shape as the bell dropdown's tabs so the two lists
    of the same thing look like the same thing. An inactive tab is plain text
    rather than a white box, because with the border gone a white box on a white
@@ -211,8 +212,15 @@ $PAGE_SKELETON = 'console';
 .nc-empty .material-symbols-outlined { font-size: 34px; display: block; margin: 0 auto .5rem; opacity: .5; }
 
 @media (max-width: 600px) {
-    .nc-head { flex-wrap: wrap; }
-    .nc-head form { margin-left: 0; width: 100%; }
+    .nc-header { column-gap: .25rem; }
+    .nc-head { grid-column: 1 / -1; margin-bottom: 1rem; }
+    .nc-tabs { grid-column: 1; align-items: center; }
+    .nc-tab { padding-inline: .65rem; white-space: nowrap; }
+    .nc-markall-form { grid-column: 2; grid-row: 2; align-self: start; }
+    .nc-markall { padding: .35rem .4rem; font-size: .6875rem; white-space: nowrap; }
+}
+@media (max-width: 330px) {
+    .nc-markall .material-symbols-outlined { display: none; }
 }
 
 /* No outline on this one. .btn-sm-outline is shared with two dozen buttons
@@ -241,8 +249,8 @@ $PAGE_SKELETON = 'console';
 
         <?php flash_banner(); ?>
 
-        <div class="nc-head">
-            <div>
+        <div class="nc-header">
+            <div class="nc-head">
                 <h1>Notifications</h1>
                 <p>
                     <span id="ncCounts"><?= number_format($total) ?> in total<?= $unread ? ', ' . number_format($unread) . ' unread' : '' ?></span>.
@@ -256,7 +264,7 @@ $PAGE_SKELETON = 'console';
                          button says that instead of sitting there greyed out or
                          disappearing. */ ?>
                 <?php $allRead = ($unread === 0); ?>
-                <form method="post" id="ncBulkForm" data-no-pill>
+                <form method="post" id="ncBulkForm" class="nc-markall-form" data-no-pill>
                     <?= csrf_field() ?>
                     <input type="hidden" name="action"
                            value="<?= $allRead ? 'mark_all_unread' : 'mark_all_read' ?>">
@@ -266,13 +274,12 @@ $PAGE_SKELETON = 'console';
                     </button>
                 </form>
             <?php endif; ?>
-        </div>
-
-        <div class="nc-tabs" role="tablist">
-            <button type="button" class="nc-tab <?= $filter === 'all' ? 'is-on' : '' ?>" data-filter="all" role="tab">All</button>
-            <button type="button" class="nc-tab <?= $filter === 'unread' ? 'is-on' : '' ?>" data-filter="unread" role="tab">
-                Unread<?= $unread ? ' (' . number_format($unread) . ')' : '' ?>
-            </button>
+            <div class="nc-tabs" role="tablist">
+                <button type="button" class="nc-tab <?= $filter === 'all' ? 'is-on' : '' ?>" data-filter="all" role="tab">All</button>
+                <button type="button" class="nc-tab <?= $filter === 'unread' ? 'is-on' : '' ?>" data-filter="unread" role="tab">
+                    Unread<?= $unread ? ' (' . number_format($unread) . ')' : '' ?>
+                </button>
+            </div>
         </div>
 
         <?php if (!$notifs): ?>

@@ -366,7 +366,9 @@ $PAGE_SKELETON = 'table';
 
         <!-- ============ The passes ============ -->
         <section>
-            <div class="mgmt-tabs" role="tablist">
+            <div class="mgmt-tabs-row">
+              <div class="mgmt-tabs-glide">
+               <div class="mgmt-tabs" role="tablist">
                 <button type="button" class="mgmt-tab is-on" data-pane="activePane" role="tab">
                     Active passes
                     <span class="count"><?= count($active) ?></span>
@@ -376,6 +378,8 @@ $PAGE_SKELETON = 'table';
                     <span class="count"><?= count($expired) ?></span>
                 </button>
 
+               </div>
+              </div>
                 <span class="mgmt-sort" id="sortChips">
                     <span class="mgmt-chips-label">Sort</span>
                     <button type="button" class="mgmt-chip is-on" data-sort="newest">Newest</button>

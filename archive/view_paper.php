@@ -255,38 +255,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_manuscript'])
     csrf_verify();
 
     if ($u && $u['user_role'] === 'student') {
-        $existing = student_manuscript_request((int)$u['user_id'], $id);
-        $blocked = $existing && (
-            $existing['status'] === 'pending'
-            || ($existing['status'] === 'granted' && strtotime($existing['expires_at']) > time())
-        );
-
-        if (!manuscript_requests_ready()) {
-            // A copy of the site whose database has no table for requests yet: say so, file nothing.
-            flash('error', 'Manuscript requests are not open on this site yet. Please ask a librarian in person.');
-        } elseif ($blocked) {
-            flash('error', 'You already have a request in progress for this manuscript.');
-        } elseif (!$msFiles) {
-            flash('error', 'This paper has no manuscript file on record.');
-        } else {
-            $stmt = $conn->prepare(
-                "INSERT INTO manuscript_requests (paper_id, student_user_id, status, created_at)
-                 VALUES (?, ?, 'pending', NOW())");
-            $stmt->bind_param('ii', $id, $u['user_id']);
-            $stmt->execute();
-            $stmt->close();
-
-            $lib = $conn->query("SELECT user_id FROM users WHERE user_role = 'librarian' AND is_active = 1");
-            $note = $u['full_name'] . ' requested access to the manuscript for "' . $paper['title'] . '".';
-            foreach ($lib->fetch_all(MYSQLI_ASSOC) as $librow) {
-                /* Said as a request, because the same type also carries the
-                   answer back to the student, and the default subject is
-                   written for them. */
-                create_notification((int)$librow['user_id'], $id, 'manuscript', $note,
-                    'A Manuscript Request Needs Your Attention');
-            }
-            flash('success', 'Request sent. A librarian will review it shortly.');
-        }
+        /* The rules and the librarians' notice live in config/core.php, because
+           My Library's "Request again" files the same request from its History
+           tab and the two must not drift apart. */
+        [$filed, $said] = manuscript_request_file($u, $id, $paper, (bool)$msFiles);
+        flash($filed ? 'success' : 'error', $said);
     }
     header('Location: view_paper.php?id=' . $id . '#pd-sec-manuscript');
     exit;
@@ -307,6 +280,7 @@ $PAGE_SKELETON = 'reader';
 <?php require_once ROOT_PATH.'/includes/site_head.php'; ?>
 <?php require_once ROOT_PATH.'/includes/console_shell.php'; ?>
 <?php require_once ROOT_PATH.'/includes/paper_record_css.php'; ?>
+<?php if (!$isPreview && user_has_library($u)) { require_once ROOT_PATH.'/includes/save_paper.php'; } ?>
 <?php require_once ROOT_PATH.'/includes/flash_banner.php'; ?>
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 /* ---- Archived, and what can be done about it ----
@@ -341,7 +315,7 @@ $PAGE_SKELETON = 'reader';
     position: fixed; top: 72px; right: 1.5rem; z-index: 950;
     display: inline-flex; align-items: center; gap: .4rem;
     padding: .4rem .75rem; border-radius: var(--r-badge, 2px);
-    background: var(--maroon); color: #fff; font-size: .75rem;
+    background: var(--maroon-surface); color: #fff; font-size: .75rem;
     box-shadow: 0 4px 14px rgba(51,0,0,.2);
 }
 
@@ -440,6 +414,14 @@ $PAGE_SKELETON = 'reader';
                     <?= $isArchived ? 'Archived' : 'Published' ?>
                 </span>
                 <br>
+                <?php /* The top right corner, with the other things this reader can
+                         do with the record rather than read of it. Not in the upload
+                         form's preview, which is a drawing of a page that does not
+                         exist yet, and not for a reader with no account to keep a
+                         library in. */ ?>
+                <?php if (!$isPreview && user_has_library($u)): ?>
+                    <?= save_paper_button($id, isset(saved_paper_ids((int)$u['user_id'])[$id]), 'labelled') ?>
+                <?php endif; ?>
                 <?php /* The way back to a rail that has been put away, and
                          nothing else: the control that puts it away is inside
                          the rail, on the contents' heading, where it is next to

@@ -47,6 +47,30 @@ function csp_nonce(): string {
             }
         }
 
+        /* upgrade-insecure-requests, but only where the site really is on
+           https. It rewrites same-origin requests to https, and the browser
+           applies it to a nested browsing context's own navigations as well
+           as to subresources. On a copy served over plain http there is no
+           https to be upgraded to: the request goes out as https://, the
+           server has no certificate on that port, and the navigation fails
+           outright with ERR_CERT_INVALID.
+
+           That cost a whole feature. A student asking a librarian for a
+           manuscript posts the form inside the framed preview the repository
+           opens on a row, and the handler answers with a redirect. The POST
+           went out over http and was filed; the redirect after it was
+           upgraded, refused, and never arrived, so the preview sat blank
+           white for good while the request had in fact been made. It only
+           ever showed there because that form is the one navigation a framed
+           page starts for itself.
+
+           Nothing is lost by leaving it off: on an http site every request is
+           already insecure and there is nothing to raise one to, and on https
+           the directive is sent exactly as before. */
+        $secure = (!empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off')
+               || ((string)($_SERVER['SERVER_PORT'] ?? '') === '443')
+               || (strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https');
+
         $csp = "default-src 'self'; " .
                "script-src 'self' 'nonce-{$nonce}' https://cdn.jsdelivr.net https://unpkg.com{$rcScript}; " .
                "style-src 'self' 'nonce-{$nonce}' https://cdn.jsdelivr.net https://fonts.googleapis.com; " .
@@ -59,8 +83,8 @@ function csp_nonce(): string {
                "base-uri 'self'; " .
                "object-src 'none'; " .
                "media-src 'none'; " .
-               "manifest-src 'self'; " .
-               "upgrade-insecure-requests;";
+               "manifest-src 'self';" .
+               ($secure ? " upgrade-insecure-requests;" : "");
         if (!headers_sent()) {
             header("Content-Security-Policy: " . $csp);
             header_remove('X-Powered-By'); // ID-016
@@ -1404,6 +1428,172 @@ function student_manuscript_request(int $studentUserId, int $paperId): ?array {
     $row = $stmt->get_result()->fetch_assoc() ?: null;
     $stmt->close();
     return $row;
+}
+
+/**
+ * Files a student's request for a paper's manuscript, and tells the librarians.
+ *
+ * There are two places to ask from: the paper's own page, and the History tab
+ * of My Library ("Request again"). The rules are the same in both (one request
+ * in progress per paper, nothing to ask for where no file is on record, nothing
+ * to file where the table does not exist yet), so they are written once here
+ * rather than twice where one copy can fall behind the other.
+ *
+ * @param array $paper   The paper's row, from research_papers or papers_archive.
+ * @param bool  $hasFile Whether a manuscript file is actually on record for it.
+ * @return array{0:bool,1:string} Whether a request was filed, and what to say.
+ */
+function manuscript_request_file(array $u, int $paperId, array $paper, bool $hasFile): array {
+    if (($u['user_role'] ?? '') !== 'student') {
+        return [false, 'Only a student can ask for a manuscript.'];
+    }
+    if (!manuscript_requests_ready()) {
+        // A copy of the site whose database has no table for requests yet: say so, file nothing.
+        return [false, 'Manuscript requests are not open on this site yet. Please ask a librarian in person.'];
+    }
+    $existing = student_manuscript_request((int)$u['user_id'], $paperId);
+    $blocked  = $existing && (
+        $existing['status'] === 'pending'
+        || ($existing['status'] === 'granted' && strtotime((string)$existing['expires_at']) > time())
+    );
+    if ($blocked) {
+        return [false, 'You already have a request in progress for this manuscript.'];
+    }
+    if (!$hasFile) {
+        return [false, 'This paper has no manuscript file on record.'];
+    }
+
+    $conn = db();
+    $uid  = (int)$u['user_id'];
+    $stmt = $conn->prepare(
+        "INSERT INTO manuscript_requests (paper_id, student_user_id, status, created_at)
+         VALUES (?, ?, 'pending', NOW())");
+    $stmt->bind_param('ii', $paperId, $uid);
+    $stmt->execute();
+    $stmt->close();
+
+    $lib  = $conn->query("SELECT user_id FROM users WHERE user_role = 'librarian' AND is_active = 1");
+    $note = ($u['full_name'] ?? 'A student') . ' requested access to the manuscript for "'
+          . ($paper['title'] ?? 'a paper') . '".';
+    foreach ($lib ? $lib->fetch_all(MYSQLI_ASSOC) : [] as $librow) {
+        /* Said as a request, because the same type also carries the answer
+           back to the student, and the default subject is written for them. */
+        create_notification((int)$librow['user_id'], $paperId, 'manuscript', $note,
+            'A Manuscript Request Needs Your Attention');
+    }
+    return [true, 'Request sent. A librarian will review it shortly.'];
+}
+
+/* ---------------------------------------------------------------
+   My Library: the papers a reader has saved.
+
+   One row per reader and paper in paper_favorites, which has been in
+   database/schema.sql since the first export and was never used: so there is
+   no migration, and a copy of the site built from that file already has it.
+   The check below is for a copy that somehow does not; without the table
+   nothing is saved and nothing is offered, rather than a page ending in the
+   error screen (see "A copy of the database can be behind the code").
+   --------------------------------------------------------------- */
+
+/** The roles that have a library. Every account does; a Library Pass guest is
+ *  a session that ends, with no users row for a saved paper to belong to. */
+function library_roles(): array {
+    return ['student', 'faculty', 'admin', 'head_academic', 'super_admin', 'librarian'];
+}
+
+function paper_favorites_ready(): bool {
+    static $ready = null;
+    if ($ready === null) {
+        $r = db()->query("SHOW TABLES LIKE 'paper_favorites'");
+        $ready = $r && $r->num_rows > 0;
+    }
+    return $ready;
+}
+
+/** Whether this reader can save papers at all. */
+function user_has_library(?array $u): bool {
+    return $u && !empty($u['user_id'])
+        && in_array($u['user_role'] ?? '', library_roles(), true)
+        && paper_favorites_ready();
+}
+
+/**
+ * A paper anybody signed in may open: published, or archived (the paper's page
+ * shows both, and says which). The same test archive/view_paper.php makes, so a
+ * paper can be saved exactly when it can be read.
+ */
+function paper_is_readable(int $paperId): bool {
+    $stmt = db()->prepare(
+        "SELECT 1 FROM research_papers WHERE paper_id = ? AND current_status = 'approved'
+         UNION ALL
+         SELECT 1 FROM papers_archive WHERE paper_id = ? LIMIT 1");
+    $stmt->bind_param('ii', $paperId, $paperId);
+    $stmt->execute();
+    $found = (bool)$stmt->get_result()->fetch_row();
+    $stmt->close();
+    return $found;
+}
+
+/** The ids of every paper this reader has saved, as [id => true]: one query for a whole list. */
+function saved_paper_ids(int $userId): array {
+    if (!paper_favorites_ready()) return [];
+    $stmt = db()->prepare("SELECT paper_id FROM paper_favorites WHERE user_id = ?");
+    $stmt->bind_param('i', $userId);
+    $stmt->execute();
+    $ids = [];
+    foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $row) { $ids[(int)$row['paper_id']] = true; }
+    $stmt->close();
+    return $ids;
+}
+
+/**
+ * Saves a paper to a reader's library, or takes it out. Says which it now is.
+ *
+ * INSERT IGNORE against the table's unique (user_id, paper_id), so a double
+ * press, or the same paper saved in two windows, is one row and no error.
+ */
+function paper_save_set(int $userId, int $paperId, bool $on): bool {
+    if (!paper_favorites_ready()) return false;
+    $stmt = db()->prepare($on
+        ? "INSERT IGNORE INTO paper_favorites (user_id, paper_id) VALUES (?, ?)"
+        : "DELETE FROM paper_favorites WHERE user_id = ? AND paper_id = ?");
+    $stmt->bind_param('ii', $userId, $paperId);
+    $stmt->execute();
+    $stmt->close();
+    return $on;
+}
+
+/**
+ * The papers on a reader's shelf, newest saved first.
+ *
+ * Read from wherever the paper now lives: research_papers while it is
+ * published, papers_archive once it has been taken out of the repository. One
+ * that is neither (returned to its author, or deleted) is simply not on the
+ * shelf; its row is left alone, so it comes back by itself if it is published
+ * again.
+ */
+function saved_papers(int $userId): array {
+    if (!paper_favorites_ready()) return [];
+    $stmt = db()->prepare(
+        "SELECT f.created_at AS saved_at, 0 AS is_archived, p.paper_id, p.title, p.author_names, p.year,
+                p.research_date, p.paper_type, p.program_category, p.abstract
+           FROM paper_favorites f
+           JOIN research_papers p ON p.paper_id = f.paper_id AND p.current_status = 'approved'
+          WHERE f.user_id = ?
+         UNION ALL
+         SELECT f.created_at AS saved_at, 1 AS is_archived, a.paper_id, a.title, a.author_names, a.year,
+                a.research_date, a.paper_type, a.program_category, a.abstract
+           FROM paper_favorites f
+           JOIN papers_archive a ON a.paper_id = f.paper_id
+          WHERE f.user_id = ?
+            AND NOT EXISTS (SELECT 1 FROM research_papers p2
+                             WHERE p2.paper_id = f.paper_id AND p2.current_status = 'approved')
+          ORDER BY saved_at DESC, paper_id DESC");
+    $stmt->bind_param('ii', $userId, $userId);
+    $stmt->execute();
+    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    return $rows;
 }
 
 /**

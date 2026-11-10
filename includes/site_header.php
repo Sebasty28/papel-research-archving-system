@@ -77,6 +77,18 @@ if (!$u) {
             ];
     }
 }
+/* My Library, for everyone with an account: the papers they have saved, and
+   for a student the manuscripts they have asked a librarian for. Second in the
+   bar, straight after the reader's own desk, on every role alike, so it is in
+   the same place whoever is signed in. A Library Pass guest has no library
+   (config/core.php, user_has_library()) and so no link. */
+if (function_exists('user_has_library') && user_has_library($u)) {
+    array_splice($nav_links, 1, 0, [[
+        'label' => 'My Library',
+        'href'  => BASE_URL . '/app/my_library.php',
+        'match' => ['my_library.php'],
+    ]]);
+}
 $current_script = basename($_SERVER['SCRIPT_NAME'] ?? '');
 
 // ---- Notifications (logged-in users only) ----
@@ -150,14 +162,6 @@ $login_notif_popup_items = $show_login_notif_popup
             <span class="brand-mark" aria-hidden="true"></span>
             <span class="brand-word" aria-hidden="true"><?= e(APP_NAME) ?></span>
         </a>
-        <?php /* Outside the link on purpose: .brand-word is absolutely placed
-                 and slides out from behind the mark on hover, so a chip inside
-                 would be slid over. Out here it simply sits beside the logo and
-                 stays put. The link's aria-label already says which copy this
-                 is, so the chip is decoration to a screen reader. */ ?>
-        <?php if (app_env_badge() !== ''): ?>
-            <span class="brand-env" aria-hidden="true"><?= e(app_env_badge()) ?></span>
-        <?php endif; ?>
         <?php /* Read before the nav, not inside .header-right as it used to be:
                  the phone's menu sheet is this nav, and it carries the account
                  block at its foot, so both need these. */ ?>
@@ -283,10 +287,13 @@ $login_notif_popup_items = $show_login_notif_popup
                         </span>
                     </div>
                     <a href="<?= e(BASE_URL.'/pages/settings.php') ?>">
-                        <span class="material-symbols-outlined mi-20">settings</span> Settings
+                        <span class="nav-action-content"><span class="material-symbols-outlined mi-20" aria-hidden="true">settings</span><span class="nav-action-text">Settings</span></span>
                     </a>
+                    <button type="button" data-profile-theme-toggle>
+                        <span class="nav-action-content"><span class="material-symbols-outlined mi-20" data-theme-icon aria-hidden="true">dark_mode</span><span class="nav-action-text" data-theme-label>Dark mode</span></span>
+                    </button>
                     <a href="<?= e(BASE_URL.'/app/auth/logout.php') ?>">
-                        <span class="material-symbols-outlined mi-20">logout</span> Logout
+                        <span class="nav-action-content"><span class="material-symbols-outlined mi-20" aria-hidden="true">logout</span><span class="nav-action-text">Logout</span></span>
                     </a>
                 </div>
             <?php else: ?>
@@ -303,7 +310,7 @@ $login_notif_popup_items = $show_login_notif_popup
                          to this one, which the shutting has just hidden. */ ?>
                 <div class="nav-login">
                     <button class="nav-login-btn" id="navSheetLoginBtn" type="button">
-                        <span class="material-symbols-outlined mi-20">login</span> Login
+                        <span class="nav-action-content"><span class="material-symbols-outlined mi-20" aria-hidden="true">login</span><span class="nav-action-text">Login</span></span>
                     </button>
                 </div>
             <?php endif; ?>
@@ -397,6 +404,9 @@ $login_notif_popup_items = $show_login_notif_popup
                         <a href="<?= e(BASE_URL.'/pages/settings.php') ?>">
                             <span class="material-symbols-outlined mi-20">settings</span> Settings
                         </a>
+                        <button type="button" data-profile-theme-toggle>
+                            <span class="material-symbols-outlined mi-20" data-theme-icon aria-hidden="true">dark_mode</span><span data-theme-label>Dark mode</span>
+                        </button>
                         <a href="<?= e(BASE_URL.'/app/auth/logout.php') ?>">
                             <span class="material-symbols-outlined mi-20">logout</span> Logout
                         </a>
@@ -551,9 +561,6 @@ $login_notif_popup_items = $show_login_notif_popup
                 <span class="brand-mark" aria-hidden="true"></span>
                 <span class="brand-word" aria-hidden="true"><?= e(APP_NAME) ?></span>
             </a>
-            <?php if (app_env_badge() !== ''): ?>
-                <span class="brand-env" aria-hidden="true"><?= e(app_env_badge()) ?></span>
-            <?php endif; ?>
         </div>
         <?php /* open_in_full / close_fullscreen, the pair the upload wizard's
                  expand button already uses. The screen-corners icon reads as

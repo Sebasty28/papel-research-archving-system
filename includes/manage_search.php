@@ -1,6 +1,6 @@
 <?php
 /**
- * The search field on a management console's tab row.
+ * The shared search field for a management console's account tabs.
  *
  * One field for every tab on the page: a search is a question about the people
  * or the records, not about the tab you happen to be reading, and the tab counts
@@ -14,7 +14,7 @@
  * What a page has to hold to its end of this:
  *
  * - its rows are in a `.js-pane`, and its tabs are `.mgmt-tab[data-pane="..."]`,
- *   which is the shape all four consoles already have;
+ *   which is the shape the account consoles already have;
  * - a row that is not a record carries a `.mgmt-empty` (every console's empty
  *   state already does), since that is how a record is told from a message;
  * - a row may name what it answers to in `data-search`, lower-cased. Without one

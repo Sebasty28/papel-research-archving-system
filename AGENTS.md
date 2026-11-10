@@ -1261,6 +1261,41 @@ Socio-Economic Aspects, References, Appendices: the chapters of the BSIE studies
   be behind the code") still works: three lists, no editing, a notice saying why, and the old
   columns as before.
 
+### My Library: saved papers, and a student's manuscript requests
+
+`app/my_library.php`, second in the navbar for every account (`library_roles()`), not for a
+Library Pass guest: a pass is a session with no `users` row for a saved paper to belong to.
+
+- **Saving needs no migration.** `paper_favorites` (user, paper, date, unique per pair) was in
+  `database/schema.sql` from the first export and never used. `paper_favorites_ready()` is the
+  tolerant path for a copy that somehow lacks it: nothing is offered rather than a page failing.
+- **One Save button, one script, one endpoint**: `includes/save_paper.php` (`save_paper_button()`,
+  the stylesheet and the delegated click handler) and `app/save_paper.php`, which answers JSON for
+  every case, refusals included. It is on the paper's page (which is also what the repository's row
+  preview frames, so a save in that window is announced to the page underneath with
+  `papel:paper-saved`) and at the **start** of each repository row's title: in Rows the title is one
+  line cut with an ellipsis, so anything at its end is the first thing cut, and the row's grid is
+  not asked for another column. A paper can be saved exactly when it can be read
+  (`paper_is_readable()`); taking one out is always allowed.
+- **The shelf is CSS, not images and not WebGL.** A book is a button with three faces (cover,
+  page edge, back) in a 3D space of its own; the boards are a background sized to one grid row and
+  repeated, so every row has a board at any width (7 across on a desktop, 2 on a phone). The colour
+  is the **programme's** (its place in `programs_map()`, the first being `--maroon-surface`), the
+  design (four of them) and the height (three) are the **paper's own**, by `paper_id`, because a
+  shelf of one programme's papers was otherwise a row of identical books. Covers do not lift on a
+  dark page, like the navbar's maroon. A `style="--x"` attribute is not available (CSP), which is
+  why these ride on `data-cover`, `data-look` and `data-tall`.
+- **The open book is a `<dialog>`** (focus held, Escape, top layer, no z-index to pick). It needs
+  `margin: auto` stated: the site's reset removes the margin a modal dialog centres itself with,
+  and it opened in the top left corner. A book unsaved in that window stays, faded, until the
+  window closes, so pressing Save again there puts it back.
+- **Tabs are links** (`?tab=`), so a post that comes back lands on the tab it left. Students get
+  Requests (waiting, or unlocked with the time left) and History (denied, or a grant that ran out).
+  **Request again** is offered only on a paper's latest request once it is settled.
+- **`manuscript_request_file()`** in `config/core.php` files a request for both the paper's page and
+  History, so the one-in-progress rule and the librarians' notice are written once. It emails every
+  active librarian: test it with their address pointed at `@example.com`, or through the refusals.
+
 ### Programmes
 
 `programs_map()` and `program_code()` in `config/core.php`. Full name in the
