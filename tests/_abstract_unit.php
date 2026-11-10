@@ -80,5 +80,40 @@ t('without it, the same cut could not be sent at all', json_encode(['t' => subst
 $meta = build_metadata_result(['authors' => ['A', 'B']], '', 'Student Name');
 t('no title found is an empty title, so the page keeps the box as it was', $meta['title'] === '' && $meta['abstract'] === '', json_encode($meta));
 
+/* ---- Executive Summary: what a feasibility study calls its abstract ----
+   Six of the BSIE studies on file open with one and have no Abstract at all,
+   and the finder used to answer null for every one of them. */
+
+$exec = 'This study assesses the feasibility of producing a cat litter made from water hyacinth fibers in '
+      . 'Binan City. The marketing aspect establishes a demand among pet owners, the technical aspect sets out '
+      . 'the process and the plant, and the financial aspect returns the capital within two years. The study '
+      . 'concludes that the product is viable on all five aspects examined.';
+
+$r = extract_abstract_from_text("Approval Sheet ... EXECUTIVE SUMMARY $exec MARKETING ASPECT The industry is growing.");
+t('executive summary is read as the abstract (HyaClean)', $r === $exec, (string)$r);
+
+$r = extract_abstract_from_text("Title Page ... Executive Summary $exec Chapter I The industry is growing.");
+t('executive summary in title case too (DuoTumbler)', $r === $exec, (string)$r);
+
+/* The trap this had to avoid: in Mochisols the first "Executive Summary" in the
+   text is the contents line, dot leaders and a page number, and the real one is
+   pages later. Reading the first hit would hand back the table of contents. */
+$toc = 'TABLE OF CONTENTS TITLE PAGE.....i APPROVAL SHEET.....ii '
+     . 'EXECUTIVE SUMMARY...................................................8 '
+     . 'MARKETING ASPECT.....14 INDUSTRY ANALYSIS.....15 ';
+$r = extract_abstract_from_text($toc . "EXECUTIVE SUMMARY $exec MARKETING ASPECT The industry is growing.");
+t('the contents line is not the executive summary (Mochisols)', $r === $exec, (string)$r);
+
+/* A paper carrying both means its Abstract. */
+$abs = 'This thesis examines the relationship between two variables among residents of Binan City, Laguna. '
+     . 'A descriptive correlational design was used and the findings show a significant positive relationship '
+     . 'between the two across all groups studied in this research.';
+$r = extract_abstract_from_text("EXECUTIVE SUMMARY $exec ABSTRACT $abs Keywords: one, two");
+t('a paper with both is read from its Abstract', $r === $abs, (string)$r);
+
+$r = extract_abstract_from_text('CHAPTER I Industry analysis The breadfruit chips industry can be classified under '
+   . 'the broader category of the snack food industry and has grown steadily over the last five years in Laguna.');
+t('a study with neither heading is still null, not a guess (Rimas Bites)', $r === null, (string)$r);
+
 echo "SUMMARY passed=$passed failed=$failed\n";
 exit($failed ? 1 : 0);

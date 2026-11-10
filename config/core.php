@@ -1597,6 +1597,47 @@ function saved_papers(int $userId): array {
 }
 
 /**
+ * Who may file a paper under a programme of their choosing.
+ *
+ * A student picks their own. A Librarian picks any, because they file other
+ * people's work: an old BSIT thesis being digitised belongs under BSIT, not
+ * under the faculty. Every other member of staff uploads their own work, which
+ * belongs to the faculty rather than to a degree, so the question is not asked
+ * of them and the answer is stated instead.
+ */
+function user_picks_program(?array $u): bool {
+    return in_array($u['user_role'] ?? '', ['student', 'librarian'], true);
+}
+
+/**
+ * The Academic Program a paper is filed under, from what the form posted.
+ *
+ * Only a listed answer counts. The value decides the filing folder
+ * (get_program_folder() in app/helpers/UploadHelper.php, which falls back to
+ * "Other") and is printed in the repository, on the desks and in every report,
+ * so a typed one would put a paper somewhere nobody looks under the name of a
+ * programme that does not exist. The form offers a list and nothing else, but
+ * the form is not what decides.
+ *
+ * Anyone who does not pick gets the faculty, whatever was posted.
+ *
+ * @return string A listed programme, or '' when nothing usable was given, which
+ *                the caller answers in words.
+ */
+function program_category_for(?array $u, string $posted, string $fallback = ''): string {
+    if (!user_picks_program($u)) { return 'Faculty Member'; }
+
+    $allowed = array_keys(programs_map());
+    $allowed[] = 'Faculty Member';   // not a programme, and not in the map
+    $allowed[] = 'Other';
+
+    foreach ([trim($posted), trim($fallback)] as $try) {
+        if ($try !== '' && in_array($try, $allowed, true)) { return $try; }
+    }
+    return '';
+}
+
+/**
  * The programmes PUP Biñan offers, and the short code each is known by.
  *
  * The full name is what the database stores and what a student sees on their
@@ -1617,6 +1658,10 @@ function programs_map(): array {
         'Diploma in Information Technology'               => 'DIT',
         'Diploma in Computer Engineering Technology'      => 'DCPET',
         'Bachelor of Science in Business Administration major in Human Resource Management' => 'BSBA-HRM',
+        /* Retired: no longer taught at Biñan, but theses were filed under it
+           and they are in the repository, so it has to be a programme like any
+           other or those papers are findable only under "Other". */
+        'Bachelor of Science in Accountancy' => 'BSA',
     ];
 }
 

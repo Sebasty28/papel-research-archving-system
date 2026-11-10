@@ -763,6 +763,11 @@ function extract_metadata_with_groq($pdfText, $modelChoice = '1') {
  * The abstract, copied from the paper's own text, or null when the paper has none
  * that can be read.
  *
+ * A feasibility study calls it an Executive Summary and has no Abstract at all:
+ * six of the BSIE studies on file open that way, and the finder used to hand back
+ * null for every one of them. Both headings are read, Abstract first, because a
+ * paper carrying both means the Abstract.
+ *
  * Never generated: what the repository shows as a paper's abstract has to be the
  * author's words. So when there is no abstract, the answer is null and only the
  * title, authors, year and keywords are filled in (the student writes the Abstract,
@@ -790,10 +795,25 @@ function extract_abstract_from_text($pdfText) {
     $text = preg_replace('/[\x{200B}\x{200C}\x{200D}\x{FEFF}]/u', '', $pdfText) ?? $pdfText;
     $text = preg_replace('/\s+/u', ' ', $text) ?? $text;
 
-    if (!preg_match_all('/\b(?:ABSTRACT|Abstract)\b\s*[:.\-\x{2013}\x{2014}]?\s*/u', $text, $m, PREG_OFFSET_CAPTURE)) {
+    /* Abstract first and Executive Summary after it, each heading in the order it
+       appears, so a study that has both (a journal version bound in front of the
+       full one) is read from its Abstract. Every guard below applies to both: the
+       table-of-contents line, the Title/Researcher/Adviser block and the stop at
+       the next heading are the same question whichever word the paper uses. */
+    $headings = [
+        '/\b(?:ABSTRACT|Abstract)\b\s*[:.\-\x{2013}\x{2014}]?\s*/u',
+        '/\b(?:EXECUTIVE\s+SUMMARY|Executive\s+Summary)\b\s*[:.\-\x{2013}\x{2014}]?\s*/u',
+    ];
+    $found = [];
+    foreach ($headings as $pattern) {
+        if (preg_match_all($pattern, $text, $m, PREG_OFFSET_CAPTURE)) {
+            foreach ($m[0] as $hit) { $found[] = $hit; }
+        }
+    }
+    if (!$found) {
         return null;
     }
-    foreach ($m[0] as [$heading, $at]) {
+    foreach ($found as [$heading, $at]) {
         /* By characters, not bytes: a byte count can cut a letter like the n with a
            tilde, or the peso sign, in two, and every /u pattern after it then fails. */
         $rest = mb_substr(substr($text, $at + strlen($heading)), 0, 8000);

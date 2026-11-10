@@ -27,6 +27,9 @@ $u = current_user();
    submitted. $canDraft follows from that: a draft only makes sense while there
    is a review to prepare for, and only students can see one afterwards. */
 $isStudent = (($u['user_role'] ?? '') === 'student');
+/* A Librarian chooses a programme as a student does; the rest of the staff do
+   not (config/core.php, user_picks_program()). */
+$picksProgram = user_picks_program($u);
 $canDraft  = $isStudent;
 
 /* The student's own programme.
@@ -343,7 +346,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
     $statusArr   = $_POST['paper_status'] ?? [];
     $pubStatus   = is_array($statusArr) ? implode(', ', $statusArr) : '';
     $pubLocation = trim($_POST['publication_location'] ?? '');
-    $program     = trim($_POST['program_category'] ?? '') ?: $myProgram;
+    /* Only a listed answer, and only from somebody who may choose one. */
+    $program     = program_category_for($u, $_POST['program_category'] ?? '', $myProgram);
 
     /* A draft is what was typed, and no file. A page cannot be handed a chosen
        file back (the restore prompt says so plainly), so the PDF this used to
@@ -661,15 +665,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
        not carry one, the student's own program stands in, but filing it as
        "Other" because nobody answered would put the paper somewhere no one
        looks, so that is refused instead. */
-    $programCategory = trim($_POST['program_category'] ?? '');
-    if ($programCategory === '') {
-        $userStmt = $conn->prepare("SELECT program FROM users WHERE user_id=?");
-        $userStmt->bind_param('i', $u['user_id']);
-        $userStmt->execute();
-        $userResult = $userStmt->get_result()->fetch_assoc();
-        $programCategory = trim($userResult['program'] ?? '');
-        $userStmt->close();
-    }
+    $userStmt = $conn->prepare("SELECT program FROM users WHERE user_id=?");
+    $userStmt->bind_param('i', $u['user_id']);
+    $userStmt->execute();
+    $userResult = $userStmt->get_result()->fetch_assoc();
+    $userStmt->close();
+
+    /* The form offers a list and nothing else, but the form is not what
+       decides: the value names the filing folder and is printed in every
+       report, so it is checked against that list here. Whoever may not choose
+       one gets the faculty whatever was posted (config/core.php,
+       program_category_for()). */
+    $programCategory = program_category_for($u, $_POST['program_category'] ?? '', $userResult['program'] ?? '');
     if ($programCategory === '') {
         throw new UserFacingException('Please choose your Academic Program before submitting.');
     }
@@ -5540,7 +5547,7 @@ body.pdf-docked > .site-footer {
                 <div class="row g-4">
                   <div class="col-md-6">
                     <label class="form-label">Academic Program <span class="text-danger">*</span></label>
-                    <?php if (!$isStudent): ?>
+                    <?php if (!$picksProgram): ?>
                       <?php /* Not a question for staff: they belong to the faculty rather
                                than to a degree, so the field states that instead of
                                offering ten programmes none of which is theirs. Posted as
@@ -5568,6 +5575,12 @@ body.pdf-docked > .site-footer {
                       <option value="Faculty Member"<?= $myProgram === 'Faculty Member' ? ' selected' : '' ?>>Faculty Member</option>
                       <option value="Other"<?= $myProgram === 'Other' ? ' selected' : '' ?>>Others</option>
                     </select>
+                    <?php if (!$isStudent): ?>
+                      <?php /* A Librarian is filing somebody else's work, so the
+                               programme is the paper's and not theirs. Their own
+                               answer, Faculty Member, is what the list opens on. */ ?>
+                      <small class="text-muted">File this under the programme the paper belongs to, or leave it under the faculty.</small>
+                    <?php endif; ?>
                     <?php endif; ?>
                   </div>
 

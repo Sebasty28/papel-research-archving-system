@@ -152,6 +152,28 @@ html[data-view="shelf"] .paper-list {
         linear-gradient(to bottom, color-mix(in srgb, var(--ink) 10%, transparent), transparent 22px);
     background-size: 100% var(--row);
     background-repeat: repeat-y;
+
+    /* Sized by its books. The two consoles each give the results well a
+       height of its own (the repository scrolls it, the dashboard stretches
+       it to the sidebar), and the board is a background repeated down
+       whatever that height is: three books on a column built for ten stood
+       on one shelf with four empty ones below them. A shelf is as tall as
+       what is on it. */
+    height: auto; max-height: none; min-height: 0; flex: none;
+    overflow: visible;
+    align-content: start;
+}
+/* The rail sets the column's height in Cards; in Shelf the shelf does, and
+   stretching it would put the empty boards back. */
+html[data-view="shelf"] .layout:has(.dash-shell) > .main-col { align-self: start; }
+/* Said again against the two rules that set that height by name, which are
+   more particular than the block above and so outrank it: the dashboard gives
+   the well height:0 and min-height:10rem and lets flex grow it to the rail
+   (includes/console_shell.php, above 901px). A book then stood below the last
+   board, the shelf being shorter than the books on it. */
+html[data-view="shelf"] .paper-list.is-scrollable,
+html[data-view="shelf"] .dash-shell .paper-list.is-scrollable {
+    height: auto; max-height: none; min-height: 0; flex: none; overflow: visible;
 }
 /* A book is sized by the shelf, not by how roomy the reader likes a card. */
 html[data-view="shelf"][data-density="compact"] .paper-list,
@@ -163,7 +185,12 @@ html[data-view="shelf"][data-density="comfortable"] .paper-list { padding: 0 1.2
    card rule it carries in the other two views is taken off here. */
 html[data-view="shelf"] .paper-list .paper-item,
 html[data-view="shelf"] .paper-list .paper-card {
-    display: flex; align-items: flex-end; justify-content: center;
+    /* A column, so the bookmark rests on the book's own top edge however
+       tall that book is. Anchored to the slot instead, it floated a fixed
+       distance down from the top and so hung clear above the two shorter
+       heights. */
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: flex-end;
     position: relative;
     margin: 0; padding: 0 0 var(--board); border: 0; border-radius: 0;
     background: none; box-shadow: none; cursor: default;
@@ -184,8 +211,10 @@ html[data-view="shelf"] .paper-list .shelf-book { display: block; }
    shelf, and it sits in the slot's top right corner clear of the book. */
 html[data-view="shelf"] .paper-list .paper-item > .save-paper {
     display: inline-flex;
-    position: absolute; top: 2px; right: 50%;
-    margin-right: calc(var(--bw) / -2 - 2px);
+    /* Above the book in the column (it is printed after it), at the right of
+       the cover, with the book's own turn making room for it. */
+    order: -1;
+    align-self: center; margin: 0 0 -10px var(--bw);
     z-index: 4;
 }
 
@@ -336,6 +365,15 @@ html[data-view="shelf"] .paper-list [data-band="process"]  { --cover: hsl(38 52%
 html[data-view="shelf"] .paper-list [data-band="approved"] { --cover: hsl(152 40% 24%); }
 html[data-view="shelf"] .paper-list [data-band="declined"] { --cover: var(--maroon-surface); }
 html[data-view="shelf"] .paper-list [data-band="archived"] { --cover: hsl(210 12% 32%); }
+
+/* Nothing to shelve. The notice is a child of the results well, so in Shelf
+   it would be laid out as one book-sized cell in the first column, and the
+   boards would be drawn behind an empty shelf saying there is nothing on it.
+   It takes the whole row, and the wall and its boards come off. */
+html[data-view="shelf"] .paper-list:has(> .empty-state) {
+    display: block; background: none; padding: 0;
+}
+html[data-view="shelf"] .paper-list > .empty-state { grid-column: 1 / -1; }
 
 /* ===== Narrow screens =====
    Two to a shelf on a phone, where a third would leave a book 70px wide with

@@ -22,21 +22,17 @@ function safe_name(string $name): string {
 }
 
 function get_program_folder(string $program): string {
-    $programMap = [
-        'Bachelor of Science in Information Technology' => 'BSIT',
-        'Bachelor of Science in Industrial Engineering' => 'BSIE',
-        'Bachelor of Science in Computer Engineering' => 'BSCPE',
-        'Bachelor of Secondary Education major in English' => 'BSED-ENG',
-        'Bachelor of Secondary Education major in Social Studies' => 'BSED-SS',
-        'Bachelor of Elementary Education' => 'BEED',
-        'Bachelor of Science in Psychology' => 'BSPSYCH',
-        'Diploma in Information Technology' => 'DIT',
-        'Diploma in Computer Engineering Technology' => 'DCPET',
-        'Bachelor of Science in Business Administration major in Human Resource Management' => 'BSBA-HRM',
-        'Faculty Member' => 'FACULTY'
-    ];
+    /* programs_map() in config/core.php is the list, and this used to keep a
+       second copy of it. The two drifted the moment a programme was added:
+       Accountancy became a real programme everywhere on the site while its
+       papers went on being filed in uploads/research/Other/. Faculty Member is
+       not a programme and so is not in that map, which is why it is named here.
+       Anything else still falls back to Other rather than inventing a folder. */
+    if ($program === 'Faculty Member') { return 'FACULTY'; }
 
-    return safe_name($programMap[$program] ?? 'Other');
+    $code = function_exists('programs_map') ? (programs_map()[$program] ?? null) : null;
+
+    return safe_name($code ?? 'Other');
 }
 
 function build_research_upload_directory(string $programFolder, string $paperType, string $year, string $month, string $submissionFolder): string {

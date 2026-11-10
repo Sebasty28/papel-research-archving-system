@@ -1,5 +1,5 @@
 {
- "built": "2026-11-10 13:16",
+ "built": "2026-11-11 00:22",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -68,7 +68,7 @@
    "lines": 64
   },
   "app/helpers/UploadHelper.php": {
-   "lines": 72
+   "lines": 68
   },
   "app/librarian/librarian_manage_guests.php": {
    "lines": 465
@@ -137,7 +137,7 @@
    "lines": 435
   },
   "app/student/student_upload_ai.php": {
-   "lines": 14804
+   "lines": 14817
   },
   "app/student/upload_diagnostics.php": {
    "lines": 245
@@ -167,7 +167,7 @@
    "lines": 265
   },
   "config/core.php": {
-   "lines": 4543
+   "lines": 4588
   },
   "config/error_handler.php": {
    "lines": 228
@@ -176,7 +176,7 @@
    "lines": 750
   },
   "config/groq_config.php": {
-   "lines": 987
+   "lines": 1007
   },
   "config/mail_config.php": {
    "lines": 1
@@ -299,7 +299,7 @@
    "lines": 894
   },
   "includes/shelf_view.php": {
-   "lines": 353
+   "lines": 391
   },
   "includes/site_footer.php": {
    "lines": 585
@@ -497,7 +497,7 @@
    "lines": 73
   },
   "tests/_abstract_unit.php": {
-   "lines": 85
+   "lines": 120
   },
   "tests/_checklist_unit.php": {
    "lines": 321

@@ -1296,10 +1296,61 @@ Library Pass guest: a pass is a session with no `users` row for a saved paper to
   History, so the one-in-progress rule and the librarians' notice are written once. It emails every
   active librarian: test it with their address pointed at `@example.com`, or through the refusals.
 
+### Shelf, the third view
+
+Cards, Rows and now **Shelf** (`includes/shelf_view.php`), offered by the public repository and
+the student dashboard. The books are My Library's, built the same way and from the same ten
+covers in the same order, so one paper is one colour wherever it is shelved.
+
+- **Two copies in the markup, and the attribute says which is shown.** A console prints
+  `shelf_book_html()` once per result, inside the result; in Cards and Rows the book is
+  `display: none`, in Shelf the result's own content is. A repository row and a dashboard card
+  hold quite different things, and a cover holds the same three lines either way, so mapping one
+  onto the other in CSS alone was not worth it. The switch stays instant and an AJAX swap needs
+  to know nothing, which is the bargain Rows already struck.
+- **The cover means something different on each.** The repository colours by programme; the
+  dashboard colours by where the submission has got to and writes the status across the top
+  (`data-band`: draft, process, approved, declined, archived). The approval track cannot go on a
+  book, so it stays one click away, as it is from a card.
+- **The switch is page-aware, in two places that must agree.** `$VIEW_SHELF = true` before
+  `browse_console.php` (read by the pre-paint script, so a stored `shelf` is never applied to a
+  page that cannot draw one) and `data-view-console="shelf"` on `#mainCol` (read by
+  `shelfOffered()` in `browse_console_js.php`, which is what puts Shelf in Quick Settings).
+  The setting is one per device shared by every console, so the review desks, which do not offer
+  it, fall back to Cards with `shelf` still stored. A desk is a queue worked through by status,
+  not a shelf browsed.
+- **The shelf is as tall as what is on it.** Both consoles give the results well a height of its
+  own (the repository scrolls it; the dashboard gives it `height: 0; min-height: 10rem; flex: 1`
+  above 901px so the rail sets the column), and the board is a background repeated down that
+  height: three books on a column built for ten stood on one shelf with four empty ones below.
+  Those two rules name the well by class and outrank a plain `html[data-view="shelf"] .paper-list`,
+  so the override has to name it too.
+- **The bookmark goes in the slot, above the book**, in a flex column with `order: -1`, so it
+  rests on the book's own top edge whatever height that book is. The gap still varies by a few
+  pixels between the three heights, because the slot's perspective origin is its own centre.
+- A result with nothing to shelve (the empty state) is a child of the well, so Shelf would lay it
+  out as one book-sized cell with boards drawn behind it; `:has(> .empty-state)` turns the grid
+  and the boards off.
+
 ### Programmes
 
 `programs_map()` and `program_code()` in `config/core.php`. Full name in the
 database, short code (`BSIT`) in tables and chips.
+
+**Who may choose one on the upload form** is `user_picks_program()`: a student
+(their own), and a **Librarian**, because a librarian files other people's work and
+an old BSIT thesis being digitised belongs under BSIT rather than under the faculty.
+Every other member of staff uploads their own work and is always `Faculty Member`;
+the field states that instead of offering ten degrees none of which is theirs.
+
+**The server decides, not the form.** `program_category_for($u, $posted, $fallback)`
+takes only a listed answer (the ten, plus `Faculty Member` and `Other`), falls back
+to the account's own programme, and returns `''` when there is nothing usable, which
+the submit handler answers in words. Anyone who may not choose gets `Faculty Member`
+whatever was posted. Before this the handler took `$_POST['program_category']` as it
+stood, so a crafted post filed a paper under a programme that does not exist:
+`get_program_folder()` put it in the `Other` folder and the invented name was printed
+in the repository and in every report.
 
 ---
 
