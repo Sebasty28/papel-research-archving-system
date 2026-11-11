@@ -45,7 +45,16 @@ jobs:
           username: ${{ secrets.PROD_FTP_USER }}
           password: ${{ secrets.PROD_FTP_PASS }}
           local-dir: ./
-          server-dir: /htdocs/
+          # pupbcpapel.com is an *addon* domain on this account, not the
+          # primary one, so it is served from its own directory and not from
+          # /htdocs/, which belongs to the free subdomain the account was
+          # created with. InfinityFree does not allow a document root to be
+          # changed, so the deploy moves instead. Get this wrong and the run
+          # still finishes green: the files land in the other site's folder
+          # and pupbcpapel.com goes on serving nothing, which reads as a
+          # deploy that did not happen. The Health Check panel in the client
+          # area names the directory this must match.
+          server-dir: /pupbcpapel.com/htdocs/
           exclude: |
             **/.git*
             **/.git*/**

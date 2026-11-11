@@ -1,5 +1,5 @@
 {
- "built": "2026-11-11 18:57",
+ "built": "2026-11-11 20:06",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -167,7 +167,7 @@
    "lines": 265
   },
   "config/core.php": {
-   "lines": 4756
+   "lines": 4776
   },
   "config/error_handler.php": {
    "lines": 228
@@ -251,7 +251,7 @@
    "lines": 261
   },
   "includes/manage_validate.php": {
-   "lines": 260
+   "lines": 345
   },
   "includes/notif_actions.php": {
    "lines": 224
@@ -501,6 +501,9 @@
   },
   "tests/_abstract_unit.php": {
    "lines": 120
+  },
+  "tests/_account_rules_unit.php": {
+   "lines": 131
   },
   "tests/_checklist_unit.php": {
    "lines": 321
