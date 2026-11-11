@@ -306,8 +306,13 @@ function person_name_problem(string $name): ?string {
  */
 function student_number_problem(string $id): ?string {
     $id = trim($id);
+    /* The order matters, and it is the browser's: includes/manage_validate.php
+       reads the same tests while the box is being typed into, and stops at the
+       same one, so a value that is wrong in two ways is told the same thing
+       whichever side answers first. What a keystroke cannot put right comes
+       before what is merely unfinished. */
     if ($id === '')                          return 'Enter their student number.';
-    if (strlen($id) < 6 || strlen($id) > 20) {
+    if (strlen($id) > 20) {
         return 'A student number is between 6 and 20 characters, like 2026-00001-BN-0.';
     }
     if (!preg_match('/^[0-9A-Za-z-]+$/', $id)) {
@@ -316,11 +321,17 @@ function student_number_problem(string $id): ?string {
     if (!preg_match('/^[0-9]/', $id)) {
         return 'A student number starts with the intake year, like 2026-00001-BN-0.';
     }
-    if (strpos($id, '--') !== false || substr($id, -1) === '-') {
+    if (strpos($id, '--') !== false) {
         return 'Check the dashes in that student number: 2026-00001-BN-0.';
     }
     if (preg_match('/[A-Za-z]{4,}/', $id)) {
         return 'Only the campus code may be letters, as BN is in 2026-00001-BN-0.';
+    }
+    if (strlen($id) < 6) {
+        return 'A student number is between 6 and 20 characters, like 2026-00001-BN-0.';
+    }
+    if (substr($id, -1) === '-') {
+        return 'Check the dashes in that student number: 2026-00001-BN-0.';
     }
     if (preg_match_all('/[0-9]/', $id) < 6) {
         return 'A student number has at least six digits in it, like 2026-00001-BN-0.';
@@ -338,21 +349,28 @@ function student_number_problem(string $id): ?string {
  */
 function staff_id_problem(string $id, string $label = 'staff ID'): ?string {
     $id = trim($id);
-    if ($id === '')                          return 'Enter their ' . $label . '.';
-    if (strlen($id) < 3 || strlen($id) > 20) {
+    /* Same order as the browser reads them in, for the reason given above. */
+    if ($id === '')     return 'Enter their ' . $label . '.';
+    if (strlen($id) > 20) {
         return 'A ' . $label . ' is between 3 and 20 characters, like FAC-2026-001.';
     }
     if (!preg_match('/^[0-9A-Za-z-]+$/', $id)) {
         return 'A ' . $label . ' is letters, numbers and dashes, with no spaces or symbols.';
     }
-    if (strpos($id, '--') !== false || $id[0] === '-' || substr($id, -1) === '-') {
+    if (strpos($id, '--') !== false || $id[0] === '-') {
+        return 'Check the dashes in that ' . $label . ': FAC-2026-001.';
+    }
+    if (other_name_looks_random($id)) {
+        return 'That does not look like a ' . $label . '. It is the one the campus issued, like FAC-2026-001.';
+    }
+    if (strlen($id) < 3) {
+        return 'A ' . $label . ' is between 3 and 20 characters, like FAC-2026-001.';
+    }
+    if (substr($id, -1) === '-') {
         return 'Check the dashes in that ' . $label . ': FAC-2026-001.';
     }
     if (!preg_match('/[0-9]/', $id)) {
         return 'A ' . $label . ' has a number in it, like FAC-2026-001.';
-    }
-    if (other_name_looks_random($id)) {
-        return 'That does not look like a ' . $label . '. It is the one the campus issued, like FAC-2026-001.';
     }
     return null;
 }
@@ -417,8 +435,10 @@ function section_problem(string $section): ?string {
     if (strcasecmp($section, 'ladderized') === 0) return null;
     if (!preg_match('/^[1-4]\s*-?\s*[A-Za-z0-9]{0,3}$/', $section)
         || student_account_years($section) === null) {
-        return 'A section starts with the year level, like 4-1 or 4A, because that is what the '
-             . "account's length is counted from. For a ladderized intake, type Ladderized.";
+        /* Why the year level matters is in this function's own note; the box is
+           a narrow column, so what it says there is the answer, not the reason. */
+        return 'A section starts with the year level, like 4-1 or 4A. '
+             . 'For a ladderized intake, type Ladderized.';
     }
     return null;
 }

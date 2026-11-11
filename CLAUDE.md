@@ -965,6 +965,80 @@ and approving it will email that student.
 
 ## Business rules worth knowing
 
+### What a management console may be told
+
+The three consoles (an adviser's students, the Coordinator's advisers and
+librarians, the Director's admins) ask for the same handful of answers through
+one form that both creates and edits an account, and between them they took
+almost anything: a full name of digits, a student number of keyboard mashing,
+`fsjdfhsjfhjsd@gmail`, a section nothing can read.
+
+One rule per answer, in `config/core.php`, each returning the sentence to show
+or null: `person_name_problem()`, `student_number_problem()`,
+`staff_id_problem()`, `account_email_problem()`, `academic_year_problem()`,
+`section_problem()`. A handler reads as one `foreach` over the five or six that
+apply, so the three consoles and both services (`FacultyManagementService`,
+`AdminManagementService`) say the same thing in the same words.
+
+- **The gibberish test is already written.** `other_name_looks_random()`, the
+  one the upload form uses on a paper type somebody has typed: one letter four
+  times over, a long run of three or four letters shuffled, six consonants
+  together, a run along the keyboard, a long word with no vowel.
+  `adasdadasd` is the second of those.
+- **A student number is numbers and dashes**, the campus code being the only
+  letters allowed (`2026-00001-BN-0`), at least six digits, and no symbols. The
+  old rule demanded *a letter and a number*, which the registrar's own format
+  only happens to satisfy and a plain roll number does not.
+- **A bare domain is a typo, not an address.** `filter_var` passes
+  `name@gmail`, because a host with no dot is a valid address on a network that
+  has one. Every account made here is emailed its password, so the domain has
+  to be whole.
+- **A section that cannot be read means an account that never expires.**
+  `student_expiry_date()` counts from the year level in front of the section, so
+  `section_problem()` ends by asking `student_account_years()` whether it can
+  read what was typed. While fixing that: `student_account_years()` named "4A"
+  in its own comment and never matched it, `\b` finding no boundary between two
+  word characters. It is `(?![0-9])` now, so a lettered section works and "41"
+  is still refused.
+- **The browser is told the same thing**, in `includes/manage_validate.php`,
+  under the field rather than as a banner after a round trip that empties half
+  the form. It is required **before** `manage_save_confirm.php` on all three
+  pages, because both listen for the same form's submit and listeners fire in
+  the order they were added: a refused form has to stop the event
+  (`stopImmediatePropagation`) before the "Save these changes?" dialog opens over
+  it. The note goes under the field's own hint, keyed by the field's name, since
+  the students console puts the academic year and the section in one
+  `.mgmt-field` and a single note there belonged to whichever complained last.
+- **It answers while the box is being typed into.** Every rule takes a `live`
+  flag, and in that state it reports only what another keystroke cannot put
+  right: a digit in a name is wrong the moment it is typed, a name of one
+  letter is simply not finished. The full rule is read when the field is left
+  and again on submit, which is where "unfinished" becomes "wrong". Without
+  that split the form marked every box red on the way in, which is the mistake
+  the upload page already records (`papelDoc.flag()` clearing on the first
+  keystroke).
+- **The complaint is drawn as a bad flash banner is** (`--bad-bg`,
+  `--bad-border`, `--bad-text` plus an `error` icon), and the field itself is
+  tinted and bordered from the same tokens. Two notes on that: the tint is
+  mixed from `--bad-text`, because `--bad-bg` is translucent in Old Night and a
+  translucent mix shows the panel rather than marking the box; and the border
+  needs `!important` to outrank `focus_ring.php`, which paints every text
+  field's border from `--border-control` through three `:not()`s.
+- **A `pattern` attribute decides before any script runs.** The two name boxes
+  carried `pattern="[A-Za-z\s.]+"`, which refused Dela Cruz-Santos and O'Brien
+  while accepting "asdasdasd", and the students console set a custom validity on
+  the Student ID demanding a letter: a custom validity stops the submit event
+  altogether, so the shared rules never ran and the browser showed a bubble of
+  its own. Both are gone; the names are now letters, spaces, full stops, hyphens
+  and apostrophes.
+- The programme is checked against `programs_map()` on both paths, for the
+  reason `program_category_for()` exists on the upload form: it arrives in a
+  form field, and it decides the filing folder and every report.
+
+`tests/_account_rules_unit.php` is the list of what the boxes must take and must
+refuse: every acceptance is a value really on file, every refusal something
+somebody typed in.
+
 ### Student account expiry
 
 An account's life comes from the section: `1-x` → 5 years, `2-x` → 4, `3-x` → 3,
