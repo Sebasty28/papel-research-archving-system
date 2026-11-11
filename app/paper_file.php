@@ -149,6 +149,33 @@ if ($disk !== null) {
     exit;
 }
 
-paper_file_refuse($driveId !== '' ? 502 : 404, $driveId !== ''
-    ? 'The file could not be fetched from Google Drive just now. Please try again.'
-    : 'This file could not be found.');
+if ($driveId === '') {
+    paper_file_refuse(404, 'This file could not be found.');
+}
+
+/* "Please try again" was the answer to every Drive failure, including the ones
+   trying again cannot mend. A lapsed grant needs the Coordinator to reconnect
+   Drive, and a reader told to try again just keeps pressing. The cause rides
+   along off production, for the same reason safe_error_message() carries one:
+   on a copy of the site the server log is somewhere nobody testing can look. */
+$problem = gdrive_note_problem();
+switch ($problem['kind']) {
+    case 'missing':
+        $code = 404;
+        $why  = 'This file is no longer on Google Drive. Please tell the Research '
+              . 'Coordinator, who can ask for it to be uploaded again.';
+        break;
+    case 'disconnected':
+        $code = 502;
+        $why  = "This paper's file is on Google Drive, which PAPEL cannot reach at "
+              . 'the moment. Please tell the Research Coordinator, who can reconnect it.';
+        break;
+    default:
+        $code = 502;
+        $why  = 'The file could not be fetched from Google Drive just now. Please try again.';
+}
+
+if (!empty($problem['detail']) && defined('APP_ENV') && APP_ENV !== 'production') {
+    $why .= "\n\nCause: " . $problem['detail'];
+}
+paper_file_refuse($code, $why);

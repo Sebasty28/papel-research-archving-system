@@ -198,6 +198,8 @@ $PDF_DOCK_SIDES     = array_values(array_intersect(['left', 'right'], (array)($P
     background: var(--white); color: var(--ink);
     box-shadow: 0 4px 14px rgba(51, 0, 0, .12);
     font-size: .8125rem; text-align: center;
+    /* The cause of a Drive failure arrives on its own line off production. */
+    white-space: pre-line;
 }
 .pdf-dock-status:empty { display: none; }
 
@@ -683,7 +685,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }).catch(function (err) {
             if ((err && err.name === 'AbortError') || mine !== fetching) return;
             setBusy(false);
-            status.textContent = err && err.message && err.message.length < 200
+            status.textContent = err && err.message && err.message.length < 600
                 ? err.message : 'This file could not be opened. Please try again.';
         });
     }

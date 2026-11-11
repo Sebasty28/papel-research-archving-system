@@ -304,7 +304,7 @@ body {
             .then(function (bytes) { return view.load(bytes); })
             .catch(function (err) {
                 setBusy(false);
-                statusEl.textContent = err && err.message && err.message.length < 200
+                statusEl.textContent = err && err.message && err.message.length < 600
                     ? err.message : 'This file could not be opened. Please try again.';
             });
         return;

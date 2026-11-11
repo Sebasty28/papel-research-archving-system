@@ -323,18 +323,54 @@ function is_gdrive_connected($userId = null): bool
     static $answer = null;
     if ($answer !== null) return $answer;
 
-    if (!get_system_gdrive_token()) return $answer = false;
+    if (!get_system_gdrive_token()) {
+        /* Every "no" here used to be silent, and a caller that turns one into a
+           sentence for a reader ("could not be fetched from Google Drive") then
+           left nothing at all in the log to say which "no" it was. */
+        gdrive_note_problem('disconnected', 'no system token stored');
+        return $answer = false;
+    }
 
     try {
         $client = get_gdrive_client();          // refreshes if the token allows it
         $t = $client->getAccessToken();
         // Still expired after that attempt means the refresh was refused.
         $answer = $t && !$client->isAccessTokenExpired();
+        if (!$answer) {
+            /* get_gdrive_client() wrote why to system_settings and returned
+               quietly; say it out loud too, or the only record of a refusal is
+               a row that the next successful refresh overwrites. */
+            $note = gdrive_last_refresh();
+            gdrive_note_problem('disconnected', 'token refresh refused: '
+                . trim(($note['result'] ?? 'unknown') . ' ' . ($note['detail'] ?? '')));
+        }
     } catch (Throwable $e) {
-        error_log('GDrive connection check failed: ' . $e->getMessage());
+        /* A refresh that throws rather than answering is the network, not the
+           grant: worth trying again rather than reconnecting. */
+        gdrive_note_problem('transient', 'token refresh failed: ' . $e->getMessage());
         $answer = false;
     }
     return $answer;
+}
+
+/**
+ * Why the last Drive read gave up, for the caller that has to tell a reader.
+ *
+ * `kind` is 'transient' (the network or Drive itself; trying again is the right
+ * advice) or 'disconnected' (the grant is dead; only reconnecting helps), and
+ * `detail` is the cause in words. Logged as it is set, because the reader-facing
+ * sentence is deliberately vague and the log is the only place the cause lands.
+ * Held per request, in the same spirit as safe_error_message(): the detail is
+ * for a server log and for a copy of the site that is not production.
+ */
+function gdrive_note_problem(?string $kind = null, string $detail = ''): array
+{
+    static $problem = ['kind' => '', 'detail' => ''];
+    if ($kind !== null) {
+        $problem = ['kind' => $kind, 'detail' => $detail];
+        error_log('GDrive unavailable (' . $kind . '): ' . $detail);
+    }
+    return $problem;
 }
 
 function get_gdrive_auth_url(): string
@@ -568,34 +604,129 @@ function download_from_gdrive(string $fileId): ?string
 function stream_from_gdrive(string $fileId): array
 {
     $fileId = trim($fileId);
-    if ($fileId === '' || !is_gdrive_connected()) return [null, null];
+    if ($fileId === '') {
+        gdrive_note_problem('disconnected', 'no Drive file id on this record');
+        return [null, null];
+    }
+    if (!is_gdrive_connected()) return [null, null];   // which has said why
 
-    try {
-        $client = get_gdrive_client();
-        if (!$client->getAccessToken()) return [null, null];
+    /* Two attempts, because the ways this fails are mostly momentary and the
+       reader pays for every one of them with a dead viewer. The expensive
+       moment is the first read after the access token has lapsed: nothing
+       refreshes it in the background, so whoever opens a paper after a quiet
+       night is the request that must go to Google for a new one, and a single
+       blip there used to be the whole answer. A 401 is retried with the token
+       forced open first, since the one we hold is evidently not the one Drive
+       wants. A 403 or 404 is Drive's verdict on this file and is not retried:
+       asking twice cannot change it. */
+    $attempts = 2;
+    for ($try = 1; $try <= $attempts; $try++) {
+        $last = $try === $attempts;
+        try {
+            $client = get_gdrive_client();
+            if (!$client->getAccessToken()) {
+                gdrive_note_problem('disconnected', 'client holds no access token');
+                return [null, null];
+            }
 
-        $response = $client->authorize()->request('GET',
-            'https://www.googleapis.com/drive/v3/files/' . rawurlencode($fileId),
-            ['query' => ['alt' => 'media'], 'stream' => true, 'http_errors' => false]);
+            $response = $client->authorize()->request('GET',
+                'https://www.googleapis.com/drive/v3/files/' . rawurlencode($fileId),
+                ['query' => ['alt' => 'media'], 'stream' => true, 'http_errors' => false]);
 
-        if ($response->getStatusCode() !== 200) {
-            error_log('GDrive stream refused for ' . $fileId . ': HTTP ' . $response->getStatusCode());
+            $code = $response->getStatusCode();
+            if ($code !== 200) {
+                /* The body carries Drive's own reason ("File not found", "The
+                   user has not granted the app..."), which is the whole story
+                   and used to be dropped on the floor. It is small on an error
+                   and is never the file, so reading it here costs nothing. */
+                $why = 'HTTP ' . $code . ' ' . gdrive_error_text((string)$response->getBody());
+                $retryable = $code === 401 || $code >= 500;
+                if ($retryable && !$last) {
+                    if ($code === 401) gdrive_force_refresh();
+                    usleep(400000);
+                    continue;
+                }
+                /* Three different failures wearing one face until now. 404 is
+                   this file, gone from Drive or filed under an account we are
+                   not in any more, and no amount of reconnecting or retrying
+                   brings it back. 403 is the grant: the connection is the thing
+                   to look at. Everything else is worth another go later. */
+                $kind = $code === 404 ? 'missing' : ($code === 403 ? 'disconnected' : 'transient');
+                gdrive_note_problem($kind, 'Drive refused ' . $fileId . ': ' . $why);
+                return [null, null];
+            }
+
+            $size = $response->getHeaderLine('Content-Length');
+            $body = $response->getBody();
+
+            $send = function () use ($body) {
+                while (!$body->eof()) {
+                    echo $body->read(65536);
+                    flush();
+                    if (connection_aborted()) break;   // the reader went away; stop fetching
+                }
+            };
+            return [$send, $size !== '' ? (int)$size : null];
+        } catch (Throwable $e) {
+            // Nothing has been sent yet, so a second try is still free to fail.
+            if (!$last) { usleep(400000); continue; }
+            gdrive_note_problem('transient', 'Drive unreachable for ' . $fileId . ': ' . $e->getMessage());
             return [null, null];
         }
-        $size = $response->getHeaderLine('Content-Length');
-        $body = $response->getBody();
+    }
+    return [null, null];
+}
 
-        $send = function () use ($body) {
-            while (!$body->eof()) {
-                echo $body->read(65536);
-                flush();
-                if (connection_aborted()) break;   // the reader went away; stop fetching
-            }
-        };
-        return [$send, $size !== '' ? (int)$size : null];
+/**
+ * Drive's own sentence, out of the JSON it wraps it in.
+ *
+ * An error body is a nested object several lines deep, and the sentence worth
+ * reading ("File not found: ...") is one field of it. Cutting the raw JSON to a
+ * couple of hundred characters kept the braces and lost the end of the message.
+ */
+function gdrive_error_text(string $body): string
+{
+    $body = trim($body);
+    if ($body === '') return '(no reason given)';
+
+    $decoded = json_decode($body, true);
+    if (is_array($decoded)) {
+        $message = $decoded['error']['message']
+            ?? $decoded['error_description']
+            ?? (is_string($decoded['error'] ?? null) ? $decoded['error'] : null);
+        if (is_string($message) && $message !== '') return substr($message, 0, 200);
+    }
+    return substr($body, 0, 200);
+}
+
+/**
+ * Mint a new access token now, whatever the one we hold claims about itself.
+ *
+ * get_gdrive_client() only refreshes a token it can see has lapsed. Drive
+ * answering 401 to a token that still looks live is the other case: the clock
+ * says fine and Google disagrees, and without this the retry would present the
+ * very same token again.
+ */
+function gdrive_force_refresh(): bool
+{
+    $token = get_system_gdrive_token();
+    if (!$token || empty($token['refresh_token'])) return false;
+
+    try {
+        $client = new Google_Client();
+        $client->setClientId(GDRIVE_CLIENT_ID);
+        $client->setClientSecret(GDRIVE_CLIENT_SECRET);
+        $fresh = $client->fetchAccessTokenWithRefreshToken($token['refresh_token']);
+        if (isset($fresh['error'])) {
+            gdrive_note_refresh((string)$fresh['error'], (string)($fresh['error_description'] ?? ''));
+            return false;
+        }
+        save_system_gdrive_token($client->getAccessToken());
+        gdrive_note_refresh('ok', '');
+        return true;
     } catch (Throwable $e) {
-        error_log('GDrive stream failed for ' . $fileId . ': ' . $e->getMessage());
-        return [null, null];
+        gdrive_note_refresh('exception', $e->getMessage());
+        return false;
     }
 }
 

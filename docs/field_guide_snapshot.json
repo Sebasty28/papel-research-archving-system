@@ -1,5 +1,5 @@
 {
- "built": "2026-11-11 00:22",
+ "built": "2026-11-11 13:33",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -101,7 +101,7 @@
    "lines": 980
   },
   "app/paper_file.php": {
-   "lines": 155
+   "lines": 182
   },
   "app/review_paper.php": {
    "lines": 810
@@ -173,7 +173,7 @@
    "lines": 228
   },
   "config/gdrive_config.php": {
-   "lines": 750
+   "lines": 881
   },
   "config/groq_config.php": {
    "lines": 1007
@@ -272,7 +272,7 @@
    "lines": 124
   },
   "includes/pdf_dock.php": {
-   "lines": 1435
+   "lines": 1437
   },
   "includes/pdf_writer.php": {
    "lines": 416
