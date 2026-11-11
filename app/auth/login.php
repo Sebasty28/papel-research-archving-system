@@ -11,7 +11,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
      needs to sign in again on a page that has a current token. */
   $role_for_redirect = in_array($_POST['selected_role'] ?? '', ['student', 'faculty', 'guest'], true)
       ? $_POST['selected_role'] : 'student';
-  /* login_error, because that is the only key the sign-in panel draws. */
+
+  /* A sign-in sent by fetch is answered, not redirected.
+     The slide-in panel (includes/site_header.php) checks the ID and password
+     before it lets go of the page: wrong ones are said in the panel, with what
+     was typed still in it, and only a sign-in that worked loads anything. A
+     browser with no script, and any other caller, posts the form as it always
+     did and gets the redirect below, so there is one set of rules and one set
+     of messages whichever way the credentials arrive.
+
+     Every answer is a 200. The request reached the right place and was
+     understood; what failed is the sign-in, which the body says. A 401 here
+     would be the first thing the loading bar's fetch wrapper sees. */
+  $wants_json = (($_POST['ajax'] ?? '') === '1');
+  $login_answer = function (array $body) {
+      header('Content-Type: application/json; charset=utf-8');
+      header('Cache-Control: no-store');
+      echo json_encode($body);
+      exit;
+  };
+  /* Takes the message and where a form post would have gone, so a call site
+     reads the same whichever kind of request it is serving. */
+  $login_failed = function (string $message, string $redirect) use ($wants_json, $login_answer) {
+      if ($wants_json) { $login_answer(['success' => false, 'message' => $message]); }
+      flash('login_error', $message);
+      header('Location: ' . $redirect);
+      exit;
+  };
+  $login_done = function (string $url) use ($wants_json, $login_answer) {
+      if ($wants_json) { $login_answer(['success' => true, 'redirect' => $url]); }
+      header('Location: ' . $url);
+      exit;
+  };
+
+  /* login_error, because that is the only key the sign-in panel draws.
+     csrf_verify() answers a stale token with a redirect, which a fetch would
+     follow and read as a page of HTML, so that case is taken first here. The
+     wording is csrf_verify()'s own. */
+  if ($wants_json && !csrf_valid()) {
+      $login_failed('Your session expired before that was submitted. Please refresh the page and try again.', '');
+  }
   csrf_verify(BASE_URL . '/archive/index.php?login_modal=1&role=' . $role_for_redirect, 'login_error');
 
   $action = $_POST['action'] ?? 'login';
@@ -25,14 +64,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       /* An ID and a password. The birthdate used to be a third factor here,
          which meant an account with none on file could not sign in at all, and
          a date of birth is not a secret, so it was never adding much. */
-      if ($id === '' || $pw === '') { flash('login_error','Enter your ID and password.'); header('Location: '.$error_redirect); exit; }
+      if ($id === '' || $pw === '') { $login_failed('Enter your ID and password.', $error_redirect); }
 
       /* Checked before the password is looked at, so a bot cannot use this
          endpoint to test credentials at all. Inert until keys are configured. */
       if (!recaptcha_verify($_POST['g-recaptcha-response'] ?? null)) {
           login_throttle_record_failure($id);
-          flash('login_error', recaptcha_error_message());
-          header('Location: '.$error_redirect); exit;
+          $login_failed(recaptcha_error_message(), $error_redirect);
       }
 
       /* Guessing is cheap without this: the IDs follow a pattern, so the only
@@ -40,8 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
          rule, which allows six characters. */
       $locked = login_throttle_locked_for($id);
       if ($locked !== null) {
-        flash('login_error', login_throttle_message($locked));
-        header('Location: '.$error_redirect); exit;
+        $login_failed(login_throttle_message($locked), $error_redirect);
       }
 
       /* A guest pass is not an account.
@@ -65,8 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               /* Said plainly: an expired pass and a mistyped one look the same
                  from here, and "not right or has expired" covers both without
                  revealing which. */
-              flash('login_error', 'That pass username or password is not right, or the pass has expired.');
-              header('Location: '.$error_redirect); exit;
+              $login_failed('That pass username or password is not right, or the pass has expired.', $error_redirect);
           }
 
           login_throttle_clear($id);
@@ -81,8 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           $_SESSION['guest_login']  = true;
           // Recorded so a revoked pass can be spotted by primary key.
           $_SESSION['guest_id']     = (int)$guest['guest_id'];
-          header('Location: '.BASE_URL.'/archive/index.php');
-          exit;
+          $login_done(BASE_URL.'/archive/index.php');
       }
 
       /* Whatever ID this person was given, it signs them in.
@@ -103,8 +138,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       } catch (mysqli_sql_exception $e) {
         if (strpos($e->getMessage(), "Unknown column 'student_id'") !== false) {
           error_log('Database migration required: student_id column is missing from users table. Run scripts/migrations/ to fix.');
-          flash('login_error', 'A system update is required. Please contact your administrator.');
-          header('Location: '.BASE_URL.'/archive/index.php?login_modal=1'); exit;
+          $login_failed('A system update is required. Please contact your administrator.',
+                        BASE_URL.'/archive/index.php?login_modal=1');
         }
         throw $e;
       }
@@ -113,13 +148,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $stmt->store_result();
       if ($stmt->num_rows !== 1) {
         login_throttle_record_failure($id);
-        flash('login_error','That ID or password is not right.'); header('Location: '.$error_redirect); exit;
+        $login_failed('That ID or password is not right.', $error_redirect);
       }
       $stmt->bind_result($user_id, $username, $email, $password_hash, $full_name, $user_role, $is_active, $student_id, $stored_birthdate, $expires_on, $admin_level);
       $stmt->fetch();
       if (!$is_active || !password_verify($pw, $password_hash)) {
         login_throttle_record_failure($id);
-        flash('login_error','That ID or password is not right.'); header('Location: '.$error_redirect); exit;
+        $login_failed('That ID or password is not right.', $error_redirect);
       }
 
       /* The password was right, so this person is not the one being guarded
@@ -133,9 +168,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           'guest'   => ['guest'],
       ];
       if (!in_array($user_role, $role_groups[$role_hint] ?? [])) {
-          flash('login_error', 'This account does not belong to the selected login section. Please choose the correct tab.');
-          header('Location: '.$error_redirect);
-          exit;
+          $login_failed('This account does not belong to the selected login section. Please choose the correct tab.',
+                        $error_redirect);
       }
 
       /* A student account is given a life when it is created: five academic
@@ -144,16 +178,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
          adviser to move them on, which recalculates the date. The password was
          correct, so say plainly what is wrong rather than "not right". */
       if ($user_role === 'student' && !empty($expires_on) && strtotime($expires_on) < strtotime('today')) {
-          flash('login_error', 'This student account expired on ' . date('F j, Y', strtotime($expires_on)) .
-                         '. Ask your research adviser to renew it.');
-          header('Location: '.$error_redirect); exit;
+          $login_failed('This student account expired on ' . date('F j, Y', strtotime($expires_on)) .
+                        '. Ask your research adviser to renew it.', $error_redirect);
       }
 
       // Additional validation for students: must have student_id or username
       if ($user_role === 'student') {
         if (empty($student_id) && empty($username)) {
-          flash('login_error','Student account is missing required login credentials. Please contact administrator.');
-          header('Location: '.$error_redirect); exit;
+          $login_failed('Student account is missing required login credentials. Please contact administrator.',
+                        $error_redirect);
         }
       }
 
@@ -175,12 +208,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       ]);
 
       $redirect = $_POST['redirect'] ?? $_GET['redirect'] ?? null;
-      if ($redirect === 'archive') {
-          header('Location: '.BASE_URL.'/archive/index.php');
-      } else {
-          header('Location: '.role_home($user_role));
-      }
-      exit;
+      $login_done($redirect === 'archive' ? BASE_URL.'/archive/index.php' : role_home($user_role));
   }
 }
 

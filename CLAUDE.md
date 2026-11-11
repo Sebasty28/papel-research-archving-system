@@ -767,6 +767,50 @@ dark theme's `img { filter: brightness(.92) }` has to be switched off for it
 (`#id img { filter: none }`, the id being for specificity) or the picture comes
 out darker than its plate.
 
+### The console sidebar: which side it sits on, and folding it away
+
+The public repository, the student dashboard and the four review desks all
+carry `<aside id="sidebarCol">`, and the two controls on its top card come from
+`includes/browse_console_js.php` rather than from any page's markup: which card
+is first varies with the data, so the buttons are placed at run time. The
+stylesheet is `includes/browse_console.php`, and the three paper pages
+(`archive/view_paper.php`, `app/student/paper_details.php`,
+`app/review_paper.php`) carry the same side control over their own rail, keyed
+on the same setting, so a choice made anywhere holds everywhere.
+
+| Key | Set to | Class on `<html>` |
+|---|---|---|
+| `papel_sidebar_side` | `right` | none; **left is the default** |
+| `papel_sidebar_folded` | `1` | `sidebar-folded` |
+
+- **The left is the default**, so the only answer worth storing is `right`:
+  `site_head.php` reads `!== 'right'`, and a browser nobody has asked, or one
+  with storage blocked, starts on the left rather than falling through to the
+  other side.
+- **Both are read before the first paint**, in `includes/site_head.php`, for
+  the reason the palette is: restored late, the panel paints in full and then
+  jumps across the page or snaps shut, taking the results column's width with
+  it. `includes/skeleton.php` reads the same two classes, so the shape it
+  covers the page with is the shape the page is about to be.
+- **Folded, the panel is `--sidebar-w` wide and holds a rail of icons**: one to
+  bring it back, then one per card, which unfolds, opens that card if the
+  reader had collapsed it, and gives it the cursor. It is the move the upload
+  page's side pane makes, in the same clothes (`.side-rail` in
+  `student_upload_ai.php`). The width is the one custom property both `.layout`
+  rules already read, so the results column and the repository's search field
+  follow without a rule of their own; `html.sidebar-folded` outranks the
+  `:root` that set it, whichever stylesheet that was.
+- **Everything else in the panel is hidden, not just the cards.** The
+  repository signed out ends its column with a plain `.note-card`, which at
+  44px wrapped to one word a line down the page beside the rail.
+- **The rail is rebuilt, never left alone**: applying a filter on a review desk
+  replaces the whole of `#sidebarCol`'s innerHTML, which is also why a
+  MutationObserver puts both controls back. Neither rebuild may touch the DOM
+  when there is nothing to do, or the observer wakes itself for ever.
+- **Below 901px there is no side and nothing to fold**: the panel is a drawer,
+  the two controls are not drawn and the rail is never painted, so the cards
+  stay reachable on a phone however the setting was left on a desktop.
+
 ### The accessibility tab is off by default on a phone
 
 `includes/accessibility.php` draws the tab down the edge of every page. Whether
@@ -858,6 +902,32 @@ code (all three were removed; the code step was deleted outright in October
 The lookup matches `username`, `email`, `student_id` **or** `faculty_id` —
 students carry their ID in `student_id`, staff in `faculty_id`, and which column
 depends on who created the account. All four are checked.
+
+**The slide-in panel checks before it loads anything.** `#loginModalForm`
+(`includes/site_header.php`, the script in `includes/site_footer.php`) posts to
+`app/auth/login.php` by fetch with `ajax=1`, and that handler answers JSON to
+such a post and redirects to every other caller: `{success:false,message}` or
+`{success:true,redirect}`, both as 200, since what failed is the sign-in and
+not the request. Wrong credentials are said in the panel with what was typed
+still in it; only a sign-in that worked plays the animation and leaves the
+page. Each refusal goes through `$login_failed()` and each success through
+`$login_done()`, so there is one set of words whichever way the post arrived,
+and a browser with no script still posts the form and gets the old redirect.
+
+Three things that are easy to get wrong here:
+
+- **A stale CSRF token is answered before `csrf_verify()` runs.** That function
+  refuses with a redirect, which a fetch follows and reads as a page of HTML.
+- **A solved reCAPTCHA is spent.** Google refuses the same token twice, so the
+  widget is reset after every refusal and the gate locked again by hand
+  (`papelRecaptchaExpired`); without it the second attempt failed as a robot
+  however right the password was.
+- **The order of the checks is the security.** reCAPTCHA and the lockout are
+  tested before the password is looked at, so the JSON endpoint cannot be used
+  to try credentials either.
+
+`archive/login.php`, the standalone page a Library Pass email links to, is a
+separate form that posts to itself and is not part of this.
 
 `admin_level` is stored in the session at login. Do not reintroduce a
 `$u['admin_level'] ?? 1` that reads from a session which never had it — that bug

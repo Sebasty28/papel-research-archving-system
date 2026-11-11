@@ -179,6 +179,11 @@ body {
     color: var(--grey);
 }
 #viewer-status:empty { display: none; }
+/* The cause of a Drive failure arrives on its own line off production; the
+   retry under the words, as its own line. The button is styled in the shared
+   papel-pdf-view.css, so it matches the one in the panel. */
+#viewer-status { white-space: pre-line; }
+#viewer-status .pdf-retry { margin: .75rem auto 0; white-space: normal; }
 /* Every document sits on the shared dark stage (papel-pdf-view.css), as in
    the panel it was opened from, a student's own file included. */
 #viewer-body.is-dark #viewer-status { color: var(--pdf-stage-text); }
@@ -240,6 +245,11 @@ body {
         failMessage: SRC ? 'This file could not be shown. Please try again.' : undefined,
         loadingText: '',          // the ring says it (papel-pdf-view.css)
         onBusy:    setBusy,
+        /* A paper that arrived but would not draw may have arrived short, so
+           it is worth fetching again. A file handed over from the upload page
+           is already in this tab's memory: there is nothing to fetch, and
+           failMessage says what to do instead. */
+        onFail:    function (msg) { showProblem(msg, SRC ? loadPaper : null); },
         onZoom: function (z) {
             document.getElementById('viewerZoomLevel').textContent = Math.round(z * 100) + '%';
         },
@@ -294,6 +304,18 @@ body {
            request carrying this header, and drawn here. No right-click on the
            pages, which are pictures, so no "Save image as". */
         scrollEl.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+        loadPaper();
+        return;
+    }
+    if (SRC_ERROR) return;               // already said, in the status line
+
+    /* Fetching the paper, as its own function so the retry button can ask for
+       exactly the same thing again. A Drive read fails for a minute at a time
+       and mends itself; before this the reader's only move in a tab opened for
+       one paper was to reload the whole page. */
+    function loadPaper() {
+        statusEl.textContent = '';
+        setBusy(true);
         fetch(SRC, { headers: { 'X-PAPEL-Viewer': '1' }, credentials: 'same-origin', cache: 'no-store' })
             .then(function (res) {
                 if (!res.ok) {
@@ -304,12 +326,44 @@ body {
             .then(function (bytes) { return view.load(bytes); })
             .catch(function (err) {
                 setBusy(false);
-                statusEl.textContent = err && err.message && err.message.length < 600
-                    ? err.message : 'This file could not be opened. Please try again.';
+                showProblem(err && err.message && err.message.length < 600
+                    ? err.message : 'This file could not be opened. Please try again.', loadPaper);
             });
-        return;
     }
-    if (SRC_ERROR) return;               // already said, in the status line
+
+    /* The failure, with a way to try it again beside it. Built from elements,
+       not innerHTML: `message` is the server's own sentence, and off production
+       it carries the cause with it. `again` is left out where trying again
+       cannot help (a local file that will not draw), and then this is just the
+       words, exactly as before. */
+    function showProblem(message, again) {
+        statusEl.textContent = '';
+        var text = document.createElement('div');
+        text.textContent = message;
+        statusEl.appendChild(text);
+        if (typeof again !== 'function') return;
+
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'pdf-retry';
+        btn.title = 'Try loading this file again';
+        var icon = document.createElement('span');
+        icon.className = 'material-symbols-outlined pdf-retry-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.textContent = 'refresh';
+        btn.appendChild(icon);
+        var label = document.createElement('span');
+        label.textContent = 'Try again';
+        btn.appendChild(label);
+        // Disabled on the press, so a second one cannot run a second fetch
+        // beside the first; the box is rebuilt whenever the retry decides.
+        btn.addEventListener('click', function () {
+            btn.disabled = true;
+            btn.classList.add('is-spinning');
+            again();
+        });
+        statusEl.appendChild(btn);
+    }
 
     // The upload page holds the chosen file in memory. Only messages from this
     // same origin are accepted, and only the file itself is ever passed.

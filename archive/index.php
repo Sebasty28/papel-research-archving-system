@@ -281,7 +281,12 @@ $PAGE_SKELETON = 'repository';
    ========================================================= */
 :root {
     --sidebar-w:    226px;
-    --col-gap:      36px;
+    /* The same 6px the dashboards and the review desks leave
+       (console_shell.php's own fallback): this page used 36px, so the one
+       console with a banner over it was also the one with a corridor down the
+       middle. The search field is laid out on the same token, so it widens
+       with the results it searches. */
+    --col-gap:      6px;
     /* The rendered height of the search field: .75rem of padding above and
        below its content. Named rather than left implicit because the sidebar
        is aligned against it: see .sidebar-right. Change the field's padding

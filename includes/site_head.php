@@ -1661,14 +1661,24 @@ select.lf-input {
          same reason the palette is read here rather than at the foot of the
          page. Restored late, the column would draw on one side and jump to the
          other, which reads as a bug rather than a preference. Harmless on the
-         pages that have no sidebar: nothing there matches the class. */ ?>
+         pages that have no sidebar: nothing there matches the class.
+
+         The left is the default, so the only stored answer that means anything
+         is 'right'. Hence !== and not ===: a browser nobody has asked, and one
+         with storage blocked, both start on the left rather than falling
+         through to the other side. */ ?>
+<?php /* And whether it is folded away to its rail at all, read in the same
+         breath and for the same reason: restored late, the panel would paint
+         in full and snap shut, taking the results column's width with it. */ ?>
 <script nonce="<?= csp_nonce() ?>">
 (function () {
+    var side = null, folded = null;
     try {
-        if (localStorage.getItem('papel_sidebar_side') === 'left') {
-            document.documentElement.classList.add('sidebar-left');
-        }
+        side = localStorage.getItem('papel_sidebar_side');
+        folded = localStorage.getItem('papel_sidebar_folded');
     } catch (e) {}
+    if (side !== 'right') { document.documentElement.classList.add('sidebar-left'); }
+    if (folded === '1') { document.documentElement.classList.add('sidebar-folded'); }
 })();
 </script>
 <?php /* Palettes and light/dark. Included last so its :root wins over the

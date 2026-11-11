@@ -1,5 +1,5 @@
 {
- "built": "2026-11-11 13:33",
+ "built": "2026-11-11 18:57",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -35,7 +35,7 @@
    "lines": 81
   },
   "app/admin/admin_manage_faculty.php": {
-   "lines": 548
+   "lines": 552
   },
   "app/admin/admin_review_dashboard.php": {
    "lines": 139
@@ -44,13 +44,13 @@
    "lines": 368
   },
   "app/admin/super_admin_manage_admins.php": {
-   "lines": 525
+   "lines": 530
   },
   "app/admin/super_admin_review_dashboard.php": {
    "lines": 135
   },
   "app/auth/login.php": {
-   "lines": 1110
+   "lines": 1138
   },
   "app/auth/logout.php": {
    "lines": 36
@@ -59,7 +59,7 @@
    "lines": 214
   },
   "app/faculty/faculty_manage_students.php": {
-   "lines": 1195
+   "lines": 1212
   },
   "app/faculty/faculty_review_dashboard.php": {
    "lines": 166
@@ -77,7 +77,7 @@
    "lines": 809
   },
   "app/models/AdminManagementService.php": {
-   "lines": 183
+   "lines": 198
   },
   "app/models/ArchiveRepository.php": {
    "lines": 140
@@ -86,7 +86,7 @@
    "lines": 56
   },
   "app/models/FacultyManagementService.php": {
-   "lines": 146
+   "lines": 152
   },
   "app/models/PaperRepository.php": {
    "lines": 99
@@ -116,7 +116,7 @@
    "lines": 97
   },
   "app/student/pdf_viewer.php": {
-   "lines": 331
+   "lines": 385
   },
   "app/student/student_assistant.php": {
    "lines": 147
@@ -155,7 +155,7 @@
    "lines": 954
   },
   "archive/index.php": {
-   "lines": 1431
+   "lines": 1436
   },
   "archive/login.php": {
    "lines": 1081
@@ -167,7 +167,7 @@
    "lines": 265
   },
   "config/core.php": {
-   "lines": 4588
+   "lines": 4756
   },
   "config/error_handler.php": {
    "lines": 228
@@ -203,10 +203,10 @@
    "lines": 205
   },
   "includes/browse_console.php": {
-   "lines": 1177
+   "lines": 1275
   },
   "includes/browse_console_js.php": {
-   "lines": 1504
+   "lines": 1624
   },
   "includes/card_collapse.php": {
    "lines": 94
@@ -250,6 +250,9 @@
   "includes/manage_search.php": {
    "lines": 261
   },
+  "includes/manage_validate.php": {
+   "lines": 260
+  },
   "includes/notif_actions.php": {
    "lines": 224
   },
@@ -272,7 +275,7 @@
    "lines": 124
   },
   "includes/pdf_dock.php": {
-   "lines": 1437
+   "lines": 1494
   },
   "includes/pdf_writer.php": {
    "lines": 416
@@ -302,16 +305,16 @@
    "lines": 391
   },
   "includes/site_footer.php": {
-   "lines": 585
+   "lines": 686
   },
   "includes/site_head.php": {
-   "lines": 1683
+   "lines": 1693
   },
   "includes/site_header.php": {
    "lines": 673
   },
   "includes/skeleton.php": {
-   "lines": 602
+   "lines": 652
   },
   "includes/splash.php": {
    "lines": 167

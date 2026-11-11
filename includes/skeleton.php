@@ -146,7 +146,7 @@ html.papel-skel .papel-skel-layer {
 /* ----- The shared console shape: main column and a 226px rail -----
    Every desk, the repository and the reader hang off the same .wrap, so the
    measurements here are one set, taken from the pages themselves: .wrap is
-   1168px at most with 24px of padding, and inside it the main column, a 36px
+   1168px at most with 24px of padding, and inside it the main column, a 6px
    gap and the rail come to the 1120px that leaves. A shape that merely looks
    about right still shifts the page sideways when it lifts, which is the jump
    being covered, so these are measured rather than judged by eye. */
@@ -157,8 +157,12 @@ html.papel-skel .papel-skel-layer {
 }
 .skel-desk {
     display: grid;
-    grid-template-columns: 1fr 226px;
-    gap: 36px;
+    grid-template-columns: 1fr var(--skel-rail-w, 226px);
+    /* The gutter both consoles leave: --col-gap's 6px fallback in
+       console_shell.php, and the same figure set by archive/index.php. A
+       shape that merely looks about right still shifts the page sideways as
+       it lifts, which is the jump being covered. */
+    gap: 6px;
     align-items: start;
 }
 .skel-col { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
@@ -191,7 +195,12 @@ html.papel-skel .papel-skel-layer {
 .skel-hero { height: 240px; background: var(--skel-b); }
 .skel-band { height: 50px; display: flex; align-items: center; }
 .skel-band .skel-wrap { width: 100%; padding: 0 24px; }
-.skel-band .skel-search { width: 73%; height: 50px; border-radius: 10px; }
+/* Full width: below the breakpoint the repository is one column and the real
+   field runs the whole of it. Narrowed to the results column above, in the
+   query with the swap. A flat 73% was 40px short of the real field at 1280px
+   and 230px short at 900, which shows at whichever edge the column does not
+   start from. */
+.skel-band .skel-search { width: 100%; height: 50px; border-radius: 10px; }
 
 /* ----- The reader: the paper's heading, then its cards beside a narrow rail ----- */
 .skel-read-top { display: flex; flex-direction: column; gap: .45rem; padding-bottom: 28px; }
@@ -298,6 +307,47 @@ html.papel-skel-rail .skel-tab { width: auto; height: 30px; border-radius: 8px; 
     .skel-side { display: none; }
     .skel-grid { grid-template-columns: 1fr; }
     .skel-steps { display: none; }
+}
+
+/* ----- The rail on the left, where the page is about to draw it -----
+   The side is a device setting (papel_sidebar_side, read on <html> before
+   paint by site_head.php) and the left is the default, so a skeleton with the
+   rail always on the right would shift the whole page sideways as it lifts,
+   which is the one jump it exists to cover. Each shape uses the same query as
+   the layout it stands in for, so the two cannot disagree at a width: the
+   desk and the repository swap at 901px (includes/browse_console.php), the
+   reader at 1051px (includes/paper_record_css.php). */
+@media (min-width: 901px) {
+    html.sidebar-left .skel-desk { grid-template-columns: var(--skel-rail-w, 226px) 1fr; }
+    html.sidebar-left .skel-desk > .skel-rail { order: 1; }
+    html.sidebar-left .skel-desk > .skel-col  { order: 2; }
+    /* Beside the rail, the field spans the results column it searches: the
+       rail and the 6px gutter off what .wrap leaves. */
+    .skel-band .skel-search { width: calc(100% - var(--skel-rail-w, 226px) - 6px); }
+
+    /* ----- The panel folded to its rail (papel_sidebar_folded) -----
+       The one width every shape above reads, so the results column and the
+       repository's search field follow it without a rule each. The cards go
+       with it: a filter card drawn 44px wide is a stripe, and what the page is
+       about to paint there is a column of icons. */
+    html.sidebar-folded { --skel-rail-w: 56px; }   /* browse_console.php's --sidebar-w */
+    html.sidebar-folded .skel-desk > .skel-rail { padding: 0; }
+    html.sidebar-folded .skel-desk > .skel-rail .skel-card { display: none; }
+    html.sidebar-folded .skel-desk > .skel-rail::before {
+        content: '';
+        display: block;
+        height: 148px;
+        border-radius: var(--r-card, 8px);
+        background: var(--skel-b);
+    }
+    /* And it crosses the page with those results, as archive/index.php moves
+       the real one into the second column. */
+    html.sidebar-left .skel-band .skel-search { margin-left: auto; }
+}
+@media (min-width: 1051px) {
+    html.sidebar-left .skel-read { grid-template-columns: 256px 1fr; }
+    html.sidebar-left .skel-read > .skel-rail { order: 1; }
+    html.sidebar-left .skel-read > .skel-col  { order: 2; }
 }
 </style>
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">

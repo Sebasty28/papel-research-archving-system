@@ -317,7 +317,7 @@ $PAGE_SKELETON = 'table';
                         </label>
                         <input type="text" name="faculty_id" id="faculty_id"
                                placeholder="e.g. COORDINATOR-01" required>
-                        <small class="mgmt-hint">This is what they sign in with.</small>
+                        <small class="mgmt-hint">Letters, numbers and dashes, like FAC-2026-001. This is what they sign in with.</small>
                     </div>
 
                     <div class="mgmt-field">
@@ -517,6 +517,11 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 <?php require ROOT_PATH.'/includes/password_generator.php';
 require_once ROOT_PATH.'/includes/action_dialogs.php';
+/* The field rules, before the save confirmation: both listen for this
+   form's submit, and listeners fire in the order they were added, so a
+   refused form has to stop the event before the dialog asks whether to
+   save it. */
+require ROOT_PATH.'/includes/manage_validate.php';
 require ROOT_PATH.'/includes/manage_save_confirm.php';
 require ROOT_PATH.'/includes/scroll_jump.php';
 require ROOT_PATH.'/includes/site_footer.php'; ?>

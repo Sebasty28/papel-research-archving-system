@@ -549,6 +549,107 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    /* ----- Signing in without leaving the page -----
+       The ID and the password are checked first, by fetch, and the page is
+       only given up once they are right: app/auth/login.php answers JSON to a
+       post carrying ajax=1 and redirects for everything else. A wrong password
+       used to cost a whole round trip, and not a quiet one: the post left the
+       page, the sign-in animation played over the wait, the repository loaded,
+       and the panel came back on it with both fields empty and the message
+       above them. Now nothing moves but the message.
+
+       The form keeps its action and its method, so a browser where this script
+       has not run posts it as it always did and is told the same things in the
+       same words. */
+    var loginForm = document.getElementById('loginModalForm');
+    if (loginForm && window.fetch) {
+        var loginBusy = false;
+
+        /* The same box the server prints, in the same place: above the form,
+           under the role tiles. Built fresh every time rather than refilled,
+           so the five-second life flash_dismiss.php gives it starts again with
+           the new message instead of running out mid-sentence on it. */
+        function loginAlert(message) {
+            loginPanel.querySelectorAll('.panel-alert').forEach(function (old) {
+                if (old.parentNode) { old.parentNode.removeChild(old); }
+            });
+            var box = document.createElement('div');
+            box.className = 'panel-alert error';
+            box.setAttribute('role', 'alert');
+            box.textContent = message;     // the server's words, never markup
+            loginForm.parentNode.insertBefore(box, loginForm);
+        }
+
+        function recaptchaBox() {
+            return loginForm.querySelector('[name="g-recaptcha-response"]');
+        }
+
+        /* A solved tick is spent the moment it is checked, so Google refuses
+           the same token twice: without this the second attempt failed as a
+           robot however right the password was. Resetting empties the field,
+           which is why the gate is locked again by hand. */
+        function recaptchaAgain() {
+            if (typeof grecaptcha === 'undefined' || !recaptchaBox()) { return false; }
+            try { grecaptcha.reset(); } catch (err) { return false; }
+            if (window.papelRecaptchaExpired) { window.papelRecaptchaExpired(); }
+            return true;
+        }
+
+        loginForm.addEventListener('submit', function (e) {
+            if (loginBusy) { e.preventDefault(); return; }
+            e.preventDefault();            // this also calls off the splash
+            loginBusy = true;
+
+            var submitBtn = loginForm.querySelector('[type="submit"]');
+            if (submitBtn) { submitBtn.disabled = true; }
+            /* Whether the tick box was the thing missing, decided before the
+               widget is reset, since a reset empties it either way. */
+            var box = recaptchaBox();
+            var tickMissing = !!box && box.value === '';
+
+            var body = new FormData(loginForm);
+            body.append('ajax', '1');
+
+            fetch(loginForm.getAttribute('action'), {
+                method: 'POST',
+                body: body,
+                credentials: 'same-origin',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            }).then(function (r) {
+                return r.json();
+            }).then(function (data) {
+                if (data && data.success) {
+                    /* Now it is a sign-in, so now the animation plays: the
+                       page is about to be replaced. */
+                    if (window.papelSplash) { window.papelSplash.show(); }
+                    window.location.href = data.redirect;
+                    return;                 // left busy: nothing else to do here
+                }
+                loginBusy = false;
+                loginAlert((data && data.message) || 'That ID or password is not right.');
+                var locked = recaptchaAgain();
+                if (submitBtn && !locked) { submitBtn.disabled = false; }
+                var pw = document.getElementById('modalPassword');
+                /* Straight back to the password, with what was typed selected
+                   so the next keystroke replaces it. Not when the tick box was
+                   what was missing: the answer is then on the widget, not in
+                   this field. */
+                if (pw && !tickMissing) {
+                    try { pw.focus({ preventScroll: true }); } catch (err) { pw.focus(); }
+                    pw.select();
+                }
+            }).catch(function () {
+                /* No answer, or one that is not JSON: post the form the old
+                   way rather than leave somebody unable to sign in at all.
+                   .submit() fires no submit event, so this cannot come back
+                   round to here. */
+                loginBusy = false;
+                if (submitBtn) { submitBtn.disabled = false; }
+                loginForm.submit();
+            });
+        });
+    }
+
     <?php if ($open_modal ?? false): ?>
     openLoginModal(<?= json_encode($modal_role ?? 'student') ?>);
     <?php endif; ?>

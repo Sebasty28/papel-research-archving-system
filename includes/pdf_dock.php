@@ -202,6 +202,9 @@ $PDF_DOCK_SIDES     = array_values(array_intersect(['left', 'right'], (array)($P
     white-space: pre-line;
 }
 .pdf-dock-status:empty { display: none; }
+/* The retry sits under the words, centred, as its own line. The button itself
+   is styled in papel-pdf-view.css, which both viewers load. */
+.pdf-dock-status .pdf-retry { margin: .6rem auto 0; }
 
 /* Full screen: the panel itself fills the screen, from wherever it was. The
    browser already pins a full-screen element to the whole screen; the frame
@@ -632,6 +635,15 @@ document.addEventListener('DOMContentLoaded', function () {
                     introTouch: 'Drag with one finger to move the page. Pinch with two fingers to zoom in or out.',
                     loadingText: '',                  // the ring says it
                     onBusy: setBusy,
+                    /* A file that reached the browser and would not draw is
+                       worth another go for the same reason a fetch is: the
+                       bytes came from Drive and may have arrived short. Only a
+                       server file, though; re-reading the same local File can
+                       only fail the same way, and FAIL_LOCAL says what to do
+                       about that instead. */
+                    onFail: function (msg) {
+                        showProblem(msg, showingSrc ? function () { show(showingSrc); } : null);
+                    },
                     onZoom: function (z) { zoomEl.textContent = Math.round(z * 100) + '%'; }
                 });
                 return view;
@@ -651,6 +663,50 @@ document.addEventListener('DOMContentLoaded', function () {
         paintQueued = true;
         requestAnimationFrame(function () { paintQueued = false; paintPage(); });
     }, { passive: true });
+
+    /* A failure, with a way to try the same file again beside it.
+
+       Drive fails for a minute at a time (a lapsed token being refreshed, a
+       504 from Google, a dropped connection), and until now the panel's only
+       answer was a sentence ending "Please try again" with nothing to press:
+       the reader had to close the panel and find the file on the page a second
+       time, which on the review desk means losing their place. `again` is left
+       out where trying again cannot help, and then this is just the words.
+
+       Built from elements rather than innerHTML because `message` carries the
+       server's own sentence, and off production the cause with it. */
+    function showProblem(message, again) {
+        status.textContent = '';
+        var text = document.createElement('div');
+        text.className = 'pdf-dock-status-text';
+        text.textContent = message;
+        status.appendChild(text);
+        if (typeof again !== 'function') return;
+
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'pdf-retry';
+        btn.title = 'Try loading this file again';
+        var icon = document.createElement('span');
+        icon.className = 'material-symbols-outlined pdf-retry-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.textContent = 'refresh';
+        btn.appendChild(icon);
+        var label = document.createElement('span');
+        label.textContent = 'Try again';
+        btn.appendChild(label);
+        /* The press turns the icon, and the box is replaced the moment the
+           retry decides anything, so the spin is never left running: either
+           show() clears the status on its way in, or it lands here again with
+           a fresh button. Disabled meanwhile, so a second press cannot start a
+           second fetch alongside the first. */
+        btn.addEventListener('click', function () {
+            btn.disabled = true;
+            btn.classList.add('is-spinning');
+            again();
+        });
+        status.appendChild(btn);
+    }
 
     /* Fetch a file through app/paper_file.php and draw it. The header is what
        that script checks for; a browser pointed straight at the address never
@@ -685,8 +741,9 @@ document.addEventListener('DOMContentLoaded', function () {
         }).catch(function (err) {
             if ((err && err.name === 'AbortError') || mine !== fetching) return;
             setBusy(false);
-            status.textContent = err && err.message && err.message.length < 600
-                ? err.message : 'This file could not be opened. Please try again.';
+            showProblem(err && err.message && err.message.length < 600
+                ? err.message : 'This file could not be opened. Please try again.',
+                function () { show(src); });
         });
     }
 

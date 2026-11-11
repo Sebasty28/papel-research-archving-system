@@ -51,11 +51,14 @@ class FacultyManagementService {
         if (!$data['full_name'] || !$data['email'] || !$data['faculty_id']) {
             throw new InvalidArgumentException("Full name, Faculty ID and email are all required.");
         }
-        if (!preg_match('/^[A-Za-z\s.]+$/', $data['full_name'])) {
-            throw new InvalidArgumentException("Full name cannot contain numbers.");
-        }
-        if (!filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
-            throw new InvalidArgumentException("Invalid email format.");
+        /* One rule per answer, shared with the students console and with the
+           other staff console: see "What a management console may be told" in
+           config/core.php. The first complaint is the one thrown, so they are
+           read in the order the fields are in. */
+        foreach ([person_name_problem($data['full_name']),
+                  staff_id_problem($data['faculty_id']),
+                  account_email_problem($data['email'])] as $why) {
+            if ($why !== null) { throw new InvalidArgumentException($why); }
         }
         if ($this->userRepo->isEmailOrFacultyIdTaken($data['email'], $data['faculty_id'], $userId)) {
             throw new InvalidArgumentException("Another account already uses that email or Faculty ID.");
@@ -80,11 +83,14 @@ class FacultyManagementService {
         if (!$data['full_name'] || !$data['email'] || !$data['password'] || !$data['title'] || !$data['faculty_id']) {
             throw new InvalidArgumentException("All fields are required.");
         }
-        if (!preg_match('/^[A-Za-z\s.]+$/', $data['full_name'])) {
-            throw new InvalidArgumentException("Full name cannot contain numbers.");
-        }
-        if (!filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
-            throw new InvalidArgumentException("Invalid email format.");
+        /* One rule per answer, shared with the students console and with the
+           other staff console: see "What a management console may be told" in
+           config/core.php. The first complaint is the one thrown, so they are
+           read in the order the fields are in. */
+        foreach ([person_name_problem($data['full_name']),
+                  staff_id_problem($data['faculty_id']),
+                  account_email_problem($data['email'])] as $why) {
+            if ($why !== null) { throw new InvalidArgumentException($why); }
         }
         if (strlen($data['password']) < 6 || !preg_match('/[A-Z]/', $data['password']) || !preg_match('/[0-9]/', $data['password'])) {
             throw new InvalidArgumentException("Password must be at least 6 characters and contain at least one uppercase letter and one number.");

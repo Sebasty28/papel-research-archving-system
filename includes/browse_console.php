@@ -838,10 +838,108 @@ html.sidebar-left .js-side-swap .side-icon-right { display: inline-flex; }
     html.sidebar-left #mainCol    { order: 2; }
 }
 
-/* Below the breakpoint the sidebar is a drawer, or stacked under the results,
-   and there are no sides to choose between. */
+/* ===== The sidebar folded away =====
+   The same move the upload page's side pane makes (papelSide, .side-rail in
+   student_upload_ai.php), in the same clothes: the cards go and the cream
+   panel they sat on narrows to a rail of icons, one to bring the panel back
+   and one per card. The reader who wants the whole window for the results
+   keeps the filters a click away rather than scrolling past a column they are
+   not using.
+
+   The width is the one custom property both layouts already read, so the
+   results column and (on the repository) the search field above it follow
+   without a rule of their own: html.sidebar-folded beats :root on
+   specificity, whichever stylesheet set it. Written here as a class and never
+   from script on every frame: see the warning about :root in CLAUDE.md. */
+.sidebar-rail { display: none; flex-direction: column; align-items: center; gap: .25rem; }
+.sidebar-rail-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    /* 44px, which is both the comfortable size for a finger and what the
+       rail's width is set from: the panel is this plus the .375rem of padding
+       it keeps on either side. */
+    width: 44px; height: 44px;
+    border: 0; border-radius: var(--r-control, 4px);
+    background: none;
+    /* Literal #fff on --maroon-surface, which is the pair the breadcrumb
+       strip uses. Not var(--white): that token is the site's *surface*
+       colour, and in Old Night it is #2D2F32, which put charcoal icons on the
+       maroon bar. Nothing filled from the accent may take its text from it. */
+    color: #fff;
+    cursor: pointer;
+    transition: background .15s, color .15s;
+}
+/* The one that brings the panel back stands a little apart from the cards'
+   own buttons, as it does on the upload page's rail. */
+.sidebar-rail-btn.is-show { margin-bottom: .35rem; }
+.sidebar-rail-btn .material-symbols-outlined { font-size: 20px; }
+.sidebar-rail-btn:hover { background: var(--maroon-surface-hover); }
+/* The ring goes inside the button, in white, for the same reason the crumb
+   bar's does: an outline in the accent is invisible on the accent. */
+.sidebar-rail-btn:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
+
+.js-side-hide .side-icon-right { display: none; }
+html.sidebar-left .js-side-hide .side-icon-left { display: none; }
+html.sidebar-left .js-side-hide .side-icon-right { display: inline-flex; }
+
+@media (min-width: 901px) {
+    /* The button plus the panel's own padding. Change it here and in
+       includes/skeleton.php's --skel-rail-w together, or the page steps
+       sideways as the skeleton lifts off it. */
+    html.sidebar-folded { --sidebar-w: 56px; }
+    /* Everything the panel holds goes, not the cards alone: the repository
+       signed out ends its column with a plain .note-card, which at 44px wrapped
+       to one word a line down the page beside the rail. */
+    html.sidebar-folded #sidebarCol > *:not(.sidebar-rail) { display: none; }
+    /* The rail is the panel while it is folded: it takes the column's whole
+       width and carries the colour itself, rather than sitting as a maroon
+       pill on the cream the cards used to stand on. The panel keeps its
+       rounded corners and gives up its padding, so nothing of the old ground
+       shows at an edge. On the repository, where the panel's background is
+       painted by ::after behind it (the shadow that lifts it off the banner
+       photo), the rail covers that too: both are the same shape and radius. */
+    html.sidebar-folded #sidebarCol { padding: 0; background: none; }
+    /* Tinted glass, in the same mix and the same blur as the breadcrumb
+       strip: on the repository this bar stands on the banner photo, and a
+       solid block of maroon there reads as a hole cut in the picture. */
+    html.sidebar-folded #sidebarCol .sidebar-rail {
+        /* The solid colour first: a browser that does not know color-mix
+           drops the line below and would otherwise leave white icons on a
+           bar with no fill at all. */
+        background: var(--maroon-surface);
+        background: color-mix(in srgb, var(--maroon-surface) 82%, transparent);
+        -webkit-backdrop-filter: blur(10px) saturate(160%);
+        backdrop-filter: blur(10px) saturate(160%);
+        border-radius: var(--r-card, 8px);
+        padding: .375rem 0;
+    }
+    /* Nothing to blur, so the bar keeps its own colour, as the strip does. */
+    @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+        html.sidebar-folded #sidebarCol .sidebar-rail { background: var(--maroon-surface); }
+    }
+    /* The panel's ground and the rim that lifts it off the photo are two
+       pseudo-elements on the repository (archive/index.php), painted behind
+       it. Behind glass they are no longer behind anything: the cream came
+       through as a pink cast where the picture should be, and the rim as a
+       dark band across the top third of the bar. The rail is its own surface
+       now, so both stand down while it is folded. An id outranks the four
+       classes that stylesheet names them with, whichever loads last. */
+    html.sidebar-folded #sidebarCol::before,
+    html.sidebar-folded #sidebarCol::after { content: none; }
+    html.sidebar-folded #sidebarCol .sidebar-rail { display: flex; }
+    /* The panel is no wider than one button, so it is as tall as the rail and
+       no taller: a dashboard that lets the sidebar set the column height
+       (console_shell.php) would otherwise stretch the cream the length of the
+       results. */
+    html.sidebar-folded #sidebarCol { align-self: start; }
+}
+
+/* Below the breakpoint the sidebar is a drawer, or stacked under the results:
+   there are no sides to choose between, and nothing to fold away from. The
+   rail is never drawn there, so the cards stay reachable however the setting
+   was left on a wider screen. */
 @media (max-width: 900px) {
-    .js-side-swap { display: none; }
+    .js-side-swap, .js-side-hide { display: none; }
+    .sidebar-rail { display: none !important; }
 }
 
 .card-chevron { transition: transform .25s ease; }

@@ -24,7 +24,13 @@
  *       intro:       'hint shown after the first document' (optional; '' for none)
  *       loadingText: 'said while loading'                 (optional; '' for none)
  *       onBusy:      function (loading) {…}               (optional; for a spinner)
+ *       onFail:      function (message) {…}               (optional)
  *   });
+ *
+ * onFail is given the failure instead of the status element, for a host that
+ * wants to put something to press beside the words (the two viewers offer a
+ * retry). Without it the message is written to the status element as before,
+ * so a host that has not been taught about it is unaffected.
  *   view.load(fileOrArrayBuffer);
  */
 (function (global) {
@@ -57,6 +63,14 @@
 
         function say(msg) {
             if (statusEl) statusEl.textContent = msg || '';
+        }
+
+        /* A failure, as opposed to anything else say() carries. The host is
+           offered it first: say() writes textContent, which would wipe out a
+           retry button the host had just put in the same box. */
+        function fail(msg) {
+            if (typeof options.onFail === 'function') options.onFail(msg);
+            else say(msg);
         }
 
         /* Loading, told to the page rather than written: onBusy(true) when a
@@ -857,7 +871,7 @@
                 }).catch(function () {
                     if (overtaken()) return;      // the newer load owns the status now
                     busy(false);
-                    say(options.failMessage || 'This PDF could not be previewed. You can still upload it.');
+                    fail(options.failMessage || 'This PDF could not be previewed. You can still upload it.');
                 });
             },
             pageCount: function () { return pdfDoc ? pdfDoc.numPages : 0; },

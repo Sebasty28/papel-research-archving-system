@@ -94,8 +94,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$full || !$email || !$program || !$ay || !$sect || !$sid) {
       $fail('Full name, Student ID, email, program, academic year and section are all needed.');
     }
-    if (!preg_match('/^[A-Za-z\s.]+$/', $full))     { $fail('Full name cannot contain numbers.'); }
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) { $fail('Invalid email format.'); }
+    /* One rule per answer, shared with the create form below and with the two
+       staff consoles: see "What a management console may be told" in
+       config/core.php. The first complaint is the one shown, so they are read
+       in the order the fields are in. */
+    foreach ([person_name_problem($full), student_number_problem($sid),
+              account_email_problem($email), academic_year_problem($ay),
+              section_problem($sect)] as $why) {
+        if ($why !== null) { $fail($why); }
+    }
+    /* The programme decides the filing folder and every report, and it arrives
+       in a form field like the rest: a crafted post could file a student under
+       a degree that does not exist. */
+    if (!array_key_exists($program, programs_map())) {
+        $fail('Choose an academic program from the list.');
+    }
     /* The expiry is counted from this, so an intake that has not started yet
        would quietly buy the account another year. */
     if (academic_year_is_future($ay)) {
@@ -181,14 +194,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     header('Location: faculty_manage_students.php'); exit;
   }
 
-  // Validate student_id if provided
-  if ($student_id) {
-    $validation = validate_student_id($student_id);
-    if (!$validation['valid']) {
-      flash('error', $validation['message']);
+  /* The same rules the edit handler uses, in the same order: a name that is
+     not one, a student number that is not the registrar's, an address with no
+     domain, an academic year or a section nothing can read. All of them before
+     a single lookup, so a bad answer costs no queries. */
+  foreach ([person_name_problem($full), student_number_problem($student_id),
+            account_email_problem($email), academic_year_problem($academic_year),
+            section_problem($section)] as $why) {
+    if ($why !== null) {
+      flash('error', $why);
       header('Location: faculty_manage_students.php'); exit;
     }
-    
+  }
+  if (!array_key_exists($program, programs_map())) {
+    flash('error', 'Choose an academic program from the list.');
+    header('Location: faculty_manage_students.php'); exit;
+  }
+
+  if ($student_id) {
     // Check if student_id already exists
     $check_stmt = $conn->prepare("SELECT COUNT(*) as cnt FROM users WHERE student_id=?");
     $check_stmt->bind_param('s', $student_id);
@@ -199,12 +222,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       flash('error','Student ID already exists. Please use a different Student ID.');
       header('Location: faculty_manage_students.php'); exit;
     }
-  }
-  
-  // Validate email format
-  if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    flash('error','Invalid email format.');
-    header('Location: faculty_manage_students.php'); exit;
   }
   
   /* The username is an internal handle now, not something anyone types. It is
@@ -624,17 +641,15 @@ $PAGE_SKELETON = 'table';
 
                     <div class="mgmt-field">
                         <label for="full_name">Full name <span class="req">*</span></label>
-                        <input type="text" name="full_name" id="full_name" pattern="[A-Za-z\s.]+"
-                               title="Full name cannot contain numbers"
+                        <input type="text" name="full_name" id="full_name"
                                placeholder="e.g. Juan Dela Cruz" required>
                     </div>
 
                     <div class="mgmt-field">
                         <label for="student_id">Student ID <span class="req">*</span></label>
                         <input type="text" name="student_id" id="student_id"
-                               pattern="[A-Za-z0-9._-]{6,20}" title="Student ID: 6-20 characters"
                                placeholder="e.g. 2026-00001-BN-0" required>
-                        <small class="mgmt-hint">6&ndash;20 characters. This is what they sign in with.</small>
+                        <small class="mgmt-hint">Numbers and dashes, as the registrar writes it. This is what they sign in with.</small>
                     </div>
 
                     <div class="mgmt-field">
@@ -871,16 +886,13 @@ $PAGE_SKELETON = 'table';
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 document.addEventListener('DOMContentLoaded', function () {
 
-    /* A Student ID with only letters, or only digits, is almost always a typo.
-       Say so while it is being typed rather than after the form is sent. */
-    var sid = document.getElementById('student_id');
-    if (sid) {
-        sid.addEventListener('input', function () {
-            var v = this.value;
-            var ok = v.length === 0 || (/[A-Za-z]/.test(v) && /[0-9]/.test(v));
-            this.setCustomValidity(ok ? '' : 'Student ID needs at least one letter and one number.');
-        });
-    }
+    /* What a Student ID may be is includes/manage_validate.php's business now,
+       in the same words as the server (student_number_problem). This used to
+       set a custom validity here demanding "at least one letter and one
+       number", which the registrar's 2026-00001-BN-0 only happens to satisfy
+       and a plain roll number does not; worse, a custom validity stops the
+       submit event before any script sees it, so the shared rules never ran
+       and the browser showed a bubble of its own instead. */
 
     /* An academic year that has not started yet is refused by the handler,
        because the account's expiry is counted from it. Said here as it is
@@ -1181,6 +1193,11 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 <?php require ROOT_PATH.'/includes/password_generator.php';
 require_once ROOT_PATH.'/includes/action_dialogs.php';
+/* The field rules, before the save confirmation: both listen for this
+   form's submit, and listeners fire in the order they were added, so a
+   refused form has to stop the event before the dialog asks whether to
+   save it. */
+require ROOT_PATH.'/includes/manage_validate.php';
 require ROOT_PATH.'/includes/manage_save_confirm.php';
 require ROOT_PATH.'/includes/site_footer.php'; ?>
 </body>

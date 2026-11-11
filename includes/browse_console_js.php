@@ -657,6 +657,16 @@
     if (!aside) { return; }
     var root = document.documentElement;
     var KEY = 'papel_sidebar_side';
+    var FOLD_KEY = 'papel_sidebar_folded';
+
+    function folded() { return root.classList.contains('sidebar-folded'); }
+
+    function symbol(name, cls) {
+        var i = document.createElement('span');
+        i.className = 'material-symbols-outlined' + (cls ? ' ' + cls : '');
+        i.textContent = name;
+        return i;
+    }
 
     function label(btn) {
         var to = root.classList.contains('sidebar-left') ? 'right' : 'left';
@@ -677,33 +687,143 @@
         ['side-icon-left:dock_to_right', 'side-icon-right:dock_to_left']
             .forEach(function (pair) {
                 var bits = pair.split(':');
-                var i = document.createElement('span');
-                i.className = 'material-symbols-outlined ' + bits[0];
-                i.textContent = bits[1];
-                btn.appendChild(i);
+                btn.appendChild(symbol(bits[1], bits[0]));
             });
         label(btn);
         tools.insertBefore(btn, tools.firstChild);
+
+        /* Hide, beside it and before it: the pair reads left to right the way
+           the upload page's does, where the side pane's own strip carries the
+           same two tools in the same order. The glyph points the way the panel
+           will go, so it follows the side rather than the state. */
+        var hide = document.createElement('button');
+        hide.type = 'button';
+        hide.className = 'card-tool js-side-hide';
+        hide.title = 'Hide the side panel';
+        hide.setAttribute('aria-label', 'Hide the side panel');
+        hide.setAttribute('aria-controls', 'sidebarCol');
+        hide.setAttribute('aria-expanded', folded() ? 'false' : 'true');
+        ['side-icon-left:right_panel_close', 'side-icon-right:left_panel_close']
+            .forEach(function (pair) {
+                var bits = pair.split(':');
+                hide.appendChild(symbol(bits[1], bits[0]));
+            });
+        tools.insertBefore(hide, btn);
+    }
+
+    /* ----- The rail the panel folds into -----
+       One button to bring it back, then one per card, so the filters are a
+       click away rather than an unfold and a hunt. It lives inside the
+       <aside>: that is the element the cream panel is painted on and the one
+       the grid gives a column to, and a rail outside it would need a column of
+       its own. An AJAX filter (review_console.php) replaces the aside's
+       innerHTML in place, which is what the observer below puts right. */
+    var ICON = {
+        browseCard:  'travel_explore',
+        quickCard:   'bolt',
+        filterCard:  'filter_alt',
+        accountCard: 'account_circle'
+    };
+
+    /* The title alone, never the header it sits in: a header holds the card's
+       tools too, and every one of those is a <span> of glyph text, so reading
+       the header gave "Browseright_panel_closeexpand_more". A card with no
+       button of its own (the signed-out Browse card) has a plain header and
+       nothing else in it. */
+    function cardTitle(card) {
+        var t = card.querySelector('.card-title-btn') ||
+                card.querySelector('.sidebar-card-header');
+        return t ? t.textContent.trim() : 'the panel';
+    }
+
+    function railButton(title, icon, onClick, extra) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'sidebar-rail-btn' + (extra ? ' ' + extra : '');
+        b.title = title;
+        b.setAttribute('aria-label', title);
+        b.appendChild(symbol(icon));
+        b.addEventListener('click', onClick);
+        return b;
+    }
+
+    function addRail() {
+        var gone = aside.querySelector(':scope > .sidebar-rail');
+        if (gone) { gone.remove(); }
+        if (!folded()) { return; }
+        var rail = document.createElement('div');
+        rail.className = 'sidebar-rail';
+        rail.setAttribute('role', 'toolbar');
+        rail.setAttribute('aria-orientation', 'vertical');
+        rail.setAttribute('aria-label', 'Side panel, hidden');
+        rail.appendChild(railButton('Show the panel',
+            root.classList.contains('sidebar-left') ? 'right_panel_open' : 'left_panel_open',
+            function () { setFolded(false); }, 'is-show'));
+        aside.querySelectorAll(':scope > .sidebar-card').forEach(function (card) {
+            var title = cardTitle(card);
+            rail.appendChild(railButton('Show ' + title, ICON[card.id] || 'list', function () {
+                setFolded(false);
+                /* A card the reader had collapsed is opened: they asked for
+                   that card, not for the panel with it still shut. */
+                if (card.classList.contains('collapsed')) {
+                    var shut = card.querySelector('.js-card-toggle');
+                    if (shut) { shut.click(); }
+                }
+                var head = card.querySelector('.card-title-btn');
+                if (head) { head.focus(); }
+                card.scrollIntoView({ block: 'nearest' });
+            }));
+        });
+        aside.insertBefore(rail, aside.firstChild);
+    }
+
+    function setFolded(on) {
+        root.classList.toggle('sidebar-folded', on);
+        try { localStorage.setItem(FOLD_KEY, on ? '1' : '0'); } catch (e) {}
+        aside.querySelectorAll('.js-side-hide').forEach(function (b) {
+            b.setAttribute('aria-expanded', on ? 'false' : 'true');
+        });
+        addRail();
+        /* The control just pressed has gone with the thing it was on, so the
+           cursor goes to whichever one replaced it rather than to the top of
+           the document. Only on a press: the redraw after an AJAX filter goes
+           through addRail() alone and must not take the cursor off the page. */
+        var next = aside.querySelector(on ? '.sidebar-rail-btn.is-show' : '.js-side-hide');
+        if (next) { next.focus(); }
     }
 
     function setSide(left) {
         root.classList.toggle('sidebar-left', left);
         aside.querySelectorAll('.js-side-swap').forEach(label);
         try { localStorage.setItem(KEY, left ? 'left' : 'right'); } catch (e) {}
+        /* The rail's own glyph points at the panel, so it turns round with it.
+           A no-op while the panel is open: there is no rail drawn then. */
+        addRail();
     }
 
     /* Delegated, and the button is put back after every refresh: applying a
        filter replaces everything inside the aside, button included. */
     document.addEventListener('click', function (e) {
-        var btn = e.target.closest('.js-side-swap');
+        var btn = e.target.closest('.js-side-swap, .js-side-hide');
         if (!btn) { return; }
         e.preventDefault();
         e.stopPropagation();          // the card's collapse toggle is alongside
-        setSide(!root.classList.contains('sidebar-left'));
+        if (btn.classList.contains('js-side-hide')) { setFolded(true); }
+        else { setSide(!root.classList.contains('sidebar-left')); }
     });
 
-    addButton();
-    new MutationObserver(addButton).observe(aside, { childList: true, subtree: true });
+    function build() {
+        addButton();
+        /* The rail stands for the cards, and an AJAX filter replaces them, so
+           it is drawn again after one. Neither call may touch the DOM when
+           there is nothing to do, or the observer would wake itself for ever:
+           addButton leaves as soon as its buttons are there, and this one only
+           draws while the panel is folded and the rail has gone. */
+        if (folded() && !aside.querySelector(':scope > .sidebar-rail')) { addRail(); }
+    }
+
+    build();
+    new MutationObserver(build).observe(aside, { childList: true, subtree: true });
 })();
 
 

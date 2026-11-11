@@ -235,29 +235,192 @@ function e(string $v): string { return htmlspecialchars($v, ENT_QUOTES | ENT_SUB
 function now(): string { return date('Y-m-d H:i:s'); }
 
 // Validate student ID format (alphanumeric, 6-20 characters, allows hyphens and underscores)
+/**
+ * Kept for its shape; the rule itself is student_number_problem() below, so
+ * there is one answer to "is this a student number" and not two that drift.
+ * It used to demand a letter, which the registrar's own 2026-00001-BN-0 only
+ * happens to satisfy and a plain roll number would not.
+ */
 function validate_student_id(string $student_id): array {
-  $student_id = trim($student_id);
-  
-  if (empty($student_id)) {
-    return ['valid' => false, 'message' => 'Student ID is required.'];
-  }
-  
-  // Check length (typically 6-20 characters)
-  if (strlen($student_id) < 6 || strlen($student_id)> 20) {
-    return ['valid' => false, 'message' => 'Student ID must be between 6 and 20 characters.'];
-  }
-  
-  // Allow alphanumeric, hyphens, underscores, and dots
-  if (!preg_match('/^[A-Za-z0-9._-]+$/', $student_id)) {
-    return ['valid' => false, 'message' => 'Student ID can only contain letters, numbers, dots, hyphens, and underscores.'];
-  }
-  
-  // Must contain at least one letter and one number
-  if (!preg_match('/[A-Za-z]/', $student_id) || !preg_match('/[0-9]/', $student_id)) {
-    return ['valid' => false, 'message' => 'Student ID must contain at least one letter and one number.'];
-  }
-  
-  return ['valid' => true, 'message' => ''];
+  $why = student_number_problem($student_id);
+  return ['valid' => $why === null, 'message' => $why ?? ''];
+}
+
+/* =========================================================================
+   What a management console may be told.
+
+   The three consoles (an adviser's students, the Coordinator's advisers and
+   librarians, the Director's admins) ask for the same handful of answers, and
+   between them took almost anything: a full name of digits, a student number
+   of keyboard mashing, an email with no domain after the @, a section nothing
+   can read. The last one is not cosmetic. A student account's life is worked
+   out from its section and academic year (student_expiry_date), and a section
+   that student_account_years() cannot read means no expiry at all, so a
+   mistyped roll quietly hands somebody an account that never lapses.
+
+   Each of these answers with the sentence to show the person, or null when the
+   value is fine, so a handler reads as one line per field. The wording is the
+   person's, not the database's. The same rules are stated again for the
+   browser in includes/manage_validate.php; keep the two together, and let the
+   server be the one that decides.
+   ========================================================================= */
+
+/** The characters a person's name is written with, here and in the browser. */
+const PERSON_NAME_OK = "/^[\p{L}\p{M}.'\\-\\s]+$/u";
+
+/**
+ * Why this is not a person's name, or null.
+ *
+ * Letters, spaces, full stops, hyphens and apostrophes: the hyphen and the
+ * apostrophe are new, and they are not a loosening. The old rule was
+ * [A-Za-z\s.]+ on both the form and the server, which refused Dela Cruz-Santos
+ * and O'Brien outright while accepting "asdasdasd" without a murmur.
+ */
+function person_name_problem(string $name): ?string {
+    $name = trim($name);
+    if ($name === '')               return 'Enter their full name.';
+    if (mb_strlen($name) > 100)     return 'That name is too long for the form.';
+    if (preg_match('/\d/', $name))  return 'A full name has no numbers in it.';
+    if (!preg_match(PERSON_NAME_OK, $name)) {
+        return 'A full name is letters, spaces, full stops, hyphens and apostrophes only.';
+    }
+    $letters = preg_replace('/[^\p{L}]+/u', '', $name) ?? '';
+    if (mb_strlen($letters) < 2)    return 'Please write their name out in letters.';
+    /* The same test the upload form uses on a paper type somebody has typed
+       (other_name_looks_random): one letter four times over, a long run of
+       three or four letters shuffled, six consonants together, a run along the
+       keyboard, a long word with no vowel in it. "adasdadasd" is the second. */
+    if (other_name_looks_random($name)) {
+        return 'That does not look like a name. Please type it as it is written.';
+    }
+    return null;
+}
+
+/**
+ * Why this is not a student number, or null.
+ *
+ * The registrar writes them 2026-00001-BN-0: the intake year, the roll number,
+ * the campus and a check digit. So the rule is numbers and dashes, with the
+ * campus code the only letters allowed, and it still accepts a plain roll
+ * number for a record kept the short way.
+ */
+function student_number_problem(string $id): ?string {
+    $id = trim($id);
+    if ($id === '')                          return 'Enter their student number.';
+    if (strlen($id) < 6 || strlen($id) > 20) {
+        return 'A student number is between 6 and 20 characters, like 2026-00001-BN-0.';
+    }
+    if (!preg_match('/^[0-9A-Za-z-]+$/', $id)) {
+        return 'A student number is numbers and dashes, with no spaces or symbols, like 2026-00001-BN-0.';
+    }
+    if (!preg_match('/^[0-9]/', $id)) {
+        return 'A student number starts with the intake year, like 2026-00001-BN-0.';
+    }
+    if (strpos($id, '--') !== false || substr($id, -1) === '-') {
+        return 'Check the dashes in that student number: 2026-00001-BN-0.';
+    }
+    if (preg_match('/[A-Za-z]{4,}/', $id)) {
+        return 'Only the campus code may be letters, as BN is in 2026-00001-BN-0.';
+    }
+    if (preg_match_all('/[0-9]/', $id) < 6) {
+        return 'A student number has at least six digits in it, like 2026-00001-BN-0.';
+    }
+    return null;
+}
+
+/**
+ * Why this is not a staff ID, or null. $label names the box on the form, since
+ * the same rule serves Faculty ID, Librarian ID and the Director's own.
+ *
+ * Looser than a student number on purpose: these are issued by the campus in
+ * several shapes already on file (FC-00123, HAP-00123, DIR-2026-001), so what
+ * is enforced is that it reads as an ID at all rather than any one form of it.
+ */
+function staff_id_problem(string $id, string $label = 'staff ID'): ?string {
+    $id = trim($id);
+    if ($id === '')                          return 'Enter their ' . $label . '.';
+    if (strlen($id) < 3 || strlen($id) > 20) {
+        return 'A ' . $label . ' is between 3 and 20 characters, like FAC-2026-001.';
+    }
+    if (!preg_match('/^[0-9A-Za-z-]+$/', $id)) {
+        return 'A ' . $label . ' is letters, numbers and dashes, with no spaces or symbols.';
+    }
+    if (strpos($id, '--') !== false || $id[0] === '-' || substr($id, -1) === '-') {
+        return 'Check the dashes in that ' . $label . ': FAC-2026-001.';
+    }
+    if (!preg_match('/[0-9]/', $id)) {
+        return 'A ' . $label . ' has a number in it, like FAC-2026-001.';
+    }
+    if (other_name_looks_random($id)) {
+        return 'That does not look like a ' . $label . '. It is the one the campus issued, like FAC-2026-001.';
+    }
+    return null;
+}
+
+/**
+ * Why this is not an address mail can reach, or null.
+ *
+ * PHP's own filter passes fsjdfhsjfhjsd@gmail: a bare host is a valid address
+ * on a network that has one, and on the public internet it is a typo nobody
+ * will ever receive. Every account made here is emailed its password, so an
+ * address that cannot take delivery is worth catching while the person who
+ * typed it is still looking at it.
+ */
+function account_email_problem(string $email): ?string {
+    $email = trim($email);
+    if ($email === '')            return 'Enter their email address.';
+    if (mb_strlen($email) > 150)  return 'That email address is too long for the form.';
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        return 'That is not an email address. It wants the shape name@example.com.';
+    }
+    $domain = substr(strrchr($email, '@') ?: '', 1);
+    if (!preg_match('/^[A-Za-z0-9.-]+\.[A-Za-z]{2,24}$/', $domain)) {
+        return 'That address needs the whole domain, like gmail.com rather than gmail.';
+    }
+    return null;
+}
+
+/**
+ * Why this is not an academic year, or null.
+ *
+ * academic_year_start_year() reads 26-27, 2026-2027 and 26/27, and the account's
+ * expiry is counted from it, so anything it cannot read is refused here rather
+ * than silently counted from today instead.
+ */
+function academic_year_problem(string $ay): ?string {
+    $ay = trim($ay);
+    if ($ay === '')        return 'Enter the academic year.';
+    if (strlen($ay) > 20)  return 'That academic year is too long for the form.';
+    if (!preg_match('/^(\d{2}|\d{4})\s*[-\/]\s*(\d{2}|\d{4})$/', $ay, $m)) {
+        return 'Write the academic year as one year to the next, like 26-27.';
+    }
+    $from = (int)$m[1] % 100;
+    $to   = (int)$m[2] % 100;
+    if ($to !== ($from + 1) % 100) {
+        return 'An academic year runs from one year to the next, like 26-27.';
+    }
+    return null;
+}
+
+/**
+ * Why this is not a section, or null.
+ *
+ * The year level in front of it is what decides how long the account lives
+ * (student_account_years), so the last test is simply whether that function can
+ * read what was typed. A section it cannot read is the quiet failure this is
+ * here to stop: no expiry, on an account that should have had one.
+ */
+function section_problem(string $section): ?string {
+    $section = trim($section);
+    if ($section === '')          return 'Enter their section.';
+    if (mb_strlen($section) > 40) return 'That section is too long for the form.';
+    if (strcasecmp($section, 'ladderized') === 0) return null;
+    if (!preg_match('/^[1-4]\s*-?\s*[A-Za-z0-9]{0,3}$/', $section)
+        || student_account_years($section) === null) {
+        return 'A section starts with the year level, like 4-1 or 4A, because that is what the '
+             . "account's length is counted from. For a ladderized intake, type Ladderized.";
+    }
+    return null;
 }
 
 function csrf_token(): string {
@@ -1687,8 +1850,13 @@ function student_account_years(?string $section): ?int {
     $section = trim((string)$section);
     if ($section === '') return null;
     if (strcasecmp($section, 'ladderized') === 0) return 2;
-    // "4-1", "4 - 1", "4A", only the year level in front matters.
-    if (preg_match('/^\s*([1-4])\b/', $section, $m)) {
+    /* "4-1", "4 - 1", "4A", only the year level in front matters. Not \b
+       after the digit: between "4" and "A" there is no boundary, both being
+       word characters, so the one shape this comment named was the one it
+       did not read, and a "4A" section silently gave the account no expiry
+       at all. A second digit is still refused, so "41" is unreadable rather
+       than read as a fourth year. */
+    if (preg_match('/^\s*([1-4])(?![0-9])/', $section, $m)) {
         return 6 - (int)$m[1];       // 1 -> 5, 2 -> 4, 3 -> 3, 4 -> 2
     }
     return null;

@@ -230,3 +230,33 @@
     -ms-user-select: none;
     user-select: none;
 }
+
+/* ----- The way out of a failed load -----
+   A pill with the refresh ring in it, put beside the failure by whichever
+   viewer is showing it (includes/pdf_dock.php, app/student/pdf_viewer.php).
+   It lives here because both load this file and the button must look the same
+   in each; neither viewer is named above for that reason.
+
+   A real <button>, so it keeps the focus ring and answers the keyboard.
+   `white-space: normal` because the box it sits in is `pre-line`, to give the
+   cause of a Drive failure its own line, and the label would otherwise break
+   wherever it happened to be written. */
+.pdf-retry {
+    display: inline-flex; align-items: center; gap: .35rem;
+    padding: .3rem .75rem .3rem .5rem;
+    border: 1px solid var(--border); border-radius: 999px;
+    background: var(--cream); color: var(--maroon);
+    font-family: var(--font-body); font-size: .8125rem; font-weight: 600;
+    line-height: 1.2; white-space: normal; cursor: pointer;
+    transition: background .15s ease, border-color .15s ease;
+}
+.pdf-retry:hover:not(:disabled) { background: var(--white); border-color: var(--maroon); }
+.pdf-retry:disabled { cursor: default; opacity: .75; }
+.pdf-retry-icon { font-size: 18px; line-height: 1; }
+/* Turning while the retry is in flight, so a slow Drive still looks answered. */
+.pdf-retry.is-spinning .pdf-retry-icon { animation: pdf-retry-spin .9s linear infinite; }
+@keyframes pdf-retry-spin { to { transform: rotate(360deg); } }
+/* The ring already says "working"; it does not have to move to say it. */
+@media (prefers-reduced-motion: reduce) {
+    .pdf-retry.is-spinning .pdf-retry-icon { animation: none; }
+}
