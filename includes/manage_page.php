@@ -729,6 +729,27 @@ html.import-open { overflow: hidden; }
 .import-tick { width: 2rem; }
 .import-line { color: var(--grey); font-variant-numeric: tabular-nums; }
 .import-pw { font-family: ui-monospace, Consolas, monospace; white-space: nowrap; }
+.import-pw-pending { font-family: inherit; color: var(--grey); font-style: italic; }
+
+/* Every cell of the preview is editable, so a row can be mended here rather
+   than in the spreadsheet. They are written as plain text until focused: a
+   table of forty boxed inputs reads as a form to fill in rather than a list to
+   check, which is the opposite of what this screen is for. */
+.import-cell {
+    width: 100%; min-width: 7rem;
+    padding: .2rem .3rem; margin: -.2rem -.3rem;
+    font-family: inherit; font-size: inherit; color: inherit;
+    background: transparent; border: 1px solid transparent;
+    border-radius: var(--r-control, 4px);
+}
+.import-cell:hover { border-color: var(--border); background: var(--white); }
+.import-cell:focus {
+    outline: none; background: var(--white);
+    border-color: var(--maroon); box-shadow: 0 0 0 2px color-mix(in srgb, var(--maroon) 18%, transparent);
+}
+select.import-cell { min-width: 9rem; cursor: pointer; }
+.import-table.is-editable td { vertical-align: middle; }
+.import-table.is-editable .import-status { vertical-align: top; }
 .import-ok { color: var(--maroon); font-weight: 600; }
 .import-skip { color: var(--grey); }
 .import-why { margin: 0; padding-left: 1rem; }

@@ -340,5 +340,17 @@
             try { first.focus({ preventScroll: false }); } catch (err) { first.focus(); }
         });
     });
+
+    /* The same rules, for anything that is not one of these forms. The
+       spreadsheet import checks its preview as it is typed in, and a second
+       copy of "that does not look like a name" would be a second opinion about
+       one answer. Nothing else is published: the rest of this file is about
+       fields that live in a form. */
+    window.papelManageRules = {
+        name:          nameProblem,
+        studentNumber: studentNumberProblem,
+        staffId:       staffIdProblem,
+        email:         emailProblem
+    };
 })();
 </script>

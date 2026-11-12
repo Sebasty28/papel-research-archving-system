@@ -1079,10 +1079,29 @@ at the cost of a build:
   refused for exactly the reasons typing it would be. `account_import_check_row()`
   is the one copy, and the create pass runs it **again**: a preview is a moment
   old, and somebody else may have enrolled the same person in between.
-- **Nothing the browser says is trusted but a list of line numbers.** The parsed
-  rows stay in the session (`$_SESSION['papel_import'][$kind]`) and the create
-  step reads them from there. Three hundred rows of names and emails travelling
-  through the browser and back would all have to be treated as hostile on return.
+- **Every cell of the preview is editable**, so a row the rules refused is mended
+  there rather than in the spreadsheet. It is re-checked as it is typed, by the
+  very functions the forms use: `includes/manage_validate.php` publishes
+  `window.papelManageRules`, and a second copy of "that does not look like a
+  name" would be a second opinion about one answer. The password comes from the
+  name and the ID, so an edited row's shows "on create" rather than a stale value.
+- **So the posted values do matter, and they are checked like any other typing.**
+  The session still decides which *lines* exist, so a post cannot invent a row the
+  file never had; everything else comes from the page and goes through
+  `account_import_check_row()` and the duplicate lookup again inside
+  `account_import_create()`. Nothing from the page is believed about whether a row
+  is fit to create, only about what it now says. Driven against the running site:
+  a post naming `Director` or `super_admin` as a position on the admins console is
+  refused in the console's own words, while the legitimate rows beside it are
+  created.
+- **Rows that fail are kept, with what was typed into them**, so they can be
+  corrected and tried again; the ones that succeeded drop out. Clearing the lot
+  would throw away the edits along with the mistake.
+- **There is no default position any more.** It was a box on the upload card
+  answering for every row at once, which is the wrong shape: one file can hold
+  advisers and librarians. Each row carries its own, as a list of the positions
+  that console may create, never a free-text box that invites a spelling the
+  server has to refuse.
 - **A position a console may not create is refused**, from the file as from the
   form: `account_import_kinds()` holds each console's own set, so a spreadsheet
   naming "Director" on the admins console is rejected in words. Checked against

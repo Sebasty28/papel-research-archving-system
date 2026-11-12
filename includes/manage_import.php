@@ -84,8 +84,6 @@ function manage_import_handle(string $kind, mysqli $conn, string $self, int $cre
                 foreach ([academic_year_problem($ctx['academic_year']), section_problem($ctx['section'])] as $why) {
                     if ($why !== null) { throw new UserFacingException($why); }
                 }
-            } else {
-                $ctx['position'] = (string)($_POST['default_position'] ?? '');
             }
 
             $sheet = account_import_read($_FILES['import_file'] ?? []);
@@ -121,9 +119,29 @@ function manage_import_handle(string $kind, mysqli $conn, string $self, int $cre
         $back();
     }
 
-    /* The page returns line numbers and nothing else. */
+    /* The preview is editable, so the page returns the corrected values as well
+       as the ticks. They are a member of staff's typing, exactly as the create
+       form's boxes are, and they are checked the same way: every row goes
+       through account_import_check_row() and the duplicate lookup again inside
+       account_import_create(). Nothing from the page is believed about whether
+       a row is fit to create; only about what it now says.
+
+       The stash is still the list of lines, so a line the file never had cannot
+       be invented by adding one to the post. */
     $wanted = array_flip(array_map('intval', (array)($_POST['rows'] ?? [])));
-    $rows = array_values(array_filter($stash['rows'], static fn($r) => isset($wanted[$r['line'] ?? -1])));
+    $cells  = (array)($_POST['cell'] ?? []);
+
+    $rows = [];
+    foreach ($stash['rows'] as $row) {
+        $line = $row['line'] ?? -1;
+        if (!isset($wanted[$line])) { continue; }
+        $edit = (array)($cells[$line] ?? []);
+        $row['id']       = trim((string)($edit['id']    ?? $row['id']));
+        $row['name']     = normalize_person_name((string)($edit['name'] ?? $row['name']));
+        $row['email']    = strtolower(trim((string)($edit['email'] ?? $row['email'])));
+        $row['position'] = $kind === 'student' ? '' : trim((string)($edit['position'] ?? $row['position']));
+        $rows[] = $row;
+    }
     if (!$rows) {
         flash('error', 'No rows were ticked, so nothing was created.');
         $back();
@@ -132,7 +150,31 @@ function manage_import_handle(string $kind, mysqli $conn, string $self, int $cre
     $notify = ($_POST['notify'] ?? '') === '1';
     $result = account_import_create($rows, $kind, $stash['ctx'], $conn, $notify);
 
-    manage_import_set($kind, null);
+    /* Rows that failed are kept, with what was typed into them, so they can be
+       corrected and tried again. Clearing the lot would throw away the edits
+       along with the mistake. Everything through: the import is finished. */
+    if ($result['created'] + $result['failed'] + $result['skipped'] > 0 && ($result['failed'] || $result['skipped'])) {
+        $done = [];
+        foreach ($result['log'] as $line) {
+            if (!empty($line['ok'])) { $done[$line['id']] = true; }
+        }
+        $keep = [];
+        foreach ($stash['rows'] as $row) {
+            if (!empty($row['over'])) { continue; }
+            foreach ($rows as $edited) {
+                if (($edited['line'] ?? null) === ($row['line'] ?? null)) { $row = $edited; break; }
+            }
+            if (isset($done[$row['id']])) { continue; }      // created, nothing left to do
+            $row['problems'] = account_import_check_row($row, $kind);
+            $row['exists']   = account_import_existing($conn, $kind, $row['id'], $row['email']);
+            $row['password'] = $row['problems'] ? '' : account_import_password($row['name'], $row['id']);
+            $keep[] = $row;
+        }
+        $stash['rows'] = $keep;
+        manage_import_set($kind, $keep ? $stash : null);
+    } else {
+        manage_import_set($kind, null);
+    }
 
     $spec = account_import_kind($kind);
     $said = $result['created'] . ' ' . ($result['created'] === 1 ? $spec['noun'] : $spec['plural']) . ' created';
@@ -202,16 +244,6 @@ function manage_import_card(string $kind): void {
                         </div>
                     </div>
                     <small class="mgmt-hint">The section sets how long the accounts last, so one file is one section.</small>
-                <?php else: ?>
-                    <div class="mgmt-field">
-                        <label for="imp_position">Position <span class="req">*</span></label>
-                        <select name="default_position" id="imp_position" required>
-                            <?php foreach ($spec['positions'] as $p): ?>
-                                <option value="<?= e($p) ?>"><?= e($p) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                        <small class="mgmt-hint">Used for any row whose file has no Position column of its own.</small>
-                    </div>
                 <?php endif; ?>
 
                 <div class="mgmt-field">
@@ -264,8 +296,9 @@ function manage_import_preview(string $kind): void {
                     <p class="import-lead">
                         <strong><?= $nReady ?></strong> ready to create<?php
                         $bad = count($rows) - $nReady;
-                        if ($bad) { echo ', <strong>' . $bad . '</strong> left out'; } ?>.
-                        Untick anybody you do not want.
+                        if ($bad) { echo ', <strong>' . $bad . '</strong> needing attention'; } ?>.
+                        Every box below can be corrected here: fix a row and it is checked again as
+                        you type, with no need to mend the spreadsheet and upload it afresh.
                     </p>
                 </div>
                 <form method="post" class="import-discard">
@@ -295,12 +328,12 @@ function manage_import_preview(string $kind): void {
                 <input type="hidden" name="action" value="import_create">
 
                 <div class="import-scroll">
-                    <table class="import-table">
+                    <table class="import-table is-editable">
                         <thead>
                             <tr>
                                 <th class="import-tick">
-                                    <input type="checkbox" id="impAll" checked
-                                           aria-label="Tick or untick every row that can be created">
+                                    <input type="checkbox" id="impAll"
+                                           aria-label="Tick or untick every row">
                                 </th>
                                 <th>Line</th>
                                 <th><?= e($spec['id_label']) ?></th>
@@ -313,22 +346,41 @@ function manage_import_preview(string $kind): void {
                         </thead>
                         <tbody>
                         <?php foreach ($rows as $r):
-                            $ok = account_import_usable($r); ?>
-                            <tr class="<?= $ok ? '' : 'is-bad' ?>">
+                            $ok = account_import_usable($r);
+                            $line = (int)$r['line']; ?>
+                            <tr class="import-row <?= $ok ? '' : 'is-bad' ?>" data-line="<?= $line ?>">
                                 <td class="import-tick">
-                                    <?php if ($ok): ?>
-                                        <input type="checkbox" name="rows[]" value="<?= (int)$r['line'] ?>" checked
-                                               class="import-row-tick"
-                                               aria-label="Create <?= e($r['name']) ?>">
-                                    <?php endif; ?>
+                                    <input type="checkbox" name="rows[]" value="<?= $line ?>"
+                                           class="import-row-tick" <?= $ok ? 'checked' : '' ?>
+                                           aria-label="Create line <?= $line ?>">
                                 </td>
-                                <td class="import-line"><?= (int)$r['line'] ?></td>
-                                <td><?= e($r['id']) ?></td>
-                                <td><?= e($r['name']) ?></td>
-                                <td><?= e($r['email']) ?></td>
-                                <?php if ($kind !== 'student'): ?><td><?= e($r['position']) ?></td><?php endif; ?>
-                                <td class="import-pw"><?= $ok ? e($r['password']) : '' ?></td>
+                                <td class="import-line"><?= $line ?></td>
+                                <td><input type="text" class="import-cell" data-field="id"
+                                           name="cell[<?= $line ?>][id]" value="<?= e($r['id']) ?>"
+                                           aria-label="<?= e($spec['id_label']) ?>, line <?= $line ?>"></td>
+                                <td><input type="text" class="import-cell" data-field="name"
+                                           name="cell[<?= $line ?>][name]" value="<?= e($r['name']) ?>"
+                                           aria-label="Full name, line <?= $line ?>"></td>
+                                <td><input type="text" class="import-cell" data-field="email"
+                                           name="cell[<?= $line ?>][email]" value="<?= e($r['email']) ?>"
+                                           aria-label="Email, line <?= $line ?>"></td>
+                                <?php if ($kind !== 'student'): ?>
                                 <td>
+                                    <?php /* A list, not a box: the position decides the role stored, and
+                                             only three are allowed here. Typing one in would invite a
+                                             spelling the server has to refuse. */ ?>
+                                    <select class="import-cell" data-field="position"
+                                            name="cell[<?= $line ?>][position]"
+                                            aria-label="Position, line <?= $line ?>">
+                                        <option value=""<?= $r['position'] === '' ? ' selected' : '' ?>>Choose</option>
+                                        <?php foreach ($spec['positions'] as $pos): ?>
+                                            <option value="<?= e($pos) ?>"<?= $r['position'] === $pos ? ' selected' : '' ?>><?= e($pos) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </td>
+                                <?php endif; ?>
+                                <td class="import-pw"><?= $ok ? e($r['password']) : '' ?></td>
+                                <td class="import-status">
                                     <?php if ($ok): ?>
                                         <span class="import-ok">ready</span>
                                     <?php elseif ($r['exists'] !== ''): ?>
@@ -356,12 +408,15 @@ function manage_import_preview(string $kind): void {
                         </span>
                     </label>
 
-                    <button type="submit" class="btn-sm-maroon"
-                            <?= $nReady ? '' : 'disabled' ?>
+                    <?php /* The count follows the ticks, which follow the corrections, so
+                             it is written by script rather than fixed here. data-confirm is
+                             rewritten with it: action_dialogs.php reads the attribute when
+                             the button is pressed, so keeping it in step is enough. */ ?>
+                    <button type="submit" class="btn-sm-maroon" id="importCreate"
                             data-confirm="Create <?= $nReady ?> account<?= $nReady === 1 ? '' : 's' ?>? Their passwords are shown once, on the next screen."
-                            data-confirm-yes="Create <?= $nReady ?> account<?= $nReady === 1 ? '' : 's' ?>">
+                            data-confirm-yes="Create accounts">
                         <span class="material-symbols-outlined" aria-hidden="true">person_add</span>
-                        Create <?= $nReady ?> account<?= $nReady === 1 ? '' : 's' ?>
+                        <span id="importCreateLabel">Create <?= $nReady ?> account<?= $nReady === 1 ? '' : 's' ?></span>
                     </button>
                 </div>
             </form>
@@ -370,22 +425,115 @@ function manage_import_preview(string $kind): void {
 
     <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
     (function () {
-        /* The header tick drives the rest. Only rows that can be created have a
-           box at all, so there is nothing to guard against here. */
         var all = document.getElementById('impAll');
         if (!all) { return; }
-        var ticks = Array.prototype.slice.call(document.querySelectorAll('.import-row-tick'));
+        var ticks  = Array.prototype.slice.call(document.querySelectorAll('.import-row-tick')),
+            rows   = Array.prototype.slice.call(document.querySelectorAll('.import-row')),
+            button = document.getElementById('importCreate'),
+            label  = document.getElementById('importCreateLabel'),
+            KIND   = <?= json_encode($kind) ?>;
+
+        /* The rules the forms use, published by includes/manage_validate.php.
+           Absent only if that file is not on the page, in which case a row is
+           simply not re-checked here and the server still decides. */
+        var RULES = window.papelManageRules || null;
+
+        function problemsFor(row) {
+            if (!RULES) { return null; }
+            var get = function (f) {
+                var el = row.querySelector('[data-field="' + f + '"]');
+                return el ? el.value.trim() : '';
+            };
+            var out = [];
+            [RULES.name(get('name'), false),
+             KIND === 'student' ? RULES.studentNumber(get('id'), false) : RULES.staffId(get('id'), false),
+             RULES.email(get('email'), false)].forEach(function (why) {
+                if (why) { out.push(why); }
+            });
+            if (KIND !== 'student' && !get('position')) {
+                out.push('Choose a position for this row.');
+            }
+            return out;
+        }
+
+        /* A row already on file keeps saying so until its ID and email are both
+           changed: the clash was found on the server and cannot be re-tested
+           here, so the honest thing is to leave the sentence and let the create
+           pass decide. */
+        function wasExisting(row) {
+            var skip = row.querySelector('.import-skip');
+            return skip ? skip.textContent.trim() : '';
+        }
+
+        function paint(row) {
+            var problems = problemsFor(row);
+            if (problems === null) { return; }
+            var cell = row.querySelector('.import-status');
+            var still = wasExisting(row);
+
+            row.classList.toggle('is-bad', problems.length > 0);
+
+            if (problems.length) {
+                var ul = document.createElement('ul');
+                ul.className = 'import-why';
+                problems.forEach(function (why) {
+                    var li = document.createElement('li');
+                    li.textContent = why;          // a person's typing, never markup
+                    ul.appendChild(li);
+                });
+                cell.textContent = '';
+                cell.appendChild(ul);
+            } else if (still && !row.dataset.edited) {
+                /* untouched and already on file: leave the sentence as it was */
+            } else {
+                var span = document.createElement('span');
+                span.className = 'import-ok';
+                span.textContent = row.dataset.edited ? 'checked on create' : 'ready';
+                cell.textContent = '';
+                cell.appendChild(span);
+            }
+        }
+
+        function count() {
+            var on = ticks.filter(function (t) { return t.checked; }).length;
+            all.checked = on === ticks.length && on > 0;
+            all.indeterminate = on > 0 && on < ticks.length;
+            if (label) { label.textContent = 'Create ' + on + ' account' + (on === 1 ? '' : 's'); }
+            if (button) {
+                button.disabled = on === 0;
+                button.setAttribute('data-confirm',
+                    'Create ' + on + ' account' + (on === 1 ? '' : 's')
+                    + '? Their passwords are shown once, on the next screen.');
+            }
+        }
 
         all.addEventListener('change', function () {
             ticks.forEach(function (t) { t.checked = all.checked; });
+            count();
         });
-        ticks.forEach(function (t) {
-            t.addEventListener('change', function () {
-                var on = ticks.filter(function (x) { return x.checked; }).length;
-                all.checked = on === ticks.length;
-                all.indeterminate = on > 0 && on < ticks.length;
+        ticks.forEach(function (t) { t.addEventListener('change', count); });
+
+        rows.forEach(function (row) {
+            row.querySelectorAll('.import-cell').forEach(function (cell) {
+                var redo = function () {
+                    row.dataset.edited = '1';
+                    /* The password comes from the name and the ID, so an edited
+                       row's old one is wrong. It is worked out again on the
+                       server at create; saying so beats showing a stale value. */
+                    var pw = row.querySelector('.import-pw');
+                    if (pw && !pw.dataset.wasEdited) {
+                        pw.dataset.wasEdited = '1';
+                        pw.textContent = 'on create';
+                        pw.classList.add('import-pw-pending');
+                    }
+                    paint(row);
+                };
+                cell.addEventListener('input', redo);
+                cell.addEventListener('change', redo);
             });
         });
+
+        count();
     })();
     </script>
     <?php
