@@ -274,7 +274,7 @@ reviewer's feedback attached.
 | `includes/` | Shared header, footer, styles and dialogs |
 | `config/` | Settings, database connection, shared helpers |
 | `scripts/migrations/` | Run these once to add new database columns |
-| `docs/` | Longer notes, including `GIT_GUIDE.md` |
+| `docs/` | Longer notes. [docs/README.md](docs/README.md) says what each one is for |
 
 ---
 

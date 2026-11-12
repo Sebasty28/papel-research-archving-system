@@ -1,12 +1,18 @@
 # Putting PAPEL on production, the first time
 
-Production has never been deployed. There are no tags in the repository and no
-`PROD_FTP_*` secrets in GitHub, so the workflow that would do it has never run.
+> **This has now been done.** Production went live on **12 November 2026** at
+> **pupbcpapel.com**: the `PROD_FTP_*` secrets are set, the first full upload ran
+> that morning (about 17 minutes, which is what sending `vendor/` over FTP costs),
+> and the `v1.0.0` tag deployed on top of it. Check it with
+> `gh run list --workflow "Deploy to production"` rather than by reading this file.
+>
+> So steps A to G below are no longer a plan: they are the record of how that copy
+> was set up, and the guide for setting up the next one. Production moves from here
+> exactly as [RELEASING.md](RELEASING.md) section 4 describes: push a tag beginning
+> with `v` and wait for the green tick.
 
-This is the first run, which is the one that is nothing like the others. After
-this, production moves exactly as [RELEASING.md](RELEASING.md) section 4
-describes: push a tag beginning with `v` and wait for the green tick. Everything
-below is the groundwork that tag needs to land on.
+The first run is the one that is nothing like the others. Everything below is the
+groundwork a `v` tag needs to land on.
 
 Companion to [RELEASING.md](RELEASING.md) (the version number and the tags) and
 to the CLAUDE.md section "Setting up a copy of the site", which is the short form

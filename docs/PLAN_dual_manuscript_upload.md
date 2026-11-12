@@ -1,6 +1,6 @@
 # Plan: one paper, two manuscript files (IMRAD and Full Manuscript)
 
-Status: **implemented** on 2026-10-21 and not yet committed. It was written the
+Status: **implemented** on 2026-10-21 and committed since. It was written the
 same day as a plan for the session that did the coding; section 0 records what the
 owner decided and where the build departs from it, and the rest is the plan as
 written. Read `CLAUDE.md` first; every trap it lists applies here.

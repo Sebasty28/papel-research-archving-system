@@ -1,6 +1,6 @@
 # Plan: sections of the author's own in "Which sections will you submit?"
 
-Status: **implemented** on 2026-10-23 and not yet committed. Written as a plan before any code
+Status: **implemented** on 2026-10-23 and committed since. Written as a plan before any code
 (approved as it stands); section 0 records where the build departs from it. Read `CLAUDE.md`
 first, in particular "Which written sections a paper was filed with" and "Sections of the
 author's own"; the traps they list apply here.

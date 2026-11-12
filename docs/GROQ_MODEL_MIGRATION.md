@@ -266,5 +266,9 @@ migration that is now a one-line change, because every call site reads `GROQ_MOD
 
 ## 10. Related
 
-- `docs/GROQ_AI_FEATURES.md` — what each AI feature does
+- `config/groq_config.php`, the live config, and the only place the key pool and the
+  fallback walk are implemented. The CLAUDE.md section "One pool of AI keys, not a key
+  per feature" is the written-up version of it. (This line used to point at
+  `docs/GROQ_AI_FEATURES.md`, deleted on 12 November 2026: it was a wish list of
+  features nobody built, not a description of the ones that exist.)
 - Groq model list: <https://console.groq.com/docs/models> — confirm exact model ids first

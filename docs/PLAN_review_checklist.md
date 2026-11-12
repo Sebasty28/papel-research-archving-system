@@ -1,6 +1,6 @@
 # Plan: a review checklist that fits the paper
 
-Status: **implemented** on 2026-10-23 and not yet committed. Written as a plan before any code
+Status: **implemented** on 2026-10-23 and committed since. Written as a plan before any code
 (approved as it stands); section 0 records where the build departs from it. Read `CLAUDE.md`
 first; the traps it lists apply here, in particular "A copy of the database can be behind the
 code".

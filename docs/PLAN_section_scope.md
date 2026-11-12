@@ -1,6 +1,6 @@
 # Plan: choosing which written sections a paper is submitted with
 
-Status: **implemented** on 2026-10-22 and not yet committed. It was written as a
+Status: **implemented** on 2026-10-22 and committed since. It was written as a
 plan before any code; section 0 records where the build departs from it, and the
 rest is the plan as written. Read `CLAUDE.md` first; the traps it lists apply here.
 

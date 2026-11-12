@@ -1824,5 +1824,20 @@ describe the dev box, not the cloud checkout.
 - **The Director's password is unrecoverable.** Testing Director-only pages
   means minting a session file directly in `C:/xampp/tmp` (26-character id from
   the `0-9a-v` alphabet — PHP rejects anything else).
-- **17 files in `docs/`**, several stale. `ADMIN_L2_DASHBOARD.md` in particular
-  describes routing that has since changed.
+- **`docs/` was cleared out on 12 November 2026** and now has an index,
+  `docs/README.md`, which says of every file whether it describes the system as it
+  stands or records something that happened. Thirteen files went, the two worst
+  clusters being step-by-step instructions to build the five-stage approval chain
+  that was deliberately shortened, and a January "improvements package" that tells
+  the reader to run three files that no longer exist. What is left is three
+  **generated** artefacts whose sources have moved on and which nobody has
+  rebuilt: `docs/handbook/` (built 23 September, `content.py` changed in October
+  and carries 50 mentions of the old "Research Adviser"),
+  `docs/diagrams/PAPEL_use_case_diagram.svg` (two mentions, though
+  `gen_usecase.php` was renamed), and `docs/field_guide.html` (one, from
+  `scripts/field_guide_content.py`). Each is one command away from correct;
+  rebuild before handing any of them to a reader.
+- **`includes/progress_tracker.php` draws the retired four-stage tracker** and
+  nothing requires it. It is the code twin of the documents deleted above: the
+  wrong answer in the place somebody would look it up. Delete it or rewrite it
+  against `workflow_progress_steps()`; do not start calling it.
