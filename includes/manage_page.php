@@ -609,13 +609,84 @@ html.mgmt-form-folded .mgmt-dock-fold .material-symbols-outlined { transform: ro
 
 
 /* ---- Import from a file (includes/manage_import.php) ----
-   The upload card sits in the form's column; the preview spans the whole grid,
-   because a table of forty people in a 19rem column is unreadable. It is
-   ordered first so it is the thing you see on coming back from the upload, and
-   under html.mgmt-dock-right, where the form moves to the far side, order has
-   to be stated or the preview follows the panel it belongs to. */
-.import-preview,
-.import-result { grid-column: 1 / -1; order: -1; }
+   A button beside the search, opening a drawer down the right-hand side, so
+   the form and the roll keep the whole page. Placed in the grid, as it first
+   was, the upload card took the roll's column and pushed the table down: the
+   grid is two columns and a third child goes beside the form, not under it. */
+/* stretch, not flex-end, so the button is exactly as tall as the search field
+   beside it without either being given a height. The search has none to copy:
+   it is padding round an input and an icon, so any number written here would be
+   a guess that drifts the moment that padding or font size changes. Wrapped
+   onto two lines each is its own height again, which is what is wanted. */
+.mgmt-head-tools {
+    display: flex; align-items: stretch; gap: .6rem;
+    flex-wrap: wrap; justify-content: flex-end;
+}
+/* The shared rule puts the search on the heading's baseline; inside the tools
+   row it has to stretch with everything else, so that one is turned off. */
+.mgmt-head-row .mgmt-head-tools .mgmt-search { align-self: stretch; }
+.import-open { white-space: nowrap; justify-content: center; }
+.import-count {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 1.25rem; height: 1.25rem; padding: 0 .3rem; margin-left: .1rem;
+    border-radius: 999px; background: var(--white); color: var(--maroon);
+    font-size: .7rem; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+
+/* 19000, under the 20000 of the help dialog and of action_dialogs.php, so the
+   "Create N accounts?" confirmation opens over the drawer and not beneath it.
+   Never .modal-backdrop: Bootstrap generates that class and these pages load
+   Bootstrap, which is how the login slide-in once buried every modal. */
+.import-veil {
+    position: fixed; inset: 0; z-index: 19000;
+    background: rgba(51, 0, 0, .45);
+    opacity: 0; transition: opacity .2s ease;
+}
+.import-veil.is-open { opacity: 1; }
+
+.import-drawer {
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 19001;
+    width: min(46rem, 100vw);
+    display: flex; flex-direction: column;
+    background: var(--white);
+    border-left: 1px solid var(--border);
+    box-shadow: -18px 0 48px rgba(51, 0, 0, .22);
+    transform: translateX(100%);
+    transition: transform .22s ease;
+}
+.import-drawer.is-open { transform: translateX(0); }
+@media (prefers-reduced-motion: reduce) {
+    .import-veil, .import-drawer { transition: none; }
+}
+
+.import-drawer-head {
+    display: flex; align-items: center; gap: .5rem; flex: none;
+    padding: .9rem 1.1rem; border-bottom: 1px solid var(--maroon);
+}
+.import-drawer-head .material-symbols-outlined { color: var(--maroon); font-size: 20px; }
+.import-drawer-head h2 {
+    font-family: var(--font-head); font-size: 1rem; font-weight: 500;
+    color: var(--maroon); margin: 0; flex: 1 1 auto;
+}
+.import-close {
+    border: none; background: none; cursor: pointer; padding: .15rem;
+    display: inline-flex; color: var(--grey); border-radius: 6px;
+}
+.import-close:hover { color: var(--maroon); background: var(--cream); }
+
+/* The drawer scrolls, not the page behind it: html.import-open holds that
+   still, and on <html> rather than <body> for the reason written on the
+   expanded section of the upload page. */
+.import-drawer-body { flex: 1 1 auto; overflow-y: auto; padding: 1rem 1.1rem 1.25rem; }
+.import-drawer-body > .mgmt-panel { border: 0; }
+.import-drawer-body > .mgmt-panel + .mgmt-panel { margin-top: .9rem; border-top: 1px solid var(--border); }
+.import-drawer-body .mgmt-panel-body { padding: 0; }
+.import-drawer-body > .mgmt-panel + .mgmt-panel .mgmt-panel-body { padding-top: .9rem; }
+html.import-open { overflow: hidden; }
+
+/* In a drawer the table has the full height to use, and the page is not
+   scrolling behind it, so it is the body that scrolls rather than the box. */
+.import-drawer-body .import-scroll { max-height: none; }
 
 .import-h {
     display: flex; align-items: center; gap: .4rem;

@@ -8,14 +8,18 @@
  *
  * The shape of it:
  *
- *   1. A card beside the create form takes the file, plus whatever the file
- *      cannot carry (a student's programme, year and section; a default
- *      position for staff).
- *   2. Preview parses it and holds the result in the session, then redirects,
- *      so a refresh does not re-upload and the back button behaves.
- *   3. The preview panel lists every row with its generated password and
- *      anything wrong with it, and nothing is created until Create is pressed.
- *   4. Create reads the rows **from the session**, not from the page, so the
+ *   1. A button beside the search field opens a drawer down the right-hand
+ *      side. Everything the import owns lives in there, so the form and the
+ *      roll keep the whole page and neither is displaced by it.
+ *   2. The card takes the file, plus whatever the file cannot carry (a
+ *      student's programme, year and section; a default position for staff).
+ *   3. Preview parses it and holds the result in the session, then redirects,
+ *      so a refresh does not re-upload and the back button behaves. Coming back
+ *      with rows waiting, the drawer opens itself: the upload returned to this
+ *      page and the answer to it is inside.
+ *   4. The preview lists every row with its generated password and anything
+ *      wrong with it, and nothing is created until Create is pressed.
+ *   5. Create reads the rows **from the session**, not from the page, so the
  *      only thing the browser decides is which lines to include. Each row is
  *      then checked again from scratch.
  *
@@ -154,7 +158,7 @@ function manage_import_card(string $kind): void {
     $spec = account_import_kind($kind);
     $open = manage_import_stash($kind) !== null;
     ?>
-    <section class="mgmt-panel import-card" aria-label="Import from a file">
+    <section class="mgmt-panel import-card" aria-label="Choose a file">
         <div class="mgmt-panel-body">
             <h3 class="import-h">
                 <span class="material-symbols-outlined" aria-hidden="true">upload_file</span>
@@ -233,10 +237,10 @@ function manage_import_card(string $kind): void {
 /* ──────────────────────────── the preview ───────────────────────────── */
 
 /**
- * The parsed rows, full width above the grid. Prints nothing when there is no
- * import waiting, so a page with no upload looks exactly as it did before.
+ * The parsed rows. Prints nothing when there is no import waiting, so the tab
+ * shows just the upload card until a file has been read.
  */
-function manage_import_panel(string $kind): void {
+function manage_import_preview(string $kind): void {
     $stash = manage_import_stash($kind);
     if (!$stash) { return; }
 
@@ -382,6 +386,137 @@ function manage_import_panel(string $kind): void {
                 all.indeterminate = on > 0 && on < ticks.length;
             });
         });
+    })();
+    </script>
+    <?php
+}
+
+/* ------------------ the button and its drawer ----------------------- */
+
+/**
+ * The button, beside the search field at the top of the page.
+ *
+ * The count is the number of rows waiting in a preview, so a file already read
+ * is visible without opening anything.
+ */
+function manage_import_button(string $kind): void {
+    $stash = manage_import_stash($kind);
+    $waiting = $stash ? count(array_filter($stash['rows'], static fn($r) => empty($r['over']))) : 0;
+    ?>
+    <button type="button" class="btn-sm-maroon import-open" id="importOpen"
+            aria-haspopup="dialog" aria-controls="importDrawer" aria-expanded="false">
+        <span class="material-symbols-outlined" aria-hidden="true">upload_file</span>
+        Import file
+        <?php if ($waiting): ?><span class="import-count"><?= $waiting ?></span><?php endif; ?>
+    </button>
+    <?php
+}
+
+/**
+ * The drawer: everything the import owns, in a panel down the right-hand side.
+ *
+ * Goes last inside <main>, after the grid. It is fixed, so its place in the
+ * document decides nothing but the tab order.
+ *
+ * It was a tab on the roll's strip before this, and a card in the grid before
+ * that. The grid is two columns, so the card landed beside the form rather than
+ * under it and took the roll's column.
+ *
+ * Two things it has to respect, both written down elsewhere in this project at
+ * the cost of a build each:
+ *
+ *   - **Not `.modal-backdrop`.** Bootstrap generates that class and these pages
+ *     load Bootstrap; the site's login slide-in used the name once and every
+ *     Bootstrap modal inherited its z-index and rendered under its own veil.
+ *   - **Lock the page on `<html>`, never on `<body>`.** A body given
+ *     `overflow: hidden` becomes a scroll box of its own and the sticky navbar
+ *     scrolls away inside it.
+ *
+ * It sits at 19000, under the 20000 of this page's help dialog and of
+ * action_dialogs.php, so the "Create N accounts?" confirmation opens over the
+ * drawer rather than under it.
+ */
+function manage_import_drawer(string $kind): void {
+    start_session_once();
+    /* Read without consuming: flash() clears what it returns, and
+       manage_import_result() below is what should consume this one. The drawer
+       opens itself for a result as well as for a preview, since the passwords
+       are shown once and must not sit behind a closed panel. */
+    $hasResult = !empty($_SESSION['flash']['import_log']);
+    $waiting   = manage_import_stash($kind) !== null;
+    $spec      = account_import_kind($kind);
+    ?>
+    <div class="import-veil" id="importVeil" hidden></div>
+
+    <aside class="import-drawer" id="importDrawer" role="dialog" aria-modal="true"
+           aria-labelledby="importDrawerTitle" hidden>
+        <div class="import-drawer-head">
+            <span class="material-symbols-outlined" aria-hidden="true">upload_file</span>
+            <h2 id="importDrawerTitle">Import <?= e($spec['plural']) ?></h2>
+            <button type="button" class="import-close" id="importClose" aria-label="Close">
+                <span class="material-symbols-outlined" aria-hidden="true">close</span>
+            </button>
+        </div>
+        <div class="import-drawer-body">
+            <?php manage_import_result(); ?>
+            <?php manage_import_preview($kind); ?>
+            <?php manage_import_card($kind); ?>
+        </div>
+    </aside>
+
+    <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
+    (function () {
+        var open   = document.getElementById('importOpen'),
+            veil   = document.getElementById('importVeil'),
+            drawer = document.getElementById('importDrawer'),
+            close  = document.getElementById('importClose');
+        if (!open || !veil || !drawer || !close) { return; }
+
+        var root = document.documentElement, lastFocus = null;
+
+        function show() {
+            lastFocus = document.activeElement;
+            veil.hidden = drawer.hidden = false;
+            /* Shown first, opened on the next frame: given both in one go the
+               panel is already in place when the transition is asked for, and
+               it slides nowhere. */
+            requestAnimationFrame(function () {
+                veil.classList.add('is-open');
+                drawer.classList.add('is-open');
+            });
+            root.classList.add('import-open');
+            open.setAttribute('aria-expanded', 'true');
+            close.focus();
+        }
+
+        function hide() {
+            veil.classList.remove('is-open');
+            drawer.classList.remove('is-open');
+            root.classList.remove('import-open');
+            open.setAttribute('aria-expanded', 'false');
+            /* Left in the page until the slide has finished, so it does not
+               vanish mid-transition. */
+            window.setTimeout(function () {
+                if (!drawer.classList.contains('is-open')) { veil.hidden = drawer.hidden = true; }
+            }, 220);
+            if (lastFocus && lastFocus.focus) { lastFocus.focus(); }
+        }
+
+        open.addEventListener('click', show);
+        close.addEventListener('click', hide);
+        veil.addEventListener('click', hide);
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && !drawer.hidden) { hide(); }
+        });
+
+        <?php if ($waiting || $hasResult): ?>
+        /* Rows are waiting, or passwords have just been shown. Opening on load
+           is the whole point: the upload came back to this page and the answer
+           to it is in here. */
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', show);
+        } else { show(); }
+        <?php endif; ?>
     })();
     </script>
     <?php

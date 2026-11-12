@@ -1042,9 +1042,36 @@ somebody typed in.
 ### Enrolling a list from a spreadsheet
 
 All three consoles take a CSV or `.xlsx` of **ID, Name, Email** (and **Position**
-for the two staff consoles) beside the form that makes one account at a time.
-`config/account_import.php` reads and checks; `includes/manage_import.php` is
-the screen and the POST handling; the three pages gain four lines each.
+for the two staff consoles). `config/account_import.php` reads and checks;
+`includes/manage_import.php` is the screen and the POST handling; the three
+pages gain three lines each.
+
+**It is a button beside the search field, opening a drawer down the right-hand
+side** (`manage_import_button()` and `manage_import_drawer()`). The form and the
+roll keep the whole page; nothing of the import sits in the layout.
+
+It took three goes, and the two it is not are worth knowing:
+
+- **In the `.mgmt-grid`**, as first built, the upload card took the roll's
+  column and pushed the table of accounts down the page. The grid is two
+  columns, so a third child lands beside the form, not under it.
+- **As a tab on the roll's strip** that was fixed, but it put the upload behind
+  a press nobody makes unless they already know it is there.
+
+With rows waiting, or passwords just shown, the drawer opens itself on load: the
+upload came back to this page and the answer to it is inside. The flash is read
+without `flash()`, which would consume it before `manage_import_result()` could.
+
+Three things the drawer has to respect, each written down elsewhere in this file
+at the cost of a build:
+
+- **Never `.modal-backdrop`.** Bootstrap generates that class and these pages
+  load Bootstrap. The veil is `.import-veil`.
+- **Lock the page on `<html>`** (`html.import-open`), never on `<body>`.
+- **z-index 19000**, under the 20000 of this page's help dialog and of
+  `action_dialogs.php`, so the "Create N accounts?" confirmation opens *over*
+  the drawer. Put a new fixed element on that ladder rather than reaching for a
+  bigger number.
 
 - **The rules are not restated.** A row goes through `person_name_problem()`,
   `student_number_problem()` or `staff_id_problem()`, and

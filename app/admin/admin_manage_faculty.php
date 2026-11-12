@@ -292,7 +292,10 @@ $PAGE_SKELETON = 'table';
                      become what each tab holds of the matches, and Enter walks to a tab
                      that has one. The shared layout puts it in the heading on
                      desktop and below the form on phones. */ ?>
-            <?php mgmt_search_field('Search name, ID or email'); ?>
+            <div class="mgmt-head-tools">
+                <?php manage_import_button('faculty'); ?>
+                <?php mgmt_search_field('Search name, ID or email'); ?>
+            </div>
         </div>
     </div>
 
@@ -304,13 +307,6 @@ $PAGE_SKELETON = 'table';
     ?>
 
     <div class="mgmt-grid">
-
-        <?php /* The spreadsheet just uploaded, and the passwords of the batch
-                 just created: both span the whole grid, since a table of forty
-                 people does not fit the form's column. Each prints nothing when
-                 there is nothing to show. */ ?>
-        <?php manage_import_result(); ?>
-        <?php manage_import_panel('faculty'); ?>
 
         <!-- ============ Create / edit ============
              One panel does both, exactly as on Manage Students. -->
@@ -388,10 +384,6 @@ $PAGE_SKELETON = 'table';
             </div>
         </section>
 
-        <?php /* Under the form, in the same column: the grid places a third
-                 child at the start of the next row. */ ?>
-        <?php manage_import_card('faculty'); ?>
-
         <!-- ============ Roll ============ -->
         <section>
             <div class="mgmt-tabs-row">
@@ -428,6 +420,10 @@ $PAGE_SKELETON = 'table';
         </section>
 
     </div>
+    <?php /* Fixed to the right of the window; its place here decides
+             nothing but the tab order. */ ?>
+    <?php manage_import_drawer('faculty'); ?>
+
 </main>
 
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
