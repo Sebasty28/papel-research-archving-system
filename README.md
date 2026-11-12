@@ -1,7 +1,7 @@
 # PAPEL — PUP Biñan Research Archiving System
 
 A web system for submitting, reviewing and publishing student research papers.
-Students upload their work, a Research Adviser reviews it, the Research
+Students upload their work, a Subject Adviser reviews it, the Research
 Coordinator approves and publishes it, and the public repository makes the
 approved papers readable.
 
@@ -241,7 +241,7 @@ You sign in with your **ID**, not a username:
 | Role | ID looks like |
 |---|---|
 | Student | `2023-00056-BN-0` |
-| Research Adviser | `FAC-2026-001` |
+| Subject Adviser | `FAC-2026-001` |
 | Research Coordinator | `ADM-2026-001` |
 | Head of Academic Programs | `HAP-2026-001` |
 | Director | `DIR-2026-001` |
@@ -251,7 +251,7 @@ You sign in with your **ID**, not a username:
 ## How a paper moves through the system
 
 ```
-Student uploads  →  Research Adviser reviews  →  Research Coordinator approves
+Student uploads  →  Subject Adviser reviews  →  Research Coordinator approves
                                                           ↓
                                               Published to the public repository
 ```

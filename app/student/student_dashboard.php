@@ -200,7 +200,7 @@ if ($papers) {
     $sq->close();
 }
 
-// The student's Research Adviser is the faculty member who created their
+// The student's Subject Adviser is the faculty member who created their
 // account: shown even before that adviser has acted on a paper.
 $adviser_name = null;
 $ad = $conn->prepare("SELECT f.full_name FROM users s JOIN users f ON f.user_id = s.created_by WHERE s.user_id = ?");
@@ -623,7 +623,7 @@ $VIEW_SHELF = true;
                             <div class="card-people">
                                 <?php $adviser = $rv['faculty'] ?? $adviser_name; ?>
                                 <?php if (!empty($adviser)): ?>
-                                    <div>Research Adviser: <span class="who"><?= e($adviser) ?></span></div>
+                                    <div>Subject Adviser: <span class="who"><?= e($adviser) ?></span></div>
                                 <?php endif; ?>
                                 <?php if (!empty($rv['admin'])): ?>
                                     <div>Research Coordinator: <span class="who"><?= e($rv['admin']) ?></span></div>

@@ -11,7 +11,7 @@ Each user role now has a dedicated dashboard with specific functionalities tailo
 - Final approval of research ethics (after HAP approval)
 - Manage approved papers archive
 - View analytics and statistics
-- Create and manage all staff roles (HAP, Research Coordinator, Librarian, Research Adviser)
+- Create and manage all staff roles (HAP, Research Coordinator, Librarian, Subject Adviser)
 - Access to `super_admin_manage_admins.php` for user management
 
 **Workflow Position:** Final approver in the chain
@@ -35,7 +35,7 @@ Each user role now has a dedicated dashboard with specific functionalities tailo
 **Dashboard:** `app/faculty/head_academic_dashboard.php`
 **Capabilities:**
 - Review research ethics that have been approved by BOTH:
-  - Faculty (Research Adviser)
+  - Faculty (Subject Adviser)
   - Research Coordinator (Admin)
 - Approve or decline research ethics
 - Forward approved research ethics to Super Admin/Director for final approval
@@ -50,7 +50,7 @@ Each user role now has a dedicated dashboard with specific functionalities tailo
 
 ---
 
-### 4. Research Adviser (Faculty)
+### 4. Subject Adviser (Faculty)
 **Dashboard:** `app/faculty/faculty_review_dashboard.php`
 **Capabilities:**
 - Review research papers from assigned students
@@ -107,7 +107,7 @@ Each user role now has a dedicated dashboard with specific functionalities tailo
 ```
 Student Submission
     ↓
-Faculty (Research Adviser) Review
+Faculty (Subject Adviser) Review
     ↓ (if approved)
 Research Coordinator (Admin) Review
     ↓ (if approved)
@@ -125,7 +125,7 @@ Archived in Repository
   - `super_admin`
   - `admin` (Research Coordinator)
   - `head_academic` (HAP)
-  - `faculty` (Research Adviser)
+  - `faculty` (Subject Adviser)
   - `librarian`
   - `student`
   - `guest`
@@ -154,7 +154,7 @@ Archived in Repository
 
 ### Faculty Dashboards
 - `app/faculty/head_academic_dashboard.php` - HAP dashboard
-- `app/faculty/faculty_review_dashboard.php` - Research Adviser dashboard
+- `app/faculty/faculty_review_dashboard.php` - Subject Adviser dashboard
 - `app/faculty/faculty_manage_students.php` - Student management
 
 ### Guest Management

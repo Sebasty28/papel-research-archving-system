@@ -309,6 +309,28 @@ $PAGE_SKELETON = 'table';
                         </small>
                     </div>
 
+                    <?php /* One person, two posts. The constitution allows it: a Research
+                             Coordinator who is also a Subject Adviser is the case that
+                             prompted it. What may be offered here is the actor's own
+                             authority (secondary_position_options()), never the whole
+                             list, or this console would be a way round the one above. */ ?>
+                    <?php $SECOND = secondary_position_options($u); ?>
+                    <?php if ($SECOND): ?>
+                    <div class="mgmt-field">
+                        <label for="secondary_position">Also serves as</label>
+                        <select name="secondary_position" id="secondary_position">
+                            <option value="">Nothing else</option>
+                            <?php foreach ($SECOND as $pos): ?>
+                                <option value="<?= e($pos) ?>"><?= e($pos) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <small class="mgmt-hint">
+                            A second post the same person holds. They sign in once and can open
+                            both desks. Leave it alone for almost everybody.
+                        </small>
+                    </div>
+                    <?php endif; ?>
+
                     <div class="mgmt-field">
                         <label for="full_name">Full name <span class="req">*</span></label>
                         <input type="text" name="full_name" id="full_name"

@@ -10,7 +10,7 @@ $facultyService = new FacultyManagementService($conn);
 
 /* The Research Coordinator staffs the review side and the library. The two
    admin positions are the Director's to fill, so they are not offered here. */
-$OFFERED = ['Research Adviser', 'Librarian'];
+$OFFERED = ['Subject Adviser', 'Librarian'];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   csrf_verify();
@@ -80,7 +80,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               'password' => $_POST['password'] ?? '',
               'title' => trim($_POST['title'] ?? ''),
               'faculty_id' => trim($_POST['faculty_id'] ?? ''),
-              'birthdate' => trim($_POST['birthdate'] ?? '')
+              'birthdate' => trim($_POST['birthdate'] ?? ''),
+              /* The second post this person also holds, if any. Named here
+                 because this handler copies field by field rather than passing
+                 $_POST on: left out, the box on the form posts into nothing and
+                 the service sees "none" however it was answered. What may be
+                 given is decided by the server (secondary_position_for()). */
+              'secondary_position' => trim($_POST['secondary_position'] ?? '')
           ];
           $message = $facultyService->createFaculty($data, $u['user_id']);
           flash('success', $message);
@@ -286,7 +292,7 @@ $PAGE_SKELETON = 'table';
         <div class="mgmt-head-row">
             <div>
                 <h1>Advisers &amp; Librarians</h1>
-                <p>Create and manage Research Adviser and Librarian accounts.</p>
+                <p>Create and manage Subject Adviser and Librarian accounts.</p>
             </div>
             <?php /* One field for every tab (includes/manage_search.php): the counts
                      become what each tab holds of the matches, and Enter walks to a tab
@@ -358,6 +364,28 @@ $PAGE_SKELETON = 'table';
                             Coordinators and the Head of Academic Programs are created by the Director.
                         </small>
                     </div>
+
+                    <?php /* One person, two posts. The constitution allows it: a Research
+                             Coordinator who is also a Subject Adviser is the case that
+                             prompted it. What may be offered here is the actor's own
+                             authority (secondary_position_options()), never the whole
+                             list, or this console would be a way round the one above. */ ?>
+                    <?php $SECOND = secondary_position_options($u); ?>
+                    <?php if ($SECOND): ?>
+                    <div class="mgmt-field">
+                        <label for="secondary_position">Also serves as</label>
+                        <select name="secondary_position" id="secondary_position">
+                            <option value="">Nothing else</option>
+                            <?php foreach ($SECOND as $pos): ?>
+                                <option value="<?= e($pos) ?>"><?= e($pos) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <small class="mgmt-hint">
+                            A second post the same person holds. They sign in once and can open
+                            both desks. Leave it alone for almost everybody.
+                        </small>
+                    </div>
+                    <?php endif; ?>
 
                     <div class="mgmt-field">
                         <label for="password">Password <span class="req" id="passReq">*</span></label>

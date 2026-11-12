@@ -54,7 +54,7 @@ function account_import_kinds(): array {
             'noun'      => 'staff account',
             'plural'    => 'staff accounts',
             'id_label'  => 'Faculty ID',
-            'positions' => ['Research Adviser', 'Librarian'],
+            'positions' => ['Subject Adviser', 'Librarian'],
             'headers'   => ['Faculty ID', 'Full Name', 'Email', 'Position'],
         ],
         'admin' => [

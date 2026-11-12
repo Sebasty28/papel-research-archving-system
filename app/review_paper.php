@@ -378,7 +378,7 @@ $PAGE_SKELETON = 'reader';
                         <div>Program: <span class="who"><?= e($paper['author_program']) ?></span></div>
                     <?php endif; ?>
                     <?php if (!empty($reviewers['faculty'])): ?>
-                        <div>Research Adviser: <span class="who"><?= e($reviewers['faculty']) ?></span></div>
+                        <div>Subject Adviser: <span class="who"><?= e($reviewers['faculty']) ?></span></div>
                     <?php endif; ?>
                 </div>
             </div>
@@ -466,11 +466,11 @@ $PAGE_SKELETON = 'reader';
                     <?php else: /* the Coordinator: the adviser's list, to read */ ?>
                         <?php if ($checklist): ?>
                             <div class="pd-note"><span class="material-symbols-outlined">verified_user</span>
-                                <span>This is the checklist your Research Adviser recorded. Only they can change it.</span></div>
+                                <span>This is the checklist your Subject Adviser recorded. Only they can change it.</span></div>
                             <div class="pd-check-grid"><?= review_checklist_groups_html($checklist) ?></div>
                         <?php else: ?>
                             <div class="pd-note"><span class="material-symbols-outlined">info</span>
-                                <span>Your Research Adviser did not record a checklist for this paper.</span></div>
+                                <span>Your Subject Adviser did not record a checklist for this paper.</span></div>
                         <?php endif; ?>
                     <?php endif; ?>
 
@@ -611,7 +611,7 @@ document.addEventListener('DOMContentLoaded', function () {
         var left = gaps();
         var gapEl = document.getElementById('confirmGaps');
         gapEl.textContent = (approving && left.length)
-            ? (ck ? 'Still unticked: ' : 'Your Research Adviser left these unticked: ') + left.join(', ') + '. The student sees this checklist.'
+            ? (ck ? 'Still unticked: ' : 'Your Subject Adviser left these unticked: ') + left.join(', ') + '. The student sees this checklist.'
             : '';
 
         document.getElementById('confirmDoneLabel').textContent = approving

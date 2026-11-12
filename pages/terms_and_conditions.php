@@ -92,7 +92,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
 
                 <section class="terms-section">
                     <h2><span class="num">3.</span> Review and publication</h2>
-                    <p>Student submissions pass through a Research Adviser review followed by a Research Coordinator review. A reviewer may forward the submission or return it with feedback. A student submission is published only after the Research Coordinator gives final approval.</p>
+                    <p>Student submissions pass through a Subject Adviser review followed by a Research Coordinator review. A reviewer may forward the submission or return it with feedback. A student submission is published only after the Research Coordinator gives final approval.</p>
                     <p>Authorized institutional roles may have a different publication path for their own submissions. Where PAPEL permits direct publication, the person using that permission remains responsible for checking the work and its publication settings before publishing it.</p>
                     <p>Publication does not mean that PAPEL or the university guarantees the accuracy, originality, or conclusions of a paper.</p>
                 </section>

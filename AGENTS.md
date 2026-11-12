@@ -20,7 +20,7 @@ step. Files are served straight from `C:/xampp/htdocs/capstone`.
 ## The approval chain
 
 ```
-Student uploads  →  Research Adviser  →  Research Coordinator  →  Published
+Student uploads  →  Subject Adviser  →  Research Coordinator  →  Published
                          (faculty)            (admin, level 1)
 ```
 
@@ -37,7 +37,7 @@ feedback. So `draft` means either "never submitted" *or* "returned" — see the
 | Role in `users.user_role` | Who | Home page |
 |---|---|---|
 | `student` | Student | `app/student/student_dashboard.php` |
-| `faculty` | Research Adviser | `app/faculty/faculty_review_dashboard.php` |
+| `faculty` | Subject Adviser | `app/faculty/faculty_review_dashboard.php` |
 | `admin` + `admin_level=1` | Research Coordinator | `app/admin/admin_review_dashboard.php` |
 | `admin` + `admin_level=2` | Head of Academic Programs | `app/faculty/head_review_dashboard.php` |
 | `head_academic` | Head of Academic Programs | same page as above |
@@ -502,7 +502,7 @@ week later (`supporting_documents.document_type` became a `VARCHAR` and gained
 `document_name`; `paper_manuscripts` was created), and staging has **no shell to run a
 migration script from**. `scripts/**` is not deployed either (`deploy-staging.yml`), and
 it must stay that way: several of the older scripts have no web guard. So its database
-stayed as it was, five queries named `document_name`, and the Research Adviser's desk
+stayed as it was, five queries named `document_name`, and the Subject Adviser's desk
 ended in the "Something Went Wrong" page for any adviser with a paper waiting. Nothing
 showed it here, where the migration had run. The first sign was a faculty login that
 "went to an error".
@@ -1229,7 +1229,7 @@ them, since a box made after load is not there for the restore to find.
 
 ### The review checklist
 
-What the Research Adviser confirms while reading a paper. Its heading is a dropdown of
+What the Subject Adviser confirms while reading a paper. Its heading is a dropdown of
 ready-made lists (`paper_checklist_templates()` in `config/core.php`): IMRaD Sections,
 Undergraduate Thesis Sections and Capstone Project Sections (Chapter 1 to 5 and References: the
 old "Full Manuscript" list, under the name of what is being reviewed), Feasibility Study

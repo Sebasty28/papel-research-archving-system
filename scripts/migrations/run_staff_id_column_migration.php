@@ -9,7 +9,7 @@
  *
  * It mattered beyond tidiness: sign-in matches student_id *or* faculty_id, so
  * two different numbers opened the same account, and anything picking an ID by
- * "whichever column is filled" showed a Research Adviser's number labelled
+ * "whichever column is filled" showed a Subject Adviser's number labelled
  * "Student ID".
  *
  * Where both columns hold something, faculty_id is the one kept: that is the

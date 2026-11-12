@@ -842,7 +842,7 @@
    but pinned there with CSS (position: absolute, in a padding-right gutter
    that column reserves), not inserted into the text itself: otherwise its
    own width would push "Status: ..." out further than "View Details" below
-   it, or than .card-people's Research Adviser/Coordinator lines in the
+   it, or than .card-people's Subject Adviser/Coordinator lines in the
    track underneath, and the three would no longer share a right edge.
    student_dashboard.php never replaces its list by AJAX, but review_console.php
    does: every tab and filter change swaps #mainCol's whole innerHTML in,

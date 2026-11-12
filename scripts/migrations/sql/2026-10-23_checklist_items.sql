@@ -13,7 +13,7 @@
 --      "Database" it should read "No gaps".
 --
 -- WHAT IT DOES
---   Adds paper_checklist.items_json, where the Research Adviser's checklist is kept as the
+--   Adds paper_checklist.items_json, where the Subject Adviser's checklist is kept as the
 --   adviser left it: the list chosen, the sections (added, removed or renamed for that one
 --   paper) and which were ticked. Checklists already recorded keep their eleven yes/no
 --   columns and are read as before. Until this is run the site still works: the checklist is

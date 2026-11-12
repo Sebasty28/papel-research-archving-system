@@ -61,7 +61,7 @@ function workflow_status_badge_text(string $status, bool $hasFeedback = false): 
  * Steps for the per-paper progress tracker, as [label, state] pairs where
  * state is done | current | todo.
  *
- * The review chain is: Research Adviser (the faculty member who created the
+ * The review chain is: Subject Adviser (the faculty member who created the
  * student's account) -> Research Coordinator -> Approved. The Coordinator is
  * the final approval gate; the Head of Academic Programs and the Director do
  * not approve, they only view what has already been approved.
@@ -71,7 +71,7 @@ function workflow_status_badge_text(string $status, bool $hasFeedback = false): 
  * onto the final node rather than dropped.
  */
 function workflow_progress_steps(string $status, bool $hasFeedback = false): array {
-    $labels = ['Research Adviser', 'Research Coordinator', 'Approved'];
+    $labels = ['Subject Adviser', 'Research Coordinator', 'Approved'];
 
     if ($status === 'approved')                        $reached = 3;
     // Past the Coordinator under the old chain: awaiting publication.
@@ -115,7 +115,7 @@ const SUBMISSION_CANCEL_HOURS = 24;
  *
  * The two stages work in opposite directions, deliberately:
  *
- *   - Waiting on the Research Adviser: withdrawing is allowed for the first 24
+ *   - Waiting on the Subject Adviser: withdrawing is allowed for the first 24
  *     hours. A grace period for second thoughts, which closes so the adviser is
  *     not reviewing a moving target.
  *
@@ -189,7 +189,7 @@ function submission_cancel_state(array $paper, mysqli $conn): array {
             'unlocks'  => null,
             'reason'   => $allowed ? '' :
                 'The ' . SUBMISSION_CANCEL_HOURS . '-hour window to withdraw this submission has passed. '
-                . 'Ask your Research Adviser if you need it returned.',
+                . 'Ask your Subject Adviser if you need it returned.',
         ];
     }
 
@@ -202,7 +202,7 @@ function submission_cancel_state(array $paper, mysqli $conn): array {
         'deadline' => null,
         'unlocks'  => $mark,
         'reason'   => $allowed ? '' :
-            'Your Research Adviser has approved this. You will be able to withdraw it if the '
+            'Your Subject Adviser has approved this. You will be able to withdraw it if the '
             . 'Research Coordinator has not acted by ' . date('M j, g:i a', $mark) . '.',
     ];
 }

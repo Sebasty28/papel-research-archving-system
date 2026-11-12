@@ -1241,7 +1241,7 @@ html[data-view="rows"] .paper-list .card-status .paper-action { display: none; }
                             <div class="card-people">
                                 <div>Student: <span class="who"><?= e($r['author_name']) ?></span></div>
                                 <?php if (!empty($rv['faculty'])): ?>
-                                    <div>Research Adviser: <span class="who"><?= e($rv['faculty']) ?></span></div>
+                                    <div>Subject Adviser: <span class="who"><?= e($rv['faculty']) ?></span></div>
                                 <?php endif; ?>
                                 <?php if (!empty($rv['admin'])): ?>
                                     <div>Research Coordinator: <span class="who"><?= e($rv['admin']) ?></span></div>

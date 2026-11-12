@@ -2,7 +2,7 @@
 /**
  * Research Coordinator's review desk.
  *
- * The final gate. A paper the Research Adviser has forwarded is published to
+ * The final gate. A paper the Subject Adviser has forwarded is published to
  * the public repository here, or returned to the student. Nobody approves after
  * this: the Head of Academic Programs and the Director read what comes out of
  * it. The page is the shared review console; this file describes the desk.
@@ -91,7 +91,7 @@ $RC = [
     'tabs'  => [
         'queue'     => ['label' => 'Waiting for you', 'icon' => 'gavel', 'act' => true,
                         'where' => "rp.current_status IN ('pending_admin','pending_admin_l1')",
-                        'empty' => 'Nothing is waiting for you. Papers arrive here once a Research Adviser approves them.',
+                        'empty' => 'Nothing is waiting for you. Papers arrive here once a Subject Adviser approves them.',
                         'empty_icon' => 'task_alt'],
         /* The three tabs that move: what is waiting here, what is still with an
            adviser, and what went back to a student. They are read together,
@@ -100,7 +100,7 @@ $RC = [
            rather than the queue. */
         'adviser'   => ['label' => 'With Advisers',   'icon' => 'schedule',
                         'where' => "rp.current_status = 'pending_faculty'",
-                        'empty' => 'No paper is sitting with a Research Adviser right now.'],
+                        'empty' => 'No paper is sitting with a Subject Adviser right now.'],
         'returned'  => ['label' => 'Returned',        'icon' => 'undo',
                         'where' => "rp.current_status = 'draft' AND $declined_exists",
                         'empty' => 'No paper has been sent back for revision.'],

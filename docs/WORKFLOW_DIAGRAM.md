@@ -20,7 +20,7 @@
           ▼
     ┌──────────────────┐
     │ STAGE 1: FACULTY │
-    │ Research Adviser │
+    │ Subject Adviser │
     │ pending_faculty  │
     └────────┬─────────┘
              │ Approve

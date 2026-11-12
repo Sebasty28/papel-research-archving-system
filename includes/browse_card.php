@@ -77,7 +77,7 @@ function browse_card_links(?array $u): array
  * Programs): nobody there uploads a paper, has drafts to check on, or runs
  * a desk of their own.
  *
- * A Research Adviser and a Research Coordinator get the same quick actions
+ * A Subject Adviser and a Research Coordinator get the same quick actions
  * here as their own review desk's "What you can do" card offers (minus the
  * link back to the repository itself, redundant on the page that already
  * is one): reading a paper on the public repository shouldn't mean losing

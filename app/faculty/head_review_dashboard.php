@@ -3,7 +3,7 @@
  * Head of Academic Programs: oversight desk.
  *
  * Read-only by design. The approval chain ends at the Research Coordinator
- * (Research Adviser -> Research Coordinator -> Approved); this desk exists so
+ * (Subject Adviser -> Research Coordinator -> Approved); this desk exists so
  * the Head can see what has been published, across every program. There is no
  * approve or return control here, and adding one would put a fourth step back
  * into a workflow that was deliberately shortened. Papers still moving through

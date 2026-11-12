@@ -68,8 +68,24 @@ class AdminManagementService {
         $hash = password_hash($data['password'], PASSWORD_DEFAULT);
         $is_active = 1;
         
+        /* A second post, where this copy of the database can hold one and the
+           person creating the account is allowed to give it. The check is the
+           server's: secondary_position_for() throws for anything outside the
+           actor's own authority, so a crafted post says so rather than
+           succeeding differently from how the form looks. Two statements
+           rather than one built from pieces, because the bind type string has
+           to match the columns exactly and a mismatch fails at run time. */
+        $second = users_have_secondary_position()
+            ? secondary_position_for($data['actor'] ?? current_user(), $data['secondary_position'] ?? '', $title_val)
+            : '';
+
+        if ($second !== '') {
+            $stmt = $this->conn->prepare("INSERT INTO users (username,email,password,full_name,faculty_id,birthdate,user_role,created_by,is_active,title,admin_level,secondary_position) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)");
+            $stmt->bind_param('sssssssissis', $data['username'], $data['email'], $hash, $data['full_name'], $data['faculty_id'], $data['birthdate'], $data['role'], $createdBy, $is_active, $title_val, $data['admin_level'], $second);
+        } else {
         $stmt = $this->conn->prepare("INSERT INTO users (username,email,password,full_name,faculty_id,birthdate,user_role,created_by,is_active,title,admin_level) VALUES (?,?,?,?,?,?,?,?,?,?,?)");
         $stmt->bind_param('sssssssissi', $data['username'], $data['email'], $hash, $data['full_name'], $data['faculty_id'], $data['birthdate'], $data['role'], $createdBy, $is_active, $title_val, $data['admin_level']);
+        }
         
         if ($stmt->execute()) {
             if (!$notify) { return $title_val . ' account created. No email was sent.'; }

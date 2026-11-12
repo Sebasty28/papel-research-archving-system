@@ -6,7 +6,7 @@
  * question it leaves behind (who else, when, and how often) needs a list, and
  * each console already has the roll it applies to:
  *
- *     Research Adviser    students
+ *     Subject Adviser    students
  *     Research Coordinator faculty and librarians
  *     Director            admins, the Head, and librarians
  *

@@ -189,7 +189,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
                 <div class="faq-body" id="q2">
                     <p>Once you submit it, your paper is read by two people:</p>
                     <ol>
-                        <li><strong>Your Research Adviser</strong> reads it first and either sends it on or returns it to you with feedback.</li>
+                        <li><strong>Your Subject Adviser</strong> reads it first and either sends it on or returns it to you with feedback.</li>
                         <li><strong>The Research Coordinator</strong> reads it next. Their approval is the last step: the paper is published to the public repository there and then.</li>
                     </ol>
                     <p>Either reviewer can send it back instead. It returns to your drafts with their
@@ -245,8 +245,8 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
                     A new one has to be issued by whoever set up your account:</p>
 
                     <ul>
-                        <li><strong>Students</strong>: your Research Adviser.</li>
-                        <li><strong>Research Advisers and the Librarian</strong>: the Research Coordinator.</li>
+                        <li><strong>Students</strong>: your Subject Adviser.</li>
+                        <li><strong>Subject Advisers and the Librarian</strong>: the Research Coordinator.</li>
                         <li><strong>Research Coordinator and the Head of Academic Programs</strong>: the Director.</li>
                     </ul>
 

@@ -76,7 +76,7 @@ $i = 0; foreach ($right as $k => $v) { $pos[$k] = [$RCX, rowY($i)]; $i++; }
 $actors = [
   'student'   => [180,  430, 'Student',              false],
   'guest'     => [180,  880, 'Guest',                false],
-  'adviser'   => [1590, 210, 'Research Adviser',     false],
+  'adviser'   => [1590, 210, 'Subject Adviser',     false],
   'coord'     => [1590, 430, 'Research Coordinator', false],
   'hap'       => [1590, 650, 'Head of Academic|Programs', false],
   'director'  => [1590, 870, 'Director',             false],

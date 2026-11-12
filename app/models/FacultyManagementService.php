@@ -118,6 +118,16 @@ class FacultyManagementService {
         $data['user_role'] = $userRole;
         $data['created_by'] = $createdBy;
 
+        /* A second post, checked against what the person creating the account
+           may actually give: this console may not hand out a Research
+           Coordinator, which is the escalation that list exists to stop. */
+        if (users_have_secondary_position()) {
+            $data['secondary_position'] = secondary_position_for(
+                $data['actor'] ?? current_user(), $data['secondary_position'] ?? '', $data['title']);
+        } else {
+            unset($data['secondary_position']);
+        }
+
         if ($this->userRepo->createUser($data)) {
             return $notify
                 ? $this->sendWelcomeEmail($data)

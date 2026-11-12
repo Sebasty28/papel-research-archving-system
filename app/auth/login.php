@@ -126,7 +126,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
          Without faculty_id, a newly created adviser or coordinator could only
          get in with the username derived from their Employee ID, which nobody
          ever tells them. Email and username still work as before. */
-      $sql = "SELECT user_id, username, email, password, full_name, user_role, is_active, student_id, birthdate, expires_on, admin_level
+      /* secondary_position only where the column exists: a copy of the site
+         whose migration has not been run must still be able to sign in. See
+         "A copy of the database can be behind the code" in CLAUDE.md. */
+      $second_col = users_have_secondary_position() ? ', secondary_position' : '';
+      $sql = "SELECT user_id, username, email, password, full_name, user_role, is_active, student_id, birthdate, expires_on, admin_level{$second_col}
               FROM users
               WHERE (username=? OR email=?
                      OR (student_id IS NOT NULL AND student_id<>'' AND student_id=?)
@@ -150,7 +154,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         login_throttle_record_failure($id);
         $login_failed('That ID or password is not right.', $error_redirect);
       }
-      $stmt->bind_result($user_id, $username, $email, $password_hash, $full_name, $user_role, $is_active, $student_id, $stored_birthdate, $expires_on, $admin_level);
+      /* The bind list has to match the SELECT exactly, and the SELECT above
+         carries secondary_position only where the column exists, so this is
+         written out both ways rather than built. A mismatch here fails at run
+         time and not at lint, which is the same trap bind_param's type string
+         sets. */
+      $secondary_position = null;
+      if ($second_col !== '') {
+          $stmt->bind_result($user_id, $username, $email, $password_hash, $full_name, $user_role,
+                             $is_active, $student_id, $stored_birthdate, $expires_on, $admin_level,
+                             $secondary_position);
+      } else {
+          $stmt->bind_result($user_id, $username, $email, $password_hash, $full_name, $user_role,
+                             $is_active, $student_id, $stored_birthdate, $expires_on, $admin_level);
+      }
       $stmt->fetch();
       if (!$is_active || !password_verify($pw, $password_hash)) {
         login_throttle_record_failure($id);
@@ -205,6 +222,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           'full_name'   => $full_name,
           'user_role'   => $user_role,
           'admin_level' => (int)$admin_level,
+          /* The second post rides in the session beside the first, because
+             require_role() reads it on every page and a lookup per page would
+             be a query per page for a column almost nobody has filled in. */
+          'secondary_position' => $secondary_position,
       ]);
 
       $redirect = $_POST['redirect'] ?? $_GET['redirect'] ?? null;

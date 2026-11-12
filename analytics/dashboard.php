@@ -5,7 +5,7 @@
  * There were two: this one (four figures and a single bar chart, shown to the
  * Research Coordinator and the Director) and analytics_dashboard.php, which had
  * the charts, the tables and the written summary but was only reachable by the
- * Research Adviser and the Head of Academic Programs. Two audiences, two
+ * Subject Adviser and the Head of Academic Programs. Two audiences, two
  * different answers to the same question.
  *
  * Its figures were folded into the fuller page, which now serves all four. This

@@ -911,7 +911,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     $sz          = $primary['size'];
     $gdriveId    = $primary['drive'];
 
-    /* A submitted paper goes to the Research Adviser. It used to be filed as
+    /* A submitted paper goes to the Subject Adviser. It used to be filed as
        'draft' (the same state as work never sent) so pressing Submit put the
        paper in the student's Drafts tab and no reviewer ever saw it. Nothing
        later promoted it, which is why every review queue stayed empty. */
@@ -1207,7 +1207,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
             if (is_dir($dir)) { @rmdir($dir); }
         }
 
-        /* Tell the Research Adviser there is something waiting. The adviser is the
+        /* Tell the Subject Adviser there is something waiting. The adviser is the
            faculty member who created this student's account, which is the same link
            their review queue is built on, so if there is no creator, nobody would
            ever see the paper, and that is worth recording rather than passing over
@@ -1225,7 +1225,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
                     . ($scopeNote !== '' ? ' ' . $scopeNote : ''));
             } else {
                 error_log('Paper ' . $paper_id . ' submitted by user ' . $u['user_id']
-                        . ' who has no Research Adviser (users.created_by is empty), so it will not appear in any review queue.');
+                        . ' who has no Subject Adviser (users.created_by is empty), so it will not appear in any review queue.');
             }
         }
     } catch (Throwable $late) {
@@ -10754,7 +10754,7 @@ function sectionsNote() {
     return '<p>Your PDF and what you type here are read by different people, and they'
       + ' are not interchangeable.</p>'
       + (CAN_DRAFT
-          ? '<p><strong>The PDF goes to your reviewers.</strong> Your Research Adviser'
+          ? '<p><strong>The PDF goes to your reviewers.</strong> Your Subject Adviser'
             + ' and the Research Coordinator open it to check your work as you submitted'
             + ' it, formatting, figures, appendices and all.</p>'
           : '<p><strong>The PDF is the record of the paper itself.</strong> It is kept'

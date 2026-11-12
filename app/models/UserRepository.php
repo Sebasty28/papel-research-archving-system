@@ -72,6 +72,23 @@ class UserRepository {
     }
 
     public function createUser($data) {
+        /* Two statements, not one built from pieces: the bind type string must
+           have exactly one character per parameter and a mismatch fails at run
+           time rather than at lint. The second post is written only when there
+           is one and the column exists; the caller has already decided whether
+           the person may give it (secondary_position_for()). */
+        $second = (string)($data['secondary_position'] ?? '');
+
+        if ($second !== '') {
+            $stmt = $this->conn->prepare("INSERT INTO users (username, email, password, full_name, title, faculty_id, birthdate, user_role, created_by, is_active, secondary_position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)");
+            $stmt->bind_param('ssssssssis',
+                $data['username'], $data['email'], $data['hash'],
+                $data['full_name'], $data['title'], $data['faculty_id'], $data['birthdate'],
+                $data['user_role'], $data['created_by'], $second
+            );
+            return $stmt->execute();
+        }
+
         $stmt = $this->conn->prepare("INSERT INTO users (username, email, password, full_name, title, faculty_id, birthdate, user_role, created_by, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)");
         $stmt->bind_param('ssssssssi',
             $data['username'], $data['email'], $data['hash'],

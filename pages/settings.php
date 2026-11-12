@@ -11,7 +11,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
    account is made by the desk responsible for it. Following that one link gives
    the whole chain without naming a single role here:
 
-       a student's goes to the Research Adviser who enrolled them
+       a student's goes to the Subject Adviser who enrolled them
        an adviser's to the Research Coordinator who added them
        a Coordinator's, a Head's and the Librarian's to the Director
        the Director's to nobody, because nobody created that account

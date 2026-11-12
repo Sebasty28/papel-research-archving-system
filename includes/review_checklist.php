@@ -1,6 +1,6 @@
 <?php
 /**
- * The review checklist, as the Research Adviser fills it in and as everyone else
+ * The review checklist, as the Subject Adviser fills it in and as everyone else
  * reads it.
  *
  * One editor serves both places the adviser decides: the full review page

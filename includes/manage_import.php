@@ -347,11 +347,18 @@ function manage_import_preview(string $kind): void {
                         <tbody>
                         <?php foreach ($rows as $r):
                             $ok = account_import_usable($r);
+                            $taken = ($r['exists'] ?? '') !== '';
                             $line = (int)$r['line']; ?>
-                            <tr class="import-row <?= $ok ? '' : 'is-bad' ?>" data-line="<?= $line ?>">
+                            <?php /* A row whose ID or email is already on an account cannot be
+                                     created, so it is greyed and its tick is locked rather than
+                                     left to fail on the server. Editing either box unlocks it
+                                     again: the clash may be exactly what the edit mends. */ ?>
+                            <tr class="import-row <?= $ok ? '' : 'is-bad' ?> <?= $taken ? 'is-taken' : '' ?>"
+                                data-line="<?= $line ?>" <?= $taken ? 'data-taken="1"' : '' ?>>
                                 <td class="import-tick">
                                     <input type="checkbox" name="rows[]" value="<?= $line ?>"
                                            class="import-row-tick" <?= $ok ? 'checked' : '' ?>
+                                           <?= $taken ? 'disabled' : '' ?>
                                            aria-label="Create line <?= $line ?>">
                                 </td>
                                 <td class="import-line"><?= $line ?></td>
@@ -483,8 +490,8 @@ function manage_import_preview(string $kind): void {
                 });
                 cell.textContent = '';
                 cell.appendChild(ul);
-            } else if (still && !row.dataset.edited) {
-                /* untouched and already on file: leave the sentence as it was */
+            } else if (still && row.dataset.taken) {
+                /* still clashing: leave the sentence saying so */
             } else {
                 var span = document.createElement('span');
                 span.className = 'import-ok';
@@ -517,6 +524,17 @@ function manage_import_preview(string $kind): void {
             row.querySelectorAll('.import-cell').forEach(function (cell) {
                 var redo = function () {
                     row.dataset.edited = '1';
+                    /* A clash is found on the server and cannot be re-tested here,
+                       so changing the ID or the email is taken as an attempt to mend
+                       it: the row is unlocked and the create pass decides. Changing
+                       the name alone cannot mend a clash, so it does not unlock. */
+                    if (row.dataset.taken && (cell.dataset.field === 'id' || cell.dataset.field === 'email')) {
+                        var tick = row.querySelector('.import-row-tick');
+                        if (tick && tick.disabled) { tick.disabled = false; tick.checked = true; }
+                        row.classList.remove('is-taken');
+                        delete row.dataset.taken;
+                        count();
+                    }
                     /* The password comes from the name and the ID, so an edited
                        row's old one is wrong. It is worked out again on the
                        server at create; saying so beats showing a stale value. */

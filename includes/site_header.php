@@ -76,6 +76,19 @@ if (!$u) {
                 ['label' => 'Contact Support',  'href' => BASE_URL.'/pages/contact_support.php',  'match' => ['contact_support.php']],
             ];
     }
+
+    /* One person, two posts. The second desk is offered as a single link
+       rather than the whole of that role's menu: two complete menus side by
+       side is a navbar nobody can read, and the desk is the way in to
+       everything else that role has. Null for almost everybody. */
+    $second_desk = secondary_desk_link($u);
+    if ($second_desk) {
+        $nav_links[] = [
+            'label' => $second_desk['label'],
+            'href'  => $second_desk['href'],
+            'match' => [basename(parse_url($second_desk['href'], PHP_URL_PATH) ?: '')],
+        ];
+    }
 }
 /* My Library, for everyone with an account: the papers they have saved, and
    for a student the manuscripts they have asked a librarian for. Second in the

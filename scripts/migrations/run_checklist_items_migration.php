@@ -3,7 +3,7 @@
  * Room for a review checklist that is not the eleven fixed ones.
  *
  * paper_checklist held eleven yes/no columns, one run for IMRaD and one for
- * chapters. The Research Adviser can now pick a list (IMRaD, Undergraduate
+ * chapters. The Subject Adviser can now pick a list (IMRaD, Undergraduate
  * Thesis, Capstone Project, Feasibility Study, or a blank one) and add, remove
  * or rename sections for the one paper, so what is recorded is the list itself:
  * its sections and which were ticked, as JSON in items_json.

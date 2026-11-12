@@ -3,7 +3,7 @@
  * Director: oversight and records desk.
  *
  * The Director takes no part in approving. The chain ends at the Research
- * Coordinator (Research Adviser -> Research Coordinator -> Approved), so this
+ * Coordinator (Subject Adviser -> Research Coordinator -> Approved), so this
  * desk reads what came out of it. What is the Director's alone stays here:
  * archiving a paper out of public view, the Drive folder every upload lands in,
  * and the administrator accounts.

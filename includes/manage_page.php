@@ -727,6 +727,17 @@ html.import-open { overflow: hidden; }
 .import-table tbody tr:last-child td { border-bottom: 0; }
 .import-table tr.is-bad { background: color-mix(in srgb, var(--maroon) 6%, transparent); }
 .import-tick { width: 2rem; }
+/* The browser's own control, in the site's colour. accent-color recolours the
+   tick and its box without replacing the control, so the keyboard, the focus
+   ring and the indeterminate state all stay as the platform draws them. */
+.import-tick input,
+.import-notify input { accent-color: var(--maroon); width: 1rem; height: 1rem; }
+
+/* Already on an account: greyed, and its tick locked, so it cannot be created.
+   Editing the ID or the email unlocks it, since that may be what mends it. */
+.import-table tr.is-taken { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.import-table tr.is-taken .import-cell { color: var(--grey); }
+.import-table tr.is-taken .import-tick input { cursor: not-allowed; }
 .import-line { color: var(--grey); font-variant-numeric: tabular-nums; }
 .import-pw { font-family: ui-monospace, Consolas, monospace; white-space: nowrap; }
 .import-pw-pending { font-family: inherit; color: var(--grey); font-style: italic; }

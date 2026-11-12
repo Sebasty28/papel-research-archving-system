@@ -20,7 +20,7 @@ step. Files are served straight from `C:/xampp/htdocs/capstone`.
 ## The approval chain
 
 ```
-Student uploads  →  Research Adviser  →  Research Coordinator  →  Published
+Student uploads  →  Subject Adviser  →  Research Coordinator  →  Published
                          (faculty)            (admin, level 1)
 ```
 
@@ -37,7 +37,7 @@ feedback. So `draft` means either "never submitted" *or* "returned" — see the
 | Role in `users.user_role` | Who | Home page |
 |---|---|---|
 | `student` | Student | `app/student/student_dashboard.php` |
-| `faculty` | Research Adviser | `app/faculty/faculty_review_dashboard.php` |
+| `faculty` | Subject Adviser | `app/faculty/faculty_review_dashboard.php` |
 | `admin` + `admin_level=1` | Research Coordinator | `app/admin/admin_review_dashboard.php` |
 | `admin` + `admin_level=2` | Head of Academic Programs | `app/faculty/head_review_dashboard.php` |
 | `head_academic` | Head of Academic Programs | same page as above |
@@ -47,6 +47,55 @@ feedback. So `draft` means either "never submitted" *or* "returned" — see the
 **Two roles do the HAP job** — `head_academic`, and `admin` at level 2. Both land
 on the same desk. They have not been consolidated; be careful when writing a
 role check that you cover both.
+
+### One person, two posts
+
+The constitution lets a member of staff hold two positions at once, a Research
+Coordinator who also advises being the case that prompted it. The account keeps
+**one** `user_role`, which decides what it is called and where it lands; the
+second post is a position name in `users.secondary_position`, resolved through
+`staff_position_map()`.
+
+- **Ask `user_roles($u)`, never `$u['user_role']`, when deciding what somebody
+  may open.** `require_role()` does. For everybody with one post it returns the
+  one role it always did, which is why nothing else had to change.
+  `user_positions()` is the names, `user_has_role()` the question, and
+  `user_level_for()` the admin_level to read when acting as a given role, since
+  a Head of Academic Programs and a Research Coordinator are both `admin` and
+  differ only by level.
+- **Who may hand one out is an authority rule, not a list of positions.**
+  `secondary_position_options()`: the Director may give any, the Research
+  Coordinator only what its own console creates (Subject Adviser, Librarian),
+  everybody else none. Letting that console give "Research Coordinator" would
+  be a way to mint one without being the Director, which is the escalation the
+  primary list already prevents. `secondary_position_for()` throws rather than
+  dropping a value it does not like, so a crafted post says so instead of
+  succeeding differently from how the form looks.
+- **A handler that copies `$_POST` field by field has to name it.**
+  `admin_manage_faculty.php` builds its `$data` from a named list, and the
+  field was silently absent until that list mentioned it: the escalation test
+  passed for the wrong reason (nothing arrived) and a legitimate second post
+  could not be given either. The admins console passes `$_POST` whole and
+  needed no such change.
+- The navbar offers **one link to the other desk** (`secondary_desk_link()`),
+  not that role's whole menu: two complete menus side by side is a navbar
+  nobody can read. `position_home()` finds it, because `role_home()` reads the
+  signed-in account's own `admin_level` and a second post brings its own.
+- **The approval chain is not restricted.** A person who is both Subject
+  Adviser and Research Coordinator may approve at both steps, which the owner
+  chose deliberately on 12 November 2026. For those papers the second step adds
+  nothing, since one person signs off their own review. If that is ever to
+  change, the place is `config/workflow.php`.
+- A copy of the database without the column still works:
+  `users_have_secondary_position()` is the tolerant path, `schema_gaps()`
+  reports it, and `scripts/migrations/sql/2026-11-12_secondary_position.sql`
+  closes it.
+
+**The adviser is the "Subject Adviser"**, renamed from "Research Adviser" on
+12 November 2026. The position is stored as written, so
+`staff_position_aliases()` keeps resolving the old name for rows written before
+the rename, and the migration above renames them. Read, never written: nothing
+puts the old name back.
 
 ---
 
@@ -502,7 +551,7 @@ week later (`supporting_documents.document_type` became a `VARCHAR` and gained
 `document_name`; `paper_manuscripts` was created), and staging has **no shell to run a
 migration script from**. `scripts/**` is not deployed either (`deploy-staging.yml`), and
 it must stay that way: several of the older scripts have no web guard. So its database
-stayed as it was, five queries named `document_name`, and the Research Adviser's desk
+stayed as it was, five queries named `document_name`, and the Subject Adviser's desk
 ended in the "Something Went Wrong" page for any adviser with a paper waiting. Nothing
 showed it here, where the migration had run. The first sign was a faculty login that
 "went to an error".
@@ -1097,6 +1146,10 @@ at the cost of a build:
 - **Rows that fail are kept, with what was typed into them**, so they can be
   corrected and tried again; the ones that succeeded drop out. Clearing the lot
   would throw away the edits along with the mistake.
+- **A row already on an account is greyed and its tick locked**, so it cannot be
+  created at all. Editing its ID or its email unlocks it, since that may be
+  exactly what mends the clash; editing the name alone does not, because it
+  cannot. The server checks again regardless.
 - **There is no default position any more.** It was a box on the upload card
   answering for every row at once, which is the wrong shape: one file can hold
   advisers and librarians. Each row carries its own, as a list of the positions
@@ -1469,7 +1522,7 @@ them, since a box made after load is not there for the restore to find.
 
 ### The review checklist
 
-What the Research Adviser confirms while reading a paper. Its heading is a dropdown of
+What the Subject Adviser confirms while reading a paper. Its heading is a dropdown of
 ready-made lists (`paper_checklist_templates()` in `config/core.php`): IMRaD Sections,
 Undergraduate Thesis Sections and Capstone Project Sections (Chapter 1 to 5 and References: the
 old "Full Manuscript" list, under the name of what is being reviewed), Feasibility Study

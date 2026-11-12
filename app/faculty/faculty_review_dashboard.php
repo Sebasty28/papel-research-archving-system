@@ -1,6 +1,6 @@
 <?php
 /**
- * Research Adviser's review desk.
+ * Subject Adviser's review desk.
  *
  * First stop in the workflow: the adviser reads what their own students submit
  * and either forwards it to the Research Coordinator or sends it back with
@@ -79,7 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['export'])) {
                published page will and will not contain before they open it. */
             $scopeNote = paper_scope_notice(paper_scope_info_for((int)$paper_id), 'brief');
             create_notification($admin_id, $paper_id, 'submission',
-                "Research Adviser approved {$student_name}'s paper. Pending your review."
+                "Subject Adviser approved {$student_name}'s paper. Pending your review."
                 . ($scopeNote !== '' ? ' ' . $scopeNote : ''));
         }
 
@@ -89,7 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['export'])) {
            the next thing they heard was either publication or a return. */
         if ($student_id) {
             create_notification($student_id, $paper_id, 'approval',
-                'Your Research Adviser approved your paper and sent it on to the '
+                'Your Subject Adviser approved your paper and sent it on to the '
                 . 'Research Coordinator for the final review.',
                 'Your Paper Has Been Approved & Forwarded');
         }
@@ -102,7 +102,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['export'])) {
         purge_paper_drive_files($paper_id);
         if ($student_id = paper_owner($paper_id)) {
             create_notification($student_id, $paper_id, 'decline',
-                'Your Research Adviser returned your paper: ' . $feedback);
+                'Your Subject Adviser returned your paper: ' . $feedback);
         }
         flash('success', 'Paper returned to the student with your feedback.');
     }
@@ -124,7 +124,7 @@ $sc->close();
 $RC = [
     'self'  => $SELF,
     'title' => 'Review Desk',
-    'role'  => 'Research Adviser',
+    'role'  => 'Subject Adviser',
     'blurb' => 'Papers from the students you advise. Approving one sends it to the Research Coordinator; returning it puts it back in the student\'s drafts with your feedback.',
     'scope' => ['sql' => 'u.created_by = ?', 'params' => [$u['user_id']], 'types' => 'i'],
     'tabs'  => [

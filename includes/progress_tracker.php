@@ -4,7 +4,7 @@
  * Shows the 5-stage approval workflow with visual indicators
  * 
  * Stages:
- * 1. Faculty (Research Adviser)
+ * 1. Faculty (Subject Adviser)
  * 2. Admin L1 (Research Coordinator)
  * 3. Admin L2 (HAP)
  * 4. Head of Academic Affairs

@@ -411,6 +411,7 @@ CREATE TABLE IF NOT EXISTS `users` (
   `expires_on` date DEFAULT NULL,
   `student_id` varchar(50) DEFAULT NULL,
   `admin_level` tinyint(4) DEFAULT 1 COMMENT '1=Research Coordinator, 2=HAP (Head of Academic Programs)',
+  `secondary_position` varchar(50) DEFAULT NULL COMMENT 'A second post the same person holds, by name; see staff_positions()',
   PRIMARY KEY (`user_id`),
   UNIQUE KEY `username` (`username`),
   UNIQUE KEY `email` (`email`),

@@ -749,7 +749,10 @@ function require_login(): void { if (!current_user()) { login_redirect(); } }
    treated as opening a page, which is also what curl looks like. */
 function require_role(array $roles): void {
   $u = current_user();
-  if ($u && in_array($u['user_role'], $roles, true)) { return; }
+  /* Every post the account holds, not just the one it was created as: a
+     Research Coordinator who is also a Subject Adviser opens both desks. For
+     everybody else user_roles() is the one role it always was. */
+  if ($u && array_intersect(user_roles($u), $roles)) { return; }
 
   $tab = in_array('student', $roles, true) ? 'student' : 'faculty';
 
@@ -837,22 +840,210 @@ function paper_date_display(?string $research_date, $year = null): string {
  * four. It lives here now.
  *
  * Who may create whom is decided by the page, not by this list:
- *   Research Coordinator  ->  Research Adviser, Librarian
+ *   Research Coordinator  ->  Subject Adviser, Librarian
  *   Director              ->  Research Coordinator, Head of Academic Affairs, Librarian
  */
 function staff_positions(): array {
     return [
-        'Research Adviser'         => ['role' => 'faculty',   'level' => 1],
+        'Subject Adviser'          => ['role' => 'faculty',   'level' => 1],
         'Research Coordinator'     => ['role' => 'admin',     'level' => 1],
         'Head of Academic Affairs' => ['role' => 'admin',     'level' => 2],
         'Librarian'                => ['role' => 'librarian', 'level' => 0],
     ];
 }
 
+/**
+ * Names this project has called a position before now.
+ *
+ * The position is stored as written, in users.title, so renaming one in code
+ * leaves every account already on file answering to the old name. The adviser
+ * was the "Research Adviser" until November 2026 and is the Subject Adviser
+ * now; a row still saying the old thing has to keep working, on a copy of the
+ * site whose migration has not been run and on one where it has but an old
+ * backup was restored over it.
+ *
+ * Read, never written: staff_position_map() resolves these, and nothing here
+ * puts one back into the database.
+ */
+function staff_position_aliases(): array {
+    return ['Research Adviser' => 'Subject Adviser'];
+}
+
 /** The user_role and admin_level a position maps to, or null if unrecognised. */
 function staff_position_map(?string $position): ?array {
     $position = trim((string)$position);
+    $position = staff_position_aliases()[$position] ?? $position;
     return staff_positions()[$position] ?? null;
+}
+
+/** The name a position goes by now, whatever it was called when it was stored. */
+function staff_position_current_name(?string $position): string {
+    $position = trim((string)$position);
+    return staff_position_aliases()[$position] ?? $position;
+}
+
+/**
+ * Does this copy of the database know about a second post?
+ *
+ * The tolerant path for a server whose migration has not been run. See "A copy
+ * of the database can be behind the code" in CLAUDE.md: asked once per request,
+ * and answered no rather than failing, so a copy that is behind simply has no
+ * second positions rather than an error page on every staff login.
+ */
+function users_have_secondary_position(): bool {
+    static $has = null;
+    if ($has !== null) { return $has; }
+    $res = db()->query("SHOW COLUMNS FROM users LIKE 'secondary_position'");
+    return $has = ($res && $res->num_rows > 0);
+}
+
+/**
+ * Every post this account holds, the first being the one it was created as.
+ *
+ * One member of staff may hold two at once; the constitution allows it, and a
+ * Research Coordinator who also advises is the case that prompted it. The
+ * account still has one user_role, which decides where it lands and what it is
+ * called; the second post is a position name stored beside it.
+ *
+ * @return string[] position names, no duplicates, never empty for staff
+ */
+function user_positions(?array $u): array {
+    if (!$u) { return []; }
+    $out = [staff_position_of($u)];
+
+    $second = staff_position_current_name((string)($u['secondary_position'] ?? ''));
+    if ($second !== '' && $second !== $out[0] && staff_position_map($second)) {
+        $out[] = $second;
+    }
+    return $out;
+}
+
+/**
+ * Every user_role this account may act as.
+ *
+ * What require_role() reads. A single-post account answers exactly as it did
+ * before this existed, which is why nothing else had to change: the list is
+ * one long for almost everybody.
+ *
+ * @return string[]
+ */
+function user_roles(?array $u): array {
+    if (!$u) { return []; }
+    $roles = [(string)($u['user_role'] ?? '')];
+
+    $second = staff_position_current_name((string)($u['secondary_position'] ?? ''));
+    $map = $second !== '' ? staff_position_map($second) : null;
+    if ($map && !in_array($map['role'], $roles, true)) { $roles[] = $map['role']; }
+
+    return array_values(array_filter($roles, static fn($r) => $r !== ''));
+}
+
+/** May this account act as the given role, by either of its posts? */
+function user_has_role(?array $u, string $role): bool {
+    return in_array($role, user_roles($u), true);
+}
+
+/**
+ * The desk a position works at.
+ *
+ * role_home() cannot answer this for a second post: it reads the signed-in
+ * account's own admin_level to tell a Research Coordinator from a Head of
+ * Academic Programs, and a second post brings its own level. This takes the
+ * position and asks staff_positions() instead.
+ */
+function position_home(?string $position): string {
+    $map = staff_position_map($position);
+    if (!$map) { return BASE_URL . '/archive/index.php'; }
+
+    if ($map['role'] === 'admin') {
+        return (int)$map['level'] === 2
+            ? BASE_URL . '/app/faculty/head_review_dashboard.php'
+            : BASE_URL . '/app/admin/admin_review_dashboard.php';
+    }
+    return role_home($map['role']);
+}
+
+/**
+ * The other desk this person may work at, or null for almost everybody.
+ *
+ * One link rather than the whole of the other role's menu: two complete menus
+ * side by side is a navbar nobody can read, and the desk is the way in to
+ * everything else that role has.
+ *
+ * @return array{label: string, href: string}|null
+ */
+function secondary_desk_link(?array $u): ?array {
+    if (!$u) { return null; }
+    $posts = user_positions($u);
+    if (count($posts) < 2) { return null; }
+
+    return ['label' => $posts[1] . ' desk', 'href' => position_home($posts[1])];
+}
+
+/**
+ * Which second posts the person at the keyboard may hand out.
+ *
+ * The authority rule, and the reason it is not simply "every position": the
+ * Research Coordinator's console creates Subject Advisers and Librarians, so
+ * letting it set a second post of "Research Coordinator" would be a way to
+ * mint a Coordinator without being the Director, which is the escalation that
+ * list exists to prevent. The Director sits at the top of the tree and may
+ * hand out any of them, which is what makes a Coordinator who also advises
+ * possible at all: only the Director creates that account.
+ *
+ * @param array|null $actor the signed-in person doing the creating
+ * @return string[] position names, empty for anybody who may not do this
+ */
+function secondary_position_options(?array $actor): array {
+    if (!$actor) { return []; }
+    $role = (string)($actor['user_role'] ?? '');
+
+    if ($role === 'super_admin') { return array_keys(staff_positions()); }
+    if ($role === 'admin' && (int)($actor['admin_level'] ?? 1) === 1) {
+        return ['Subject Adviser', 'Librarian'];
+    }
+    return [];
+}
+
+/**
+ * What to store as a second post, or '' for none.
+ *
+ * The server decides, as it does for a programme on the upload form: anything
+ * not on the actor's own list is refused rather than quietly dropped, so a
+ * crafted post says so instead of succeeding differently from how it looks.
+ *
+ * @throws InvalidArgumentException when the position is not one they may give
+ */
+function secondary_position_for(?array $actor, ?string $posted, string $primary): string {
+    $posted = staff_position_current_name((string)$posted);
+    if ($posted === '') { return ''; }
+
+    /* The same post twice is nothing, not an error: a form that remembers the
+       primary and copies it into the second box is a slip, not an attack. */
+    if ($posted === staff_position_current_name($primary)) { return ''; }
+
+    if (!in_array($posted, secondary_position_options($actor), true)) {
+        throw new InvalidArgumentException(
+            'You cannot give somebody a second post of "' . $posted . '".');
+    }
+    return $posted;
+}
+
+/**
+ * The admin_level to read when acting as $role.
+ *
+ * A Head of Academic Programs is an admin at level 2 and a Research
+ * Coordinator one at level 1, so the number means nothing without knowing
+ * which post is being worn. The primary post's level is the account's own;
+ * a second post brings its own from staff_positions().
+ */
+function user_level_for(?array $u, string $role): int {
+    if (!$u) { return 1; }
+    if ((string)($u['user_role'] ?? '') === $role) { return (int)($u['admin_level'] ?? 1); }
+
+    $second = staff_position_current_name((string)($u['secondary_position'] ?? ''));
+    $map = $second !== '' ? staff_position_map($second) : null;
+    return $map && $map['role'] === $role ? (int)$map['level'] : (int)($u['admin_level'] ?? 1);
 }
 
 /**
@@ -866,7 +1057,7 @@ function staff_position_of(array $user): string {
     $level = (int)($user['admin_level'] ?? 1);
     if ($role === 'head_academic') return 'Head of Academic Affairs';
     if ($role === 'librarian')     return 'Librarian';
-    if ($role === 'faculty')       return 'Research Adviser';
+    if ($role === 'faculty')       return 'Subject Adviser';
     if ($role === 'admin')         return $level === 2 ? 'Head of Academic Affairs' : 'Research Coordinator';
     return trim((string)($user['title'] ?? '')) ?: 'Staff';
 }
@@ -881,7 +1072,7 @@ function staff_position_of(array $user): string {
  *   page's furniture. A student or the Director falls past every branch in it
  *   and comes out as "Staff".
  *
- *   role_label() knows the Director but calls a Research Adviser a "Faculty
+ *   role_label() knows the Director but calls a Subject Adviser a "Faculty
  *   Adviser" and a Head of Academic Programs a "Records Officer", neither of
  *   which is what the rest of the system calls them.
  *
@@ -894,7 +1085,7 @@ function account_position(array $user): string {
     $level = (int)($user['admin_level'] ?? 1);
 
     if ($role === 'student')       return 'Student';
-    if ($role === 'faculty')       return 'Research Adviser';
+    if ($role === 'faculty')       return 'Subject Adviser';
     if ($role === 'librarian')     return 'Librarian';
     if ($role === 'head_academic') return 'Head of Academic Programs';
     if ($role === 'super_admin')   return 'Director';
@@ -944,7 +1135,7 @@ function account_identifier(array $user): array {
 function support_requester_roles(): array {
     return [
         'student'       => 'Student',
-        'faculty'       => 'Research Adviser',
+        'faculty'       => 'Subject Adviser',
         'librarian'     => 'Librarian',
         'admin'         => 'Research Coordinator',
         'head_academic' => 'Head of Academic Programs',
@@ -958,7 +1149,7 @@ function support_requester_roles(): array {
    posts, so the label and the lookup cannot drift apart. */
 function support_handler_roles(): array {
     return [
-        'faculty'     => 'Research Adviser',
+        'faculty'     => 'Subject Adviser',
         'admin'       => 'Research Coordinator',
         'super_admin' => 'Director',
     ];
@@ -1463,7 +1654,7 @@ function student_manuscript_access(int $studentUserId, int $paperId): bool {
  *   - archive/view_paper.php: a published or archived paper's manuscript, for
  *     staff, and for a student holding an open grant from a Librarian;
  *   - app/review_paper.php: every file, of any paper for the Coordinator and of
- *     their own students' papers for a Research Adviser;
+ *     their own students' papers for a Subject Adviser;
  *   - app/student/paper_details.php: every file of the student's own paper.
  * Supporting documents belong to the submission, not the published paper, so
  * the public page never offers them and they are not reachable through it.
@@ -3928,7 +4119,7 @@ function paper_checklist_groups(?string $manuscriptType): array {
 /* =========================================================================
    The review checklist
 
-   What the Research Adviser confirms while reading a paper. It used to be eleven
+   What the Subject Adviser confirms while reading a paper. It used to be eleven
    fixed yes/no columns, one run for IMRaD and one for chapters, picked by the
    file format alone. A feasibility study has neither, and the reviewer could not
    change a line, so the list is now chosen from a few ready-made ones and may be
@@ -4634,6 +4825,17 @@ function supporting_doc_type_for_storage(string $type): string
 function schema_gaps(): array
 {
     $gaps = [];
+
+    if (!users_have_secondary_position()) {
+        $gaps[] = [
+            'key'    => 'secondary_position',
+            'what'   => 'users.secondary_position is missing',
+            'effect' => 'Nobody can be given a second post, so a Research Coordinator who also '
+                      . 'advises cannot reach the adviser\'s desk. Everything else works as before.',
+            'sql'    => "ALTER TABLE users\n  ADD COLUMN secondary_position VARCHAR(50) NULL DEFAULT NULL AFTER admin_level;",
+            'file'   => 'scripts/migrations/sql/2026-11-12_secondary_position.sql',
+        ];
+    }
 
     $type = db()->query("SHOW COLUMNS FROM supporting_documents LIKE 'document_type'");
     $col  = $type ? $type->fetch_assoc() : null;

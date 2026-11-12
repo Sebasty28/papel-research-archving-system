@@ -159,7 +159,7 @@ $returned = $fb->get_result()->fetch_assoc() ?: null;
 $fb->close();
 
 $reviewerRole = [
-    'faculty' => 'Research Adviser',
+    'faculty' => 'Subject Adviser',
     'admin'   => 'Research Coordinator',
 ];
 $needsRevision = $status === 'draft' && $returned;
@@ -288,10 +288,10 @@ $PAGE_SKELETON = 'reader';
                     <h2>With your reviewers</h2>
                     <p>
                         <?php if ($status === 'pending_faculty'): ?>
-                            Your Research Adviser is reading this now. Once they approve it, it goes
+                            Your Subject Adviser is reading this now. Once they approve it, it goes
                             to the Research Coordinator for the final decision.
                         <?php else: ?>
-                            Your Research Adviser has approved this and passed it to the Research
+                            Your Subject Adviser has approved this and passed it to the Research
                             Coordinator, who makes the final decision.
                         <?php endif; ?>
                         Nothing here can be changed while it is under review.
@@ -323,7 +323,7 @@ $PAGE_SKELETON = 'reader';
                comes before the words themselves. */
             $toc = [
                 ['id' => 'pd-sec-progress', 'label' => 'Where It Stands', 'children' => [
-                    ['id' => 'pd-sub-adviser',     'label' => 'Research Adviser'],
+                    ['id' => 'pd-sub-adviser',     'label' => 'Subject Adviser'],
                     ['id' => 'pd-sub-coordinator', 'label' => 'Research Coordinator'],
                 ]],
                 ['id' => 'pd-sec-info',      'label' => 'Basic Information', 'children' => []],
@@ -383,7 +383,7 @@ $PAGE_SKELETON = 'reader';
                     <?php endforeach; ?>
                 </div>
                 <div class="pd-people">
-                    <div id="pd-sub-adviser">Research Adviser: <span class="who"><?= e($reviewers['faculty'] ?? 'Not yet reviewed') ?></span></div>
+                    <div id="pd-sub-adviser">Subject Adviser: <span class="who"><?= e($reviewers['faculty'] ?? 'Not yet reviewed') ?></span></div>
                     <div id="pd-sub-coordinator">Research Coordinator: <span class="who"><?= e($reviewers['admin'] ?? 'Not yet reviewed') ?></span></div>
                 </div>
             </div>
@@ -463,7 +463,7 @@ $PAGE_SKELETON = 'reader';
             <?php if (!$checklist): ?>
                 <div class="pd-note">
                     <span class="material-symbols-outlined">info</span>
-                    <span>Your Research Adviser did not record a checklist for this paper.
+                    <span>Your Subject Adviser did not record a checklist for this paper.
                           The files below are what was actually submitted.</span>
                 </div>
             <?php endif; ?>
@@ -498,7 +498,7 @@ $PAGE_SKELETON = 'reader';
             <?php if ($checklist): ?>
                 <div class="pd-note pd-note--after">
                     <span class="material-symbols-outlined">verified_user</span>
-                    <span>Recorded by <?= e($reviewers['faculty'] ?? 'your Research Adviser') ?>
+                    <span>Recorded by <?= e($reviewers['faculty'] ?? 'your Subject Adviser') ?>
                           when the paper was approved<?= !empty($checklist['recorded_at'])
                             ? ' on ' . e(date('F j, Y', strtotime($checklist['recorded_at']))) : '' ?>.</span>
                 </div>

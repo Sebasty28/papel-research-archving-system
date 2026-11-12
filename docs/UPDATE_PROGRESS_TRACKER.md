@@ -2,7 +2,7 @@
 
 ## What Changed
 The progress tracker now shows **5 stages** instead of 4:
-1. Faculty (Research Adviser)
+1. Faculty (Subject Adviser)
 2. Admin L1 (Research Coordinator) - NEW
 3. Admin L2 (HAP) - NEW
 4. Head of Academic Affairs
@@ -107,7 +107,7 @@ require_once '../../includes/progress_tracker.php';
   <div class="progress-line"><div class="progress-line-fill step2"></div></div>
   <div class="progress-step">
     <div class="step-circle completed"><?= $icon_green ?></div>
-    <div class="step-label completed">Research Adviser</div>
+    <div class="step-label completed">Subject Adviser</div>
   </div>
   <div class="progress-step">
     <div class="step-circle current"><?= $icon_yellow ?></div>

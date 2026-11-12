@@ -39,7 +39,7 @@ with one online process:
 
 1. A **student** uploads a paper (the manuscript PDF, the metadata, the written sections and the
    supporting documents).
-2. The student's **Research Adviser** (faculty) reviews it against a checklist and approves it or
+2. The student's **Subject Adviser** (faculty) reviews it against a checklist and approves it or
    returns it with feedback.
 3. The **Research Coordinator** gives the final approval, which publishes the paper.
 4. The **Public Repository** makes approved papers searchable and readable by students, staff
@@ -144,7 +144,7 @@ written with a suffix, for example `1.0.0-rc.1` (release candidate 1).
 | 0.8.0 | 16 Oct 2026 | Staging | One shared PDF viewer and docked PDF panel site-wide; Corpus chatbot typing indicator |
 | 0.9.0 | 21–22 Oct 2026 | Staging | Two manuscript files per paper (IMRAD and Full); chosen written sections; Groq proxy Worker; upload diagnostics |
 | 0.9.1 | 22–23 Oct 2026 | Staging | Fixes: first-try sign-in, readable host refusals, Drive storage-folder check, adviser desk on an older database |
-| 0.10.0 | 23 Oct 2026 | Staging | Editable review checklist for the Research Adviser |
+| 0.10.0 | 23 Oct 2026 | Staging | Editable review checklist for the Subject Adviser |
 | 0.11.0 | 23 Oct 2026 | Staging | Sections of the author's own (Custom mode, presets for thesis and feasibility study) |
 | 0.11.1 | 27 Oct 2026 | Staging | Fix: `manuscript_requests` table added for databases built from `schema.sql` |
 | 0.12.0 | 27 Oct 2026 | Staging | "Other" paper and manuscript types; year-only dates; faithful abstract extraction; type-in dropdowns |
@@ -164,7 +164,7 @@ What the system already did at this point:
 
 - Sign-in by role (student, faculty, admin, head academic, super admin, librarian, guest).
 - Student upload of a paper with its PDF, metadata and IMRaD sections, with AI metadata extraction.
-- The approval chain: Research Adviser, then Research Coordinator, with return-with-feedback.
+- The approval chain: Subject Adviser, then Research Coordinator, with return-with-feedback.
 - The Public Repository with search and filters, the paper page and the PDF viewer.
 - Review desks for each staff role, account management consoles, the analytics dashboard.
 - Notifications in the app and by email; Google Drive storage; archiving of papers.
@@ -245,7 +245,7 @@ loading glitch fix.
 - **Fixed** sign-in failing on the first attempt after an idle period (the sign-in form's security token was being discarded).
 - **Fixed** refusals from the host reaching the student as an unexplained error.
 - **Fixed** uploads failing because the configured Drive folder belonged to another account: the Storage Folder page now checks a folder before saving it.
-- **Fixed** the Research Adviser's desk ending in an error on a database that had not run the latest migration; added `2026-10-21_catch_up.sql` for phpMyAdmin.
+- **Fixed** the Subject Adviser's desk ending in an error on a database that had not run the latest migration; added `2026-10-21_catch_up.sql` for phpMyAdmin.
 
 #### 0.10.0 (23 October 2026): Editable review checklist
 
@@ -345,7 +345,7 @@ storage folder, which is different on each copy and must be one the connected ac
 | Role (`users.user_role`) | Title | What they do | Home page |
 |---|---|---|---|
 | `student` | Student | Upload, save drafts, resubmit returned papers, track progress, browse the repository, request manuscripts | `app/student/student_dashboard.php` |
-| `faculty` | Research Adviser | Review their advisees' papers with the checklist; approve or return; create student accounts | `app/faculty/faculty_review_dashboard.php` |
+| `faculty` | Subject Adviser | Review their advisees' papers with the checklist; approve or return; create student accounts | `app/faculty/faculty_review_dashboard.php` |
 | `admin`, `admin_level = 1` | Research Coordinator | Final approval and publishing; manage faculty accounts; analytics; connect Google Drive | `app/admin/admin_review_dashboard.php` |
 | `admin`, `admin_level = 2`, or `head_academic` | Head of Academic Programs | Read and monitor published work; analytics | `app/faculty/head_review_dashboard.php` |
 | `super_admin` | Campus Director | Read and monitor; manage administrator accounts; set the Drive storage folder | `app/admin/super_admin_review_dashboard.php` |
@@ -354,7 +354,7 @@ storage folder, which is different on each copy and must be one the connected ac
 | (none) | Public visitor | Read the repository's paper cards and abstracts | `archive/` |
 
 Who creates whom: the Director creates administrators; the Research Coordinator creates faculty
-and librarians; a Research Adviser creates their own students; the Librarian creates guest passes.
+and librarians; a Subject Adviser creates their own students; the Librarian creates guest passes.
 
 ---
 
@@ -387,7 +387,7 @@ Forward move between steps.
 
 - One review desk shared by four roles (`includes/review_console.php`), configured per role.
 - The paper's full record, its manuscript(s) in the PDF panel, and the supporting documents.
-- The **review checklist** for the Research Adviser: ready-made lists or edited for one paper.
+- The **review checklist** for the Subject Adviser: ready-made lists or edited for one paper.
 - **Approve** forwards to the next step or publishes; **Return** sends it back to the student as a draft with feedback, and deletes the returned files from Drive so fresh ones are attached.
 - A chip on each card shows which written sections were submitted.
 - The student can withdraw a paper still in review, with the Adviser or with the Coordinator.
@@ -442,7 +442,7 @@ for multi-byte characters, and a fallback API key.
 
 ```mermaid
 flowchart LR
-    S([Student uploads]) --> F{Research Adviser<br/>reviews}
+    S([Student uploads]) --> F{Subject Adviser<br/>reviews}
     F -- Approve --> C{Research Coordinator<br/>reviews}
     F -- Return with feedback --> D[Draft, returned]
     C -- Approve --> P([Published in the<br/>Public Repository])
@@ -485,7 +485,7 @@ sequenceDiagram
     participant W as PAPEL (PHP)
     participant G as Google Drive
     participant DB as Database
-    participant Ad as Research Adviser
+    participant Ad as Subject Adviser
     St->>B: Fill the four steps, attach PDF(s)
     B->>W: Submit (form + files, CSRF token)
     W->>G: Is the storage folder usable?
