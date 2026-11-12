@@ -75,8 +75,15 @@ The rule, from the System Overview section 3.1:
 | A fix, no new feature | **PATCH**: `0.13.0` to `0.13.1` | `manuscript_requests` table fix (0.11.1) |
 | Something that breaks existing work or stored data | MAJOR | has not happened yet |
 
-While PAPEL is still being built it stays at `0.something`. The first number
-becomes `1.0.0` only when the system is accepted after User Acceptance Testing.
+`1.0.0` is the first build to go live on production, which it reached on
+12 November 2026. Everything numbered `0.14.0` and below belongs to the months
+before that, when the only copies were a laptop and staging.
+
+The rule here used to say the first number waited for User Acceptance Testing to
+sign the system off. The owner moved it to the day the public site opened, on
+the grounds that a number people outside the project can read should say the
+system is real, not that it is still being argued about. Releases after
+acceptance carry on from `1.0.x`.
 
 ### Step 2: write it in the file
 
@@ -124,8 +131,7 @@ touches it, so testers never meet a half finished change.
 1. Make sure the build you want is already pushed and working on staging.
 2. Make sure `VERSION` holds the number you want people to see.
 3. **History** tab, right-click that commit, **Create Tag…**.
-4. Type the tag **with** the `v`, for example `v1.0.0-rc.1` for the first build
-   for User Acceptance Testing.
+4. Type the tag **with** the `v`, matching what `VERSION` holds: `v1.0.0`.
 5. **Create Tag**, then **Push origin**.
 
 The production deploy starts on its own.
