@@ -124,26 +124,26 @@ $counts = ['saved' => count($saved), 'requests' => count($requests), 'history' =
 $tab = (string)($_GET['tab'] ?? 'saved');
 if (!isset($tabs[$tab])) { $tab = 'saved'; }
 
-/** How much of a grant is left, in words. */
+/** How much of a grant is left, in words.
+ *
+ *  One copy, in config/core.php: the live countdown
+ *  (includes/manuscript_timer.php) writes the same shape over this figure once
+ *  a second, and two spellings of "how long is left" would read as the page
+ *  correcting itself the moment it loaded. */
 function library_time_left(string $expiresAt): string {
-    $left = strtotime($expiresAt) - time();
-    if ($left <= 0) { return 'ended'; }
-    $h = intdiv($left, 3600);
-    $m = intdiv($left % 3600, 60);
-    return $h > 0 ? $h . 'h ' . $m . 'm left' : max(1, $m) . 'm left';
+    return manuscript_time_left($expiresAt);
 }
 
 /**
- * Which of the ten cover colours a paper wears: its programme's place in
- * programs_map(), so a programme is one colour on every shelf, and the first
- * (BSIT) is the site's own maroon. One the map does not know is given a colour
- * from its name, so it is at least the same colour every time.
+ * Which cover a paper's book wears: its programme's group, from the palette
+ * the repository's Shelf view uses too (includes/book_covers.php), so one
+ * paper is one colour on both shelves. It used to be an index into a palette
+ * of ten by the programme's place in programs_map(), which coloured a
+ * programme by where it happened to sit in a list.
  */
-function library_cover_index(?string $program): int {
-    $program = trim((string)$program);
-    $at = array_search($program, array_keys(programs_map()), true);
-    if ($at !== false) { return (int)$at % 10; }
-    return $program === '' ? 0 : (int)(abs(crc32($program)) % 10);
+require_once ROOT_PATH . '/includes/book_covers.php';
+function library_cover_index(?string $program): string {
+    return book_cover_group($program);
 }
 
 /** "Bering" for one author, "Begino et al." for several: what fits a cover. */
@@ -157,9 +157,7 @@ function library_cover_byline(?string $authors): string {
 
 /** The abstract as plain text, cut to a paragraph. Cut by characters: see "Text cut by bytes is not text". */
 function library_excerpt(?string $html): string {
-    $text = html_entity_decode(strip_tags((string)$html), ENT_QUOTES | ENT_HTML5, 'UTF-8');
-    $text = trim((string)(preg_replace('/\s+/u', ' ', $text) ?? ''));
-    return mb_strlen($text) > 520 ? rtrim(mb_substr($text, 0, 520)) . '...' : $text;
+    return book_excerpt($html);     // includes/book_covers.php, shared with the repository
 }
 ?>
 <!doctype html>
@@ -176,6 +174,7 @@ function library_excerpt(?string $html): string {
 <?php require_once ROOT_PATH.'/includes/console_shell.php'; ?>
 <?php require_once ROOT_PATH.'/includes/save_paper.php'; ?>
 <?php require_once ROOT_PATH.'/includes/flash_banner.php'; ?>
+<?php /* The cover palette, shared with the repository's Shelf view. */ book_covers_style(); ?>
 <style nonce="<?= csp_nonce() ?>">
 .lib-wrap { padding-top: 1.5rem; padding-bottom: 3rem; }
 .lib-head { margin: 0 0 1rem; }
@@ -265,10 +264,7 @@ function library_excerpt(?string $html): string {
     position: relative; display: block;
     width: var(--bw); height: var(--bh);
     padding: 0; border: 0; background: none; cursor: pointer;
-    font: inherit; color: #fff; text-align: left;
-    /* The cover's own margins, as variables: the banded cover below has to
-       undo them exactly, here and at the larger size in the open book. */
-    --pt: 10px; --pr: 9px; --pb: 9px; --pl: 13px;
+    font: inherit; color: var(--cover-foil); text-align: left;
     transform-style: preserve-3d;
     transform: rotateY(-28deg);
     transition: transform .4s cubic-bezier(.2, .8, .2, 1);
@@ -284,18 +280,15 @@ function library_excerpt(?string $html): string {
 .book:focus-visible { outline: none; }
 .book:focus-visible .book-cover { box-shadow: 0 0 0 2px var(--white), 0 0 0 4px var(--maroon); }
 
+/* The front face. Only where it sits in the book is this page's; the board
+   and everything stamped on it are .bk-face's (includes/book_covers.php), the
+   same as the repository's Shelf view. Nothing here may set its padding,
+   display or background: this stylesheet comes after that one, so at the same
+   weight it would win and undo the cover. */
 .book-cover {
     position: absolute; inset: 0;
-    display: flex; flex-direction: column;
-    padding: var(--pt) var(--pr) var(--pb) var(--pl);
     border-radius: 2px 4px 4px 2px;
     transform: translateZ(calc(var(--bd) / 2));
-    background-color: var(--cover);
-    /* The hinge: a soft dark fold down the spine side, then a hairline of
-       light where the board turns. */
-    background-image: linear-gradient(90deg,
-        rgba(0, 0, 0, .30) 0, rgba(0, 0, 0, 0) 7%,
-        rgba(255, 255, 255, .13) 8.5%, rgba(255, 255, 255, 0) 11%);
     overflow: hidden;
 }
 .book::before {
@@ -317,81 +310,18 @@ function library_excerpt(?string $html): string {
     box-shadow: -10px 6px 16px rgba(0, 0, 0, .32);
 }
 
-/* What is printed on the cover. */
-.book-top {
-    font-size: 8.5px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase;
-    padding-bottom: 5px; margin-bottom: 7px;
-    border-bottom: 1px solid rgba(255, 255, 255, .38);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.book-title {
-    font-family: var(--font-head); font-size: 11px; font-weight: 700; line-height: 1.24;
-    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 6;
-    overflow: hidden;
-    /* Hyphenated, not cut wherever the line ends: "Communicatio / n" is what
-       overflow-wrap: anywhere made of a long word on a narrow cover. */
-    overflow-wrap: break-word; -webkit-hyphens: auto; hyphens: auto;
-    /* Never squeezed: a title given less room than its lines need shows the
-       top half of the last one, which is what the shorter books did. They are
-       given a line fewer below instead. */
-    flex-shrink: 0;
-}
-.shelf .book[data-tall="1"] .book-title,
-.shelf .book[data-tall="2"] .book-title { -webkit-line-clamp: 5; }
-.shelf .book[data-look="1"][data-tall="2"] .book-title { -webkit-line-clamp: 4; }
-.book-by {
-    margin-top: auto; padding-top: 6px;
-    font-size: 8.5px; letter-spacing: .03em; opacity: .88;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
+/* What is stamped on the cover, and its colour: includes/book_covers.php,
+   one hardbound cover by programme group, shared with the repository. */
+
+/* Said apart from the stamping, on a dark tag of its own: it is a note about
+   this copy, not part of the cover. Plain white whatever the board, and none
+   of the foil's pressed edge. */
 .book-archived {
-    position: absolute; right: 0; bottom: 22px;
-    padding: 1px 5px; font-size: 7.5px; letter-spacing: .08em; text-transform: uppercase;
-    background: rgba(0, 0, 0, .38); border-radius: 2px 0 0 2px;
+    position: absolute; right: 0; bottom: 30px;
+    padding: 1px 5px; font-size: 7px; letter-spacing: .08em; text-transform: uppercase;
+    background: rgba(0, 0, 0, .55); border-radius: 2px 0 0 2px;
+    color: #fff; text-shadow: none;
 }
-
-/* ===== Four designs =====
-   The colour is the programme's, so a shelf of one programme's papers would be
-   a row of identical books: every paper on file when this was built was BSIT.
-   The design is the paper's own (its number, modulo four), so two books of one
-   colour still differ. All four are drawn in black and white washes over
-   --cover, so each works on every colour.
-     0  a rule under the heading (the plain cover above)
-     1  the heading in a dark band across the top
-     2  a hairline frame
-     3  a pale foot the byline stands on */
-.book[data-look="1"] .book-top {
-    margin: calc(var(--pt) * -1) calc(var(--pr) * -1) 8px calc(var(--pl) * -1);
-    padding: var(--pt) var(--pr) 6px var(--pl);
-    background: rgba(0, 0, 0, .28); border-bottom: 0;
-}
-.book[data-look="2"] .book-top { border-bottom: 0; margin-bottom: 4px; }
-.book[data-look="2"] .book-cover::after {
-    content: ''; position: absolute; inset: 5px 5px 5px 9px;
-    border: 1px solid rgba(255, 255, 255, .36); border-radius: 1px; pointer-events: none;
-}
-.book[data-look="3"] .book-cover::before {
-    content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 24%;
-    background: rgba(255, 255, 255, .15);
-}
-.book[data-look="3"] .book-by { position: relative; }
-
-/* ===== The ten covers =====
-   A cover is an object, not a surface of the page: like the navbar's maroon it
-   does not lift on a dark page, and white is printed on all of them. The first
-   is the site's own accent, so it changes with the palette; the rest are one
-   lightness and one strength of colour apart from it, so the shelf reads as a
-   set. White clears 7:1 on every one. */
-.book[data-cover="0"] { --cover: var(--maroon-surface); }
-.book[data-cover="1"] { --cover: hsl(212 38% 30%); }
-.book[data-cover="2"] { --cover: hsl(158 34% 26%); }
-.book[data-cover="3"] { --cover: hsl(26 46% 31%); }
-.book[data-cover="4"] { --cover: hsl(268 28% 34%); }
-.book[data-cover="5"] { --cover: hsl(188 42% 26%); }
-.book[data-cover="6"] { --cover: hsl(338 36% 33%); }
-.book[data-cover="7"] { --cover: hsl(84 28% 27%); }
-.book[data-cover="8"] { --cover: hsl(232 30% 36%); }
-.book[data-cover="9"] { --cover: hsl(44 46% 28%); }
 
 /* ===== Shelf or list =====
    The same papers twice in the markup, and the attribute says which is shown:
@@ -420,6 +350,7 @@ function library_excerpt(?string $html): string {
 .lib-req-ico { flex: 0 0 auto; font-size: 20px; color: var(--maroon); margin-top: .1rem; }
 .lib-req-state strong { color: var(--ink); font-weight: 600; }
 .lib-req-act { flex: 0 0 auto; align-self: center; }
+.lib-req-act:empty { display: none; }
 .lib-req-act form { margin: 0; }
 
 /* Nothing here yet, or nothing matching the search. */
@@ -439,53 +370,15 @@ function library_excerpt(?string $html): string {
 .shelf-room .lib-empty[hidden] { display: none; }
 
 /* ===== The open book =====
-   A <dialog>, so the browser holds the focus inside it, closes it on Escape
-   and draws it above everything on the page without a z-index to pick. */
-.lib-dialog {
-    width: min(44rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem);
-    /* Stated, not left to the browser: a modal dialog centres itself with
-       margin: auto, and the site's reset (margin: 0 on everything) takes that
-       away, which put the window in the top left corner of the page. */
-    margin: auto;
-    padding: 0; border: 0; border-radius: var(--r-card, 8px);
-    background: var(--white); color: var(--ink);
-    box-shadow: 0 18px 48px rgba(0, 0, 0, .35);
-    overflow: auto;
-}
-.lib-dialog::backdrop { background: rgba(20, 8, 8, .55); }
-.lib-dlg { position: relative; display: flex; gap: 1.5rem; padding: 1.5rem; }
-.lib-dlg-book {
-    --bw: 150px; --bh: 216px; --bd: 26px;
-    flex: 0 0 auto; width: calc(var(--bw) + 34px); padding: .5rem 0 0 .5rem;
-    perspective: 1100px;
-}
-.lib-dlg-book .book { cursor: default; transform: rotateY(-24deg); --pt: 15px; --pr: 13px; --pb: 13px; --pl: 18px; }
-.lib-dlg-book .book-top { font-size: 10.5px; padding-bottom: 7px; margin-bottom: 10px; }
-.lib-dlg-book .book-title { font-size: 15px; -webkit-line-clamp: 7; }
-.lib-dlg-book .book-by { font-size: 10.5px; }
-.lib-dlg-body { flex: 1 1 auto; min-width: 0; padding-right: 1.5rem; }
-.lib-dlg-kicker { margin: 0 0 .375rem; font-size: .6875rem; letter-spacing: .06em; text-transform: uppercase; color: var(--grey); }
-.lib-dlg-title { margin: 0; font-family: var(--font-head); font-size: 1.125rem; font-weight: 600; line-height: 1.3; color: var(--maroon); }
-.lib-dlg-authors { margin: .375rem 0 0; font-size: .8125rem; color: var(--ink); }
-.lib-dlg-abstract { margin: .875rem 0 0; font-size: .8125rem; line-height: 1.6; color: var(--ink); }
-.lib-dlg-abstract:empty { display: none; }
-.lib-dlg-saved { margin: .875rem 0 0; font-size: .75rem; color: var(--grey); }
-.lib-dlg-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .625rem; margin-top: 1rem; }
-.lib-dlg-actions .save-paper.is-labelled { margin-top: 0; }
-.lib-dlg-close {
-    position: absolute; top: .625rem; right: .625rem;
-    display: inline-flex; padding: .25rem; border: 0; background: none;
-    color: var(--grey); cursor: pointer; border-radius: var(--r-control, 4px);
-}
-.lib-dlg-close:hover { color: var(--maroon); background: var(--cream); }
+   The shared book viewer now (includes/book_viewer.php): pressed, a book is
+   taken off the shelf into a whole 3D book that turns, and set down into the
+   card this page's own dialog used to be, the same layout and figures. The
+   repository's Shelf view opens the same one. */
 
 @media (max-width: 700px) {
     .lib-tools { margin-left: 0; width: 100%; }
     .lib-tools .lib-tools-label { margin-left: .25rem; }
     .shelf { padding: 0 .5rem; grid-template-columns: repeat(auto-fill, minmax(calc(var(--bw) + 18px), 1fr)); }
-    .lib-dlg { flex-direction: column; align-items: center; gap: 1rem; padding: 1.25rem 1rem; }
-    .lib-dlg-book { --bw: 120px; --bh: 173px; --bd: 22px; }
-    .lib-dlg-body { padding-right: 0; width: 100%; }
     .lib-req { flex-wrap: wrap; }
     .lib-req-act { width: 100%; padding-left: 2rem; }
     .dash-top { flex-wrap: wrap; }
@@ -559,7 +452,7 @@ function library_excerpt(?string $html): string {
                     <button type="button" class="dash-tab" data-sort="year" aria-pressed="false">Year</button>
                     <span class="lib-rule" aria-hidden="true"></span>
                     <button type="button" class="dash-tab active" data-view-as="shelf" aria-pressed="true"
-                            title="Shelf" aria-label="Show as a shelf">
+                            title="Hardbounds" aria-label="Show as hardbound books on a shelf">
                         <span class="material-symbols-outlined" aria-hidden="true">shelves</span>
                     </button>
                     <button type="button" class="dash-tab" data-view-as="list" aria-pressed="false"
@@ -603,10 +496,13 @@ function library_excerpt(?string $html): string {
                                 data-name="<?= e(mb_strtolower((string)$p['title'])) ?>"
                                 data-year="<?= (int)($p['year'] ?? 0) ?>"
                                 data-saved="<?= (int)strtotime((string)$p['saved_at']) ?>">
-                                <button type="button" class="book" data-cover="<?= library_cover_index($p['program_category'] ?? '') ?>"
-                                        data-look="<?= $pid % 4 ?>" data-tall="<?= $pid % 3 ?>"
+                                <button type="button" class="book" data-cover="<?= e(library_cover_index($p['program_category'] ?? '')) ?>"
+                                        data-tall="<?= $pid % 3 ?>"
                                         data-paper="<?= $pid ?>"
                                         data-title="<?= e($p['title']) ?>"
+                                        data-program="<?= e($p['program_category'] ?? '') ?>"
+                                        data-year="<?= e((string)($p['year'] ?? '')) ?>"
+                                        data-kind="<?= e($type) ?>"
                                         data-authors="<?= e($p['author_names'] ?? '') ?>"
                                         data-kicker="<?= e($kicker) ?>"
                                         data-abstract="<?= e(library_excerpt($p['abstract'] ?? '')) ?>"
@@ -614,10 +510,17 @@ function library_excerpt(?string $html): string {
                                         data-href="<?= e(BASE_URL) ?>/archive/view_paper.php?id=<?= $pid ?>"
                                         aria-haspopup="dialog"
                                         aria-label="<?= e($p['title'] . (!empty($p['author_names']) ? ', by ' . $p['author_names'] : '') . '. Open.') ?>">
-                                    <span class="book-cover">
-                                        <span class="book-top"><?= e($top !== '' ? $top : APP_NAME) ?></span>
-                                        <span class="book-title"><?= e($p['title']) ?></span>
-                                        <span class="book-by"><?= e(library_cover_byline($p['author_names'] ?? '')) ?></span>
+                                    <?php /* The board and its stamping are the shared hardbound
+                                             cover (includes/book_covers.php), the same as the
+                                             repository's shelf. */ ?>
+                                    <span class="book-cover bk-face">
+                                        <?= book_cover_face([
+                                            'title'    => (string)$p['title'],
+                                            'kind'     => $type,
+                                            'by'       => library_cover_byline($p['author_names'] ?? ''),
+                                            'by_label' => 'Presented by',
+                                            'mark'     => $top !== '' ? $top : APP_NAME,
+                                        ]) ?>
                                         <?php if ((int)$p['is_archived'] === 1): ?>
                                             <span class="book-archived">Archived</span>
                                         <?php endif; ?>
@@ -684,29 +587,47 @@ function library_excerpt(?string $html): string {
             <?php else: ?>
                 <ul class="lib-reqs">
                     <?php foreach ($requests as $r): $pid = (int)$r['paper_id']; ?>
-                        <li class="lib-req">
-                            <span class="material-symbols-outlined lib-req-ico" aria-hidden="true"><?= $r['is_active'] ? 'lock_open' : 'hourglass_top' ?></span>
+                        <?php /* data-ms-row and the three hooks inside it are how
+                                 includes/manuscript_timer.php rewrites this row where it
+                                 stands when a librarian grants the request, or when the grant
+                                 runs out, instead of the reader having to refresh the page to
+                                 find out. */ ?>
+                        <li class="lib-req" data-ms-row="<?= $pid ?>" data-ms-req="<?= (int)$r['request_id'] ?>"
+                            data-ms-href="<?= e(BASE_URL) ?>/archive/view_paper.php?id=<?= $pid ?>#pd-sec-manuscript">
+                            <span class="material-symbols-outlined lib-req-ico" data-ms-ico aria-hidden="true"><?= $r['is_active'] ? 'lock_open' : 'hourglass_top' ?></span>
                             <div class="lib-req-main">
                                 <a class="lib-req-title" href="<?= e(BASE_URL) ?>/archive/view_paper.php?id=<?= $pid ?>"><?= e($r['paper_title'] ?? 'A paper no longer in the repository') ?></a>
                                 <?php if (!empty($r['author_names'])): ?>
                                     <p class="lib-row-sub"><?= e($r['author_names']) ?></p>
                                 <?php endif; ?>
-                                <p class="lib-req-state">
+                                <?php /* data-ms-ended: what the line should read once the
+                                         countdown in it reaches zero. "Unlocked until 10:30 PM
+                                         (ended)" is not a sentence, and the row is not redrawn
+                                         until the page is. */ ?>
+                                <p class="lib-req-state" data-ms-state<?= $r['is_active'] ? ' data-ms-ended="Access to this manuscript has ended. You can ask a librarian again."' : '' ?>>
                                     <?php if ($r['is_active']): ?>
+                                        <?php /* data-ms-until: includes/manuscript_timer.php keeps this
+                                                 figure counting down by the second off the server's clock,
+                                                 so the row does not go on claiming "3h 0m left" an hour
+                                                 later. The server's own words are what is printed, so the
+                                                 line is right with no script at all. */ ?>
                                         <strong>Unlocked</strong> until <?= e(date('F j, Y g:i A', strtotime((string)$r['expires_at']))) ?>
-                                        (<?= e(library_time_left((string)$r['expires_at'])) ?>).
+                                        (<span data-ms-until="<?= (int)strtotime((string)$r['expires_at']) ?>"><?= e(library_time_left((string)$r['expires_at'])) ?></span>).
                                     <?php else: ?>
                                         <strong>Waiting</strong> for a librarian to review it. Asked <?= e(date('F j, Y g:i A', strtotime((string)$r['created_at']))) ?>.
                                     <?php endif; ?>
                                 </p>
                             </div>
-                            <?php if ($r['is_active']): ?>
-                                <div class="lib-req-act">
+                            <?php /* Printed whether or not there is anything in it yet: the
+                                     script fills it in when the grant arrives, and an empty one
+                                     is not drawn (.lib-req-act:empty). */ ?>
+                            <div class="lib-req-act" data-ms-act>
+                                <?php if ($r['is_active']): ?>
                                     <a class="btn-sm-maroon" href="<?= e(BASE_URL) ?>/archive/view_paper.php?id=<?= $pid ?>#pd-sec-manuscript">
                                         <span class="material-symbols-outlined mi-18" aria-hidden="true">menu_book</span> Open manuscript
                                     </a>
-                                </div>
-                            <?php endif; ?>
+                                <?php endif; ?>
+                            </div>
                         </li>
                     <?php endforeach; ?>
                 </ul>
@@ -723,12 +644,18 @@ function library_excerpt(?string $html): string {
             <?php else: ?>
                 <ul class="lib-reqs">
                     <?php foreach ($history as $r):
-                        $pid    = (int)$r['paper_id'];
-                        $denied = $r['status'] === 'denied';
-                        $title  = $r['paper_title'] ?? 'A paper no longer in the repository';
+                        $pid   = (int)$r['paper_id'];
+                        /* 'denied', 'revoked' or 'expired'. A grant a librarian took
+                           back is a denied row that had been granted first, and it is
+                           said in its own words: being told a request was "denied"
+                           when it was in fact answered, used and then ended is the
+                           site misremembering what happened to them. */
+                        $state = manuscript_request_state($r);
+                        $title = $r['paper_title'] ?? 'A paper no longer in the repository';
+                        $ico   = $state === 'denied' ? 'block' : ($state === 'revoked' ? 'lock' : 'lock_clock');
                     ?>
                         <li class="lib-req">
-                            <span class="material-symbols-outlined lib-req-ico" aria-hidden="true"><?= $denied ? 'block' : 'lock_clock' ?></span>
+                            <span class="material-symbols-outlined lib-req-ico" aria-hidden="true"><?= $ico ?></span>
                             <div class="lib-req-main">
                                 <?php if ((int)$r['readable'] === 1): ?>
                                     <a class="lib-req-title" href="<?= e(BASE_URL) ?>/archive/view_paper.php?id=<?= $pid ?>"><?= e($title) ?></a>
@@ -739,8 +666,11 @@ function library_excerpt(?string $html): string {
                                     <p class="lib-row-sub"><?= e($r['author_names']) ?></p>
                                 <?php endif; ?>
                                 <p class="lib-req-state">
-                                    <?php if ($denied): ?>
+                                    <?php if ($state === 'denied'): ?>
                                         <strong>Denied</strong> on <?= e(date('F j, Y', strtotime((string)($r['denied_at'] ?: $r['created_at'])))) ?>.
+                                    <?php elseif ($state === 'revoked'): ?>
+                                        <strong>Ended by a librarian</strong> on <?= e(date('F j, Y g:i A', strtotime((string)($r['denied_at'] ?: $r['created_at'])))) ?>,
+                                        before it was due to run out on <?= e(date('F j, Y g:i A', strtotime((string)$r['expires_at']))) ?>.
                                     <?php else: ?>
                                         <strong>Ended</strong> on <?= e(date('F j, Y g:i A', strtotime((string)$r['expires_at']))) ?>,
                                         after <?= (int)$r['duration_hours'] ?> hour<?= (int)$r['duration_hours'] === 1 ? '' : 's' ?> of access.
@@ -772,34 +702,15 @@ function library_excerpt(?string $html): string {
 </main>
 
 <?php if ($tab === 'saved'): ?>
-<dialog class="lib-dialog" id="libDialog" aria-labelledby="libDlgTitle">
-    <div class="lib-dlg">
-        <button type="button" class="lib-dlg-close" data-close aria-label="Close">
-            <span class="material-symbols-outlined" aria-hidden="true">close</span>
-        </button>
-        <div class="lib-dlg-book" aria-hidden="true"></div>
-        <div class="lib-dlg-body">
-            <p class="lib-dlg-kicker"></p>
-            <h2 class="lib-dlg-title" id="libDlgTitle"></h2>
-            <p class="lib-dlg-authors"></p>
-            <p class="lib-dlg-abstract"></p>
-            <p class="lib-dlg-saved"></p>
-            <div class="lib-dlg-actions">
-                <a class="btn-sm-maroon" data-read href="#">
-                    <span class="material-symbols-outlined mi-18" aria-hidden="true">menu_book</span> Read paper
-                </a>
-                <span data-save-slot></span>
-            </div>
-        </div>
-    </div>
-</dialog>
+<?php /* The book viewer: a pressed book is taken off the shelf, turned, and
+         set down into the details card (includes/book_viewer.php). */ ?>
+<?php require ROOT_PATH.'/includes/book_viewer.php'; ?>
 
 <script nonce="<?= csp_nonce() ?>">
 document.addEventListener('DOMContentLoaded', function () {
     var root   = document.getElementById('libSaved');
     var shelf  = document.getElementById('libShelf');
     var list   = document.getElementById('libList');
-    var dialog = document.getElementById('libDialog');
     if (!root || !shelf || !list) { return; }
 
     var search    = document.getElementById('libSearch');
@@ -869,56 +780,56 @@ document.addEventListener('DOMContentLoaded', function () {
         tally();
     }
 
-    /* ---- The open book ---- */
-    var openId = null;
-    function fill(sel, text) { dialog.querySelector(sel).textContent = text || ''; }
-
+    /* ---- The open book ----
+       The shared viewer (includes/book_viewer.php), given what this page knows
+       about the paper. A browser with no <dialog> has no viewer, and goes to
+       the paper's page instead. */
+    /* What the viewer is told about one book: asked for the one pressed, and
+       again for each one its arrows step to. */
+    function libraryInfo(book) {
+        var d = book.dataset;
+        var cover = book.querySelector('.book-cover');
+        var mark  = book.querySelector('.bk-mark');
+        return {
+            paperId:  d.paper,
+            title:    d.title,
+            authors:  d.authors,
+            kicker:   d.kicker,
+            abstract: d.abstract,
+            note:     d.savedOn,
+            program:  d.program,
+            year:     d.year,
+            kind:     d.kind,
+            href:     d.href,
+            /* Everything on this shelf is saved, so the card's Save button
+               starts saved. */
+            saved:    true,
+            cover:    book.getAttribute('data-cover'),
+            /* The cover's own face, without the Archived tag laid over it. */
+            face:     faceOf(cover),
+            mark:     mark ? mark.textContent : ''
+        };
+    }
     function openBook(book) {
-        if (!dialog || typeof dialog.showModal !== 'function') {
-            window.location.href = book.getAttribute('data-href');      // a browser with no <dialog>
+        if (!window.papelBookViewer) {
+            window.location.href = book.dataset.href;
             return;
         }
-        var d = book.dataset;
-        openId = d.paper;
-        fill('.lib-dlg-kicker',   d.kicker);
-        fill('.lib-dlg-title',    d.title);
-        fill('.lib-dlg-authors',  d.authors);
-        fill('.lib-dlg-abstract', d.abstract);
-        fill('.lib-dlg-saved',    d.savedOn);
-        dialog.querySelector('[data-read]').setAttribute('href', d.href);
-
-        /* The same book, larger: a copy of its faces with everything that made
-           it a control taken off, since this one is only a picture. */
-        var stage = dialog.querySelector('.lib-dlg-book');
-        var copy  = document.createElement('span');
-        copy.className = 'book';
-        copy.setAttribute('data-cover', book.getAttribute('data-cover'));
-        copy.setAttribute('data-look', book.getAttribute('data-look'));
-        copy.appendChild(book.querySelector('.book-cover').cloneNode(true));
-        stage.textContent = '';
-        stage.appendChild(copy);
-
-        /* The shared Save button, built here in the saved state: the script in
-           includes/save_paper.php answers for it like any other. */
-        var slot = dialog.querySelector('[data-save-slot]');
-        var btn  = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'save-paper is-labelled is-saved';
-        btn.setAttribute('data-save-paper', d.paper);
-        btn.setAttribute('aria-pressed', 'true');
-        btn.title = 'Remove from My Library';
-        var ico = document.createElement('span');
-        ico.className = 'material-symbols-outlined';
-        ico.setAttribute('aria-hidden', 'true');
-        ico.textContent = 'bookmark';
-        var word = document.createElement('span');
-        word.className = 'save-paper-label';
-        word.textContent = 'Saved';
-        btn.appendChild(ico); btn.appendChild(word);
-        slot.textContent = '';
-        slot.appendChild(btn);
-
-        dialog.showModal();
+        /* The shelf as it stands: its current order, and only the books the
+           search is showing, since a hidden one is not on the shelf to step to. */
+        var items = Array.prototype.filter.call(shelf.querySelectorAll('.book'), function (b) {
+            var slot = b.closest('.book-slot');
+            return !(slot && slot.hidden);
+        });
+        window.papelBookViewer.open(book, libraryInfo(book),
+            { items: items, index: items.indexOf(book), infoFor: libraryInfo });
+    }
+    function faceOf(cover) {
+        if (!cover) { return ''; }
+        var copy = cover.cloneNode(true);
+        var tag  = copy.querySelector('.book-archived');
+        if (tag) { tag.remove(); }
+        return copy.innerHTML;
     }
 
     function takeOut(id) {
@@ -926,21 +837,17 @@ document.addEventListener('DOMContentLoaded', function () {
         filter();
     }
 
-    if (dialog) {
-        dialog.addEventListener('click', function (e) {
-            /* The dialog has no padding, so a click that lands on the dialog
-               itself is a click on the backdrop round it. */
-            if (e.target === dialog || (e.target.closest && e.target.closest('[data-close]'))) { dialog.close(); }
+    /* Taken off the shelf while the viewer was open, and not put back: gone
+       now that there is no window left to put it back from. */
+    document.addEventListener('papel:book-viewer-closed', function () {
+        /* Every one unsaved while the window was open, not only the one on view
+           when it closed: the arrows may have moved on from it since. */
+        var gone = {};
+        each(root.querySelectorAll('.is-leaving[data-paper], .is-leaving [data-paper]'), function (el) {
+            gone[el.getAttribute('data-paper')] = true;
         });
-        dialog.addEventListener('close', function () {
-            /* Taken off the shelf while it was open, and not put back: gone
-               now that there is no window left to put it back from. */
-            if (openId !== null && entries(openId).some(function (el) { return el.classList.contains('is-leaving'); })) {
-                takeOut(openId);
-            }
-            openId = null;
-        });
-    }
+        Object.keys(gone).forEach(takeOut);
+    });
 
     shelf.addEventListener('click', function (e) {
         var book = e.target.closest ? e.target.closest('.book') : null;
@@ -954,7 +861,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!here.length) { return; }
         if (e.detail.saved) {
             here.forEach(function (el) { el.classList.remove('is-leaving'); });
-        } else if (dialog && dialog.open && openId === id) {
+        } else if (window.papelBookViewer && window.papelBookViewer.isOpenFor(id)) {
             here.forEach(function (el) { el.classList.add('is-leaving'); });
         } else {
             takeOut(id);

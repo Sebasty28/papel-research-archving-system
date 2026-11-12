@@ -640,7 +640,9 @@ $login_notif_popup_items = $show_login_notif_popup
 
             <div class="lf-group">
                 <label class="lf-label" id="idFieldLabel" for="modalIdentifier">Username</label>
-                <input class="lf-input" type="text" name="identifier" id="modalIdentifier" placeholder="Enter your ID" required>
+                <input class="lf-input" type="text" name="identifier" id="modalIdentifier" placeholder="Enter your ID" required aria-describedby="loginEmailHint loginIdentifierError" autocomplete="username">
+                <p class="lf-hint login-email-hint" id="loginEmailHint"><span class="material-symbols-outlined" aria-hidden="true">mail</span><span>Or use the email address linked to your account.</span></p>
+                <p class="lf-hint login-field-error" id="loginIdentifierError" role="status" aria-live="polite" hidden></p>
                 <?php /* Only under the Library Pass, where the question "how do I get one?"
                          is the one the tile raises and the label cannot answer. Hidden for
                          the two roles that hold a standing account. */ ?>

@@ -204,9 +204,50 @@ function db(): mysqli {
  *     back the way they are conventionally written, since "Iii" and "Dela" are
  *     both wrong.
  */
+/**
+ * "Surname, First M." written the way the rest of the system reads a name.
+ *
+ * A registrar's roll, and most people typing from one, puts the surname first:
+ * "Reyes, Rayver S." There is one `full_name` column and no Last name field to
+ * put that half in, and every page prints the column as it stands, so a comma
+ * typed here survived as far as the public repository and the author of a paper
+ * was filed back to front. It is turned round on the way in instead.
+ *
+ * Only the shapes a roll actually uses, and the suffix stays with the surname:
+ *
+ *     Reyes, Rayver S.        ->  Rayver S. Reyes
+ *     Reyes Jr., Rayver S.    ->  Rayver S. Reyes Jr.
+ *     Reyes, Rayver S., Jr.   ->  Rayver S. Reyes Jr.
+ *
+ * Anything else holding a comma is left exactly as typed, for
+ * person_name_problem() to refuse in words: a comma is not a character a name
+ * may hold, so a shape this does not recognise is answered rather than
+ * rearranged into a guess.
+ */
+function person_name_surname_first(string $name): string {
+    $parts = array_map('trim', explode(',', $name));
+
+    /* "Reyes, Rayver S., Jr." - the suffix was written last and belongs to the
+       surname, so it is glued back on before the two halves are swapped. */
+    if (count($parts) === 3 && preg_match('/^(Jr|Sr|II|III|IV|V|VI|VII)\.?$/i', $parts[2])) {
+        $parts = [trim($parts[0] . ' ' . $parts[2]), $parts[1]];
+    }
+    if (count($parts) !== 2) { return $name; }
+
+    [$surname, $given] = $parts;
+    if ($surname === '' || $given === '') { return $name; }
+    return $given . ' ' . $surname;
+}
+
 function normalize_person_name(?string $name): string {
     $name = trim(preg_replace('/\s+/u', ' ', (string)$name));
     if ($name === '') return '';
+
+    /* Turned round before anything else, the casing check below included: a
+       roll written "REYES, RAYVER S." has to be swapped as well as re-cased,
+       and one written "Reyes, Rayver S." would otherwise fall straight through
+       that check with its comma still in it. */
+    if (strpos($name, ',') !== false) { $name = person_name_surname_first($name); }
 
     // Somebody has already chosen a casing. Leave it alone.
     if (preg_match('/\p{Ll}/u', $name)) return $name;
@@ -339,39 +380,102 @@ function student_number_problem(string $id): ?string {
     return null;
 }
 
+/** The shape every staff ID issued from now on is written in. */
+const STAFF_ID_EXAMPLE = 'FA0000BN2026';
+
+/** Nothing but the case: an ID is a code, so FA0001bn2026 and FA0001BN2026 are
+    the same one and only one of them should ever be stored. */
+function staff_id_clean(?string $id): string {
+    return strtoupper(trim((string)$id));
+}
+
+/**
+ * The year at the end of a staff ID, and what it may be.
+ *
+ * Next year as well as this one, because a batch is enrolled before the
+ * academic year it belongs to starts. 2000 at the bottom is older than any
+ * account this system will ever hold and is there to catch a slipped digit
+ * (1026, 9999) rather than to date anybody.
+ */
+function staff_id_year_range(): array { return [2000, (int)date('Y') + 1]; }
+
 /**
  * Why this is not a staff ID, or null. $label names the box on the form, since
  * the same rule serves Faculty ID, Librarian ID and the Director's own.
  *
- * Looser than a student number on purpose: these are issued by the campus in
- * several shapes already on file (FC-00123, HAP-00123, DIR-2026-001), so what
- * is enforced is that it reads as an ID at all rather than any one form of it.
+ * The shape is FA 0000 BN 2026: the prefix every staff account carries, a
+ * four-digit serial, the campus code, and the year. Checked a part at a time
+ * rather than against one regex, so the complaint names the part that is wrong
+ * instead of printing the whole shape back, and so the browser can say it the
+ * moment that part is typed (includes/manage_validate.php reads the same tests
+ * in the same order).
+ *
+ * $keeping is the ID the account already carries, and only an edit has one.
+ * The campus issued FC-00123, HAP-00123 and DIR-2026-001 before the format was
+ * settled, and the rule runs on edit as well as create: without this, no such
+ * account could be saved at all - not its email, not its name - until somebody
+ * reissued its ID. So an ID that has not been touched is let through on the
+ * loose rule this box used to carry, and anything typed fresh is the new shape.
  */
-function staff_id_problem(string $id, string $label = 'staff ID'): ?string {
-    $id = trim($id);
-    /* Same order as the browser reads them in, for the reason given above. */
-    if ($id === '')     return 'Enter their ' . $label . '.';
-    if (strlen($id) > 20) {
-        return 'A ' . $label . ' is between 3 and 20 characters, like FAC-2026-001.';
+function staff_id_problem(string $id, string $label = 'staff ID', string $keeping = ''): ?string {
+    $id      = trim($id);
+    $keeping = trim($keeping);
+
+    if ($keeping !== '' && strcasecmp($id, $keeping) === 0) {
+        return staff_id_legacy_problem($id, $label);
     }
+
+    $eg = ', like ' . STAFF_ID_EXAMPLE . '.';
+
+    /* Same order as the browser reads them in: what another keystroke cannot
+       put right comes before what is merely unfinished. */
+    if ($id === '') return 'Enter their ' . $label . '.';
+    if (!preg_match('/^[0-9A-Za-z]+$/', $id)) {
+        return 'A ' . $label . ' is letters and numbers only, with no spaces, dashes or symbols' . $eg;
+    }
+    if (strlen($id) > 12) {
+        return 'A ' . $label . ' is twelve characters' . $eg;
+    }
+    /* Each part is read only once it has been typed in full, which is what
+       lets this same walk answer while the box is being typed into. */
+    foreach ([[0, 2, '/^FA$/i',      'starts with FA'],
+              [2, 4, '/^[0-9]{4}$/', 'has four digits after FA'],
+              [6, 2, '/^BN$/i',      'has the campus code BN after those four digits'],
+              [8, 4, '/^[0-9]{4}$/', 'ends with the year']] as [$at, $len, $re, $say]) {
+        $part = substr($id, $at, $len);
+        if (strlen($part) === $len && !preg_match($re, $part)) {
+            return 'A ' . $label . ' ' . $say . $eg;
+        }
+    }
+    if (strlen($id) < 12) {
+        return 'A ' . $label . ' is twelve characters' . $eg;
+    }
+    [$lo, $hi] = staff_id_year_range();
+    $year = (int)substr($id, 8, 4);
+    if ($year < $lo || $year > $hi) {
+        return 'Check the year at the end of that ' . $label . ': ' . STAFF_ID_EXAMPLE . '.';
+    }
+    return null;
+}
+
+/**
+ * The rule this box carried before the format was settled, kept for the IDs
+ * already on file and reached only through $keeping above.
+ *
+ * It asks almost nothing, because the value it is reading came out of the
+ * database rather than off a keyboard: what it is there to catch is a row
+ * somehow holding a blank or something that is not an ID at all. No example is
+ * quoted in any of it - the only example this system shows anybody now is the
+ * new one, and "check the dashes, like FA0000BN2026" would be nonsense.
+ */
+function staff_id_legacy_problem(string $id, string $label = 'staff ID'): ?string {
+    $id = trim($id);
+    if ($id === '')       return 'Enter their ' . $label . '.';
+    if (strlen($id) > 20) return 'That ' . $label . ' is too long for the form.';
     if (!preg_match('/^[0-9A-Za-z-]+$/', $id)) {
         return 'A ' . $label . ' is letters, numbers and dashes, with no spaces or symbols.';
     }
-    if (strpos($id, '--') !== false || $id[0] === '-') {
-        return 'Check the dashes in that ' . $label . ': FAC-2026-001.';
-    }
-    if (other_name_looks_random($id)) {
-        return 'That does not look like a ' . $label . '. It is the one the campus issued, like FAC-2026-001.';
-    }
-    if (strlen($id) < 3) {
-        return 'A ' . $label . ' is between 3 and 20 characters, like FAC-2026-001.';
-    }
-    if (substr($id, -1) === '-') {
-        return 'Check the dashes in that ' . $label . ': FAC-2026-001.';
-    }
-    if (!preg_match('/[0-9]/', $id)) {
-        return 'A ' . $label . ' has a number in it, like FAC-2026-001.';
-    }
+    if (strlen($id) < 3)  return 'That ' . $label . ' is too short.';
     return null;
 }
 
@@ -841,14 +945,14 @@ function paper_date_display(?string $research_date, $year = null): string {
  *
  * Who may create whom is decided by the page, not by this list:
  *   Research Coordinator  ->  Subject Adviser, Librarian
- *   Director              ->  Research Coordinator, Head of Academic Affairs, Librarian
+ *   Director              ->  Research Coordinator, Head of Academic Programs, Librarian
  */
 function staff_positions(): array {
     return [
-        'Subject Adviser'          => ['role' => 'faculty',   'level' => 1],
-        'Research Coordinator'     => ['role' => 'admin',     'level' => 1],
-        'Head of Academic Affairs' => ['role' => 'admin',     'level' => 2],
-        'Librarian'                => ['role' => 'librarian', 'level' => 0],
+        'Subject Adviser'           => ['role' => 'faculty',   'level' => 1],
+        'Research Coordinator'      => ['role' => 'admin',     'level' => 1],
+        'Head of Academic Programs' => ['role' => 'admin',     'level' => 2],
+        'Librarian'                 => ['role' => 'librarian', 'level' => 0],
     ];
 }
 
@@ -858,15 +962,21 @@ function staff_positions(): array {
  * The position is stored as written, in users.title, so renaming one in code
  * leaves every account already on file answering to the old name. The adviser
  * was the "Research Adviser" until November 2026 and is the Subject Adviser
- * now; a row still saying the old thing has to keep working, on a copy of the
- * site whose migration has not been run and on one where it has but an old
- * backup was restored over it.
+ * now; the head was the "Head of Academic Affairs" in this list, while every
+ * page around it already said "Head of Academic Programs", and the Director's
+ * console translated between the two as it drew its tabs. A row still saying
+ * either old thing has to keep working, on a copy of the site whose migration
+ * has not been run and on one where it has but an old backup was restored over
+ * it.
  *
  * Read, never written: staff_position_map() resolves these, and nothing here
  * puts one back into the database.
  */
 function staff_position_aliases(): array {
-    return ['Research Adviser' => 'Subject Adviser'];
+    return [
+        'Research Adviser'         => 'Subject Adviser',
+        'Head of Academic Affairs' => 'Head of Academic Programs',
+    ];
 }
 
 /** The user_role and admin_level a position maps to, or null if unrecognised. */
@@ -1055,10 +1165,10 @@ function user_level_for(?array $u, string $role): int {
 function staff_position_of(array $user): string {
     $role  = $user['user_role'] ?? '';
     $level = (int)($user['admin_level'] ?? 1);
-    if ($role === 'head_academic') return 'Head of Academic Affairs';
+    if ($role === 'head_academic') return 'Head of Academic Programs';
     if ($role === 'librarian')     return 'Librarian';
     if ($role === 'faculty')       return 'Subject Adviser';
-    if ($role === 'admin')         return $level === 2 ? 'Head of Academic Affairs' : 'Research Coordinator';
+    if ($role === 'admin')         return $level === 2 ? 'Head of Academic Programs' : 'Research Coordinator';
     return trim((string)($user['title'] ?? '')) ?: 'Staff';
 }
 
@@ -1789,6 +1899,109 @@ function student_manuscript_active_count(int $studentUserId): int {
     return (int)$n;
 }
 
+/**
+ * Every grant a student holds right now, soonest to run out first.
+ *
+ * What the live countdown in the corner of the page is drawn from
+ * (includes/manuscript_timer.php) and what app/manuscript_grants.php answers
+ * with, so the figure on screen and the figure the server would act on cannot
+ * disagree. Lazy expiry as everywhere else: a lapsed row is left exactly as it
+ * was written and simply stops being returned.
+ *
+ * The title comes from whichever table the paper now lives in, because a paper
+ * archived while a grant was open is still readable and the grant still counts.
+ */
+function student_manuscript_grants(int $studentUserId): array {
+    if (!manuscript_requests_ready()) return [];
+    $conn = db();
+    $stmt = $conn->prepare(
+        "SELECT r.request_id, r.paper_id, r.granted_at, r.expires_at, r.duration_hours,
+                COALESCE(p.title, pa.title) AS paper_title
+           FROM manuscript_requests r
+           LEFT JOIN research_papers p ON p.paper_id = r.paper_id AND p.current_status = 'approved'
+           LEFT JOIN papers_archive  pa ON pa.paper_id = r.paper_id
+          WHERE r.student_user_id = ? AND r.status = 'granted' AND r.expires_at > NOW()
+          ORDER BY r.expires_at ASC");
+    $stmt->bind_param('i', $studentUserId);
+    $stmt->execute();
+    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    return $rows;
+}
+
+/**
+ * How much of a grant is left, in the words the countdown uses: "2h 59m left",
+ * "14m 03s left", or "ended".
+ *
+ * Both the request rows in My Library and the note on a paper's page print this
+ * and then hand the same figure to includes/manuscript_timer.php to keep
+ * ticking (data-ms-until), so the sentence a reader sees with no script is the
+ * sentence the script carries on writing, in the same shape.
+ */
+function manuscript_time_left(string $expiresAt): string {
+    $left = strtotime($expiresAt) - time();
+    if ($left <= 0) { return 'ended'; }
+    $h = intdiv($left, 3600);
+    $m = intdiv($left % 3600, 60);
+    $s = $left % 60;
+    if ($h > 0) { return $h . 'h ' . $m . 'm left'; }
+    if ($m > 0) { return $m . 'm ' . str_pad((string)$s, 2, '0', STR_PAD_LEFT) . 's left'; }
+    return $s . 's left';
+}
+
+/** How many of a student's requests are still waiting for a librarian's answer. */
+function student_manuscript_pending_count(int $studentUserId): int {
+    if (!manuscript_requests_ready()) return 0;
+    $conn = db();
+    $stmt = $conn->prepare(
+        "SELECT COUNT(*) FROM manuscript_requests
+          WHERE student_user_id = ? AND status = 'pending'");
+    $stmt->bind_param('i', $studentUserId);
+    $stmt->execute();
+    $stmt->bind_result($n);
+    $stmt->fetch();
+    $stmt->close();
+    return (int)$n;
+}
+
+/**
+ * The papers a student has an open manuscript request on: `paper_id => state`,
+ * where the state is 'pending' (waiting for a librarian) or 'granted' (open
+ * right now).
+ *
+ * What the public repository pins to the top of its list for that reader. A
+ * request is a paper they are waiting on, and the repository is where they go
+ * back to look at it; scrolling a list of everything on file to find the one
+ * they have asked about is the page making them do the remembering.
+ *
+ * Settled requests are not in it: a denial, a revocation or a grant that has
+ * run out is not something still in progress, and a paper pinned for ever
+ * because it was once asked about is no longer a pin but a mess.
+ */
+function student_open_request_papers(int $studentUserId): array {
+    if (!manuscript_requests_ready()) return [];
+    $conn = db();
+    $stmt = $conn->prepare(
+        "SELECT paper_id, status FROM manuscript_requests
+          WHERE student_user_id = ?
+            AND (status = 'pending' OR (status = 'granted' AND expires_at > NOW()))
+          ORDER BY created_at ASC");
+    $stmt->bind_param('i', $studentUserId);
+    $stmt->execute();
+    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+
+    $open = [];
+    foreach ($rows as $r) {
+        $pid = (int)$r['paper_id'];
+        /* A live grant outranks an older pending row on the same paper: one is
+           something to read now, the other a question already answered. */
+        if (($open[$pid] ?? '') === 'granted') { continue; }
+        $open[$pid] = $r['status'] === 'granted' ? 'granted' : 'pending';
+    }
+    return $open;
+}
+
 /** The most recent request a student has made for one paper's manuscript, or null. */
 function student_manuscript_request(int $studentUserId, int $paperId): ?array {
     if (!manuscript_requests_ready()) return null;
@@ -1802,6 +2015,35 @@ function student_manuscript_request(int $studentUserId, int $paperId): ?array {
     $row = $stmt->get_result()->fetch_assoc() ?: null;
     $stmt->close();
     return $row;
+}
+
+/**
+ * What a request now is, in one word, for a page that has to say so:
+ * 'pending', 'granted' (open right now), 'expired', 'denied' or 'revoked'.
+ *
+ * **Revoked is not a status of its own**, and deliberately so: the column is an
+ * ENUM, an invalid value is stored as the empty string without a word of
+ * complaint (see "An invalid ENUM value is silently thrown away"), and adding
+ * one would be a migration every copy of the site has to run before this code
+ * can be deployed at all. A librarian taking an open grant back is written as
+ * `denied` with `denied_at` set, which is what it is, and the `granted_at`
+ * already on the row is what tells the two apart: a request that was refused
+ * outright was never granted.
+ *
+ * Ask this rather than reading `status` by hand, or a revocation reads as a
+ * refusal and the student is told their request was turned down when it was in
+ * fact answered and then ended.
+ */
+function manuscript_request_state(array $r): string {
+    $status = (string)($r['status'] ?? '');
+    if ($status === 'denied') {
+        return !empty($r['granted_at']) ? 'revoked' : 'denied';
+    }
+    if ($status === 'granted') {
+        return (!empty($r['expires_at']) && strtotime((string)$r['expires_at']) > time())
+             ? 'granted' : 'expired';
+    }
+    return $status !== '' ? $status : 'pending';
 }
 
 /**

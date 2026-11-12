@@ -85,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 /* The Director fills three positions. What the database stores for each is in
    staff_positions(); the Head of Academic Programs is listed from both kinds of
    record, because head_academic and an admin at level 2 mean the same job. */
-$OFFERED = ['Research Coordinator', 'Head of Academic Affairs', 'Librarian'];
+$OFFERED = ['Research Coordinator', 'Head of Academic Programs', 'Librarian'];
 $byPosition = $adminService->getStaffByPosition($OFFERED);
 
 /**
@@ -317,7 +317,7 @@ $PAGE_SKELETON = 'table';
                     <?php $SECOND = secondary_position_options($u); ?>
                     <?php if ($SECOND): ?>
                     <div class="mgmt-field">
-                        <label for="secondary_position">Also serves as</label>
+                        <label for="secondary_position">Another Position</label>
                         <select name="secondary_position" id="secondary_position">
                             <option value="">Nothing else</option>
                             <?php foreach ($SECOND as $pos): ?>
@@ -335,6 +335,7 @@ $PAGE_SKELETON = 'table';
                         <label for="full_name">Full name <span class="req">*</span></label>
                         <input type="text" name="full_name" id="full_name"
                                placeholder="e.g. Dr. Maria Santos" required>
+                        <small class="mgmt-hint">Surname first is fine: &ldquo;Reyes, Rayver S.&rdquo; is saved as &ldquo;Rayver S. Reyes&rdquo;.</small>
                     </div>
 
                     <!-- The label names the role being created, and follows the
@@ -345,8 +346,8 @@ $PAGE_SKELETON = 'table';
                             <span id="idLabel">Faculty ID</span> <span class="req">*</span>
                         </label>
                         <input type="text" name="faculty_id" id="faculty_id"
-                               placeholder="e.g. COORDINATOR-01" required>
-                        <small class="mgmt-hint">Letters, numbers and dashes, like FAC-2026-001. This is what they sign in with.</small>
+                               placeholder="e.g. <?= e(STAFF_ID_EXAMPLE) ?>" maxlength="12" required>
+                        <small class="mgmt-hint">FA, a four-digit number, BN and the year, like <?= e(STAFF_ID_EXAMPLE) ?>. This is what they sign in with.</small>
                     </div>
 
                     <div class="mgmt-field">
@@ -390,7 +391,7 @@ $PAGE_SKELETON = 'table';
                 <?php $first = true; foreach ($OFFERED as $i => $pos): ?>
                     <button type="button" class="mgmt-tab <?= $first ? 'is-on' : '' ?>"
                             data-pane="pane<?= $i ?>" role="tab">
-                        <?= e($pos === 'Head of Academic Affairs' ? 'Head of Academic Programs' : $pos) ?>
+                        <?= e($pos) ?>
                         <span class="count"><?= count($byPosition[$pos]) ?></span>
                     </button>
                 <?php $first = false; endforeach; ?>
@@ -436,16 +437,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
     /* The box is a Faculty ID on every console now, so the label no longer
        changes with the position: one staff number, one name for it, whether
-       the person is an adviser, a coordinator or a librarian. Only the example
-       still follows the position, since the three are written differently. */
-    var ID_HINTS = {
-        'Research Coordinator':     'e.g. COORDINATOR-01',
-        'Head of Academic Affairs': 'e.g. HAP-2026-001',
-        'Librarian':                'e.g. LIB-2026-001'
-    };
+       the person is an adviser, a coordinator or a librarian. Nor does the
+       example any more, every staff ID being written FA0000BN2026: the three
+       that used to differ here were COORDINATOR-01, HAP-2026-001 and
+       LIB-2026-001, and none of them is the shape of a staff ID now. The
+       label is still rewritten on a position change because the markup sets
+       it once, at load, and an edit can arrive with it saying something else. */
     function relabelId() {
         idLabel.textContent = 'Faculty ID';
-        idInput.placeholder = ID_HINTS[positionSelect.value] || 'e.g. FAC-2026-001';
     }
     positionSelect.addEventListener('change', relabelId);
 
@@ -506,6 +505,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // form.reset() restores the markup's values, not these: set them after.
         document.getElementById('formAction').value = 'create_user';
         document.getElementById('formUserId').value = '';
+        delete idInput.dataset.keeping;   // a new account gets no such licence
         relabelId();          // the level went back to blank with the reset
         document.querySelectorAll('tr.is-editing')
                 .forEach(function (r) { r.classList.remove('is-editing'); });
@@ -515,6 +515,12 @@ document.addEventListener('DOMContentLoaded', function () {
         var d = row.dataset;
         document.getElementById('full_name').value   = d.fullName || '';
         document.getElementById('faculty_id').value  = d.facultyId || '';
+        /* The ID this account already has. FC-00123 and DIR-2026-001 were
+           issued before the format was settled, and the rule runs on edit as
+           well as create: without this the form would refuse to save a change
+           of email on such an account. includes/manage_validate.php reads it;
+           the server reads the same thing off the database and decides. */
+        idInput.dataset.keeping = d.facultyId || '';
         document.getElementById('email').value       = d.email || '';
         positionSelect.value = d.position || '';
         relabelId();

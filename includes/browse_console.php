@@ -29,7 +29,11 @@
        than showing a list with no layout at all. The page says which it is by
        setting $VIEW_SHELF before this file is included. */
     var shelfOk = <?= !empty($VIEW_SHELF) ? 'true' : 'false' ?>;
-    if (v !== 'rows' && !(v === 'shelf' && shelfOk)) { v = 'cards'; }
+    /* Two shelf views now, by the same licence: Hardbounds (stored as "shelf",
+       its name before there were two, so nobody's saved choice is lost) and
+       Bookshelf, the same books stood spine out. */
+    var shelfy = v === 'shelf' || v === 'bookshelf';
+    if (v !== 'rows' && !(shelfy && shelfOk)) { v = 'cards'; }
     document.documentElement.setAttribute('data-view', v);
 })();
 </script>
@@ -492,7 +496,8 @@ html[data-view="rows"] .paper-list .paper-item .paper-program {
     flex-shrink: 0;
     cursor: pointer;
 }
-.qs-radio input[type="radio"]:checked { background: var(--pup-maroon); }
+/* Filled controls use the surface accent; the text accent turns white in Old Night. */
+.qs-radio input[type="radio"]:checked { background: var(--maroon-surface); }
 
 /* ===== The same choices, on the list itself =====
    Right-clicking a paper opens them where the pointer already is, instead of
@@ -997,7 +1002,7 @@ html.sidebar-left .js-side-hide .side-icon-right { display: inline-flex; }
     margin: 0;
     transition: background .15s;
 }
-.filter-radio input[type="radio"]:checked { background: var(--pup-maroon); }
+.filter-radio input[type="radio"]:checked { background: var(--maroon-surface); }
 .filter-radio input[type="radio"]:focus-visible {
     outline: 2px solid var(--maroon);
     outline-offset: 2px;

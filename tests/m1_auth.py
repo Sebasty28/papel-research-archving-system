@@ -51,12 +51,10 @@ def t002():
 
 
 def t003():
-    """A wrong password is refused, and says so without naming which half."""
+    """A recognised ID with a wrong password identifies the password to correct."""
     c = H.Client()
     msg = c.login_error(F.STUDENT['student_id'], 'WrongPassword9', 'student')
-    leaks = bool(re.search(r'password is incorrect|no such user|user not found',
-                           msg, re.I))
-    check('ID-003', (not c.signed_in) and msg and not leaks,
+    check('ID-003', (not c.signed_in) and 'The password is incorrect' in msg,
           'refused with "%s"' % msg[:60],
           'wrong password was not refused properly (msg: %r)' % msg[:60], msg)
     clear_throttle(F.STUDENT['student_id'])

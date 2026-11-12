@@ -477,6 +477,11 @@ html.sidebar-left .pd-side-swap .side-icon-right { display: inline-flex; }
    else on these pages. */
 .pd-note a { color: var(--maroon); }
 .pd-note a:hover { color: var(--dark-maroon); }
+.pd-note--request { flex-wrap: wrap; align-items: center; }
+.pd-note--request .pd-note-action { margin-left: auto; white-space: nowrap; }
+.pd-note--request a.pd-note-action,
+.pd-note--request a.pd-note-action:hover { color: #fff; }
+.pd-note--request .pd-note-action .material-symbols-outlined { font-size: 16px; color: #fff; }
 
 /* The way to the public copy of a record, in the corner that holds what can
    be done with it rather than what is written in it: under the panel toggle,

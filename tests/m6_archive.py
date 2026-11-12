@@ -74,9 +74,8 @@ def t058():
     c = H.Client('expired guest')
     ok = c.login(g[1], g[2], 'guest')
     msg = c.login_error(g[1], g[2], 'guest')
-    check('ID-058', not ok,
-          'an expired pass is refused, and the message does not say whether it '
-          'was wrong or merely expired ("%s")' % msg[:70],
+    check('ID-058', not ok and 'This Library Pass has expired' in msg,
+          'an expired pass is refused with a specific renewal message ("%s")' % msg[:70],
           'an expired guest pass still signed in')
 
 

@@ -82,6 +82,27 @@
     try { NAME_OK = new RegExp("^[\\p{L}\\p{M}.'\\-\\s]+$", 'u'); }
     catch (err) { NAME_OK = /^[A-Za-z.'\-\s]+$/; }
 
+    /* person_name_surname_first(). A roll from the registrar puts the surname
+       first, and there is one full_name column with nowhere to keep the halves
+       apart, so "Reyes, Rayver S." is turned round on the way in. Done here as
+       well as on the server so that what is on screen when they leave the box
+       is what will be stored, rather than the roll showing something else a
+       moment later. The casing is the server's alone: it re-cases an
+       all-capitals name, which this does not, so the two never disagree. */
+    var NAME_SUFFIX = /^(Jr|Sr|II|III|IV|V|VI|VII)\.?$/i;
+    function surnameFirst(v) {
+        var s = String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
+        if (s.indexOf(',') === -1) { return s; }
+
+        var parts = s.split(',').map(function (p) { return p.trim(); });
+        /* "Reyes, Rayver S., Jr." - the suffix belongs to the surname. */
+        if (parts.length === 3 && NAME_SUFFIX.test(parts[2])) {
+            parts = [(parts[0] + ' ' + parts[2]).trim(), parts[1]];
+        }
+        if (parts.length !== 2 || !parts[0] || !parts[1]) { return s; }
+        return parts[1] + ' ' + parts[0];
+    }
+
     /* other_name_looks_random(), the test the upload form uses on a paper type
        somebody has typed: one letter four times over, a long run of three or
        four letters shuffled, six consonants together, a run along the
@@ -118,7 +139,14 @@
        keystroke would mark every box wrong on the way in. On leaving the
        field, and on submit, the whole rule is read. */
     function nameProblem(v, live) {
-        v = v.trim();
+        /* Read as it will be stored. A comma is not a character a name may
+           hold, so one in a shape this recognises is gone by the time the rule
+           below sees it, and one in a shape it does not is still refused in
+           words - which is what the server does too, normalize_person_name()
+           running before person_name_problem(). */
+        v = surnameFirst(v);
+        /* "Reyes," is a name halfway through being typed, not a wrong one. */
+        if (live) { v = v.replace(/,\s*$/, '').trim(); }
         if (v === '')            { return live ? null : 'Enter their full name.'; }
         if (v.length > 100)      { return 'That name is too long for the form.'; }
         if (/\d/.test(v))        { return 'A full name has no numbers in it.'; }
@@ -147,22 +175,61 @@
         return null;
     }
 
-    function staffIdProblem(v, live) {
-        v = v.trim();
-        var what = 'staff ID';
-        if (v === '')                        { return live ? null : 'Enter their ' + what + '.'; }
-        if (v.length > 20)                   { return 'A ' + what + ' is between 3 and 20 characters, like FAC-2026-001.'; }
+    /* staff_id_problem(). FA 0000 BN 2026: the prefix every staff account
+       carries, a four-digit serial, the campus code, and the year. Read a part
+       at a time, in the order config/core.php reads them, so the complaint
+       names the part that is wrong and can be said the moment that part is
+       typed rather than once all twelve characters are there.
+
+       `keeping` is the ID the account already carries, and only an edit has
+       one: FC-00123 and DIR-2026-001 were issued before the format was settled
+       and are allowed to stay, or no such account could be saved at all until
+       somebody reissued its ID. The server reads it off the database; this
+       reads it off the box the row was loaded into, and the server is what
+       decides. */
+    var STAFF_ID_EG = 'FA0000BN2026';
+    var STAFF_ID_PARTS = [[0, 2, /^FA$/i,      'starts with FA'],
+                          [2, 4, /^[0-9]{4}$/, 'has four digits after FA'],
+                          [6, 2, /^BN$/i,      'has the campus code BN after those four digits'],
+                          [8, 4, /^[0-9]{4}$/, 'ends with the year']];
+
+    function staffIdLegacyProblem(v, what) {
+        if (v === '')                        { return 'Enter their ' + what + '.'; }
+        if (v.length > 20)                   { return 'That ' + what + ' is too long for the form.'; }
         if (!/^[0-9A-Za-z-]+$/.test(v))      { return 'A ' + what + ' is letters, numbers and dashes, with no spaces or symbols.'; }
-        if (v.indexOf('--') !== -1 || v.charAt(0) === '-') {
-            return 'Check the dashes in that ' + what + ': FAC-2026-001.';
+        if (v.length < 3)                    { return 'That ' + what + ' is too short.'; }
+        return null;
+    }
+
+    function staffIdProblem(v, live, keeping) {
+        v = v.trim();
+        var what = 'Faculty ID';
+        keeping = String(keeping || '').trim();
+
+        if (keeping !== '' && v.toUpperCase() === keeping.toUpperCase()) {
+            return staffIdLegacyProblem(v, what);
         }
-        if (looksRandom(v)) {
-            return 'That does not look like a ' + what + '. It is the one the campus issued, like FAC-2026-001.';
+
+        var eg = ', like ' + STAFF_ID_EG + '.';
+        if (v === '')                        { return live ? null : 'Enter their ' + what + '.'; }
+        if (!/^[0-9A-Za-z]+$/.test(v)) {
+            return 'A ' + what + ' is letters and numbers only, with no spaces, dashes or symbols' + eg;
         }
-        if (live)                            { return null; }
-        if (v.length < 3)                    { return 'A ' + what + ' is between 3 and 20 characters, like FAC-2026-001.'; }
-        if (v.slice(-1) === '-')             { return 'Check the dashes in that ' + what + ': FAC-2026-001.'; }
-        if (!/[0-9]/.test(v))                { return 'A ' + what + ' has a number in it, like FAC-2026-001.'; }
+        if (v.length > 12)                   { return 'A ' + what + ' is twelve characters' + eg; }
+        for (var i = 0; i < STAFF_ID_PARTS.length; i++) {
+            var at = STAFF_ID_PARTS[i][0], len = STAFF_ID_PARTS[i][1],
+                re = STAFF_ID_PARTS[i][2], say = STAFF_ID_PARTS[i][3];
+            var part = v.substr(at, len);
+            if (part.length === len && !re.test(part)) {
+                return 'A ' + what + ' ' + say + eg;
+            }
+        }
+        if (live)                            { return null; }   // the rest is "not finished yet"
+        if (v.length < 12)                   { return 'A ' + what + ' is twelve characters' + eg; }
+        var year = parseInt(v.substr(8, 4), 10);
+        if (year < 2000 || year > new Date().getFullYear() + 1) {
+            return 'Check the year at the end of that ' + what + ': ' + STAFF_ID_EG + '.';
+        }
         return null;
     }
 
@@ -221,6 +288,17 @@
         }
         return null;
     }
+
+    /* What a box is written down as once they leave it, where that differs
+       from what was typed. The server does the same thing and is what decides
+       (normalize_person_name(), staff_id_clean()); doing it here as well means
+       what is on screen when they tab away is what the roll will show, instead
+       of the form accepting one thing and the table printing another. */
+    var TIDY = {
+        full_name:  surnameFirst,
+        /* An ID is a code, so one case of it. */
+        faculty_id: function (v) { return v.trim().toUpperCase(); }
+    };
 
     /* Which rule belongs to which box, by the name the form posts. The staff
        consoles both post faculty_id; only the students console has the rest. */
@@ -300,22 +378,43 @@
         return found;
     }
 
+    /* The ID this account already carries, where a console has loaded a row
+       into the form for editing. Read off the box rather than held in a
+       variable here, so a console puts it there in its own toEditMode() and
+       takes it away again in toCreateMode(); a form that sets neither is a
+       create form and keeps the new format throughout. */
+    function keepingOf(el) { return (el.dataset && el.dataset.keeping) || ''; }
+
+    /* Written down the way it will be stored, and only where that is a change:
+       assigning to el.value unconditionally would move the cursor to the end
+       of a box somebody is still in. */
+    function tidy(el) {
+        var fn = TIDY[el.name];
+        if (!fn) { return; }
+        var out = fn(el.value);
+        if (out !== el.value) { el.value = out; }
+    }
+
     forms.forEach(function (form) {
         fieldsOf(form).forEach(function (pair) {
             var el = pair[0], rule = pair[1];
             /* As it is typed. The live reading only answers for what another
                keystroke cannot put right, so the note appears on the digit
                that spoils a name and goes again the moment it is taken out,
-               and a half-typed answer is never called wrong. */
+               and a half-typed answer is never called wrong. The box itself is
+               not rewritten here, only read as it will be stored: moving the
+               cursor under somebody mid-word is worse than any note. */
             el.addEventListener('input', function () {
-                var why = rule(el.value, true);
+                var why = rule(el.value, true, keepingOf(el));
                 if (why) { complain(el, why); } else { clear(el); }
             });
             /* And in full when they leave it, which is where what is merely
-               unfinished becomes what is wrong. */
+               unfinished becomes what is wrong, and where the box is written
+               down properly. */
             el.addEventListener('blur', function () {
                 if (el.value.trim() === '') { clear(el); return; }
-                var why = rule(el.value);
+                tidy(el);
+                var why = rule(el.value, false, keepingOf(el));
                 if (why) { complain(el, why); } else { clear(el); }
             });
         });
@@ -323,7 +422,9 @@
         form.addEventListener('submit', function (e) {
             var first = null;
             fieldsOf(form).forEach(function (pair) {
-                var el = pair[0], why = pair[1](el.value);   // in full: nothing is "not finished" now
+                var el = pair[0];
+                tidy(el);                                    // a box never left still gets written down properly
+                var why = pair[1](el.value, false, keepingOf(el));   // in full: nothing is "not finished" now
                 if (why) {
                     complain(el, why);
                     if (!first) { first = el; }

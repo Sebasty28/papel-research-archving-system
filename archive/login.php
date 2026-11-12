@@ -45,13 +45,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // sidestep a lock earned on the other.
     $error = login_throttle_message($locked);
   } elseif ($username && $password) {
-    $stmt = $conn->prepare("SELECT guest_id, username, password, expires_at FROM guest_sessions WHERE username = ? AND expires_at> NOW()");
+    $stmt = $conn->prepare("SELECT guest_id, username, password, expires_at, expires_at <= NOW() AS is_expired FROM guest_sessions WHERE username = ? LIMIT 1");
     $stmt->bind_param('s', $username);
     $stmt->execute();
     $res = $stmt->get_result();
 
     if ($row = $res->fetch_assoc()) {
-      if (password_verify($password, $row['password'])) {
+      if (!password_verify($password, $row['password'])) {
+        login_throttle_record_failure($username);
+        $error = 'The Library Pass password is incorrect. Please try again.';
+      } elseif ($row['is_expired']) {
+        login_throttle_clear($username);
+        $error = 'This Library Pass has expired. Ask the Librarian for a new pass.';
+      } else {
         login_throttle_clear($username);
         $u = ['user_id' => 0, 'username' => $row['username'], 'email' => '', 'full_name' => 'Pass holder', 'user_role' => 'guest'];
         login_user($u);
@@ -61,9 +67,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['guest_id'] = (int)$row['guest_id'];
         header('Location: index.php');
         exit;
-      } else {
-        login_throttle_record_failure($username);
-        $error = "Invalid password.";
       }
     } else {
       /* Not a guest pass, so try it as a staff or student sign-in.
@@ -77,22 +80,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
          WHERE (username=? OR email=?
                 OR (student_id IS NOT NULL AND student_id<>'' AND student_id=?)
                 OR (faculty_id IS NOT NULL AND faculty_id<>'' AND faculty_id=?))
-           AND is_active=1 LIMIT 1");
+           LIMIT 1");
       $stmt->bind_param('ssss', $username, $username, $username, $username);
       $stmt->execute();
       $res = $stmt->get_result();
 
       $row = $res->fetch_assoc();
-      // A student account only lasts as long as their course does.
-      if ($row && $row['user_role'] === 'student' && !empty($row['expires_on'])
-          && strtotime($row['expires_on']) < strtotime('today')
-          && password_verify($password, $row['password'])) {
+      if (!$row) {
+        login_throttle_record_failure($username);
+        $error = 'No account or Library Pass was found for that ID, username, or email. Check it and try again.';
+      } elseif (!password_verify($password, $row['password'])) {
+        login_throttle_record_failure($username);
+        $error = 'The password is incorrect. Please try again.';
+      } elseif (!$row['is_active']) {
+        login_throttle_clear($username);
+        $error = 'This account is deactivated. Contact your administrator.';
+      } elseif ($row['user_role'] === 'student' && !empty($row['expires_on'])
+          && strtotime($row['expires_on']) < strtotime('today')) {
+        login_throttle_clear($username);
         $error = 'This student account expired on ' . date('F j, Y', strtotime($row['expires_on'])) .
-                 '. Ask your research adviser to renew it.';
-        $row = null;
-      }
-
-      if ($row && password_verify($password, $row['password'])) {
+                 '. Ask your Subject Adviser to renew it.';
+      } else {
         login_throttle_clear($username);
         login_user([
           'user_id'     => $row['user_id'],
@@ -105,16 +113,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header('Location: index.php');
         exit;
       }
-      /* Only a genuinely wrong credential counts towards a lock. The expired
-         account above got here with the right password, and locking somebody
-         out over an account that already cannot be used helps nobody. */
-      if ($error === null) {
-        login_throttle_record_failure($username);
-        $error = "That ID or password is not right.";
-      }
     }
   } else {
-    $error = "Please enter username and password.";
+    $error = $username === '' && $password === '' ? 'Enter your username or ID and password.'
+        : ($username === '' ? 'Enter your pass username or account ID.' : 'Enter your password.');
   }
 }
 ?>

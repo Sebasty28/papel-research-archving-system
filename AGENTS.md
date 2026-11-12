@@ -1,4 +1,15 @@
-# PAPEL — notes for Claude Code
+# PAPEL - notes for Claude Code and other coding agents
+
+**`CLAUDE.md` and `AGENTS.md` are the same file.** Two harnesses look for two
+names, so the content lives in both, byte for byte: `diff CLAUDE.md AGENTS.md`
+prints nothing when they are right. **Change both or neither**, as with the
+password twin in `includes/password_generator.php`.
+
+AGENTS.md had already been left behind once, by two commits: it still called the
+Subject Adviser the "Research Adviser" and knew nothing about one person holding
+two posts or about the spreadsheet import. That is the worst kind of stale note,
+the wrong answer sitting in the place somebody would look it up, and it is the
+same failure as `ai/groq_config.php` under "One pool of AI keys" below.
 
 Context for anyone (human or AI) picking this project up. Read this before
 changing anything; several of the conventions below are not guessable from the
@@ -47,6 +58,67 @@ feedback. So `draft` means either "never submitted" *or* "returned" — see the
 **Two roles do the HAP job** — `head_academic`, and `admin` at level 2. Both land
 on the same desk. They have not been consolidated; be careful when writing a
 role check that you cover both.
+
+### One person, two posts
+
+The constitution lets a member of staff hold two positions at once, a Research
+Coordinator who also advises being the case that prompted it. The account keeps
+**one** `user_role`, which decides what it is called and where it lands; the
+second post is a position name in `users.secondary_position`, resolved through
+`staff_position_map()`.
+
+- **Ask `user_roles($u)`, never `$u['user_role']`, when deciding what somebody
+  may open.** `require_role()` does. For everybody with one post it returns the
+  one role it always did, which is why nothing else had to change.
+  `user_positions()` is the names, `user_has_role()` the question, and
+  `user_level_for()` the admin_level to read when acting as a given role, since
+  a Head of Academic Programs and a Research Coordinator are both `admin` and
+  differ only by level.
+- **Who may hand one out is an authority rule, not a list of positions.**
+  `secondary_position_options()`: the Director may give any, the Research
+  Coordinator only what its own console creates (Subject Adviser, Librarian),
+  everybody else none. Letting that console give "Research Coordinator" would
+  be a way to mint one without being the Director, which is the escalation the
+  primary list already prevents. `secondary_position_for()` throws rather than
+  dropping a value it does not like, so a crafted post says so instead of
+  succeeding differently from how the form looks.
+- **A handler that copies `$_POST` field by field has to name it.**
+  `admin_manage_faculty.php` builds its `$data` from a named list, and the
+  field was silently absent until that list mentioned it: the escalation test
+  passed for the wrong reason (nothing arrived) and a legitimate second post
+  could not be given either. The admins console passes `$_POST` whole and
+  needed no such change.
+- The navbar offers **one link to the other desk** (`secondary_desk_link()`),
+  not that role's whole menu: two complete menus side by side is a navbar
+  nobody can read. `position_home()` finds it, because `role_home()` reads the
+  signed-in account's own `admin_level` and a second post brings its own.
+- **The approval chain is not restricted.** A person who is both Subject
+  Adviser and Research Coordinator may approve at both steps, which the owner
+  chose deliberately on 12 November 2026. For those papers the second step adds
+  nothing, since one person signs off their own review. If that is ever to
+  change, the place is `config/workflow.php`.
+- A copy of the database without the column still works:
+  `users_have_secondary_position()` is the tolerant path, `schema_gaps()`
+  reports it, and `scripts/migrations/sql/2026-11-12_secondary_position.sql`
+  closes it.
+
+**The adviser is the "Subject Adviser"**, renamed from "Research Adviser" on
+12 November 2026. The position is stored as written, so
+`staff_position_aliases()` keeps resolving the old name for rows written before
+the rename, and the migration above renames them. Read, never written: nothing
+puts the old name back.
+
+**The head's position is the "Head of Academic Programs"**, the name the rest of
+the site had always used. `staff_positions()` alone said "Head of Academic
+Affairs", so the Director's console offered that in its Position list and
+translated it to the other name as it drew its tabs: one job under two names,
+and the one a person could choose was the one nothing else printed. It is the
+same rename as the adviser's and goes the same way: the old name is a
+`staff_position_aliases()` entry, so a stored title, a posted second post and a
+spreadsheet's Position column all still resolve, and
+`scripts/migrations/sql/2026-11-12_head_academic_programs.sql`
+(`run_head_academic_programs_migration.php`) renames what is on file. Nothing
+writes the old name back, and nothing should translate between the two again.
 
 ---
 
@@ -697,6 +769,7 @@ its own palette is a bug, not a style choice.
 | `theme.php` | Palette + light/dark, applied pre-paint |
 | `scroll_jump.php` | Scroll to top/bottom button |
 | `skeleton.php` | The loading skeleton: pale blocks in the shape of the page, over the content area until the page has settled |
+| `manuscript_timer.php` | The countdown on a student's unlocked manuscripts, and the pop-ups that announce one starting and one ending |
 
 **Never use `alert()` or `confirm()`.** Put `data-confirm="..."` on the button
 and `action_dialogs.php` handles it.
@@ -766,6 +839,50 @@ asking for both put the animation on screen twice. The GIF is not transparent
 dark theme's `img { filter: brightness(.92) }` has to be switched off for it
 (`#id img { filter: none }`, the id being for specificity) or the picture comes
 out darker than its plate.
+
+### The console sidebar: which side it sits on, and folding it away
+
+The public repository, the student dashboard and the four review desks all
+carry `<aside id="sidebarCol">`, and the two controls on its top card come from
+`includes/browse_console_js.php` rather than from any page's markup: which card
+is first varies with the data, so the buttons are placed at run time. The
+stylesheet is `includes/browse_console.php`, and the three paper pages
+(`archive/view_paper.php`, `app/student/paper_details.php`,
+`app/review_paper.php`) carry the same side control over their own rail, keyed
+on the same setting, so a choice made anywhere holds everywhere.
+
+| Key | Set to | Class on `<html>` |
+|---|---|---|
+| `papel_sidebar_side` | `right` | none; **left is the default** |
+| `papel_sidebar_folded` | `1` | `sidebar-folded` |
+
+- **The left is the default**, so the only answer worth storing is `right`:
+  `site_head.php` reads `!== 'right'`, and a browser nobody has asked, or one
+  with storage blocked, starts on the left rather than falling through to the
+  other side.
+- **Both are read before the first paint**, in `includes/site_head.php`, for
+  the reason the palette is: restored late, the panel paints in full and then
+  jumps across the page or snaps shut, taking the results column's width with
+  it. `includes/skeleton.php` reads the same two classes, so the shape it
+  covers the page with is the shape the page is about to be.
+- **Folded, the panel is `--sidebar-w` wide and holds a rail of icons**: one to
+  bring it back, then one per card, which unfolds, opens that card if the
+  reader had collapsed it, and gives it the cursor. It is the move the upload
+  page's side pane makes, in the same clothes (`.side-rail` in
+  `student_upload_ai.php`). The width is the one custom property both `.layout`
+  rules already read, so the results column and the repository's search field
+  follow without a rule of their own; `html.sidebar-folded` outranks the
+  `:root` that set it, whichever stylesheet that was.
+- **Everything else in the panel is hidden, not just the cards.** The
+  repository signed out ends its column with a plain `.note-card`, which at
+  44px wrapped to one word a line down the page beside the rail.
+- **The rail is rebuilt, never left alone**: applying a filter on a review desk
+  replaces the whole of `#sidebarCol`'s innerHTML, which is also why a
+  MutationObserver puts both controls back. Neither rebuild may touch the DOM
+  when there is nothing to do, or the observer wakes itself for ever.
+- **Below 901px there is no side and nothing to fold**: the panel is a drawer,
+  the two controls are not drawn and the rail is never painted, so the cards
+  stay reachable on a phone however the setting was left on a desktop.
 
 ### The accessibility tab is off by default on a phone
 
@@ -859,6 +976,32 @@ The lookup matches `username`, `email`, `student_id` **or** `faculty_id` —
 students carry their ID in `student_id`, staff in `faculty_id`, and which column
 depends on who created the account. All four are checked.
 
+**The slide-in panel checks before it loads anything.** `#loginModalForm`
+(`includes/site_header.php`, the script in `includes/site_footer.php`) posts to
+`app/auth/login.php` by fetch with `ajax=1`, and that handler answers JSON to
+such a post and redirects to every other caller: `{success:false,message}` or
+`{success:true,redirect}`, both as 200, since what failed is the sign-in and
+not the request. Wrong credentials are said in the panel with what was typed
+still in it; only a sign-in that worked plays the animation and leaves the
+page. Each refusal goes through `$login_failed()` and each success through
+`$login_done()`, so there is one set of words whichever way the post arrived,
+and a browser with no script still posts the form and gets the old redirect.
+
+Three things that are easy to get wrong here:
+
+- **A stale CSRF token is answered before `csrf_verify()` runs.** That function
+  refuses with a redirect, which a fetch follows and reads as a page of HTML.
+- **A solved reCAPTCHA is spent.** Google refuses the same token twice, so the
+  widget is reset after every refusal and the gate locked again by hand
+  (`papelRecaptchaExpired`); without it the second attempt failed as a robot
+  however right the password was.
+- **The order of the checks is the security.** reCAPTCHA and the lockout are
+  tested before the password is looked at, so the JSON endpoint cannot be used
+  to try credentials either.
+
+`archive/login.php`, the standalone page a Library Pass email links to, is a
+separate form that posts to itself and is not part of this.
+
 `admin_level` is stored in the session at login. Do not reintroduce a
 `$u['admin_level'] ?? 1` that reads from a session which never had it — that bug
 gave a HAP the Coordinator's navbar for months.
@@ -894,6 +1037,310 @@ and approving it will email that student.
 ---
 
 ## Business rules worth knowing
+
+### What a management console may be told
+
+The three consoles (an adviser's students, the Coordinator's advisers and
+librarians, the Director's admins) ask for the same handful of answers through
+one form that both creates and edits an account, and between them they took
+almost anything: a full name of digits, a student number of keyboard mashing,
+`fsjdfhsjfhjsd@gmail`, a section nothing can read.
+
+One rule per answer, in `config/core.php`, each returning the sentence to show
+or null: `person_name_problem()`, `student_number_problem()`,
+`staff_id_problem()`, `account_email_problem()`, `academic_year_problem()`,
+`section_problem()`. A handler reads as one `foreach` over the five or six that
+apply, so the three consoles and both services (`FacultyManagementService`,
+`AdminManagementService`) say the same thing in the same words.
+
+- **The gibberish test is already written.** `other_name_looks_random()`, the
+  one the upload form uses on a paper type somebody has typed: one letter four
+  times over, a long run of three or four letters shuffled, six consonants
+  together, a run along the keyboard, a long word with no vowel.
+  `adasdadasd` is the second of those.
+- **A student number is numbers and dashes**, the campus code being the only
+  letters allowed (`2026-00001-BN-0`), at least six digits, and no symbols. The
+  old rule demanded *a letter and a number*, which the registrar's own format
+  only happens to satisfy and a plain roll number does not.
+- **A staff ID is `FA0000BN2026`**, and nothing else is issued: the prefix
+  every staff account carries, a four-digit serial, the campus code, and the
+  year (2000 to next year, since a batch is enrolled before its year starts).
+  `STAFF_ID_EXAMPLE` is the one example the whole site shows. It is checked a
+  part at a time rather than against one regex, so the complaint names the part
+  that is wrong and the browser can say it the moment that part is typed.
+  `staff_id_clean()` upper-cases it on the way in: an ID is a code, so
+  `fa0001bn2026` is the same one and only one of them is ever stored.
+  - **`$keeping` is what makes the old IDs survive.** The campus issued
+    `FC-00123`, `HAP-00123` and `DIR-2026-001` before the format was settled,
+    and this rule runs on **edit** as well as create, so without it no such
+    account could be saved at all - not its name, not its email - until
+    somebody reissued its ID. An ID the account already carries is let through
+    on `staff_id_legacy_problem()`, the loose rule this box used to have.
+    Change it and the new shape is required. **The answer comes from the
+    database** (`UserRepository::facultyIdOf()`), never from the form, or a
+    posted value could claim that licence for an ID the account never had. The
+    browser reads the same thing off `data-keeping`, which each console's
+    `toEditMode()` sets and `toCreateMode()` deletes.
+  - **The password generator reads a staff ID by its own shape.** Its serial
+    comes *first* and its year last, so the "last long run of digits" rule the
+    other formats share would end every password issued in one year with the
+    same three digits. Both twins carry the exception: `account_import_password()`
+    and `includes/password_generator.php`. **Change both or neither.**
+- **A name may be typed surname first.** `person_name_surname_first()`, called
+  from the top of `normalize_person_name()`, turns `Reyes, Rayver S.` into
+  `Rayver S. Reyes`, keeps a suffix with the surname (`Reyes, Rayver S., Jr.`
+  and `Reyes Jr., Rayver S.` both give `Rayver S. Reyes Jr.`), and leaves any
+  other shape holding a comma exactly as typed for `person_name_problem()` to
+  refuse in words - a comma is not a character a name may hold. There is one
+  `full_name` column and no Last name field to put the other half in, so a
+  comma typed here used to survive as far as the public repository.
+  - It runs **before** the "somebody has already chosen a casing" return, or
+    `Reyes, Rayver S.` falls straight through with its comma intact.
+  - The browser does the same turn-round on blur (`surnameFirst()` in
+    `includes/manage_validate.php`), so what is on screen when they tab away is
+    what the roll will show. The **casing is the server's alone**: it re-cases
+    an all-capitals name and the browser does not, which is a change the
+    browser never makes, so the two cannot disagree.
+  - `nameProblem()` reads the turned-round name, which is what the server does
+    too. While the box is being typed into a **trailing comma is ignored**:
+    `Reyes,` is a name halfway through being written, not a wrong one.
+- **A bare domain is a typo, not an address.** `filter_var` passes
+  `name@gmail`, because a host with no dot is a valid address on a network that
+  has one. Every account made here is emailed its password, so the domain has
+  to be whole.
+- **A section that cannot be read means an account that never expires.**
+  `student_expiry_date()` counts from the year level in front of the section, so
+  `section_problem()` ends by asking `student_account_years()` whether it can
+  read what was typed. While fixing that: `student_account_years()` named "4A"
+  in its own comment and never matched it, `\b` finding no boundary between two
+  word characters. It is `(?![0-9])` now, so a lettered section works and "41"
+  is still refused.
+- **The browser is told the same thing**, in `includes/manage_validate.php`,
+  under the field rather than as a banner after a round trip that empties half
+  the form. It is required **before** `manage_save_confirm.php` on all three
+  pages, because both listen for the same form's submit and listeners fire in
+  the order they were added: a refused form has to stop the event
+  (`stopImmediatePropagation`) before the "Save these changes?" dialog opens over
+  it. The note goes under the field's own hint, keyed by the field's name, since
+  the students console puts the academic year and the section in one
+  `.mgmt-field` and a single note there belonged to whichever complained last.
+- **It answers while the box is being typed into.** Every rule takes a `live`
+  flag, and in that state it reports only what another keystroke cannot put
+  right: a digit in a name is wrong the moment it is typed, a name of one
+  letter is simply not finished. The full rule is read when the field is left
+  and again on submit, which is where "unfinished" becomes "wrong". Without
+  that split the form marked every box red on the way in, which is the mistake
+  the upload page already records (`papelDoc.flag()` clearing on the first
+  keystroke).
+- **A hint is behind the info mark beside its label**, not a line of grey small
+  print under the box. Six subtitles down one form is a column nobody reads
+  twice, and together they pushed the Create button off the bottom of the
+  screen. One component in `includes/manage_page.php` does it for every page
+  that includes that stylesheet, so a console gains it by owning a
+  `.mgmt-field` with a label and a hint; the mark is Material Symbols' own
+  `info`, and the cohort pair's older button, which opens a dialog, was changed
+  to the same glyph so there is one mark to learn.
+  - **The hint element itself is what is shown**, never a copy of its words.
+    `#passHint` is rewritten by script (the Generate button answers through it,
+    and editing changes it to "leave blank to keep their current password"), so
+    a copy taken at load would go on saying whatever it said then.
+  - **Hidden to the eye, not to a screen reader.** The control carries
+    `aria-describedby` to it, so it is still read out with the field as it was
+    when it was printed underneath. `display: none` would take it out of the
+    accessibility tree and lose that, so it is clipped instead.
+  - **A complaint is not a tooltip.** `.is-warn` (the Generate button's answer)
+    and `.is-bad` put it back under the field and take the mark away, and those
+    rules come **after** `.is-open` in the stylesheet because they have the same
+    specificity and have to win. `.js-field-note`, the rule complaint
+    `manage_validate.php` writes, is never converted at all: it is the one hint
+    that has to appear without being asked for.
+  - **The bubble is `position: fixed`**, or the import drawer and the reset
+    modal would clip it, and it **follows its mark on a scroll rather than
+    closing**. Closing looked right and was not: a scroll event does not
+    bubble, so the listener is in the capture phase and hears a scroll of *any*
+    box on the page - a tab strip gliding, a panel's own overflow, the
+    `scrollIntoView` the form does when a row is opened. The bubble shut itself
+    before it had been read, and on the first load it shut before it had been
+    seen, while its mark had not moved a pixel. Found only by screenshotting
+    it: `getBoundingClientRect()` and the computed styles all said it was
+    there, because by then it had been opened and shut again.
+- **The complaint is drawn as a bad flash banner is** (`--bad-bg`,
+  `--bad-border`, `--bad-text` plus an `error` icon), and the field itself is
+  tinted and bordered from the same tokens. Two notes on that: the tint is
+  mixed from `--bad-text`, because `--bad-bg` is translucent in Old Night and a
+  translucent mix shows the panel rather than marking the box; and the border
+  needs `!important` to outrank `focus_ring.php`, which paints every text
+  field's border from `--border-control` through three `:not()`s.
+- **A `pattern` attribute decides before any script runs.** The two name boxes
+  carried `pattern="[A-Za-z\s.]+"`, which refused Dela Cruz-Santos and O'Brien
+  while accepting "asdasdasd", and the students console set a custom validity on
+  the Student ID demanding a letter: a custom validity stops the submit event
+  altogether, so the shared rules never ran and the browser showed a bubble of
+  its own. Both are gone; the names are now letters, spaces, full stops, hyphens
+  and apostrophes.
+- The programme is checked against `programs_map()` on both paths, for the
+  reason `program_category_for()` exists on the upload form: it arrives in a
+  form field, and it decides the filing folder and every report.
+
+`tests/_account_rules_unit.php` is the list of what the boxes must take and must
+refuse: every acceptance is a value really on file, every refusal something
+somebody typed in.
+
+### Enrolling a list from a spreadsheet
+
+All three consoles take a CSV or `.xlsx` of **ID, Name, Email** (and **Position**
+for the two staff consoles). `config/account_import.php` reads and checks;
+`includes/manage_import.php` is the screen and the POST handling; the three
+pages gain three lines each.
+
+**It is a button beside the search field, opening a drawer down the right-hand
+side** (`manage_import_button()` and `manage_import_drawer()`). The form and the
+roll keep the whole page; nothing of the import sits in the layout.
+
+It took three goes, and the two it is not are worth knowing:
+
+- **In the `.mgmt-grid`**, as first built, the upload card took the roll's
+  column and pushed the table of accounts down the page. The grid is two
+  columns, so a third child lands beside the form, not under it.
+- **As a tab on the roll's strip** that was fixed, but it put the upload behind
+  a press nobody makes unless they already know it is there.
+
+With rows waiting, or passwords just shown, the drawer opens itself on load: the
+upload came back to this page and the answer to it is inside. The flash is read
+without `flash()`, which would consume it before `manage_import_result()` could.
+
+Three things the drawer has to respect, each written down elsewhere in this file
+at the cost of a build:
+
+- **Never `.modal-backdrop`.** Bootstrap generates that class and these pages
+  load Bootstrap. The veil is `.import-veil`.
+- **Lock the page on `<html>`** (`html.import-open`), never on `<body>`.
+- **z-index 19000**, under the 20000 of this page's help dialog and of
+  `action_dialogs.php`, so the "Create N accounts?" confirmation opens *over*
+  the drawer. Put a new fixed element on that ladder rather than reaching for a
+  bigger number.
+- **A drawer at 19000 buried every dropdown inside it.** `select_skin.php` draws
+  each `<select>` as a button whose menu is appended to `<body>`, so the menu's
+  z-index is read against the whole page and not against the drawer. At 1200 the
+  Position list opened, set `aria-expanded="true"`, and painted underneath the
+  drawer: pressing the control appeared to do nothing at all. `.sel-menu` is now
+  **20050**, above the drawer and both dialogs and under the loading veil
+  (20099) and the three full-window layers. A menu is only ever up while its own
+  control is being pressed, so it belongs above anything that can hold a select.
+- **`~`, not `+`, between the drawer's panels.** The preview prints its own
+  `<script>` after the table, so the upload card is not the preview's *adjacent*
+  sibling: `.mgmt-panel + .mgmt-panel` matched nothing and the two panels met at
+  exactly 0px. An element that draws nothing is still a sibling. The upload
+  page's step bar cost a build to the same trap.
+- **`import-open` is two things**, and a bare `.import-open` matched both: the
+  button that opens the drawer, and the class put on `<html>` to hold the page
+  still while it is up. The button's rule is `white-space: nowrap`, so **the
+  whole document inherited nowrap for exactly as long as the drawer was open**,
+  and the heading and the sentence under it ran off its end in one line instead
+  of wrapping. The rule is `button.import-open` now. This is `.modal-backdrop`
+  again from the other side: there a class the site shared with Bootstrap, here
+  a class a component shares with a state. Check what else a class name matches
+  before writing a rule on it, and remember `white-space` inherits.
+- **The preview's rows can be taken out and added**, so nothing may hold a list
+  of them from load: `rowList()` / `tickList()` ask the table as it stands and
+  every handler is delegated to the body. A row added here posts under
+  `new_rows` / `new_cell`, apart from the file's `rows` / `cell`, and a line
+  taken out rides in the hidden `dropped` field, because the screen that reports
+  the result is drawn from the stash and not from the page. The stash still
+  decides which of the *file's* lines exist; adding a row is the same act as
+  typing a person into the create form beside the drawer, and
+  `account_import_check_row()`, the duplicate lookup and the position whitelist
+  all run on it exactly as on any other row. Driven against the running site: an
+  added Librarian was created, an added "Director" was refused in the console's
+  own words and kept for correction, a dropped line was neither created nor
+  shown again, and a blank added row was ignored. Removing a row only reaches
+  the stash when Create is pressed, which is the same moment the typed values do.
+- **Undo and Redo stand beside Discard**, because a correction could be made and
+  never taken back: the only way out of a mistyped cell was Discard, which
+  throws the file away. An entry is one change *with the row state it dragged
+  along* (`rowState()` / `putRowState()` in `manage_import.php`): editing a
+  clashing row's ID unlocks its tick and blanks its password, so undoing that
+  edit has to lock it again, or the preview claims a clash was mended by an edit
+  that is no longer on the page. Three things it has to respect: the recorders
+  are registered **before** the re-check handlers, since listeners fire in the
+  order they were added and the re-check is what unlocks the row; a restored
+  `<select>` is given a `change` event, or the skinned button goes on showing
+  the position that was undone; and Ctrl+Z is **left alone inside a text cell**,
+  where the browser's own undo is already the right answer. Typing is coalesced
+  into one entry per cell (750ms idle, or leaving the box), and the ticks are
+  compared against a snapshot so the header tick is one entry without this
+  knowing it ran.
+
+- **The rules are not restated.** A row goes through `person_name_problem()`,
+  `student_number_problem()` or `staff_id_problem()`, and
+  `account_email_problem()`, in the order the forms read them, so a file is
+  refused for exactly the reasons typing it would be. `account_import_check_row()`
+  is the one copy, and the create pass runs it **again**: a preview is a moment
+  old, and somebody else may have enrolled the same person in between.
+- **Every cell of the preview is editable**, so a row the rules refused is mended
+  there rather than in the spreadsheet. It is re-checked as it is typed, by the
+  very functions the forms use: `includes/manage_validate.php` publishes
+  `window.papelManageRules`, and a second copy of "that does not look like a
+  name" would be a second opinion about one answer. The password comes from the
+  name and the ID, so an edited row's shows "on create" rather than a stale value.
+- **So the posted values do matter, and they are checked like any other typing.**
+  The session still decides which *lines* exist, so a post cannot invent a row the
+  file never had; everything else comes from the page and goes through
+  `account_import_check_row()` and the duplicate lookup again inside
+  `account_import_create()`. Nothing from the page is believed about whether a row
+  is fit to create, only about what it now says. Driven against the running site:
+  a post naming `Director` or `super_admin` as a position on the admins console is
+  refused in the console's own words, while the legitimate rows beside it are
+  created.
+- **Rows that fail are kept, with what was typed into them**, so they can be
+  corrected and tried again; the ones that succeeded drop out. Clearing the lot
+  would throw away the edits along with the mistake.
+- **A row already on an account is greyed and its tick locked**, so it cannot be
+  created at all. Editing its ID or its email unlocks it, since that may be
+  exactly what mends the clash; editing the name alone does not, because it
+  cannot. The server checks again regardless.
+- **There is no default position any more.** It was a box on the upload card
+  answering for every row at once, which is the wrong shape: one file can hold
+  advisers and librarians. Each row carries its own, as a list of the positions
+  that console may create, never a free-text box that invites a spelling the
+  server has to refuse.
+- **A position a console may not create is refused**, from the file as from the
+  form: `account_import_kinds()` holds each console's own set, so a spreadsheet
+  naming "Director" on the admins console is rejected in words. Checked against
+  the running site.
+- **Email is off unless asked for.** Creating an account normally sends its
+  password to the person; forty of those cannot be recalled and a trial run is
+  the likeliest first use. The tick box is unticked, and `createFaculty()` and
+  `createAdmin()` take a `$notify` argument for it. The passwords are shown once
+  afterwards, as `password_once.php` does for a single account.
+- **A row that already exists is skipped, never updated**, so re-running a file
+  that half failed is harmless. There is no transaction: forty enrolments are
+  forty independent acts, and one bad row rolling back thirty-nine good ones
+  would be worse than a partial result that names what landed.
+- **The password is a twin, not a shared function.** `account_import_password()`
+  is `includes/password_generator.php`'s rule in PHP, because that one is
+  JavaScript and runs only where somebody is typing. **Change both or neither**;
+  `tests/` does not cover it, the scratch checks do.
+- **No PhpSpreadsheet.** It would add thousands of files to a host that allows
+  about thirty thousand and whose deploy trims `vendor/` to about nine hundred,
+  to read three columns. The `.xlsx` reader is `zip` plus `simplexml`: shared
+  strings, inline strings and plain values of the first sheet. **Cells are sparse
+  in the file** (an empty one is simply absent), so the gaps are filled in by
+  column reference or the columns shift left. The old binary `.xls` is a
+  different format and is refused in words rather than half read.
+- A student's programme, academic year and section are **not** in the file: they
+  belong to the batch, are chosen once on the upload card, and the section is
+  what `student_expiry_date()` counts from, so one file is one section.
+
+**The ID box on the admins console is now "Faculty ID"** rather than changing
+with the position ("Research Coordinator ID", "Head of Academic Programs ID").
+One staff number, one name for it, on all three consoles. The example no longer
+follows the position either, every staff ID being written `FA0000BN2026`: the
+three that used to differ were `COORDINATOR-01`, `HAP-2026-001` and
+`LIB-2026-001`, and none of them is the shape of a staff ID now.
+
+**The second post is labelled "Another Position"**, on both staff consoles. It
+was "Also serves as".
 
 ### Student account expiry
 
@@ -1280,11 +1727,11 @@ Library Pass guest: a pass is a session with no `users` row for a saved paper to
 - **The shelf is CSS, not images and not WebGL.** A book is a button with three faces (cover,
   page edge, back) in a 3D space of its own; the boards are a background sized to one grid row and
   repeated, so every row has a board at any width (7 across on a desktop, 2 on a phone). The colour
-  is the **programme's** (its place in `programs_map()`, the first being `--maroon-surface`), the
-  design (four of them) and the height (three) are the **paper's own**, by `paper_id`, because a
-  shelf of one programme's papers was otherwise a row of identical books. Covers do not lift on a
+  is the **programme's group** and the cover is one hardbound design for every book (see "The
+  colour of a book" below); the height (three of them) is the **paper's own**, by `paper_id`,
+  the way no two bound papers on a shelf are quite the same height. Covers do not lift on a
   dark page, like the navbar's maroon. A `style="--x"` attribute is not available (CSP), which is
-  why these ride on `data-cover`, `data-look` and `data-tall`.
+  why these ride on `data-cover` and `data-tall`.
 - **The open book is a `<dialog>`** (focus held, Escape, top layer, no z-index to pick). It needs
   `margin: auto` stated: the site's reset removes the margin a modal dialog centres itself with,
   and it opened in the top left corner. A book unsaved in that window stays, faded, until the
@@ -1295,12 +1742,461 @@ Library Pass guest: a pass is a session with no `users` row for a saved paper to
 - **`manuscript_request_file()`** in `config/core.php` files a request for both the paper's page and
   History, so the one-in-progress rule and the librarians' notice are written once. It emails every
   active librarian: test it with their address pointed at `@example.com`, or through the refusals.
+- **A paper with an open request is pinned to the top of the public repository**, for the student
+  whose request it is and nobody else: `student_open_request_papers()` (`config/core.php`) gives
+  `paper_id => 'pending' | 'granted'`, and `archive/index.php` puts `(paper_id IN (...)) DESC` in
+  front of the reader's own sort, with the ids **bound**, not written into the statement (the
+  whitelisted `$sort_dir` should stay the only thing this page interpolates). It holds whatever the
+  sort and the filters are, and the pinned ones are therefore on page 1. Settled requests are not in
+  it: a paper pinned for ever because it was once asked about is not a pin but a mess.
+  Each pinned result says why, because an order nobody can account for reads as a fault, and it is
+  **the same news in three shapes**, as the Shelf's book already is:
+  - **A chip at the bottom right of the card** (`.paper-pin-tag`, last in `.paper-side`, carried to
+    the card's edge by `margin-left: auto` on a box as wide as its own words, that column being
+    left-aligned for its links): "Manuscript Request Granted", a white tick on the filled accent,
+    or "Manuscript requested" as a tint while a librarian has not answered.
+  - **A tick alone at the head of the title** (`.paper-pin-mark`), which only Rows draws. A row is
+    one line and a third line in its last column would grow every row on the page by a third; the
+    words are in its tooltip and on the card. Measured: the row stays 45px either way.
+  - **The cover's band** on the Shelf, which is the one place a chip will not fit.
 
-### Shelf, the third view
+### The countdown on an unlocked manuscript
 
-Cards, Rows and now **Shelf** (`includes/shelf_view.php`), offered by the public repository and
-the student dashboard. The books are My Library's, built the same way and from the same ten
-covers in the same order, so one paper is one colour wherever it is shelved.
+`includes/manuscript_timer.php`, pulled in from `site_footer.php`: a pill in the
+top right-hand corner counting a grant down by the second, and a pop-up in the
+middle of the window when one is unlocked and when one runs out. A grant lapses
+on its own (lazy expiry), so before this the only word on it was a sentence
+written when the page was drawn: a reader two hours into a three-hour grant was
+still told "3h 0m left", and the file then stopped opening with nothing said.
+
+- **It prints nothing unless there is something to watch**: a student with a
+  grant open now, or a request waiting that could become one while the page is
+  sitting there. With neither, nothing can change without an act that reloads
+  the page (a request is filed by POST and comes back as a new page), so there
+  is no markup and no polling. For the same reason the polling **stops** once
+  the last grant has ended and nothing is pending.
+- **The server's clock, not the device's.** The page is drawn with `now` beside
+  the grants and keeps the difference; a laptop ten minutes fast would otherwise
+  count a grant out ten minutes early and announce an expiry that has not
+  happened. `app/manuscript_grants.php` answers the same shape every 30s, which
+  is how a grant signed while the page is open arrives without a refresh.
+- **A grant counted out here is finished.** The two clocks agree to within about
+  a second, so the page can reach zero a moment before the server's
+  `expires_at > NOW()` does: the next poll handed the row straight back, and a
+  second later it "ended" again, with a second pop-up behind the one just
+  closed. An id that has ended is filtered out of every later answer.
+- **The panel lists every grant**, soonest first, each with its title, what is
+  left of it and a button to open it; the one the pill is counting has its
+  figure in the accent. The title is a link to that paper, as a title is
+  everywhere else on the site: a line that is plainly a paper and plainly not
+  pressable is a dead end beside a button that works. It showed the soonest and a count of the others, which
+  is the panel knowing something it will not say. Three is the cap a librarian
+  can grant at once, so the list is short, and it scrolls anyway because the
+  cap is a setting. The rows are rebuilt only when the grants themselves
+  change (their ids and expiries, since a grant can be shortened); each tick
+  writes into the row it belongs to, or the row under the pointer would be
+  thrown away once a second.
+- **It is placed under both bars**, at `--nav-h` plus `--crumb-h` (measured by
+  `site_header.php`), at z-index 890: clear of the navbar at 900, the footer at
+  902 and the PDF panel at 900, rather than fighting any of them. It is a fixed
+  box whose `top` never changes, so no scroll handler touches it. A docked PDF
+  panel and the upload page's side pane move it in by `--pdf-dock-w` and
+  `--room-r`.
+- **Any element with `data-ms-until="<epoch>"` is kept ticking** by the same one
+  clock: the request rows in My Library and the note on a paper's page. The
+  server prints the words first (`manuscript_time_left()`, the one copy, which
+  `library_time_left()` now calls), so the line is right with no script at all.
+  The librarian's desk had declared a `manuscript_time_left()` of its own, and
+  a second declaration of a name `core.php` holds is a **fatal** error on that
+  page, not a shadowing: grep the whole tree for the name before adding a
+  function to `config/core.php`.
+  `data-ms-ended` on an ancestor says what that line should read once it reaches
+  zero, because "Unlocked until 10:30 PM (ended)" is not a sentence.
+- **My Library's rows correct themselves where they stand.** `data-ms-row` and
+  the three hooks inside it (`-ico`, `-state`, `-act`) are how a waiting row
+  becomes an unlocked one, with its countdown and its Open manuscript button,
+  the moment the poll sees the grant, and back again when it ends. Nothing is
+  reloaded: a page that can correct itself should not blink.
+- **The paper's own page is reloaded instead**, and only for the paper the news
+  is about, because what changes there is whether the file is offered at all:
+  the card, the viewer behind it and the access check are the server's.
+- **A grant the server stops listing has ended too**, and not always by the
+  clock: a librarian can revoke one, which ends the access there and then.
+  Without that the pill simply stopped showing it, the row went on counting
+  down to a time that no longer meant anything, and nothing said why the file
+  had stopped opening. It wears the same alarm as a grant that ran out, since
+  the file has locked either way, and says **revoked** rather than ended:
+  "your time is up" over access that was in fact taken back is the site
+  telling a student something untrue. Early is the test (the expiry still in
+  the future, with a second of slack for the two clocks).
+- **Both pop-ups are maroon**, the unlocked one included: good news here is
+  still PAPEL speaking, and the one green circle on the page read as a
+  different product.
+- Smaller on a phone (`max-width: 640px`), as the two queries that cover every
+  width between them rather than a `min-width` that a fractional zoom can fall
+  between. The pop-up's ringing stops after a few seconds and reduced motion
+  drops every loop. Polled with `papelQuiet`, so the loading bar does not flash
+  across the window every half minute of its own accord.
+
+Checked against the running site with a seeded grant: the pill and its panel at
+1280px and 390px, the second-by-second tick, both pop-ups, the sentence swap,
+the redraw on close, and that no second pop-up follows an expiry.
+
+### Revoking a grant, and why there is no `revoked` status
+
+The Librarian's desk ends an open grant with **Revoke**. It used to be
+**Delete**, which removed the row: the student's access stopped, and so did
+every record that it had ever been given, on that desk's History and in the
+student's own My Library. Ending somebody's access and rubbing out the record
+of it are two different acts, and this desk only ever needed the first.
+
+- **A revocation is written as `denied` with `denied_at` set**, and the
+  `granted_at` already on the row is what tells it from a refusal. There is no
+  `revoked` in the ENUM on purpose: a new value is a migration every copy of
+  the site has to run before this code can be deployed at all, and an ENUM
+  this database does not know stores an empty string in silence (see "An
+  invalid ENUM value is silently thrown away").
+- **Ask `manuscript_request_state()`** (`config/core.php`): `pending`,
+  `granted` (open right now), `expired`, `denied` or `revoked`. A page that
+  reads `status` by hand tells a student their request was turned down when it
+  was in fact answered, used and then ended. The desk's History, My Library's
+  History and the paper's own page all go through it.
+- Access stops by the strongest check there is: `student_manuscript_access()`
+  asks for `status='granted'`, so a revoked row cannot pass it, and the
+  student may ask again at once, which a `pending`-or-live-`granted` row would
+  block.
+- The student is told twice: a notification (and so an email), and the
+  countdown in the corner, which turns into the revoked pop-up on its next
+  poll.
+- **Delete is gone from that desk entirely.** Pending rows are answered with
+  Deny, which is recorded and told; History has no buttons and no tick boxes,
+  because a record is not an action. The handler still answers a posted
+  `delete` as a revoke, for a page a librarian had open before the change.
+
+### The public repository's page: 30 at a time, a pager, and a banner that folds
+
+- **Twenty results a page** (`$per_page` in `archive/index.php`), not ten: 1 to
+  20, then 21 to 40. Both pagers and every figure on the page are worked out
+  from that one number, so it is the only thing to change.
+- **The pager at the foot of the list is the pages and the figures**: Previous,
+  a window of ten page numbers at most held against the ends, Next, and the
+  range. The site's name was stretched across it for a while, one letter a
+  page, the way a search engine stretches its own; it was a wordmark where a
+  reader wanted a control, and it is gone.
+  - **It stands outside the results well**, not at the end of it. The well is a
+    box with its own scrollbar, and in Shelf view it is a grid of books on
+    painted boards: a child of it would be laid out as one more book-sized
+    cell with a board behind it. The empty state is a child of the well for
+    its own reasons and needs `:has(> .empty-state)` to turn the grid off; a
+    second such exception is worse than standing outside.
+  - Its links start with `index.php`, so the page's existing delegated handler
+    (`#mainCol a[href]`) swaps the results by AJAX with no change at all.
+  - **Previous and Next underline the word, not the link.** They are
+    inline-flex boxes holding a word and an arrow, and a decoration on a flex
+    container is drawn by each flex item for itself, from its own baseline:
+    the word's line sat at one height and the arrow's two or three pixels
+    lower, which reads as a mistake rather than as a link. The word is wrapped
+    in `.pg-word` and carries the underline; the arrow is a mark and carries
+    none, and `line-height: 1` on the glyph puts the two centres level (0.01px
+    apart, measured).
+- **The keyword strip rolls across the toolbar**, after the label `Keywords:`
+  where the count used to be (the figure is at the foot of the list, under the
+  pages, where somebody who has read to the end is asking it; the two page
+  arrows moved to the tools at the other end). Its own line under 900px. The
+  keywords are the papers' own, the commonest thirty, counted from the whole
+  repository and not from the current filter: a strip that narrowed with the
+  search it had just made would empty itself at the one moment it is in the
+  way.
+- **Pressing chips chooses up to five, and the search box is where the choice
+  lives.** A press writes the keyword into the box (comma separated), presses
+  again to take it out, and loads the results. Nothing is kept anywhere else,
+  so typing the same list by hand, pressing chips and the Back button cannot
+  disagree about what is chosen, and the chips that are on are worked out
+  server side from the terms in `q`. The box is outside the column an AJAX
+  swap replaces, so `loadResults()` writes the address's own `q` back into it.
+  - **A sixth is refused in the dialog** (`window.papelShow`,
+    `includes/action_dialogs.php`), naming the five already chosen and saying
+    to press one of them again first. A chip that simply would not light up
+    reads as a strip that has stopped working.
+  - **The X in the field takes every keyword out.** It is the browser's own
+    clear button on an `input type="search"`, and it only empties the box: the
+    results went on showing the search that had just been rubbed out and the
+    chips went on looking chosen. The `search` event is what that button
+    raises; Enter raises it too, which is why a box with words still in it is
+    left to the form.
+  - Nothing stands in front of the strip. The row opened with "Showing items
+    1-20 of 27", then with a `Keywords:` label; the figure belongs at the foot
+    of the list where somebody who has read to the end is asking it, and chips
+    say what they are by being chips.
+- **The button beside the strip opens every keyword in a dialog.** The strip
+  carries the commonest thirty; the dialog carries all of them (146 as the
+  repository stands), as chips that toggle, with a count, the same five-keyword
+  limit said in a line that turns when it is met, and **Cancel** and **Done**.
+  Nothing is applied until Done, which is what a dialog with two buttons
+  promises; Cancel and Escape leave the page exactly as it was.
+  - It stands **outside `#mainCol`**, which an AJAX swap replaces whole: a
+    dialog torn out of the document while it is open closes itself and loses
+    what was being chosen. Nothing of the choice is printed into it either, so
+    it is seeded from the search box each time it opens, that box being the
+    one place the choice lives. Its opening button is inside the swapped
+    column, so it is reached by delegation.
+  - **The page behind it is held still** (`html.kw-locked`, on `<html>` and
+    never on `<body>`: the body becomes a scroll box of its own there and the
+    sticky navbar scrolls away under it). A modal `<dialog>` holds the focus
+    and the top layer but not the wheel, so the repository went on scrolling
+    under it. The class comes off on the dialog's own `close` event, so Done,
+    Cancel, Escape and the browser's own doing all unlock it. The list carries
+    `overscroll-behavior: contain`, so a wheel that reaches its end stops
+    there rather than carrying on into the page.
+  - **A find field in the foot narrows it as it is typed**, with an X at its
+    right-hand end that empties it and puts the cursor back in it (drawn only
+    while there is something to rub out, and `type="button"`, since anything
+    else in a `<form method="dialog">` submits it and closes the dialog), and
+    the two buttons pushed to the other end of that row. A chip the find has taken out of view
+    is only hidden: it stays chosen and still counts, so finding one keyword,
+    choosing it and then searching for the next does not quietly undo the
+    first. The card is a `<form method="dialog">`, so **Enter in that field is
+    refused**: it would submit the form, close the dialog and throw away what
+    had been chosen. The list keeps a floor as well as a ceiling, or the
+    dialog shrinks to its buttons on a search that matches nothing and grows
+    again on the next letter.
+  - It took the place of the two page arrows, which had been beside the count
+    and then beside the tools. The pages are at the foot of the list with
+    their numbers; in that row the arrows were two more chevrons next to a
+    strip that is scrolled sideways, which is the one place a chevron means
+    something else.
+  - **The strip keeps its place across a swap.** It lives inside the column
+    `loadResults()` replaces, so a fresh one starts at its left-hand end:
+    somebody who had scrolled a long way along it to find a keyword was put
+    back at the beginning the moment they pressed one, and had to scroll out
+    again for the next. Its `scrollLeft` is read immediately before the swap
+    (not when the request went out: it can be scrolled while the results are
+    fetched) and written back immediately after, before the frame is painted.
+    The keywords are the same on every page of results, so the figure still
+    means the same place in the same list.
+- **Several terms mean any of them, not all.** Two keywords read as `and` is
+  the usual way to narrow by tags, and on this repository it is also the way
+  to show nothing: measured against the papers on file, the second keyword
+  emptied the page almost every time, which would make a five-keyword limit a
+  limit on how fast somebody can reach an empty list. One term behaves exactly
+  as a search always did; five of them are five ways in (`SEARCH_TERMS_MAX`,
+  which also stops a pasted paragraph of commas becoming forty LIKEs).
+  - **It stands still.** It rolled along by itself at first, pausing under the
+    pointer and a finger; a strip that moves is a strip a reader has to catch,
+    and the owner asked for it stopped. The chips are printed once now (they
+    were printed twice so the roll could wrap without a seam) and nothing
+    animates. Two things that cost a build each while it did roll, kept here
+    because either would cost it again: the position had to be held in the
+    script, since a frame moves it under half a pixel and a scroll offset is
+    stored to the device pixel, so written and read back it was 0 every frame;
+    and the rail must refuse `dragstart`, because a chip is a link and the
+    browser's own drag fired `pointercancel` a notch in.
+  - **It is a scroll box, so a swipe with its momentum, a sideways wheel and
+    the keyboard all work with no script at all.** A mouse drag is the one
+    gesture a browser does not give for free, and that is all the script adds.
+  - **The drag follows the pointer on the document, never with
+    `setPointerCapture`.** Capturing the pointer on the rail retargets the
+    compatibility mouse events to it, so the `click` that follows is raised on
+    the rail rather than on the chip under the pointer: `closest('.kw-chip')`
+    came back null and pressing a keyword did nothing at all. The test missed
+    it for the worst reason: it pressed chips with `element.click()`, which
+    goes straight past pointer capture. **Press a control the way a hand does**
+    (`Input.dispatchMouseEvent`, press and release), or the check proves
+    nothing about pressing it.
+  - **A grid item's automatic minimum is its content, not zero.** The strip's
+    track is every keyword twice over, about 7,000px, and a scroll box does not
+    hide that from the column it sits in: `.layout`'s columns read
+    `226px 7183.66px`, the page scrolled sideways, and the strip, being as wide
+    as its own content, never scrolled at all. `.main-col { min-width: 0 }`, in
+    this page's own stylesheet rather than in `includes/browse_console.php`,
+    which the dashboards and the four desks also read.
+- **Under 900px the tool buttons sit in the column's top right-hand corner**,
+  on the heading's own line, rather than on the row below it where they were
+  a second line of furniture above the first result. They are taken out of
+  the flow to get there: the heading and the toolbar are siblings in the
+  results column, and two siblings cannot share a line without a box around
+  them, which would mean rebuilding the column for the narrowest screen
+  only. The column is the positioning context, so `right: 0` is its own
+  right-hand edge and not the window's, which is what keeps the group flush
+  with the corner rather than near it (measured: 0px from it). The heading
+  carries their width as padding, so a long one wraps instead of running
+  underneath them.
+- **Scrolling down folds the hero banner away**, and coming back to the very
+  top brings it back. Never written to `localStorage`: this is what the page
+  does while it is being read, not an answer the reader has given. Pressing
+  the toggle by hand is their answer, and it stops the automatic behaviour for
+  the rest of that visit, since a banner shown by hand that folds away on the
+  next notch of the wheel is the page arguing with the person using it. A
+  banner they hid stays hidden.
+  - One listener on the **document, in the capture phase**, reading the window
+    and the results well added together: a scroll event does not bubble, and
+    which of the two actually scrolls depends on the view, the width and how
+    many results there are.
+  - **Nothing is decided for half a second after each automatic change.**
+    Folding the banner takes 240px out of the flow, the browser clamps the
+    scroll, and that clamp arrives as another scroll event: without the lock
+    it reads as a scroll back to the top, the banner returns, and the pair
+    flap once a frame. Checked by counting class changes on the banner while
+    driving real wheel events: one change down, one back, at 1280px and at
+    390px.
+
+### Hardbounds and Bookshelf, the third and fourth views
+
+Cards, Rows, **Hardbounds** and **Bookshelf** (`includes/shelf_view.php`), offered by the public
+repository and the student dashboard. The books are My Library's, built the same way and coloured
+from the same palette, so one paper is one colour wherever it is shelved.
+
+**Hardbounds was called Shelf** until Bookshelf arrived (13 November 2026), and its stored value
+is still `shelf` (`papel_view`): renaming the value would have put every device that had chosen
+it back on Cards. Where these notes say "Shelf" they mean either view, and every rule the two
+share is written `html:is([data-view="shelf"], [data-view="bookshelf"])`.
+
+### The colour of a book
+
+`includes/book_covers.php`, read by both shelves (`shelf_view.php` and `my_library.php`): a book
+is coloured by its programme's **group**, `book_cover_group()`, the way the campus groups them.
+
+| Group | Programmes | Colour |
+|---|---|---|
+| `edu` | BSEd English, BSEd Social Studies, BEEd | Blue |
+| `hrm` | BSBA-HRM | Red, yellow accent |
+| `psych` | BSPsych | Purple |
+| `it` | BSIT, DIT | Yellow, blue accent |
+| `cpe` | BSCpE, DCPET | Maroon, black accent |
+| `ie` | BSIE | Green |
+| `other` | BSA (retired), a typed-in programme, none | Neutral brown |
+
+- **By the programme's code, then by the words in its name**, so a programme spelled a little
+  differently on an old paper lands with its kind and not in `other`. It replaced an index into a
+  palette of ten by a programme's *position* in `programs_map()`, which coloured a programme by
+  where it happened to sit in a list (adding one shifted every colour after it), and the two
+  shelves each carried an identical copy of that palette.
+- **One cover: the hardbound a Philippine research paper is bound in.** A leatherette board
+  (three faint dot grids of 3, 5 and 7px, sizes that never line up, so it reads as grain and not
+  as polka dots; two grids did), the spine cloth wrapped onto the front with the hinge pressed in
+  beside it, and everything stamped in foil, in capitals, centred: the title at the head, the
+  kind of paper under it, then "Presented by", the authors, and programme · year at the foot.
+  It replaced four designs (a rule, a band, a frame, a pale foot) picked by the paper's number,
+  which looked like no book anybody at the campus has handed in.
+- **The board and its stamping are written once**: `book_cover_face()` is the markup and
+  `.bk-face` the stylesheet, both in `book_covers.php`. Each shelf owns only the element that is
+  the cover (`.shelf-cover` / `.book-cover`, given `bk-face` as well) and where it sits in its 3D
+  book. **Neither may set that element's padding, display or background**: at their weight, or
+  by coming later, either would beat `.bk-face` and undo the cover. My Library's open-book
+  dialog draws the same cover larger through `--bk-scale` (1.39, 1.11 on a phone), which every
+  size and margin in `.bk-face` is multiplied by. `by_label` is opt-in: the student dashboard
+  puts a date where the byline goes, and "Presented by" over a date is wrong.
+- **A cover is four values**: `--cover` (the board), `--cover-spine` (the cloth wrapped onto it),
+  `--cover-foil` (the stamping) and `--cover-foil-shadow` (the edge it is pressed in with). The
+  spine defaults to a shade of the board, worked out from `--cover` on the book itself, so a
+  one-colour programme is one colour all over and the dashboard's status colours get their own
+  darker spine without being told; the three two-tone programmes set it to their second colour,
+  which is how a quarter-bound book is two colours. **IT is the one light board**: gold on yellow
+  cannot be read, so it is stamped in navy (9:1) with a highlight for its pressed edge. Gold
+  clears 4.5:1 on every other board, the dashboard's status colours included.
+- They are object colours, like the navbar's maroon, written as colours rather than drawn from
+  the page's tokens, which is the one place the site does that; a blue book is blue in either
+  palette. Keyed on the bare attribute, the lowest specificity there is, with the defaults in a
+  plain `[data-cover]` rule first so the groups after it win, and the dashboard's status colours
+  (`[data-band]`, more particular) override `--cover` by saying so.
+- **The palette prints when asked, `book_covers_style()`, not on include.** My Library needs
+  `book_cover_group()` near the top of the page, long before `<head>`; a `<style>` printed there
+  stood in front of the doctype (quirks mode) and in front of the page's redirects.
+- `band_tone => ''` is the band's words without its colour. The repository's pinned books use
+  it: painting a requested paper green or amber on a shelf coloured by programme read as the
+  paper belonging to another programme.
+
+### Pressing a book: the book viewer
+
+`includes/book_viewer.php`, on the public repository's Shelf view and in My Library. A pressed
+book flies from where it stood to the middle of the window as a whole object (front, back,
+spine, and the page block top, bottom and fore-edge), turns once round to show itself, and can
+then be turned any way by dragging, gliding on when let go. Pressing it sets it down into the
+details card, the pop-up My Library always had; pressing the small book there picks it up again.
+
+- **One component, called with what each page knows**: `papelBookViewer.open(book, info)`. The
+  front face is copied from the book pressed, so it is that same hardbound cover, bigger. The
+  spine is read from the cover's foot (`BSIT · 2025`) and stamped programme, title, year, each
+  between a pair of bars, the way the campus's bound papers are; `--cover-spine-foil` is gold but
+  for HRM, whose spine is yellow and is stamped in its own dark red. My Library's own dialog is
+  gone; the card reproduces its layout and figures.
+- **Held up, the book is stamped in full.** The shelf's cover says what fits on 108px ("Baliza et
+  al.", "BSIE · 2026", a title clamped at six lines); the viewer stamps its front again from the
+  details instead of copying it, with the whole title, every author and the programme by its full
+  name, and keeps anything across the head of the shelf's cover (a request, a status). The spine
+  carries the whole title too, on up to two lines. Each page passes `program`, `year` and `kind`
+  for it; without them the copied face stands.
+  - **Small type is the price of nothing being cut.** The type is sized by `--t`, the cover's
+    scale times `--fit`, and `fit()` brings `--fit` down a step at a time until nothing runs off
+    the board, after the dialog is open (a closed one has no size) and before the first frame. The
+    margins keep `--s`, the board's own scale, so the spine cloth and the hinge are the same width
+    on the front as on the back. Measured on all 27 papers at 1280px and 390px: none overflows,
+    and the type never goes below 68% of the cover's size (the longest title, 178 characters, and
+    seven authors are the two hardest).
+  - The overrides are prefixed with `.bv`, because the shared clamp for a cover with a band is
+    written with `:has()`, whose argument counts towards its weight.
+- **The book is the same element held up and set down.** It never moves in the DOM: a mover
+  carries it (translate and scale) and the book carries its own perspective in its transform, so
+  it is seen from the same place in the middle of the window and in the corner of the card. In
+  the card it lies over an empty slot and follows it on a resize or a scroll of the card (a
+  phone's card is taller than the window). Its size is one figure, `--w`, with height, thickness
+  and `--bk-scale` in fixed proportion to it, which is why scaling it down by a transform lands
+  pixel for pixel on what My Library's 150px book was.
+- **The turn goes the short way round**: a book spun three times by hand does not unwind all
+  three on its way into the card. Only two transforms are written per frame, on the two elements
+  that move, never anything on `:root`.
+- **A drag follows the pointer on the document, not captured**, and the click a drag raises where
+  it is let go is swallowed, or a turn ending off the book closed the window from the backdrop.
+- **The page behind is held on `<html>`** (`html.bv-locked`), measured before it is held: taking
+  the scrollbar away moves the shelf a little, and the book would fly from the wrong place.
+- On the repository a press with a modifier or a middle button is left alone, so "open in a new
+  tab" still opens the paper; the handler runs in the capture phase, ahead of the one that loads
+  links in the results column. The book a signed-out reader sees is a span made pressable
+  (`tabindex`, `role="button"`, Enter and Space), and its card offers "Sign in to read", which
+  closes the viewer first or the sign-in panel would open underneath a top-layer dialog. No
+  abstract for that reader: the paper's own page, where it is shown, asks for a sign-in.
+- **My Library still lets a book unsaved in the card stay on the shelf, faded, until the window
+  closes**: the viewer raises `papel:book-viewer-closed`, and `papelBookViewer.isOpenFor(id)` is
+  what the page's own save handler asks instead of looking at a dialog of its own.
+- **Previous and next, as a file preview steps through a folder**: a round arrow at each side of
+  the window, half way down, and "3 of 20" at the head of the hint. The book on view slides out
+  to one side, turning as it goes, and the next comes in from the other, held up as the first
+  was. Each page passes its shelf: `open(book, info, { items, index, infoFor })`, the books in the
+  order they stand (the page of results on view; My Library's current sort, without the ones the
+  search has hidden) and the function that says what any one of them is, which is the same one
+  the pressed book was described by. An arrow is gone at either end, never greyed, and both are
+  gone under the card, which is about one paper. Desktop arrows sit 3rem in, clear of the
+  Accessibility tab at the left edge.
+  - **Page Up and Page Down step; the arrow keys still turn the book.** Taking the arrows for
+    stepping would have taken away the keyboard's only way to turn it.
+  - My Library's close handler takes out **every** book unsaved while the window was open, not
+    only the one on view when it closed: the arrows may have moved on from it since.
+- Keyboard: the book is focusable; arrows turn it, Enter sets it down and picks it up, Escape
+  closes. Reduced motion takes away the flight, the turn and the glide, and keeps the rest.
+- **Judge a veil by its pixels, not by a scaled-down capture.** The backdrop looked far too light
+  in screenshots and was in fact darkening white to about 68 of 255.
+
+### The bookmark on the repository's shelf is a ribbon in the pages
+
+Saved, a book has a maroon ribbon standing up out of its pages near the fore-edge; not saved,
+the bookmark is the mark beside the book; pressing it carries it from one to the other.
+
+- **The ribbon is a face of the book, not the button.** It is a `<span class="shelf-ribbon">`
+  inside the book, in the book's own `preserve-3d` space at half its thickness, so the cover and
+  the page edge hide the part that is inside by depth and not by a picture of depth, and it is
+  taken down off the shelf with the book when the book is hovered. The Save button stays the one
+  control (a button cannot be inside the book, which is a link).
+- Shown by `.paper-item:has(> .save-paper.is-saved)`: the class the save script already keeps on
+  every copy of a paper's button. So it appears only where the slot holds a Save button (the
+  repository; the dashboard has none) and follows the save the moment it is painted.
+- Saved, the button's glyph fades and its hit area moves over the ribbon's end, so pressing the
+  ribbon takes the paper back out; it is still the focusable control and still reads "Remove
+  from My Library". Under the pointer the ribbon's end lifts a little, as if being taken hold of.
+- Checked by pressing it for real, both ways, and reading `paper_favorites` after each press:
+  saved, the ribbon at opacity 1 and `translateY(0)` with the glyph gone; unsaved, back above the
+  book at opacity 0, and `elementFromPoint` at the ribbon's end answers the button. When driving
+  it, let the page settle after a scroll before reading coordinates: the banner folds a frame
+  later and moves everything 240px.
 
 - **Two copies in the markup, and the attribute says which is shown.** A console prints
   `shelf_book_html()` once per result, inside the result; in Cards and Rows the book is
@@ -1308,16 +2204,16 @@ covers in the same order, so one paper is one colour wherever it is shelved.
   hold quite different things, and a cover holds the same three lines either way, so mapping one
   onto the other in CSS alone was not worth it. The switch stays instant and an AJAX swap needs
   to know nothing, which is the bargain Rows already struck.
-- **The cover means something different on each.** The repository colours by programme; the
+- **The cover means something different on each.** The repository colours by programme group; the
   dashboard colours by where the submission has got to and writes the status across the top
   (`data-band`: draft, process, approved, declined, archived). The approval track cannot go on a
   book, so it stays one click away, as it is from a card.
 - **The switch is page-aware, in two places that must agree.** `$VIEW_SHELF = true` before
-  `browse_console.php` (read by the pre-paint script, so a stored `shelf` is never applied to a
-  page that cannot draw one) and `data-view-console="shelf"` on `#mainCol` (read by
-  `shelfOffered()` in `browse_console_js.php`, which is what puts Shelf in Quick Settings).
-  The setting is one per device shared by every console, so the review desks, which do not offer
-  it, fall back to Cards with `shelf` still stored. A desk is a queue worked through by status,
+  `browse_console.php` (read by the pre-paint script, so a stored `shelf` or `bookshelf` is never
+  applied to a page that cannot draw one) and `data-view-console="shelf"` on `#mainCol` (read by
+  `shelfOffered()` in `browse_console_js.php`, which is what puts Hardbounds and Bookshelf in
+  Quick Settings). The setting is one per device shared by every console, so the review desks,
+  which do not offer them, fall back to Cards with either still stored. A desk is a queue worked through by status,
   not a shelf browsed.
 - **The shelf is as tall as what is on it.** Both consoles give the results well a height of its
   own (the repository scrolls it; the dashboard gives it `height: 0; min-height: 10rem; flex: 1`
@@ -1331,6 +2227,47 @@ covers in the same order, so one paper is one colour wherever it is shelved.
 - A result with nothing to shelve (the empty state) is a child of the well, so Shelf would lay it
   out as one book-sized cell with boards drawn behind it; `:has(> .empty-state)` turns the grid
   and the boards off.
+
+### Bookshelf: the same books, spines out
+
+After mawise/bookshelf (MIT; the idea, none of its code): books side by side with their spines
+out, of different thicknesses and heights, on the boards Hardbounds stands its books on.
+
+- **It is the Hardbounds book turned a quarter round, not a second book.** The spine
+  (`.shelf-spine`) is a face `shelf_book_html()` prints in either view. Hardbounds holds the book
+  at `rotateY(-28deg)`, which turns the spine away; Bookshelf at `90deg`, pushed back by half the
+  book's width so the spine lies in the plane of the page at its own size. So the cover, the
+  ribbon and everything the viewer copies are the same in both, and only the turn and the room
+  differ.
+- The well is a wrapping flex row, each slot as wide as its spine and one `--row` tall, so every
+  line of books falls on a board. Four thicknesses (`data-thick`, 20 to 33px) and the three
+  heights, all by the paper's number.
+- **Taller than Hardbounds' books** (`--bh: 184px` against 156). At 156 a spine held about four
+  words of a title, and a long word was broken in the middle. Nothing sees the cover on this
+  shelf. The viewer's flight therefore measures where it starts by the larger of the book's width
+  and its height over 1.444 (`open()` in `book_viewer.php`): by the width alone it set off with a
+  book shorter than the spine it was pulled from.
+- **What a spine says**: a head, the title and a foot, between pairs of bars, as the viewer's
+  spine is stamped. In the repository the head is the programme and the foot the year, both from
+  the mark, the year told apart by its shape since either half can be missing. The dashboard has
+  no mark: its head is the status (the band its covers carry) and its foot the year out of the
+  date. The title takes two lines, three on the two thicker spines, clamped with
+  `-webkit-line-clamp`, which in vertical writing counts lines across the spine as it counts them
+  down a card (tried in Chrome before relying on it). `overflow-wrap: break-word`, never
+  `anywhere`: that broke "PSYCHOLOGICAL" into "PSYCHOLOGICA L".
+- **Pressing a spine starts the viewer edge on**: `archive/index.php` passes `turn: 90` with the
+  shelf, so the book leaves where it stood and turns to its cover as it is pulled out. Previous
+  and next step along the shelf exactly as in Hardbounds.
+- Hovered, the book is drawn 18px out of the row and 8px up. The bookmark sits above the spine;
+  saved, the ribbon stands out of the top of the book behind the spine, turned to face the reader
+  as the spine is.
+- **My Library has no Bookshelf.** The tooltip on its own shelf toggle now says Hardbounds, and
+  nothing else changed there.
+
+Checked against the running site at 1280px and 390px, in Old Night, and on the dashboard: the
+options in Quick Settings, no sideways scroll, the ribbons on saved papers, the hover, the flight
+read off the transform (87 degrees a tenth of a second after the press, then the cover), and
+Hardbounds and My Library's viewer unchanged, previous and next included.
 
 ### Programmes
 
@@ -1379,7 +2316,9 @@ ENUM to `VARCHAR`, plus `document_name`),
 `run_paper_manuscripts_migration.php` (creates `paper_manuscripts` and backfills
 one row for every paper that already has a file),
 `run_checklist_items_migration.php` (adds `paper_checklist.items_json`, which the editable review
-checklist is stored in).
+checklist is stored in),
+`run_head_academic_programs_migration.php` (renames the stored position "Head of Academic
+Affairs" to "Head of Academic Programs"; no structure changes).
 
 Run the last two on any other server before it takes this code. Until
 `paper_manuscripts` exists the pages fall back to the paper's own columns and
@@ -1396,6 +2335,14 @@ behind the code" under Traps before adding the next one.
 (`run_checklist_items_migration.php`, `paper_checklist.items_json`) the same way, and
 `2026-10-27_manuscript_requests.sql` the `manuscript_requests` table and the `'manuscript'`
 notification type (`run_manuscript_requests_migration.php`), which were never in `schema.sql`.
+
+Two of them change no structure at all and rename what is stored instead, because a position is
+stored as written: `2026-11-12_secondary_position.sql` (the adviser) and
+`2026-11-12_head_academic_programs.sql` (the head). A copy that has not run them still reads
+correctly, `staff_position_aliases()` being the tolerant path, so there is nothing in
+`schema_gaps()` to report; what it gets wrong is any page that prints a stored title unchanged.
+Both have a PHP twin for a server with a shell. **`ROW_COUNT()` is read before
+`DEALLOCATE PREPARE`**, which resets it: read after, a step that had renamed a row reported 0.
 
 Papers deleted from `research_papers` leave rows behind in `approval_workflow`,
 `paper_checklist`, `supporting_documents` and `paper_manuscripts`. `papers_archive` is *meant* to
@@ -1531,5 +2478,20 @@ describe the dev box, not the cloud checkout.
 - **The Director's password is unrecoverable.** Testing Director-only pages
   means minting a session file directly in `C:/xampp/tmp` (26-character id from
   the `0-9a-v` alphabet — PHP rejects anything else).
-- **17 files in `docs/`**, several stale. `ADMIN_L2_DASHBOARD.md` in particular
-  describes routing that has since changed.
+- **`docs/` was cleared out on 12 November 2026** and now has an index,
+  `docs/README.md`, which says of every file whether it describes the system as it
+  stands or records something that happened. Thirteen files went, the two worst
+  clusters being step-by-step instructions to build the five-stage approval chain
+  that was deliberately shortened, and a January "improvements package" that tells
+  the reader to run three files that no longer exist. What is left is three
+  **generated** artefacts whose sources have moved on and which nobody has
+  rebuilt: `docs/handbook/` (built 23 September, `content.py` changed in October
+  and carries 50 mentions of the old "Research Adviser"),
+  `docs/diagrams/PAPEL_use_case_diagram.svg` (two mentions, though
+  `gen_usecase.php` was renamed), and `docs/field_guide.html` (one, from
+  `scripts/field_guide_content.py`). Each is one command away from correct;
+  rebuild before handing any of them to a reader.
+- **`includes/progress_tracker.php` draws the retired four-stage tracker** and
+  nothing requires it. It is the code twin of the documents deleted above: the
+  wrong answer in the place somebody would look it up. Delete it or rewrite it
+  against `workflow_progress_steps()`; do not start calling it.

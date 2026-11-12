@@ -109,6 +109,24 @@ class UserRepository {
     }
 
     /**
+     * The Faculty ID this account carries now, or '' for no such account.
+     *
+     * Read for staff_id_problem()'s $keeping: an ID issued before the format
+     * was settled is allowed to stay, so that such an account can still have
+     * its name or its email corrected. The answer has to come from the database
+     * and never from the form, or a posted value could claim that licence for
+     * an ID the account never had.
+     */
+    public function facultyIdOf($userId): string {
+        $userId = (int)$userId;
+        $stmt = $this->conn->prepare("SELECT faculty_id FROM users WHERE user_id = ?");
+        $stmt->bind_param('i', $userId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        return (string)($row['faculty_id'] ?? '');
+    }
+
+    /**
      * Save an adviser's details. A blank password leaves the current one alone,
      * so the two statements differ only in whether they touch it.
      */

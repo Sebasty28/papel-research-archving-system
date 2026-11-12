@@ -337,6 +337,7 @@ $PAGE_SKELETON = 'table';
                         <label for="full_name">Full name <span class="req">*</span></label>
                         <input type="text" name="full_name" id="full_name"
                                placeholder="e.g. Dr. Maria Santos" required>
+                        <small class="mgmt-hint">Surname first is fine: &ldquo;Reyes, Rayver S.&rdquo; is saved as &ldquo;Rayver S. Reyes&rdquo;.</small>
                     </div>
 
                     <div class="mgmt-field">
@@ -344,8 +345,8 @@ $PAGE_SKELETON = 'table';
                             <span id="idLabel">Faculty ID</span> <span class="req">*</span>
                         </label>
                         <input type="text" name="faculty_id" id="faculty_id"
-                               placeholder="e.g. FAC-2026-001" required>
-                        <small class="mgmt-hint">Letters, numbers and dashes, like FAC-2026-001. This is what they sign in with.</small>
+                               placeholder="e.g. <?= e(STAFF_ID_EXAMPLE) ?>" maxlength="12" required>
+                        <small class="mgmt-hint">FA, a four-digit number, BN and the year, like <?= e(STAFF_ID_EXAMPLE) ?>. This is what they sign in with.</small>
                     </div>
 
                     <div class="mgmt-field">
@@ -373,7 +374,7 @@ $PAGE_SKELETON = 'table';
                     <?php $SECOND = secondary_position_options($u); ?>
                     <?php if ($SECOND): ?>
                     <div class="mgmt-field">
-                        <label for="secondary_position">Also serves as</label>
+                        <label for="secondary_position">Another Position</label>
                         <select name="secondary_position" id="secondary_position">
                             <option value="">Nothing else</option>
                             <?php foreach ($SECOND as $pos): ?>
@@ -530,6 +531,7 @@ document.addEventListener('DOMContentLoaded', function () {
         cancel.hidden = true;
         form.reset();
         relabelId();
+        delete document.getElementById('faculty_id').dataset.keeping;   // a new account gets no such licence
         // form.reset() restores the markup's values, not these: set them after.
         document.getElementById('formAction').value = 'create_user';
         document.getElementById('formUserId').value = '';
@@ -541,6 +543,12 @@ document.addEventListener('DOMContentLoaded', function () {
         var d = row.dataset;
         document.getElementById('full_name').value  = d.fullName || '';
         document.getElementById('faculty_id').value = d.facultyId || '';
+        /* The ID this account already has. FC-00123 was issued before the
+           format was settled, and the rule runs on edit as well as create:
+           without this the form would refuse to save a change of email on such
+           an account. includes/manage_validate.php reads it; the server reads
+           the same thing off the database and decides. */
+        document.getElementById('faculty_id').dataset.keeping = d.facultyId || '';
         document.getElementById('email').value      = d.email || '';
         if (positionSelect && d.position) { positionSelect.value = d.position; }
         relabelId();

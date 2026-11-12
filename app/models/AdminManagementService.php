@@ -42,6 +42,9 @@ class AdminManagementService {
         $data['admin_level'] = $map['level'];
 
         $data['full_name'] = normalize_person_name($data['full_name'] ?? '');
+        /* An ID is a code, not somebody's typing: FA0001bn2026 and FA0001BN2026
+           are the same one, and only one of them is ever stored. */
+        $data['faculty_id'] = staff_id_clean($data['faculty_id'] ?? '');
 
         if (!$data['full_name'] || !$data['email'] || !$data['password'] || !$data['faculty_id']) {
             throw new InvalidArgumentException("All fields required.");
@@ -51,7 +54,7 @@ class AdminManagementService {
            config/core.php. The first complaint is the one thrown, so they are
            read in the order the fields are in. */
         foreach ([person_name_problem($data['full_name']),
-                  staff_id_problem($data['faculty_id']),
+                  staff_id_problem($data['faculty_id'], 'Faculty ID'),
                   account_email_problem($data['email'])] as $why) {
             if ($why !== null) { throw new InvalidArgumentException($why); }
         }
@@ -127,8 +130,18 @@ class AdminManagementService {
            re-cased, anything with a lowercase letter in it is left alone. */
         $fullName = normalize_person_name($data['full_name'] ?? '');
         $email    = trim($data['email'] ?? '');
-        $empId    = trim($data['faculty_id'] ?? '');
+        $empId    = staff_id_clean($data['faculty_id'] ?? '');
         $password = $data['password'] ?? '';
+
+        /* What this account's ID is now, read from the database and never from
+           the form: an ID issued before the format was settled is allowed to
+           stay, so that such an account can still have its name or its email
+           corrected, and a posted value cannot be used to claim that licence
+           for an ID the account never had. See staff_id_problem(). */
+        $keep = $this->conn->prepare("SELECT faculty_id FROM users WHERE user_id = ?");
+        $keep->bind_param('i', $userId);
+        $keep->execute();
+        $keeping = (string)($keep->get_result()->fetch_assoc()['faculty_id'] ?? '');
 
         /* Moving somebody between positions is a promotion, not a new account,
            so the role, the level and the title all follow the choice. */
@@ -148,7 +161,7 @@ class AdminManagementService {
            config/core.php. The first complaint is the one thrown, so they are
            read in the order the fields are in. */
         foreach ([person_name_problem($fullName),
-                  staff_id_problem($empId),
+                  staff_id_problem($empId, 'Faculty ID', $keeping),
                   account_email_problem($email)] as $why) {
             if ($why !== null) { throw new InvalidArgumentException($why); }
         }

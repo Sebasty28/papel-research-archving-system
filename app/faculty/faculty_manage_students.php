@@ -650,6 +650,7 @@ $PAGE_SKELETON = 'table';
                         <label for="full_name">Full name <span class="req">*</span></label>
                         <input type="text" name="full_name" id="full_name"
                                placeholder="e.g. Juan Dela Cruz" required>
+                        <small class="mgmt-hint">Surname first is fine: &ldquo;Reyes, Rayver S.&rdquo; is saved as &ldquo;Rayver S. Reyes&rdquo;.</small>
                     </div>
 
                     <div class="mgmt-field">
@@ -680,7 +681,9 @@ $PAGE_SKELETON = 'table';
                                 <label for="academic_year">
                                     Academic year <span class="req">*</span>
                                     <button type="button" class="mgmt-help js-help"
-                                            aria-label="What is the academic year for?">?</button>
+                                            aria-label="What is the academic year for?">
+                                        <span class="material-symbols-outlined" aria-hidden="true">info</span>
+                                    </button>
                                 </label>
                                 <input type="text" name="academic_year" id="academic_year"
                                        list="ayList" maxlength="20" placeholder="e.g. <?= e($ACADEMIC_YEARS[0]) ?>" required>
@@ -689,13 +692,20 @@ $PAGE_SKELETON = 'table';
                                 <label for="section">
                                     Section <span class="req">*</span>
                                     <button type="button" class="mgmt-help js-help"
-                                            aria-label="What is the section for?">?</button>
+                                            aria-label="What is the section for?">
+                                        <span class="material-symbols-outlined" aria-hidden="true">info</span>
+                                    </button>
                                 </label>
                                 <input type="text" name="section" id="section"
                                        list="sectionList" maxlength="40" placeholder="e.g. 4-1" required>
                             </div>
                         </div>
-                        <small class="mgmt-hint">Pick a suggestion or type your own.</small>
+                        <?php /* No hint of its own under these two. They are one .mgmt-field
+                                 holding two labels, each with a "?" that opens the cohort
+                                 dialog, and that dialog already ends by saying both boxes
+                                 suggest the usual values and accept anything typed. A line
+                                 under them saying the same thing in fewer words is the only
+                                 subtitle left on the form. */ ?>
                         <small class="mgmt-hint is-bad" id="ayNote" hidden></small>
                         <datalist id="ayList">
                             <?php foreach ($ACADEMIC_YEARS as $ay): ?><option value="<?= e($ay) ?>"><?php endforeach; ?>

@@ -32,8 +32,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   };
   /* Takes the message and where a form post would have gone, so a call site
      reads the same whichever kind of request it is serving. */
-  $login_failed = function (string $message, string $redirect) use ($wants_json, $login_answer) {
-      if ($wants_json) { $login_answer(['success' => false, 'message' => $message]); }
+  $login_failed = function (string $message, string $redirect, string $field = '') use ($wants_json, $login_answer) {
+      if ($wants_json) { $login_answer(['success' => false, 'message' => $message, 'field' => $field]); }
       flash('login_error', $message);
       header('Location: ' . $redirect);
       exit;
@@ -64,7 +64,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       /* An ID and a password. The birthdate used to be a third factor here,
          which meant an account with none on file could not sign in at all, and
          a date of birth is not a secret, so it was never adding much. */
-      if ($id === '' || $pw === '') { $login_failed('Enter your ID and password.', $error_redirect); }
+      if ($id === '' && $pw === '') {
+          $login_failed($role_hint === 'guest' ? 'Enter your pass username and password.' : 'Enter your ID and password.', $error_redirect, 'identifier');
+      }
+      if ($id === '') {
+          $login_failed($role_hint === 'guest' ? 'Enter your Library Pass username.' : 'Enter your ID, username, or email.', $error_redirect, 'identifier');
+      }
+      if ($pw === '') { $login_failed('Enter your password.', $error_redirect, 'password'); }
 
       /* Checked before the password is looked at, so a bot cannot use this
          endpoint to test credentials at all. Inert until keys are configured. */
@@ -90,22 +96,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
          Handled here so both sign-in surfaces behave the same way. */
       if ($role_hint === 'guest') {
           $gq = $conn->prepare(
-              "SELECT guest_id, username, password, expires_at
+              "SELECT guest_id, username, password, expires_at, expires_at <= NOW() AS is_expired
                  FROM guest_sessions
-                WHERE username = ? AND expires_at > NOW() LIMIT 1");
+                WHERE username = ? LIMIT 1");
           $gq->bind_param('s', $id);
           $gq->execute();
           $guest = $gq->get_result()->fetch_assoc();
 
-          if (!$guest || !password_verify($pw, $guest['password'])) {
+          if (!$guest) {
               login_throttle_record_failure($id);
-              /* Said plainly: an expired pass and a mistyped one look the same
-                 from here, and "not right or has expired" covers both without
-                 revealing which. */
-              $login_failed('That pass username or password is not right, or the pass has expired.', $error_redirect);
+              $login_failed('No Library Pass was found for that username. Check the username provided by the Librarian.', $error_redirect, 'identifier');
+          }
+          if (!password_verify($pw, $guest['password'])) {
+              login_throttle_record_failure($id);
+              $login_failed('The Library Pass password is incorrect. Please try again.', $error_redirect, 'password');
           }
 
           login_throttle_clear($id);
+          if ($guest['is_expired']) {
+              $login_failed('This Library Pass has expired. Ask the Librarian for a new pass.', $error_redirect);
+          }
           login_user([
               'user_id'   => 0,
               'username'  => $guest['username'],
@@ -135,7 +145,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               WHERE (username=? OR email=?
                      OR (student_id IS NOT NULL AND student_id<>'' AND student_id=?)
                      OR (faculty_id IS NOT NULL AND faculty_id<>'' AND faculty_id=?))
-                AND is_active=1 LIMIT 1";
+                LIMIT 1";
       
       try {
         $stmt = $conn->prepare($sql);
@@ -152,7 +162,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       $stmt->store_result();
       if ($stmt->num_rows !== 1) {
         login_throttle_record_failure($id);
-        $login_failed('That ID or password is not right.', $error_redirect);
+        $login_failed('No account was found for that ID, username, or email. Check it and try again.', $error_redirect, 'identifier');
       }
       /* The bind list has to match the SELECT exactly, and the SELECT above
          carries secondary_position only where the column exists, so this is
@@ -169,14 +179,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                              $is_active, $student_id, $stored_birthdate, $expires_on, $admin_level);
       }
       $stmt->fetch();
-      if (!$is_active || !password_verify($pw, $password_hash)) {
+      if (!password_verify($pw, $password_hash)) {
         login_throttle_record_failure($id);
-        $login_failed('That ID or password is not right.', $error_redirect);
+        $login_failed('The password is incorrect. Please try again.', $error_redirect, 'password');
       }
 
       /* The password was right, so this person is not the one being guarded
          against: whatever happens below is about which desk they land on. */
       login_throttle_clear($id);
+      if (!$is_active) {
+          $login_failed('This account is deactivated. Contact your administrator.', $error_redirect);
+      }
 
       // Enforce that the user's actual role matches the tab they logged in from
       $role_groups = [
@@ -196,7 +209,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
          correct, so say plainly what is wrong rather than "not right". */
       if ($user_role === 'student' && !empty($expires_on) && strtotime($expires_on) < strtotime('today')) {
           $login_failed('This student account expired on ' . date('F j, Y', strtotime($expires_on)) .
-                        '. Ask your research adviser to renew it.', $error_redirect);
+                        '. Ask your Subject Adviser to renew it.', $error_redirect);
       }
 
       // Additional validation for students: must have student_id or username

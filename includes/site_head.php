@@ -1243,6 +1243,9 @@ html.nav-open .nav-burger .burger-open { display: inline-flex; }
     line-height: 1.45;
     color: var(--grey);
 }
+.login-email-hint { display: flex; align-items: center; gap: .35rem; }
+.login-email-hint .material-symbols-outlined { font-size: 16px; flex: none; }
+.login-email-hint[hidden] { display: none; }
 .lf-input {
     width: 100%;
     padding: .75rem .875rem;
@@ -1350,6 +1353,8 @@ select.lf-input {
 }
 .panel-alert.error { background: #fdeaea; color: var(--dark-maroon); }
 .panel-alert.success { background: #e7f6ed; color: #1b5e35; }
+.login-field-error { color: var(--maroon); margin-top: .4rem; }
+.lf-input[aria-invalid="true"] { border-color: var(--maroon); }
 
 @media (max-width: 900px) {
     /* These links used to be thrown away at this width (display:none and

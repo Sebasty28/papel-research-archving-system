@@ -610,9 +610,20 @@ $PAGE_SKELETON = 'reader';
                     </div>
                 <?php else: ?>
                     <?php if ($mr && $mr['status'] === 'pending'): ?>
-                        <div class="pd-note">
+                        <div class="pd-note pd-note--request">
                             <span class="material-symbols-outlined">hourglass_top</span>
                             <span>Your request is waiting for a librarian to review it.</span>
+                            <a class="btn-sm-maroon pd-note-action" href="<?= e(BASE_URL) ?>/app/my_library.php?tab=requests">
+                                View my requests <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span>
+                            </a>
+                        </div>
+                    <?php elseif ($mr && manuscript_request_state($mr) === 'revoked'): ?>
+                        <?php /* A grant a librarian took back, which is a denied row that
+                                 had been granted first. Saying "denied" there would be the
+                                 site misremembering: they were given it, and it was ended. */ ?>
+                        <div class="pd-note">
+                            <span class="material-symbols-outlined">lock</span>
+                            <span>A librarian ended your access to this manuscript. You can ask again.</span>
                         </div>
                     <?php elseif ($mr && $mr['status'] === 'denied'): ?>
                         <div class="pd-note">
@@ -697,9 +708,16 @@ $PAGE_SKELETON = 'reader';
                     $mr = student_manuscript_request((int)$u['user_id'], $id);
                     if ($mr && $mr['status'] === 'granted' && strtotime($mr['expires_at']) > time()):
                 ?>
+                    <?php /* data-ms-until: includes/manuscript_timer.php counts the
+                             second figure down off the server's clock, so a reader
+                             two hours into a three-hour grant is told what is
+                             actually left rather than what was left when the page
+                             was drawn. The words the server printed stand with no
+                             script at all. */ ?>
                     <div class="pd-note pd-note--after">
                         <span class="material-symbols-outlined">timer</span>
-                        <span>Access expires <?= e(date('F j, Y g:i A', strtotime($mr['expires_at']))) ?>.</span>
+                        <span data-ms-ended="Your access to this manuscript has ended. You can ask a librarian again.">Access expires <?= e(date('F j, Y g:i A', strtotime($mr['expires_at']))) ?>
+                              (<span data-ms-until="<?= (int)strtotime((string)$mr['expires_at']) ?>"><?= e(manuscript_time_left((string)$mr['expires_at'])) ?></span>).</span>
                     </div>
                 <?php
                     endif;

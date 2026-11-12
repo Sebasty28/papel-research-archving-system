@@ -16,13 +16,18 @@
  * one `full_name` column) so the two halves are read off the ends of whatever
  * was typed, and the middle is dropped.
  *
- * The ID field is whichever of `#student_id` / `#faculty_id` the page has; the
- * three formats in use disagree about where the serial sits, hence the
- * "last long run of digits" rule rather than a fixed segment:
+ * The ID field is whichever of `#student_id` / `#faculty_id` the page has, and
+ * the formats disagree about where the serial sits:
  *
+ *     FA0001BN2026     ->  001        (staff, the shape issued now)
  *     2023-00056-BN-0  ->  056        (student)
- *     FAC-2026-001     ->  001        (adviser)
- *     COORDINATOR-01   ->  01         (admin, no 3-digit run to find)
+ *     FAC-2026-001     ->  001        (a staff ID issued before the format was settled)
+ *     COORDINATOR-01   ->  01         (and another, with no 3-digit run to find)
+ *
+ * A staff ID is read by its own shape, because its serial comes FIRST and its
+ * year last: the general "last long run of digits" rule below would hand every
+ * member of staff enrolled in one year the same three digits and leave the name
+ * doing all the work. Everything else keeps that rule.
  *
  * The result satisfies the password rule the services enforce on save (six
  * characters plus an uppercase and a digit) for any name of two characters or
@@ -79,7 +84,15 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function idTail(id) {
-        var groups = String(id || '').match(/\d+/g) || [];
+        var v = String(id || '').trim();
+
+        /* A staff ID is FA0000BN2026: the serial comes FIRST and the year last,
+           so the general rule below would end every password issued in one year
+           with the same three digits and leave the name doing all the work. */
+        var staff = v.match(/^FA(\d{4})BN\d{4}$/i);
+        if (staff) { return staff[1].slice(-3); }
+
+        var groups = v.match(/\d+/g) || [];
         if (!groups.length) { return ''; }
 
         /* The year and the serial are both numbers; the serial is the last one

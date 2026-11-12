@@ -61,7 +61,7 @@ function account_import_kinds(): array {
             'noun'      => 'admin account',
             'plural'    => 'admin accounts',
             'id_label'  => 'Faculty ID',
-            'positions' => ['Research Coordinator', 'Head of Academic Affairs', 'Librarian'],
+            'positions' => ['Research Coordinator', 'Head of Academic Programs', 'Librarian'],
             'headers'   => ['Faculty ID', 'Full Name', 'Email', 'Position'],
         ],
     ];
@@ -116,7 +116,12 @@ function account_import_password(string $fullName, string $id): string {
     if ($name === '') { return ''; }
 
     $tail = '';
-    if (preg_match_all('/\d+/', $id, $m) && $m[0]) {
+    /* A staff ID is FA0000BN2026: the serial comes FIRST and the year last, so
+       the general rule below would end every password issued in one year with
+       the same three digits and leave the name doing all the work. */
+    if (preg_match('/^FA(\d{4})BN\d{4}$/i', trim($id), $sm)) {
+        $tail = substr($sm[1], -3);
+    } elseif (preg_match_all('/\d+/', $id, $m) && $m[0]) {
         $groups = $m[0];
         $long = array_values(array_filter($groups, static fn($g) => strlen($g) >= 3));
         $pick = $long ? end($long) : end($groups);
@@ -348,7 +353,8 @@ function account_import_check_row(array $row, string $kind): array {
     /* The same rules the form reads, in the same order, so a file is refused
        for exactly the reasons typing it would be. */
     foreach ([person_name_problem($row['name']),
-              $kind === 'student' ? student_number_problem($row['id']) : staff_id_problem($row['id']),
+              $kind === 'student' ? student_number_problem($row['id'])
+                                  : staff_id_problem($row['id'], $spec['id_label']),
               account_email_problem($row['email'])] as $why) {
         if ($why !== null) { $problems[] = $why; }
     }
@@ -393,10 +399,19 @@ function account_import_rows(array $sheet, string $kind, array $defaults, mysqli
             return $col === null ? '' : trim((string)($cells[$col] ?? ''));
         };
 
-        $id    = $get('id');
+        /* A staff ID is a code, so one case of it: a file mixing FA0001BN2026
+           with fa0001bn2026 would otherwise read as two people. A student
+           number is left exactly as the registrar writes it. */
+        $id    = $kind === 'student' ? $get('id') : staff_id_clean($get('id'));
         $name  = normalize_person_name($get('name'));
         $email = strtolower($get('email'));
         $pos   = $kind === 'student' ? '' : ($get('position') ?: (string)($defaults['position'] ?? ''));
+        /* A spreadsheet typed up before a position was renamed names the old
+           one, and the list below is the new names only: without this it would
+           be refused as a position this console cannot create. Resolved here
+           rather than in the check, so what is created and what is shown in
+           the preview are both the name the position goes by now. */
+        $pos   = $pos === '' ? '' : staff_position_current_name($pos);
 
         /* A trailing empty row is what every spreadsheet ends with. */
         if ($id === '' && $name === '' && $email === '') { continue; }

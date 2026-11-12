@@ -45,8 +45,17 @@ class FacultyManagementService {
            re-cased, anything with a lowercase letter in it is left alone. */
         $data['full_name']  = normalize_person_name($data['full_name'] ?? '');
         $data['email']      = trim($data['email'] ?? '');
-        $data['faculty_id'] = trim($data['faculty_id'] ?? '');
+        /* An ID is a code, not somebody's typing: FA0001bn2026 and FA0001BN2026
+           are the same one, and only one of them is ever stored. */
+        $data['faculty_id'] = staff_id_clean($data['faculty_id'] ?? '');
         $password           = $data['password'] ?? '';
+
+        /* What this account's ID is now, read from the database and never from
+           the form: an ID issued before the format was settled is allowed to
+           stay, so that such an account can still have its name or its email
+           corrected, and a posted value cannot be used to claim that licence
+           for an ID the account never had. See staff_id_problem(). */
+        $keeping = $this->userRepo->facultyIdOf($userId);
 
         if (!$data['full_name'] || !$data['email'] || !$data['faculty_id']) {
             throw new InvalidArgumentException("Full name, Faculty ID and email are all required.");
@@ -56,7 +65,7 @@ class FacultyManagementService {
            config/core.php. The first complaint is the one thrown, so they are
            read in the order the fields are in. */
         foreach ([person_name_problem($data['full_name']),
-                  staff_id_problem($data['faculty_id']),
+                  staff_id_problem($data['faculty_id'], 'Faculty ID', $keeping),
                   account_email_problem($data['email'])] as $why) {
             if ($why !== null) { throw new InvalidArgumentException($why); }
         }
@@ -75,6 +84,10 @@ class FacultyManagementService {
        anybody: forty welcome messages cannot be recalled, and a trial run is
        the likeliest first use. See config/account_import.php. */
     public function createFaculty($data, $createdBy, bool $notify = true) {
+        /* An ID is a code, not somebody's typing: FA0001bn2026 and FA0001BN2026
+           are the same one, and only one of them is ever stored. Done before
+           the username is taken off it, so that is one case too. */
+        $data['faculty_id'] = staff_id_clean($data['faculty_id'] ?? '');
         /* Derived from the Faculty ID: nobody types a username any more, but the
            column is still unique and still wants a value. */
         $data['username'] = strtolower(preg_replace('/[^A-Za-z0-9_]/', '', (string)$data['faculty_id']));
@@ -91,7 +104,7 @@ class FacultyManagementService {
            config/core.php. The first complaint is the one thrown, so they are
            read in the order the fields are in. */
         foreach ([person_name_problem($data['full_name']),
-                  staff_id_problem($data['faculty_id']),
+                  staff_id_problem($data['faculty_id'], 'Faculty ID'),
                   account_email_problem($data['email'])] as $why) {
             if ($why !== null) { throw new InvalidArgumentException($why); }
         }

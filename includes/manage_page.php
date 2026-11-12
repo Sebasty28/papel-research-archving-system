@@ -142,18 +142,23 @@
     background-position: right 1rem center;
 }
 
-/* ---- The "?" beside a label ---- */
+/* ---- The info mark beside a label ----
+   Material Symbols' own `info`, which draws its circle as part of the glyph:
+   the button had been a "?" drawn inside a 14px bordered circle of its own,
+   and a bordered circle around a glyph that is already a circle reads as two.
+   One mark for the whole of these consoles, so nothing has to be learnt
+   twice: the cohort pair's, which opens a dialog, is the same mark. */
 .mgmt-field label { display: flex; align-items: center; gap: .3rem; }
 .mgmt-help {
-    width: 14px; height: 14px; flex: 0 0 auto;
-    border: 1px solid var(--border); border-radius: 50%;
-    background: var(--white); color: var(--grey);
-    font-family: var(--font-body); font-size: .5625rem; line-height: 1;
+    flex: 0 0 auto;
+    border: 0; border-radius: 50%;
+    background: none; color: var(--grey);
     display: inline-flex; align-items: center; justify-content: center;
     cursor: pointer; padding: 0;
 }
-.mgmt-help:hover { border-color: var(--maroon); color: var(--maroon); background: var(--cream); }
-.mgmt-help:focus-visible { outline: 2px solid var(--maroon); outline-offset: 1px; }
+.mgmt-help .material-symbols-outlined { font-size: 15px; display: block; }
+.mgmt-help:hover { color: var(--maroon); }
+.mgmt-help:focus-visible { outline: 2px solid var(--maroon); outline-offset: 2px; }
 .mgmt-field input::placeholder { color: var(--grey); }
 /* A hint that is a complaint: said under the field it is about, while the
    value is still being typed. The border is left alone on purpose, since
@@ -164,6 +169,57 @@
 /* The hint doubles as the Generate button's only way to answer back (there is
    no alert() on this site) so it needs a state that reads as a correction. */
 .mgmt-hint.is-warn { color: var(--maroon); font-weight: 500; }
+
+/* ---- A field's hint, behind the "?" beside its label -------------------
+   A hint used to sit under its box as a second line of grey small print.
+   Six of them down one form is a column nobody reads twice, and together
+   they pushed the Create button off the bottom of the screen. The words are
+   the same words, moved behind the "?" the two cohort fields already had.
+
+   What is shown is the hint element itself and never a copy of its words:
+   #passHint is rewritten by script (the Generate button answers through it,
+   and editing changes it to "leave blank to keep their current password"),
+   and a copy taken at load would go on saying whatever it said then.
+
+   Hidden to the eye, not to a screen reader: the control carries
+   aria-describedby to it, so it is still read out with the field as it was
+   when it was printed underneath. display:none would take it out of the
+   accessibility tree altogether and lose that. */
+.mgmt-hint.is-tip {
+    position: absolute;
+    width: 1px; height: 1px;
+    margin: -1px; padding: 0; border: 0;
+    overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%);
+}
+.mgmt-hint.is-tip.is-open {
+    /* Fixed, because a hint must not be clipped by the panel, the modal or
+       the import drawer it was opened inside; placed by script against the
+       button, and closed on any scroll rather than followed. */
+    position: fixed;
+    z-index: 19500;      /* over the import drawer (19000), under its dialogs (20000) */
+    width: auto; height: auto; max-width: 17rem;
+    margin: 0; padding: .5rem .625rem;
+    overflow: visible; clip: auto; clip-path: none;
+    background: var(--white); color: var(--ink);
+    border: 1px solid var(--border); border-radius: var(--r-card, 8px);
+    box-shadow: 0 6px 20px rgb(0 0 0 / .14);
+    font-size: .6875rem; line-height: 1.45;
+}
+/* A complaint is not a tooltip. It is said under the field, as it always was,
+   whether or not the "?" happens to be open. After .is-open on purpose: the
+   two have the same specificity and this one has to win. */
+.mgmt-hint.is-tip.is-warn,
+.mgmt-hint.is-tip.is-bad {
+    position: static;
+    width: auto; height: auto; max-width: none;
+    margin: .25rem 0 0; padding: 0; border: 0;
+    overflow: visible; clip: auto; clip-path: none;
+    background: none; box-shadow: none; z-index: auto;
+    font-size: .6875rem;
+}
+/* and the "?" goes while it is, or it offers to show what is already there. */
+.mgmt-field:has(> .mgmt-hint.is-tip.is-warn) .mgmt-help.js-hint,
+.mgmt-field:has(> .mgmt-hint.is-tip.is-bad) .mgmt-help.js-hint { display: none; }
 /* Academic year and section sit together: they are read as one answer. */
 .mgmt-pair { display: grid; grid-template-columns: 1fr 1fr; gap: .625rem; }
 .mgmt-with-btn { display: flex; gap: .375rem; }
@@ -625,6 +681,29 @@ html.mgmt-form-folded .mgmt-dock-fold .material-symbols-outlined { transform: ro
 /* The shared rule puts the search on the heading's baseline; inside the tools
    row it has to stretch with everything else, so that one is turned off. */
 .mgmt-head-row .mgmt-head-tools .mgmt-search { align-self: stretch; }
+
+/* On a phone the Import file button stays **beside** the search rather than
+   dropping to a line of its own. The two are one toolbar: a button alone on a
+   row reads as a second, unrelated thing to press. What pushed it off was
+   `.mgmt-head-row .mgmt-search { width: 100% }` in the narrow block above,
+   which leaves no room next to it. The button keeps its own width (it already
+   refuses to wrap its words) and the field takes whatever is left, down to
+   nothing, which is what `min-width: 0` is for on a flex item.
+
+   **This block has to live here, after `.mgmt-head-tools` above, not up in the
+   `max-width: 780px` section.** That section comes earlier in this stylesheet,
+   and `flex-wrap: wrap` on the base rule is the same specificity, so written
+   there it lost on source order: the tools went on wrapping, and the two sat
+   side by side only at the widths where they happened to fit anyway. */
+@media (max-width: 780px) {
+    .mgmt-head-row .mgmt-head-tools {
+        flex-wrap: nowrap; width: 100%; justify-content: flex-start;
+    }
+    .mgmt-head-row .mgmt-head-tools .mgmt-search {
+        flex: 1 1 auto; width: auto; min-width: 0;
+    }
+    .mgmt-head-row .mgmt-head-tools .import-open { flex: 0 0 auto; }
+}
 /* `button.`, not a bare class. `import-open` is two things: this button, and the
    class put on <html> to hold the page still while the drawer is up. A bare
    `.import-open` matched the <html> element as well, so `white-space: nowrap`
@@ -1138,5 +1217,142 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         mark();
     });
+});
+</script>
+
+<script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
+/* ---- A field's hint, behind the "?" beside its label --------------------
+   Every .mgmt-field with a label of its own and a hint under it gets a "?"
+   on the end of the label, and the hint is shown from it instead: on hover,
+   on focus, and on a press, the last being the only one a finger has.
+
+   Three fields are left alone, each for its own reason:
+
+     - Academic year and Section, which are one .mgmt-field holding two
+       labels and already carry a "?" of their own. Theirs opens the cohort
+       dialog, which says more than a line can, so a second "?" beside it
+       would be two glyphs offering two different things.
+     - A hint that is not a child of a .mgmt-field: the import drawer's note
+       about the section is about the whole card, not about one box.
+     - .js-field-note, the complaint includes/manage_validate.php writes
+       while a box is being typed into. That is the one kind of hint that
+       has to be in front of somebody without being asked for.
+
+   The bubble is positioned here rather than in CSS because it is fixed: it
+   has to be, or the import drawer and the reset modal would both clip it. */
+document.addEventListener('DOMContentLoaded', function () {
+
+    var GUTTER = 8, open = null, shut = null, n = 0;
+
+    function place(btn, tip) {
+        /* Measured with the bubble already shown, so its own size is known.
+           Left-aligned under the "?" and pulled back inside the window; above
+           it instead when there is no room below. */
+        var b = btn.getBoundingClientRect(), t = tip.getBoundingClientRect();
+        var left = Math.min(Math.max(GUTTER, b.left), window.innerWidth - t.width - GUTTER);
+        var top  = b.bottom + 6;
+        if (top + t.height > window.innerHeight - GUTTER) {
+            top = Math.max(GUTTER, b.top - t.height - 6);
+        }
+        tip.style.left = Math.round(left) + 'px';
+        tip.style.top  = Math.round(top) + 'px';
+    }
+
+    function hide() {
+        if (!open) { return; }
+        open.tip.classList.remove('is-open');
+        open.btn.setAttribute('aria-expanded', 'false');
+        open = null;
+    }
+    function hideSoon() { clearTimeout(shut); shut = setTimeout(hide, 120); }
+    function keep()     { clearTimeout(shut); }
+
+    function show(btn, tip) {
+        clearTimeout(shut);
+        if (open && open.btn === btn) { return; }
+        hide();
+        tip.classList.add('is-open');
+        btn.setAttribute('aria-expanded', 'true');
+        open = { btn: btn, tip: tip };
+        place(btn, tip);
+    }
+
+    document.querySelectorAll('.mgmt-field').forEach(function (field) {
+        var label = field.querySelector(':scope > label');
+        var tip   = field.querySelector(':scope > .mgmt-hint:not(.js-field-note)');
+        if (!label || !tip || !tip.textContent.trim()) { return; }
+        if (label.querySelector('.mgmt-help')) { return; }   // it already has one of its own
+
+        if (!tip.id) { tip.id = 'mgmtTip' + (++n); }
+        tip.classList.add('is-tip');
+        tip.setAttribute('role', 'tooltip');
+
+        /* Still read out with the field, as it was when it was printed under
+           it. Appended rather than assigned: a control may already point at
+           something else. */
+        var control = field.querySelector('input, select, textarea');
+        if (control) {
+            var had = (control.getAttribute('aria-describedby') || '').split(/\s+/).filter(Boolean);
+            if (had.indexOf(tip.id) === -1) {
+                had.push(tip.id);
+                control.setAttribute('aria-describedby', had.join(' '));
+            }
+        }
+
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'mgmt-help js-hint';
+        var mark = document.createElement('span');
+        mark.className = 'material-symbols-outlined';
+        mark.setAttribute('aria-hidden', 'true');
+        mark.textContent = 'info';
+        btn.appendChild(mark);
+        btn.setAttribute('aria-expanded', 'false');
+        /* The label's own words, without the "*" that marks it required. */
+        var what = label.textContent.replace(/\*/g, '').replace(/\s+/g, ' ').trim();   // read before the mark is added
+        btn.setAttribute('aria-label', what ? 'More about ' + what : 'More about this field');
+        label.appendChild(btn);
+
+        btn.addEventListener('mouseenter', function () { show(btn, tip); });
+        btn.addEventListener('mouseleave', hideSoon);
+        btn.addEventListener('focus',      function () { show(btn, tip); });
+        btn.addEventListener('blur',       hide);
+        /* A finger has no hover, so the press is the whole of it there; on a
+           mouse the bubble is already up and this closes it again. */
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            if (open && open.btn === btn) { hide(); } else { show(btn, tip); }
+        });
+        tip.addEventListener('mouseenter', keep);
+        tip.addEventListener('mouseleave', hideSoon);
+    });
+
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { hide(); } });
+    document.addEventListener('pointerdown', function (e) {
+        if (open && !e.target.closest('.js-hint') && !e.target.closest('.mgmt-hint.is-open')) { hide(); }
+    });
+    /* Fixed to the window, so anything that moves the mark under it leaves the
+       bubble behind: it is put back over the mark instead.
+
+       It used to close on a scroll, which looked right and was not. A scroll
+       event does not bubble, so this listener is in the capture phase to hear
+       one at all, and that means it hears a scroll of ANY box on the page -
+       the tab strip gliding, a panel's own overflow, the scrollIntoView the
+       form does when a row is opened for editing. The bubble shut itself
+       before it had been read, and on the first load it shut before it had
+       been seen at all, while the mark it belongs to had not moved a pixel.
+
+       Writing left/top on the bubble itself is the cheap kind of per-scroll
+       work; a custom property on :root is the kind this project has already
+       paid for once (see the PDF panel in CLAUDE.md). */
+    function follow() {
+        if (!open) { return; }
+        var b = open.btn.getBoundingClientRect();
+        if (b.bottom < 0 || b.top > window.innerHeight ||
+            b.right < 0 || b.left > window.innerWidth) { hide(); return; }   // scrolled out of sight
+        place(open.btn, open.tip);
+    }
+    document.addEventListener('scroll', follow, true);
+    window.addEventListener('resize', follow);
 });
 </script>

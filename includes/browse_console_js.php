@@ -218,13 +218,16 @@
     }
     function viewOptions() {
         var o = [['cards', 'Cards'], ['rows', 'Rows']];
-        if (shelfOffered()) { o.push(['shelf', 'Shelf']); }
+        /* "shelf" is the value Hardbounds has always been stored under; it was
+           called Shelf until Bookshelf, the same books stood spine out, came
+           beside it. The value stays so a saved choice still means the same. */
+        if (shelfOffered()) { o.push(['shelf', 'Hardbounds'], ['bookshelf', 'Bookshelf']); }
         return o;
     }
     /* What a stored value means on this page. */
     function asView(v) {
         if (v === 'rows') { return 'rows'; }
-        if (v === 'shelf' && shelfOffered()) { return 'shelf'; }
+        if ((v === 'shelf' || v === 'bookshelf') && shelfOffered()) { return v; }
         return 'cards';
     }
 

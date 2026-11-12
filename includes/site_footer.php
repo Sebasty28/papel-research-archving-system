@@ -477,6 +477,63 @@ document.addEventListener('DOMContentLoaded', function () {
         faculty: 'Enter your Faculty ID',
         guest:   'e.g. libraryPass_4f2a91c8'
     };
+    var identifierInput = document.getElementById('modalIdentifier');
+    var identifierError = document.getElementById('loginIdentifierError');
+    function yearProblem(year, label) {
+        var current = new Date().getFullYear();
+        return Number(year) < 2000 || Number(year) > current + 1
+            ? 'Check the ' + label + ' year. Use 2000 through ' + (current + 1) + '.' : '';
+    }
+    function identifierProblem(value, role, complete) {
+        var v = value.trim();
+        if (!v) { return complete ? 'Enter your ' + (role === 'guest' ? 'Library Pass username' : roleLabels[role]) + '.' : ''; }
+        if (/\s/.test(v)) { return 'Remove spaces from the ' + (role === 'guest' ? 'pass username' : 'ID') + '.'; }
+        if (v.indexOf('@') !== -1 && role !== 'guest') {
+            return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? '' : 'Enter a complete email address, such as name@example.com.';
+        }
+        if (role === 'guest') {
+            if (!/^[A-Za-z0-9_]+$/.test(v)) { return 'A Library Pass username uses letters, numbers and an underscore only.'; }
+            if (!/^(libraryPass_|guest_)/i.test(v)) { return 'A Library Pass username starts with libraryPass_.'; }
+            return complete && !/^(?:libraryPass_|guest_)[0-9a-f]{8}$/i.test(v)
+                ? 'Enter the full username issued by the Librarian, such as libraryPass_4f2a91c8.' : '';
+        }
+        if (role === 'student') {
+            if (!/^[0-9A-Za-z-]+$/.test(v)) { return 'A Student ID uses numbers and dashes, with only the campus code in letters.'; }
+            if (!/^\d/.test(v)) { return 'A Student ID starts with the intake year, such as 2026-00001-BN-0.'; }
+            if (v.indexOf('--') !== -1 || /[A-Za-z]{4,}/.test(v)) { return 'Check the Student ID format, such as 2026-00001-BN-0.'; }
+            var intake = /^(\d{4})-/.exec(v);
+            if (intake) {
+                var intakeProblem = yearProblem(intake[1], 'intake');
+                if (intakeProblem) { return intakeProblem; }
+            }
+            return complete && (v.length < 6 || v.length > 20 || (v.match(/\d/g) || []).length < 6 || /-$/.test(v))
+                ? 'Enter a complete Student ID, such as 2026-00001-BN-0.' : '';
+        }
+        if (!/^[A-Za-z0-9-]+$/.test(v)) { return 'A Faculty ID uses letters, numbers and, on older IDs, dashes only.'; }
+        if (v.length > 20) { return 'That Faculty ID is too long.'; }
+        if (v.length >= 2 && !/^(?:FA|FC|FAC|HAP|DIR|LIB|COORDINATOR)/i.test(v)) {
+            return 'Check the Faculty ID prefix, such as FA0000BN2026.';
+        }
+        var staffYear = /^FA\d{4}BN(\d{4})$/i.exec(v);
+        if (staffYear) {
+            var staffYearProblem = yearProblem(staffYear[1], 'Faculty ID');
+            if (staffYearProblem) { return staffYearProblem; }
+        }
+        return complete && v.length < 6 ? 'Enter the complete Faculty ID.' : '';
+    }
+    function showIdentifierProblem(complete) {
+        if (!identifierInput || !identifierError) { return false; }
+        var problem = identifierProblem(identifierInput.value, selectedRoleInput.value, complete);
+        identifierError.textContent = problem;
+        identifierError.hidden = !problem;
+        if (problem) { identifierInput.setAttribute('aria-invalid', 'true'); }
+        else { identifierInput.removeAttribute('aria-invalid'); }
+        return !!problem;
+    }
+    if (identifierInput) {
+        identifierInput.addEventListener('input', function () { showIdentifierProblem(false); });
+        identifierInput.addEventListener('blur', function () { showIdentifierProblem(true); });
+    }
     function selectRole(role) {
         document.querySelectorAll('.role-card').forEach(function (c) {
             c.classList.toggle('active', c.getAttribute('data-role') === role);
@@ -486,10 +543,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
         var idInput = document.getElementById('modalIdentifier');
         if (idInput) { idInput.placeholder = rolePlaceholders[role] || 'Enter your ID'; }
+        showIdentifierProblem(false);
 
         // Where to get one: asked only by the role that has to be given one.
         var idHint = document.getElementById('idFieldHint');
         if (idHint) { idHint.hidden = role !== 'guest'; }
+        var emailHint = document.getElementById('loginEmailHint');
+        if (emailHint) { emailHint.hidden = role === 'guest'; }
+        if (idInput) { idInput.setAttribute('aria-describedby', (role === 'guest' ? 'idFieldHint' : 'loginEmailHint') + ' loginIdentifierError'); }
 
         /* The birthdate was dropped from sign-in and its markup went with it,
            but this still reached for the element and threw on every role click,
@@ -598,6 +659,10 @@ document.addEventListener('DOMContentLoaded', function () {
         loginForm.addEventListener('submit', function (e) {
             if (loginBusy) { e.preventDefault(); return; }
             e.preventDefault();            // this also calls off the splash
+            if (showIdentifierProblem(true)) {
+                identifierInput.focus();
+                return;
+            }
             loginBusy = true;
 
             var submitBtn = loginForm.querySelector('[type="submit"]');
@@ -626,17 +691,17 @@ document.addEventListener('DOMContentLoaded', function () {
                     return;                 // left busy: nothing else to do here
                 }
                 loginBusy = false;
-                loginAlert((data && data.message) || 'That ID or password is not right.');
+                loginAlert((data && data.message) || 'Could not sign in. Please try again.');
                 var locked = recaptchaAgain();
                 if (submitBtn && !locked) { submitBtn.disabled = false; }
-                var pw = document.getElementById('modalPassword');
-                /* Straight back to the password, with what was typed selected
-                   so the next keystroke replaces it. Not when the tick box was
-                   what was missing: the answer is then on the widget, not in
-                   this field. */
-                if (pw && !tickMissing) {
-                    try { pw.focus({ preventScroll: true }); } catch (err) { pw.focus(); }
-                    pw.select();
+                var field = data && data.field;
+                var correction = field === 'identifier' ? document.getElementById('modalIdentifier')
+                    : field === 'password' ? document.getElementById('modalPassword') : null;
+                /* Correct the field named by the server; an unknown ID should
+                   not send the person back to retype a password that was never checked. */
+                if (correction && !tickMissing) {
+                    try { correction.focus({ preventScroll: true }); } catch (err) { correction.focus(); }
+                    correction.select();
                 }
             }).catch(function () {
                 /* No answer, or one that is not JSON: post the form the old
@@ -682,4 +747,10 @@ require_once ROOT_PATH.'/includes/flash_dismiss.php';
 /* Right-click actions for the notification lists. Only for someone signed in:
    there is no bell, and no notification centre, for anybody else. */
 if (current_user()) { require_once ROOT_PATH.'/includes/notif_actions.php'; }
+/* The countdown on a student's unlocked manuscripts, and the pop-ups that
+   announce one starting and one ending. It prints nothing for anybody else,
+   and nothing for a student with no grant open and nothing waiting, so it
+   costs those pages two indexed lookups and no markup. After loading_bar.php
+   on purpose: it polls with the papelQuiet flag that file reads. */
+require_once ROOT_PATH.'/includes/manuscript_timer.php';
 require ROOT_PATH.'/includes/accessibility.php'; ?>

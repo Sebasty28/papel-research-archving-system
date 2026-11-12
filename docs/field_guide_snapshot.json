@@ -1,5 +1,5 @@
 {
- "built": "2026-11-12 16:49",
+ "built": "2026-11-13 02:40",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -35,7 +35,7 @@
    "lines": 81
   },
   "app/admin/admin_manage_faculty.php": {
-   "lines": 591
+   "lines": 599
   },
   "app/admin/admin_review_dashboard.php": {
    "lines": 139
@@ -44,13 +44,13 @@
    "lines": 368
   },
   "app/admin/super_admin_manage_admins.php": {
-   "lines": 565
+   "lines": 571
   },
   "app/admin/super_admin_review_dashboard.php": {
    "lines": 135
   },
   "app/auth/login.php": {
-   "lines": 1159
+   "lines": 1172
   },
   "app/auth/logout.php": {
    "lines": 36
@@ -59,7 +59,7 @@
    "lines": 214
   },
   "app/faculty/faculty_manage_students.php": {
-   "lines": 1223
+   "lines": 1233
   },
   "app/faculty/faculty_review_dashboard.php": {
    "lines": 166
@@ -74,10 +74,13 @@
    "lines": 465
   },
   "app/librarian/manuscript_requests.php": {
-   "lines": 809
+   "lines": 845
+  },
+  "app/manuscript_grants.php": {
+   "lines": 60
   },
   "app/models/AdminManagementService.php": {
-   "lines": 216
+   "lines": 229
   },
   "app/models/ArchiveRepository.php": {
    "lines": 140
@@ -86,7 +89,7 @@
    "lines": 56
   },
   "app/models/FacultyManagementService.php": {
-   "lines": 167
+   "lines": 180
   },
   "app/models/PaperRepository.php": {
    "lines": 99
@@ -95,10 +98,10 @@
    "lines": 84
   },
   "app/models/UserRepository.php": {
-   "lines": 161
+   "lines": 179
   },
   "app/my_library.php": {
-   "lines": 980
+   "lines": 887
   },
   "app/paper_file.php": {
    "lines": 182
@@ -155,22 +158,22 @@
    "lines": 954
   },
   "archive/index.php": {
-   "lines": 1436
+   "lines": 2553
   },
   "archive/login.php": {
-   "lines": 1081
+   "lines": 1083
   },
   "archive/view_paper.php": {
-   "lines": 1096
+   "lines": 1114
   },
   "config/account_import.php": {
-   "lines": 597
+   "lines": 612
   },
   "config/config.php": {
    "lines": 265
   },
   "config/core.php": {
-   "lines": 4978
+   "lines": 5220
   },
   "config/error_handler.php": {
    "lines": 228
@@ -202,14 +205,20 @@
   "includes/back_button.php": {
    "lines": 5
   },
+  "includes/book_covers.php": {
+   "lines": 306
+  },
+  "includes/book_viewer.php": {
+   "lines": 878
+  },
   "includes/browse_card.php": {
    "lines": 205
   },
   "includes/browse_console.php": {
-   "lines": 1275
+   "lines": 1280
   },
   "includes/browse_console_js.php": {
-   "lines": 1624
+   "lines": 1627
   },
   "includes/card_collapse.php": {
    "lines": 94
@@ -248,7 +257,7 @@
    "lines": 1193
   },
   "includes/manage_page.php": {
-   "lines": 1143
+   "lines": 1359
   },
   "includes/manage_save_confirm.php": {
    "lines": 168
@@ -257,7 +266,10 @@
    "lines": 261
   },
   "includes/manage_validate.php": {
-   "lines": 357
+   "lines": 458
+  },
+  "includes/manuscript_timer.php": {
+   "lines": 932
   },
   "includes/notif_actions.php": {
    "lines": 224
@@ -269,13 +281,13 @@
    "lines": 248
   },
   "includes/paper_record_css.php": {
-   "lines": 786
+   "lines": 791
   },
   "includes/password_audit_tab.php": {
    "lines": 201
   },
   "includes/password_generator.php": {
-   "lines": 140
+   "lines": 153
   },
   "includes/password_once.php": {
    "lines": 124
@@ -308,16 +320,16 @@
    "lines": 902
   },
   "includes/shelf_view.php": {
-   "lines": 391
+   "lines": 598
   },
   "includes/site_footer.php": {
-   "lines": 686
+   "lines": 757
   },
   "includes/site_head.php": {
-   "lines": 1693
+   "lines": 1698
   },
   "includes/site_header.php": {
-   "lines": 686
+   "lines": 688
   },
   "includes/skeleton.php": {
    "lines": 652
@@ -430,6 +442,9 @@
   "scripts/migrations/run_guest_table_setup.php": {
    "lines": 28
   },
+  "scripts/migrations/run_head_academic_programs_migration.php": {
+   "lines": 61
+  },
   "scripts/migrations/run_login_throttle_migration.php": {
    "lines": 49
   },
@@ -512,7 +527,7 @@
    "lines": 120
   },
   "tests/_account_rules_unit.php": {
-   "lines": 131
+   "lines": 193
   },
   "tests/_checklist_unit.php": {
    "lines": 321
@@ -548,7 +563,7 @@
    "lines": 202
   },
   "tests/harness.py": {
-   "lines": 306
+   "lines": 310
   },
   "tests/m10_section_scope.py": {
    "lines": 785
@@ -569,7 +584,7 @@
    "lines": 252
   },
   "tests/m1_auth.py": {
-   "lines": 309
+   "lines": 307
   },
   "tests/m3_dashboard.py": {
    "lines": 135
@@ -581,7 +596,7 @@
    "lines": 291
   },
   "tests/m6_archive.py": {
-   "lines": 469
+   "lines": 468
   },
   "tests/m7_notify.py": {
    "lines": 168

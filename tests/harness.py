@@ -203,7 +203,11 @@ class Client(object):
         m = re.search(r'login_error[^>]*>(.*?)</', html, re.S)
         if m:
             return re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', '', m.group(1))).strip()
-        for pat in (r'That ID or password is not right',
+        for pat in (r'No account was found[^<]+',
+                    r'The password is incorrect[^<]+',
+                    r'No Library Pass was found[^<]+',
+                    r'The Library Pass password is incorrect[^<]+',
+                    r'This Library Pass has expired[^<]+',
                     r'Enter your ID and password',
                     r'does not belong to the selected login section',
                     r'expired on \w+ \d+, \d{4}',
