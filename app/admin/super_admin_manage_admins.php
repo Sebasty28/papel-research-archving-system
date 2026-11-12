@@ -4,11 +4,15 @@ require_once '../../app/models/AdminManagementService.php';
 require_role(['super_admin']);
 $conn = db();
 $u = current_user();
+require_once ROOT_PATH.'/includes/manage_import.php';
 
 $adminService = new AdminManagementService($conn);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
+  /* Enrolling a list from a spreadsheet. Falls through when the POST is
+     one of this page's own actions. */
+  manage_import_handle('admin', $conn, 'super_admin_manage_admins.php', (int)$u['user_id']);
     $action = $_POST['action'] ?? '';
 
     try {
@@ -271,6 +275,13 @@ $PAGE_SKELETON = 'table';
 
     <div class="mgmt-grid">
 
+        <?php /* The spreadsheet just uploaded, and the passwords of the batch
+                 just created: both span the whole grid, since a table of forty
+                 people does not fit the form's column. Each prints nothing when
+                 there is nothing to show. */ ?>
+        <?php manage_import_result(); ?>
+        <?php manage_import_panel('admin'); ?>
+
         <!-- ============ Create / edit ============ -->
         <?php /* No heading row, as on My Students: the page title says what
                  this is for, and in edit mode the note at the top of the form
@@ -313,7 +324,7 @@ $PAGE_SKELETON = 'table';
                          ID or a HAP's depending on that answer. -->
                     <div class="mgmt-field">
                         <label for="faculty_id">
-                            <span id="idLabel">Research Coordinator ID</span> <span class="req">*</span>
+                            <span id="idLabel">Faculty ID</span> <span class="req">*</span>
                         </label>
                         <input type="text" name="faculty_id" id="faculty_id"
                                placeholder="e.g. COORDINATOR-01" required>
@@ -349,6 +360,10 @@ $PAGE_SKELETON = 'table';
                 </form>
             </div>
         </section>
+
+        <?php /* Under the form, in the same column: the grid places a third
+                 child at the start of the next row. */ ?>
+        <?php manage_import_card('admin'); ?>
 
         <!-- ============ Roll ============
              Split by level rather than by status, because that is the question
@@ -401,16 +416,18 @@ document.addEventListener('DOMContentLoaded', function () {
     var idLabel = document.getElementById('idLabel');
     var idInput = document.getElementById('faculty_id');
 
-    /* The ID box names whichever position is being filled. */
-    var ID_LABELS = {
-        'Research Coordinator':     ['Research Coordinator ID', 'e.g. COORDINATOR-01'],
-        'Head of Academic Affairs': ['Head of Academic Programs ID', 'e.g. HAP-2026-001'],
-        'Librarian':                ['Librarian ID', 'e.g. LIB-2026-001']
+    /* The box is a Faculty ID on every console now, so the label no longer
+       changes with the position: one staff number, one name for it, whether
+       the person is an adviser, a coordinator or a librarian. Only the example
+       still follows the position, since the three are written differently. */
+    var ID_HINTS = {
+        'Research Coordinator':     'e.g. COORDINATOR-01',
+        'Head of Academic Affairs': 'e.g. HAP-2026-001',
+        'Librarian':                'e.g. LIB-2026-001'
     };
     function relabelId() {
-        var pair = ID_LABELS[positionSelect.value] || ['Staff ID', 'e.g. STF-2026-001'];
-        idLabel.textContent = pair[0];
-        idInput.placeholder = pair[1];
+        idLabel.textContent = 'Faculty ID';
+        idInput.placeholder = ID_HINTS[positionSelect.value] || 'e.g. FAC-2026-001';
     }
     positionSelect.addEventListener('change', relabelId);
 

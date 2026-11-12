@@ -1039,6 +1039,56 @@ apply, so the three consoles and both services (`FacultyManagementService`,
 refuse: every acceptance is a value really on file, every refusal something
 somebody typed in.
 
+### Enrolling a list from a spreadsheet
+
+All three consoles take a CSV or `.xlsx` of **ID, Name, Email** (and **Position**
+for the two staff consoles) beside the form that makes one account at a time.
+`config/account_import.php` reads and checks; `includes/manage_import.php` is
+the screen and the POST handling; the three pages gain four lines each.
+
+- **The rules are not restated.** A row goes through `person_name_problem()`,
+  `student_number_problem()` or `staff_id_problem()`, and
+  `account_email_problem()`, in the order the forms read them, so a file is
+  refused for exactly the reasons typing it would be. `account_import_check_row()`
+  is the one copy, and the create pass runs it **again**: a preview is a moment
+  old, and somebody else may have enrolled the same person in between.
+- **Nothing the browser says is trusted but a list of line numbers.** The parsed
+  rows stay in the session (`$_SESSION['papel_import'][$kind]`) and the create
+  step reads them from there. Three hundred rows of names and emails travelling
+  through the browser and back would all have to be treated as hostile on return.
+- **A position a console may not create is refused**, from the file as from the
+  form: `account_import_kinds()` holds each console's own set, so a spreadsheet
+  naming "Director" on the admins console is rejected in words. Checked against
+  the running site.
+- **Email is off unless asked for.** Creating an account normally sends its
+  password to the person; forty of those cannot be recalled and a trial run is
+  the likeliest first use. The tick box is unticked, and `createFaculty()` and
+  `createAdmin()` take a `$notify` argument for it. The passwords are shown once
+  afterwards, as `password_once.php` does for a single account.
+- **A row that already exists is skipped, never updated**, so re-running a file
+  that half failed is harmless. There is no transaction: forty enrolments are
+  forty independent acts, and one bad row rolling back thirty-nine good ones
+  would be worse than a partial result that names what landed.
+- **The password is a twin, not a shared function.** `account_import_password()`
+  is `includes/password_generator.php`'s rule in PHP, because that one is
+  JavaScript and runs only where somebody is typing. **Change both or neither**;
+  `tests/` does not cover it, the scratch checks do.
+- **No PhpSpreadsheet.** It would add thousands of files to a host that allows
+  about thirty thousand and whose deploy trims `vendor/` to about nine hundred,
+  to read three columns. The `.xlsx` reader is `zip` plus `simplexml`: shared
+  strings, inline strings and plain values of the first sheet. **Cells are sparse
+  in the file** (an empty one is simply absent), so the gaps are filled in by
+  column reference or the columns shift left. The old binary `.xls` is a
+  different format and is refused in words rather than half read.
+- A student's programme, academic year and section are **not** in the file: they
+  belong to the batch, are chosen once on the upload card, and the section is
+  what `student_expiry_date()` counts from, so one file is one section.
+
+**The ID box on the admins console is now "Faculty ID"** rather than changing
+with the position ("Research Coordinator ID", "Head of Academic Programs ID").
+One staff number, one name for it, on all three consoles. Only the placeholder
+example still follows the position.
+
 ### Student account expiry
 
 An account's life comes from the section: `1-x` → 5 years, `2-x` → 4, `3-x` → 3,

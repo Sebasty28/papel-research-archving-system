@@ -607,6 +607,74 @@ html.mgmt-form-folded .mgmt-dock-fold .material-symbols-outlined { transform: ro
     box-shadow: inset 3px 0 0 var(--maroon);
 }
 
+
+/* ---- Import from a file (includes/manage_import.php) ----
+   The upload card sits in the form's column; the preview spans the whole grid,
+   because a table of forty people in a 19rem column is unreadable. It is
+   ordered first so it is the thing you see on coming back from the upload, and
+   under html.mgmt-dock-right, where the form moves to the far side, order has
+   to be stated or the preview follows the panel it belongs to. */
+.import-preview,
+.import-result { grid-column: 1 / -1; order: -1; }
+
+.import-h {
+    display: flex; align-items: center; gap: .4rem;
+    margin: 0 0 .35rem; font-size: .95rem; font-weight: 700; color: var(--maroon);
+}
+.import-h .material-symbols-outlined { font-size: 1.1rem; }
+.import-lead,
+.import-note { margin: 0 0 .7rem; font-size: .8rem; color: var(--grey); line-height: 1.5; }
+.import-form .mgmt-field { margin-bottom: .6rem; }
+.import-go { margin-top: .2rem; }
+
+.import-sum {
+    display: flex; flex-wrap: wrap; gap: .75rem;
+    align-items: flex-start; justify-content: space-between;
+}
+.import-discard { margin: 0; }
+
+.import-warn {
+    display: flex; align-items: flex-start; gap: .4rem;
+    margin: 0 0 .7rem; padding: .5rem .6rem;
+    font-size: .78rem; line-height: 1.5;
+    color: var(--ink); background: var(--cream);
+    border: 1px solid var(--border); border-radius: 6px;
+}
+.import-warn .material-symbols-outlined { font-size: 1rem; color: var(--maroon); flex: none; }
+
+/* A wide table in a column that must not widen the page: the scroll is on this
+   box, never on the body. */
+.import-scroll { overflow-x: auto; max-height: 26rem; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; }
+.import-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+.import-table th,
+.import-table td { padding: .4rem .5rem; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+.import-table thead th {
+    position: sticky; top: 0; z-index: 1;
+    background: var(--cream); color: var(--ink);
+    font-weight: 700; white-space: nowrap;
+}
+.import-table tbody tr:last-child td { border-bottom: 0; }
+.import-table tr.is-bad { background: color-mix(in srgb, var(--maroon) 6%, transparent); }
+.import-tick { width: 2rem; }
+.import-line { color: var(--grey); font-variant-numeric: tabular-nums; }
+.import-pw { font-family: ui-monospace, Consolas, monospace; white-space: nowrap; }
+.import-ok { color: var(--maroon); font-weight: 600; }
+.import-skip { color: var(--grey); }
+.import-why { margin: 0; padding-left: 1rem; }
+.import-why li { margin: 0; }
+
+.import-foot {
+    display: flex; flex-wrap: wrap; gap: .75rem;
+    align-items: center; justify-content: space-between; margin-top: .75rem;
+}
+.import-notify { display: flex; align-items: flex-start; gap: .45rem; font-size: .8rem; cursor: pointer; }
+.import-notify input { margin-top: .2rem; }
+.import-notify small { display: block; color: var(--grey); font-size: .72rem; line-height: 1.45; }
+
+@media (max-width: 720px) {
+    .import-foot { align-items: stretch; }
+    .import-scroll { max-height: 20rem; }
+}
 </style>
 
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">

@@ -71,7 +71,10 @@ class FacultyManagementService {
         return $this->userRepo->updateFacultyDetails($userId, $data, $password);
     }
 
-    public function createFaculty($data, $createdBy) {
+    /* $notify is false for a spreadsheet import, which asks before it emails
+       anybody: forty welcome messages cannot be recalled, and a trial run is
+       the likeliest first use. See config/account_import.php. */
+    public function createFaculty($data, $createdBy, bool $notify = true) {
         /* Derived from the Faculty ID: nobody types a username any more, but the
            column is still unique and still wants a value. */
         $data['username'] = strtolower(preg_replace('/[^A-Za-z0-9_]/', '', (string)$data['faculty_id']));
@@ -116,7 +119,9 @@ class FacultyManagementService {
         $data['created_by'] = $createdBy;
 
         if ($this->userRepo->createUser($data)) {
-            return $this->sendWelcomeEmail($data);
+            return $notify
+                ? $this->sendWelcomeEmail($data)
+                : $data['title'] . ' account created. No email was sent.';
         }
         throw new Exception("Failed to create account in the database.");
     }

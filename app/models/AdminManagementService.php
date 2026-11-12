@@ -25,7 +25,8 @@ class AdminManagementService {
         return $stmt->execute() && $stmt->affected_rows> 0;
     }
 
-    public function createAdmin($data, $createdBy) {
+    /* $notify: see the note on FacultyManagementService::createFaculty(). */
+    public function createAdmin($data, $createdBy, bool $notify = true) {
         /* Derived from the Employee ID, as on the other staff pages. */
         $data['username'] = strtolower(preg_replace('/[^A-Za-z0-9_]/', '', (string)$data['faculty_id']));
         if ($data['username'] === '') { $data['username'] = 'staff' . substr(bin2hex(random_bytes(4)), 0, 6); }
@@ -71,6 +72,7 @@ class AdminManagementService {
         $stmt->bind_param('sssssssissi', $data['username'], $data['email'], $hash, $data['full_name'], $data['faculty_id'], $data['birthdate'], $data['role'], $createdBy, $is_active, $title_val, $data['admin_level']);
         
         if ($stmt->execute()) {
+            if (!$notify) { return $title_val . ' account created. No email was sent.'; }
             $emailBody  = email_para('Dear ' . $data['full_name'] . ',');
             $emailBody .= email_para('An account has been created for you on ' . APP_NAME
                         . ', the research repository of PUP Biñan Campus.');

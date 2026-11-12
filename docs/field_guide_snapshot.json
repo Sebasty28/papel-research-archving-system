@@ -1,5 +1,5 @@
 {
- "built": "2026-11-12 07:44",
+ "built": "2026-11-12 10:27",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -35,7 +35,7 @@
    "lines": 81
   },
   "app/admin/admin_manage_faculty.php": {
-   "lines": 552
+   "lines": 567
   },
   "app/admin/admin_review_dashboard.php": {
    "lines": 139
@@ -44,7 +44,7 @@
    "lines": 368
   },
   "app/admin/super_admin_manage_admins.php": {
-   "lines": 530
+   "lines": 547
   },
   "app/admin/super_admin_review_dashboard.php": {
    "lines": 135
@@ -59,7 +59,7 @@
    "lines": 214
   },
   "app/faculty/faculty_manage_students.php": {
-   "lines": 1212
+   "lines": 1227
   },
   "app/faculty/faculty_review_dashboard.php": {
    "lines": 166
@@ -77,7 +77,7 @@
    "lines": 809
   },
   "app/models/AdminManagementService.php": {
-   "lines": 198
+   "lines": 200
   },
   "app/models/ArchiveRepository.php": {
    "lines": 140
@@ -86,7 +86,7 @@
    "lines": 56
   },
   "app/models/FacultyManagementService.php": {
-   "lines": 152
+   "lines": 157
   },
   "app/models/PaperRepository.php": {
    "lines": 99
@@ -162,6 +162,9 @@
   },
   "archive/view_paper.php": {
    "lines": 1096
+  },
+  "config/account_import.php": {
+   "lines": 597
   },
   "config/config.php": {
    "lines": 265
@@ -241,8 +244,11 @@
   "includes/manage_console.php": {
    "lines": 252
   },
+  "includes/manage_import.php": {
+   "lines": 432
+  },
   "includes/manage_page.php": {
-   "lines": 896
+   "lines": 964
   },
   "includes/manage_save_confirm.php": {
    "lines": 168

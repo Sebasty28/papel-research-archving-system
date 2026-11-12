@@ -2,8 +2,12 @@
 require_once '../../config/core.php';
 require_once '../../config/gdrive_config.php';
 require_role(['faculty']); $conn=db(); $u=current_user();
+require_once ROOT_PATH.'/includes/manage_import.php';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   csrf_verify();
+  /* Enrolling a list from a spreadsheet. Falls through when the POST is
+     one of this page's own actions. */
+  manage_import_handle('student', $conn, 'faculty_manage_students.php', (int)$u['user_id']);
   
   // Toggle active status
   if (isset($_POST['action']) && $_POST['action'] === 'toggle_active') {
@@ -618,6 +622,13 @@ $PAGE_SKELETON = 'table';
 
     <div class="mgmt-grid">
 
+        <?php /* The spreadsheet just uploaded, and the passwords of the batch
+                 just created: both span the whole grid, since a table of forty
+                 people does not fit the form's column. Each prints nothing when
+                 there is nothing to show. */ ?>
+        <?php manage_import_result(); ?>
+        <?php manage_import_panel('student'); ?>
+
         <!-- ============ Create / edit ============
              One panel does both. Editing fills these same boxes with the chosen
              student and swaps the action underneath, so there is never a second
@@ -722,6 +733,10 @@ $PAGE_SKELETON = 'table';
                 </form>
             </div>
         </section>
+
+        <?php /* Under the form, in the same column: the grid places a third
+                 child at the start of the next row. */ ?>
+        <?php manage_import_card('student'); ?>
 
         <!-- ============ Roll ============
      Two tabs over the same kind of rows, so both get the same filter bar and
