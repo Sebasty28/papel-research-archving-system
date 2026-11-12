@@ -1121,6 +1121,57 @@ at the cost of a build:
   `action_dialogs.php`, so the "Create N accounts?" confirmation opens *over*
   the drawer. Put a new fixed element on that ladder rather than reaching for a
   bigger number.
+- **A drawer at 19000 buried every dropdown inside it.** `select_skin.php` draws
+  each `<select>` as a button whose menu is appended to `<body>`, so the menu's
+  z-index is read against the whole page and not against the drawer. At 1200 the
+  Position list opened, set `aria-expanded="true"`, and painted underneath the
+  drawer: pressing the control appeared to do nothing at all. `.sel-menu` is now
+  **20050**, above the drawer and both dialogs and under the loading veil
+  (20099) and the three full-window layers. A menu is only ever up while its own
+  control is being pressed, so it belongs above anything that can hold a select.
+- **`~`, not `+`, between the drawer's panels.** The preview prints its own
+  `<script>` after the table, so the upload card is not the preview's *adjacent*
+  sibling: `.mgmt-panel + .mgmt-panel` matched nothing and the two panels met at
+  exactly 0px. An element that draws nothing is still a sibling. The upload
+  page's step bar cost a build to the same trap.
+- **`import-open` is two things**, and a bare `.import-open` matched both: the
+  button that opens the drawer, and the class put on `<html>` to hold the page
+  still while it is up. The button's rule is `white-space: nowrap`, so **the
+  whole document inherited nowrap for exactly as long as the drawer was open**,
+  and the heading and the sentence under it ran off its end in one line instead
+  of wrapping. The rule is `button.import-open` now. This is `.modal-backdrop`
+  again from the other side: there a class the site shared with Bootstrap, here
+  a class a component shares with a state. Check what else a class name matches
+  before writing a rule on it, and remember `white-space` inherits.
+- **The preview's rows can be taken out and added**, so nothing may hold a list
+  of them from load: `rowList()` / `tickList()` ask the table as it stands and
+  every handler is delegated to the body. A row added here posts under
+  `new_rows` / `new_cell`, apart from the file's `rows` / `cell`, and a line
+  taken out rides in the hidden `dropped` field, because the screen that reports
+  the result is drawn from the stash and not from the page. The stash still
+  decides which of the *file's* lines exist; adding a row is the same act as
+  typing a person into the create form beside the drawer, and
+  `account_import_check_row()`, the duplicate lookup and the position whitelist
+  all run on it exactly as on any other row. Driven against the running site: an
+  added Librarian was created, an added "Director" was refused in the console's
+  own words and kept for correction, a dropped line was neither created nor
+  shown again, and a blank added row was ignored. Removing a row only reaches
+  the stash when Create is pressed, which is the same moment the typed values do.
+- **Undo and Redo stand beside Discard**, because a correction could be made and
+  never taken back: the only way out of a mistyped cell was Discard, which
+  throws the file away. An entry is one change *with the row state it dragged
+  along* (`rowState()` / `putRowState()` in `manage_import.php`): editing a
+  clashing row's ID unlocks its tick and blanks its password, so undoing that
+  edit has to lock it again, or the preview claims a clash was mended by an edit
+  that is no longer on the page. Three things it has to respect: the recorders
+  are registered **before** the re-check handlers, since listeners fire in the
+  order they were added and the re-check is what unlocks the row; a restored
+  `<select>` is given a `change` event, or the skinned button goes on showing
+  the position that was undone; and Ctrl+Z is **left alone inside a text cell**,
+  where the browser's own undo is already the right answer. Typing is coalesced
+  into one entry per cell (750ms idle, or leaving the box), and the ticks are
+  compared against a snapshot so the header tick is one entry without this
+  knowing it ran.
 
 - **The rules are not restated.** A row goes through `person_name_problem()`,
   `student_number_problem()` or `staff_id_problem()`, and

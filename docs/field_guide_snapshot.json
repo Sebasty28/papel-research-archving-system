@@ -1,5 +1,5 @@
 {
- "built": "2026-11-12 15:44",
+ "built": "2026-11-12 16:37",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -245,10 +245,10 @@
    "lines": 252
   },
   "includes/manage_import.php": {
-   "lines": 733
+   "lines": 1193
   },
   "includes/manage_page.php": {
-   "lines": 1067
+   "lines": 1143
   },
   "includes/manage_save_confirm.php": {
    "lines": 168
@@ -305,7 +305,7 @@
    "lines": 93
   },
   "includes/select_skin.php": {
-   "lines": 894
+   "lines": 902
   },
   "includes/shelf_view.php": {
    "lines": 391

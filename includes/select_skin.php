@@ -84,9 +84,17 @@ select.is-skinned {
 .sel-btn[aria-expanded="true"] .sel-chev { transform: rotate(180deg); }
 .sel-btn:disabled { opacity: .55; cursor: not-allowed; background: var(--cream, #FFF5F5); }
 
-/* The list. Fixed, so a panel with overflow:hidden cannot clip it. */
+/* The list. Fixed, so a panel with overflow:hidden cannot clip it.
+   It is appended to <body>, so its z-index is read against the whole page and
+   not against whatever holds the select. At 1200 it opened *underneath* the
+   account import drawer (19001) and under any dialog (20000): the person
+   pressed the control, the menu opened, aria-expanded said so, and nothing
+   appeared on screen. A menu is only ever up while its own control is being
+   pressed, so it belongs above everything that can contain a select; 20050
+   clears the drawer and both dialogs and stays under the three full-window
+   layers (skeleton 2147482000, splash, loading bar). */
 .sel-menu {
-    position: fixed; z-index: 1200;
+    position: fixed; z-index: 20050;
     max-height: 15rem; overflow-y: auto;
     padding: .25rem;
     background: var(--white, #fff);

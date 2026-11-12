@@ -625,7 +625,14 @@ html.mgmt-form-folded .mgmt-dock-fold .material-symbols-outlined { transform: ro
 /* The shared rule puts the search on the heading's baseline; inside the tools
    row it has to stretch with everything else, so that one is turned off. */
 .mgmt-head-row .mgmt-head-tools .mgmt-search { align-self: stretch; }
-.import-open { white-space: nowrap; justify-content: center; }
+/* `button.`, not a bare class. `import-open` is two things: this button, and the
+   class put on <html> to hold the page still while the drawer is up. A bare
+   `.import-open` matched the <html> element as well, so `white-space: nowrap`
+   was inherited by the whole document for exactly as long as the drawer was
+   open: the heading and the sentence under it then ran off the end of the
+   drawer in one line instead of wrapping. Two things sharing a class name is
+   the mistake `.modal-backdrop` cost a build to, in the other direction. */
+button.import-open { white-space: nowrap; justify-content: center; }
 .import-count {
     display: inline-flex; align-items: center; justify-content: center;
     min-width: 1.25rem; height: 1.25rem; padding: 0 .3rem; margin-left: .1rem;
@@ -679,17 +686,26 @@ html.mgmt-form-folded .mgmt-dock-fold .material-symbols-outlined { transform: ro
    expanded section of the upload page. */
 .import-drawer-body { flex: 1 1 auto; overflow-y: auto; padding: 1rem 1.1rem 1.25rem; }
 .import-drawer-body > .mgmt-panel { border: 0; }
-.import-drawer-body > .mgmt-panel + .mgmt-panel { margin-top: .9rem; border-top: 1px solid var(--border); }
+/* `~` and not `+`: the preview prints its own <script> after the table, so the
+   upload card is not the panel's *adjacent* sibling and `+` matched nothing at
+   all. The two panels then met at exactly 0px, with no rule and no margin
+   between the "Email each person their password" line and "Import from a file",
+   which reads as one run-on panel. An element that draws nothing still counts
+   as a sibling; the upload page's step bar cost a build to the same trap. */
+.import-drawer-body > .mgmt-panel ~ .mgmt-panel { margin-top: 1.25rem; border-top: 1px solid var(--border); }
 .import-drawer-body .mgmt-panel-body { padding: 0; }
-.import-drawer-body > .mgmt-panel + .mgmt-panel .mgmt-panel-body { padding-top: .9rem; }
+.import-drawer-body > .mgmt-panel ~ .mgmt-panel .mgmt-panel-body { padding-top: 1.25rem; }
 html.import-open { overflow: hidden; }
 
 /* In a drawer the table has the full height to use, and the page is not
    scrolling behind it, so it is the body that scrolls rather than the box. */
 .import-drawer-body .import-scroll { max-height: none; }
 
+/* Wrapping, because the file's name is in here and it is somebody else's: the
+   icon and the count stay on the first line and a long name takes the next
+   rather than widening the panel. */
 .import-h {
-    display: flex; align-items: center; gap: .4rem;
+    display: flex; align-items: center; flex-wrap: wrap; gap: .4rem;
     margin: 0 0 .35rem; font-size: .95rem; font-weight: 700; color: var(--maroon);
 }
 .import-h .material-symbols-outlined { font-size: 1.1rem; }
@@ -702,7 +718,36 @@ html.import-open { overflow: hidden; }
     display: flex; flex-wrap: wrap; gap: .75rem;
     align-items: flex-start; justify-content: space-between;
 }
+/* A flex item will not shrink below the width of its own content unless it is
+   told it may, so the heading and the sentence under it kept their one-line
+   width and ran off the end of the drawer instead of wrapping. `min-width: 0`
+   is what lets them wrap; the file name is somebody's, so it may be one long
+   word, and `overflow-wrap` breaks that rather than pushing the panel wide. */
+/* The whole line, so Undo, Redo and Discard stay on a row of their own under
+   the sentence rather than being pulled up beside the heading as soon as the
+   text is allowed to wrap. */
+.import-sum > div { min-width: 0; flex: 1 1 100%; }
+.import-sum .import-h,
+.import-sum .import-lead { overflow-wrap: anywhere; }
+/* Undo, Redo and Discard on one line: three ways back from a correction, in
+   order of how much they throw away. The gap before Discard is wider than the
+   one between the pair, so the destructive one is not pressed for the mild one. */
+.import-tools { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin-bottom: .85rem; }
+.import-tools .import-discard { margin: 0 0 0 .5rem; }
 .import-discard { margin: 0; }
+.import-history { display: inline-flex; gap: .4rem; }
+/* No border on these three. They sit over the table as a toolbar does, and
+   three outlined boxes in a row read as three decisions to make rather than as
+   the small corrections they are. The hover fill is what answers the pointer,
+   and :focus-visible keeps its ring: a control with neither border nor focus
+   ring cannot be found from the keyboard at all. */
+.import-tools .btn-sm-outline {
+    border-color: transparent; background: none; padding: .4rem .7rem;
+}
+.import-tools .btn-sm-outline:hover:not([disabled]) { background: var(--cream); }
+.import-history button { display: inline-flex; align-items: center; gap: .25rem; }
+.import-history button .material-symbols-outlined { font-size: 1rem; }
+.import-history button[disabled] { opacity: .45; cursor: not-allowed; }
 
 .import-warn {
     display: flex; align-items: flex-start; gap: .4rem;
@@ -738,7 +783,31 @@ html.import-open { overflow: hidden; }
 .import-table tr.is-taken { background: color-mix(in srgb, var(--ink) 5%, transparent); }
 .import-table tr.is-taken .import-cell { color: var(--grey); }
 .import-table tr.is-taken .import-tick input { cursor: not-allowed; }
-.import-line { color: var(--grey); font-variant-numeric: tabular-nums; }
+/* The spreadsheet's line number was the second column and meant nothing to
+   anybody reading the preview: the file is on screen, and a row can now be
+   taken out or added here, so the number it happened to have is not even
+   stable. Its place is the remove button. The line itself lives on in
+   data-line, which is what the posted field names are keyed by. */
+.import-act { width: 2.2rem; }
+.import-row-del {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 1.6rem; height: 1.6rem; padding: 0;
+    border: 1px solid transparent; border-radius: var(--r-control, 4px);
+    background: none; color: var(--grey); cursor: pointer;
+}
+.import-row-del .material-symbols-outlined { font-size: 1rem; }
+.import-row-del:hover { color: var(--maroon); background: var(--cream); border-color: var(--border); }
+/* A row added here has nothing in it yet, so it says so rather than showing a
+   password worked out from two empty boxes. */
+.import-row.is-new .import-pw { color: var(--grey); font-style: italic; }
+.import-add {
+    display: inline-flex; align-items: center; gap: .3rem; margin-top: .6rem;
+    padding: .35rem .7rem; font-size: .75rem;
+    color: var(--maroon); background: none; border: 1px dashed var(--soft-maroon);
+    border-radius: var(--r-control, 4px); cursor: pointer; font-family: var(--font-body);
+}
+.import-add:hover { background: var(--cream); }
+.import-add .material-symbols-outlined { font-size: 1rem; }
 .import-pw { font-family: ui-monospace, Consolas, monospace; white-space: nowrap; }
 .import-pw-pending { font-family: inherit; color: var(--grey); font-style: italic; }
 
@@ -747,7 +816,7 @@ html.import-open { overflow: hidden; }
    table of forty boxed inputs reads as a form to fill in rather than a list to
    check, which is the opposite of what this screen is for. */
 .import-cell {
-    width: 100%; min-width: 7rem;
+    width: 100%; min-width: 6rem;
     padding: .2rem .3rem; margin: -.2rem -.3rem;
     font-family: inherit; font-size: inherit; color: inherit;
     background: transparent; border: 1px solid transparent;
@@ -758,21 +827,28 @@ html.import-open { overflow: hidden; }
     outline: none; background: var(--white);
     border-color: var(--maroon); box-shadow: 0 0 0 2px color-mix(in srgb, var(--maroon) 18%, transparent);
 }
-select.import-cell { min-width: 9rem; cursor: pointer; }
+select.import-cell { min-width: 8rem; cursor: pointer; }
 .import-table.is-editable td { vertical-align: middle; }
 .import-table.is-editable .import-status { vertical-align: top; }
 .import-ok { color: var(--maroon); font-weight: 600; }
 .import-skip { color: var(--grey); }
 .import-why { margin: 0; padding-left: 1rem; }
 .import-why li { margin: 0; }
+/* Room for a sentence. The whole document used to inherit `white-space: nowrap`
+   from the class the drawer puts on <html> (see button.import-open above), so
+   every reason sat on one line and this column was as wide as the longest of
+   them. With the text wrapping properly it was squeezed to 79px instead, and a
+   row with one thing wrong stood three times the height of its neighbours. */
+.import-status { min-width: 11rem; }
 
 .import-foot {
-    display: flex; flex-wrap: wrap; gap: .75rem;
-    align-items: center; justify-content: space-between; margin-top: .75rem;
+    display: flex; flex-wrap: wrap; gap: 1rem;
+    align-items: center; justify-content: space-between;
+    margin-top: 1rem; padding-bottom: .25rem;
 }
 .import-notify { display: flex; align-items: flex-start; gap: .45rem; font-size: .8rem; cursor: pointer; }
 .import-notify input { margin-top: .2rem; }
-.import-notify small { display: block; color: var(--grey); font-size: .72rem; line-height: 1.45; }
+.import-notify small { display: block; margin-top: .15rem; color: var(--grey); font-size: .72rem; line-height: 1.45; }
 
 @media (max-width: 720px) {
     .import-foot { align-items: stretch; }

@@ -126,14 +126,30 @@ function manage_import_handle(string $kind, mysqli $conn, string $self, int $cre
        account_import_create(). Nothing from the page is believed about whether
        a row is fit to create; only about what it now says.
 
-       The stash is still the list of lines, so a line the file never had cannot
-       be invented by adding one to the post. */
+       The stash decides which of the file's lines exist, so one the file never
+       had cannot be slipped in under `cell`. Rows *added* on the preview are a
+       separate matter and arrive under their own names (`new_rows`,
+       `new_cell`): adding one is the same act as typing a person into the
+       create form beside this drawer, which whoever is on this page may already
+       do. What guards it is unchanged, and is what guards every other row:
+       account_import_check_row() and the duplicate lookup run again below, and
+       the position must be one this console creates. */
     $wanted = array_flip(array_map('intval', (array)($_POST['rows'] ?? [])));
     $cells  = (array)($_POST['cell'] ?? []);
+
+    /* Lines taken out of the preview. They are dropped from the stash too, or
+       the screen that reports the result, which is drawn from the stash and not
+       from the page, would show them again. */
+    $dropped = [];
+    foreach (explode(',', (string)($_POST['dropped'] ?? '')) as $gone) {
+        $gone = trim($gone);
+        if ($gone !== '') { $dropped[(int)$gone] = true; }
+    }
 
     $rows = [];
     foreach ($stash['rows'] as $row) {
         $line = $row['line'] ?? -1;
+        if (isset($dropped[$line])) { continue; }
         if (!isset($wanted[$line])) { continue; }
         $edit = (array)($cells[$line] ?? []);
         $row['id']       = trim((string)($edit['id']    ?? $row['id']));
@@ -142,6 +158,33 @@ function manage_import_handle(string $kind, mysqli $conn, string $self, int $cre
         $row['position'] = $kind === 'student' ? '' : trim((string)($edit['position'] ?? $row['position']));
         $rows[] = $row;
     }
+
+    /* The rows added on the preview. Their keys are positions in the post and
+       nothing else, so they are given line numbers after the file's only if
+       they have to be shown again. */
+    $added = [];
+    $newWanted = array_flip(array_map('strval', (array)($_POST['new_rows'] ?? [])));
+    foreach ((array)($_POST['new_cell'] ?? []) as $key => $edit) {
+        if (!isset($newWanted[(string)$key])) { continue; }
+        if (count($rows) + count($added) >= ACCOUNT_IMPORT_MAX_ROWS) { break; }
+        $edit = (array)$edit;
+        $added[] = [
+            'line'     => null,
+            'added'    => true,
+            'id'       => trim((string)($edit['id'] ?? '')),
+            'name'     => normalize_person_name((string)($edit['name'] ?? '')),
+            'email'    => strtolower(trim((string)($edit['email'] ?? ''))),
+            'position' => $kind === 'student' ? '' : trim((string)($edit['position'] ?? '')),
+            'password' => '',
+            'problems' => [],
+            'exists'   => '',
+        ];
+    }
+    /* A row added and left entirely blank is somebody who pressed Add and
+       changed their mind: ignored, exactly as a blank row in a file is. */
+    $added = array_values(array_filter($added, static fn($r) => $r['id'] !== '' || $r['name'] !== '' || $r['email'] !== ''));
+    $rows = array_merge($rows, $added);
+
     if (!$rows) {
         flash('error', 'No rows were ticked, so nothing was created.');
         $back();
@@ -159,12 +202,27 @@ function manage_import_handle(string $kind, mysqli $conn, string $self, int $cre
             if (!empty($line['ok'])) { $done[$line['id']] = true; }
         }
         $keep = [];
+        $lastLine = 0;
         foreach ($stash['rows'] as $row) {
             if (!empty($row['over'])) { continue; }
+            if (isset($dropped[$row['line'] ?? -1])) { continue; }   // taken out on the preview
             foreach ($rows as $edited) {
                 if (($edited['line'] ?? null) === ($row['line'] ?? null)) { $row = $edited; break; }
             }
             if (isset($done[$row['id']])) { continue; }      // created, nothing left to do
+            $row['problems'] = account_import_check_row($row, $kind);
+            $row['exists']   = account_import_existing($conn, $kind, $row['id'], $row['email']);
+            $row['password'] = $row['problems'] ? '' : account_import_password($row['name'], $row['id']);
+            $keep[] = $row;
+            $lastLine = max($lastLine, (int)($row['line'] ?? 0));
+        }
+        /* An added row that did not go through is kept like any other, so it can
+           be corrected and tried again. It is given a line number after the
+           file's own only now, because until this moment it had no place in the
+           file and nothing should have pretended otherwise. */
+        foreach ($added as $row) {
+            if (isset($done[$row['id']])) { continue; }
+            $row['line']     = ++$lastLine;
             $row['problems'] = account_import_check_row($row, $kind);
             $row['exists']   = account_import_existing($conn, $kind, $row['id'], $row['email']);
             $row['password'] = $row['problems'] ? '' : account_import_password($row['name'], $row['id']);
@@ -290,22 +348,44 @@ function manage_import_preview(string $kind): void {
                 <div>
                     <h3 class="import-h">
                         <span class="material-symbols-outlined" aria-hidden="true">fact_check</span>
-                        <?= count($rows) ?> row<?= count($rows) === 1 ? '' : 's' ?> in
+                        <?php /* The counts are written by script as rows are mended, taken
+                                 out or added, so what is said here cannot drift from the
+                                 table under it. These are the opening figures. */ ?>
+                        <span id="importRowCount"><?= count($rows) ?> row<?= count($rows) === 1 ? '' : 's' ?></span> in
                         <?= e($stash['file'] !== '' ? $stash['file'] : 'the file') ?>
                     </h3>
                     <p class="import-lead">
-                        <strong><?= $nReady ?></strong> ready to create<?php
+                        <span id="importTally"><strong><?= $nReady ?></strong> ready to create<?php
                         $bad = count($rows) - $nReady;
-                        if ($bad) { echo ', <strong>' . $bad . '</strong> needing attention'; } ?>.
+                        if ($bad) { echo ', <strong>' . $bad . '</strong> needing attention'; } ?>.</span>
                         Every box below can be corrected here: fix a row and it is checked again as
                         you type, with no need to mend the spreadsheet and upload it afresh.
                     </p>
                 </div>
-                <form method="post" class="import-discard">
-                    <?= csrf_field(); ?>
-                    <input type="hidden" name="action" value="import_discard">
-                    <button type="submit" class="btn-sm-outline">Discard</button>
-                </form>
+                <?php /* Undo and Redo stand beside Discard because they are the same
+                         question asked smaller: Discard throws away every correction and
+                         the file with it, Undo takes back the last one. They are
+                         type="button" and sit outside the create form, so neither can
+                         submit anything; everything they do is in the page. */ ?>
+                <div class="import-tools">
+                    <div class="import-history" role="group" aria-label="Your corrections">
+                        <button type="button" class="btn-sm-outline" id="importUndo" disabled
+                                title="Undo the last correction (Ctrl+Z)">
+                            <span class="material-symbols-outlined" aria-hidden="true">undo</span>
+                            <span>Undo</span>
+                        </button>
+                        <button type="button" class="btn-sm-outline" id="importRedo" disabled
+                                title="Redo the correction just undone (Ctrl+Y)">
+                            <span class="material-symbols-outlined" aria-hidden="true">redo</span>
+                            <span>Redo</span>
+                        </button>
+                    </div>
+                    <form method="post" class="import-discard">
+                        <?= csrf_field(); ?>
+                        <input type="hidden" name="action" value="import_discard">
+                        <button type="submit" class="btn-sm-outline">Discard</button>
+                    </form>
+                </div>
             </div>
 
             <?php if ($stash['headerless']): ?>
@@ -335,7 +415,7 @@ function manage_import_preview(string $kind): void {
                                     <input type="checkbox" id="impAll"
                                            aria-label="Tick or untick every row">
                                 </th>
-                                <th>Line</th>
+                                <th class="import-act"><span aria-label="Remove a row"></span></th>
                                 <th><?= e($spec['id_label']) ?></th>
                                 <th>Name</th>
                                 <th>Email</th>
@@ -361,7 +441,18 @@ function manage_import_preview(string $kind): void {
                                            <?= $taken ? 'disabled' : '' ?>
                                            aria-label="Create line <?= $line ?>">
                                 </td>
-                                <td class="import-line"><?= $line ?></td>
+                                <td class="import-act">
+                                    <?php /* Taking a row out is a correction like any other: it
+                                             goes on the Undo stack, and the line is only really
+                                             gone from the import once Create is pressed, which is
+                                             when the typed values stop being the page's and
+                                             become the server's. */ ?>
+                                    <button type="button" class="import-row-del"
+                                            title="Remove this row from the import"
+                                            aria-label="Remove line <?= $line ?> from the import">
+                                        <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                                    </button>
+                                </td>
                                 <td><input type="text" class="import-cell" data-field="id"
                                            name="cell[<?= $line ?>][id]" value="<?= e($r['id']) ?>"
                                            aria-label="<?= e($spec['id_label']) ?>, line <?= $line ?>"></td>
@@ -406,6 +497,58 @@ function manage_import_preview(string $kind): void {
                     </table>
                 </div>
 
+                <?php /* Lines taken out of the preview, so the create pass can drop them
+                         from the stash as well. Without it a removed row would be back on
+                         the screen that reports the result, since that screen is drawn
+                         from the stash and not from the page. */ ?>
+                <input type="hidden" name="dropped" id="importDropped" value="">
+
+                <button type="button" class="import-add" id="importAddRow">
+                    <span class="material-symbols-outlined" aria-hidden="true">add</span>
+                    Add a row
+                </button>
+
+                <?php /* The shape of a row added here. Its fields are named apart from the
+                         file's (new_cell / new_rows), so the two cannot be confused on the
+                         server, and the key is only a position in the post. */ ?>
+                <template id="importNewRow">
+                    <tr class="import-row is-new is-bad" data-new="1">
+                        <td class="import-tick">
+                            <input type="checkbox" name="new_rows[]" value="__K__"
+                                   class="import-row-tick" checked aria-label="Create this added row">
+                        </td>
+                        <td class="import-act">
+                            <button type="button" class="import-row-del"
+                                    title="Remove this row from the import"
+                                    aria-label="Remove this added row">
+                                <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                            </button>
+                        </td>
+                        <td><input type="text" class="import-cell" data-field="id"
+                                   name="new_cell[__K__][id]" value=""
+                                   aria-label="<?= e($spec['id_label']) ?>, added row"></td>
+                        <td><input type="text" class="import-cell" data-field="name"
+                                   name="new_cell[__K__][name]" value=""
+                                   aria-label="Full name, added row"></td>
+                        <td><input type="text" class="import-cell" data-field="email"
+                                   name="new_cell[__K__][email]" value=""
+                                   aria-label="Email, added row"></td>
+                        <?php if ($kind !== 'student'): ?>
+                        <td>
+                            <select class="import-cell" data-field="position"
+                                    name="new_cell[__K__][position]" aria-label="Position, added row">
+                                <option value="" selected>Choose</option>
+                                <?php foreach ($spec['positions'] as $pos): ?>
+                                    <option value="<?= e($pos) ?>"><?= e($pos) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </td>
+                        <?php endif; ?>
+                        <td class="import-pw">on create</td>
+                        <td class="import-status"></td>
+                    </tr>
+                </template>
+
                 <div class="import-foot">
                     <label class="import-notify">
                         <input type="checkbox" name="notify" value="1">
@@ -434,11 +577,24 @@ function manage_import_preview(string $kind): void {
     (function () {
         var all = document.getElementById('impAll');
         if (!all) { return; }
-        var ticks  = Array.prototype.slice.call(document.querySelectorAll('.import-row-tick')),
-            rows   = Array.prototype.slice.call(document.querySelectorAll('.import-row')),
+        var table  = document.querySelector('.import-table'),
+            tbody  = table ? table.querySelector('tbody') : null,
             button = document.getElementById('importCreate'),
             label  = document.getElementById('importCreateLabel'),
-            KIND   = <?= json_encode($kind) ?>;
+            tally  = document.getElementById('importTally'),
+            rowSum = document.getElementById('importRowCount'),
+            dropped = document.getElementById('importDropped'),
+            addBtn = document.getElementById('importAddRow'),
+            tpl    = document.getElementById('importNewRow'),
+            KIND   = <?= json_encode($kind) ?>,
+            MAXROWS = <?= (int)ACCOUNT_IMPORT_MAX_ROWS ?>;
+        if (!tbody) { return; }
+
+        /* Rows are taken out and added here, so nothing may hold a list of them
+           from load. Every reader asks the table as it stands, and the handlers
+           are delegated to the body rather than bound per row. */
+        function rowList()  { return Array.prototype.slice.call(tbody.querySelectorAll('.import-row')); }
+        function tickList() { return Array.prototype.slice.call(tbody.querySelectorAll('.import-row-tick')); }
 
         /* The rules the forms use, published by includes/manage_validate.php.
            Absent only if that file is not on the page, in which case a row is
@@ -495,13 +651,45 @@ function manage_import_preview(string $kind): void {
             } else {
                 var span = document.createElement('span');
                 span.className = 'import-ok';
-                span.textContent = row.dataset.edited ? 'checked on create' : 'ready';
+                span.textContent = (row.dataset.edited || row.dataset.new) ? 'checked on create' : 'ready';
                 cell.textContent = '';
                 cell.appendChild(span);
             }
         }
 
+        /* What the heading and the sentence under it say. Written here rather
+           than left as the server printed them, because a row taken out or
+           added changes both, and a count that contradicts the table under it
+           is worse than no count. */
+        function summarise() {
+            var rows = rowList(), ready = 0;
+            rows.forEach(function (r) {
+                var tick = r.querySelector('.import-row-tick');
+                if (!r.classList.contains('is-bad') && tick && !tick.disabled) { ready++; }
+            });
+            if (rowSum) {
+                rowSum.textContent = rows.length + ' row' + (rows.length === 1 ? '' : 's');
+            }
+            if (tally) {
+                var bad = rows.length - ready;
+                tally.textContent = '';
+                var strong = document.createElement('strong');
+                strong.textContent = String(ready);
+                tally.appendChild(strong);
+                tally.appendChild(document.createTextNode(' ready to create'));
+                if (bad > 0) {
+                    tally.appendChild(document.createTextNode(', '));
+                    var s2 = document.createElement('strong');
+                    s2.textContent = String(bad);
+                    tally.appendChild(s2);
+                    tally.appendChild(document.createTextNode(' needing attention'));
+                }
+                tally.appendChild(document.createTextNode('.'));
+            }
+        }
+
         function count() {
+            var ticks = tickList();
             var on = ticks.filter(function (t) { return t.checked; }).length;
             all.checked = on === ticks.length && on > 0;
             all.indeterminate = on > 0 && on < ticks.length;
@@ -512,46 +700,318 @@ function manage_import_preview(string $kind): void {
                     'Create ' + on + ' account' + (on === 1 ? '' : 's')
                     + '? Their passwords are shown once, on the next screen.');
             }
+            summarise();
         }
 
-        all.addEventListener('change', function () {
-            ticks.forEach(function (t) { t.checked = all.checked; });
-            count();
-        });
-        ticks.forEach(function (t) { t.addEventListener('change', count); });
+        /* ─────────────────────── Undo and Redo ───────────────────────────
+           Every box here is editable, so a correction could be made but never
+           taken back: the only way out of a mistyped cell was Discard, which
+           throws the whole file away. An entry is one change, with the row
+           state it dragged along: editing a clashing row's ID unlocks its tick
+           and blanks its password, and undoing that edit has to lock it again,
+           or the preview would claim a clash was mended by an edit that is no
+           longer on the page.
 
-        rows.forEach(function (row) {
-            row.querySelectorAll('.import-cell').forEach(function (cell) {
-                var redo = function () {
-                    row.dataset.edited = '1';
-                    /* A clash is found on the server and cannot be re-tested here,
-                       so changing the ID or the email is taken as an attempt to mend
-                       it: the row is unlocked and the create pass decides. Changing
-                       the name alone cannot mend a clash, so it does not unlock. */
-                    if (row.dataset.taken && (cell.dataset.field === 'id' || cell.dataset.field === 'email')) {
-                        var tick = row.querySelector('.import-row-tick');
-                        if (tick && tick.disabled) { tick.disabled = false; tick.checked = true; }
-                        row.classList.remove('is-taken');
-                        delete row.dataset.taken;
-                        count();
-                    }
-                    /* The password comes from the name and the ID, so an edited
-                       row's old one is wrong. It is worked out again on the
-                       server at create; saying so beats showing a stale value. */
-                    var pw = row.querySelector('.import-pw');
-                    if (pw && !pw.dataset.wasEdited) {
-                        pw.dataset.wasEdited = '1';
-                        pw.textContent = 'on create';
-                        pw.classList.add('import-pw-pending');
-                    }
-                    paint(row);
-                };
-                cell.addEventListener('input', redo);
-                cell.addEventListener('change', redo);
+           The recorders are delegated to the table body and registered BEFORE
+           the re-check handler at the end of this block, so they see the row as
+           it was: listeners on one element fire in the order they were added,
+           and the re-check is what unlocks the row. */
+        var undoStack = [], redoStack = [], HISTORY_MAX = 100,
+            applying  = false,          // a change we are making ourselves
+            openEdit  = null,           // the cell being typed in, not yet an entry
+            idleTimer = null,
+            newKey    = 0,              // only a position in the post, never an identity
+            undoBtn   = document.getElementById('importUndo'),
+            redoBtn   = document.getElementById('importRedo');
+
+        function rowState(row) {
+            var tick = row.querySelector('.import-row-tick'),
+                pw   = row.querySelector('.import-pw');
+            return {
+                edited:  row.dataset.edited || '',
+                taken:   row.dataset.taken || '',
+                isTaken: row.classList.contains('is-taken'),
+                on:      tick ? tick.checked : false,
+                locked:  tick ? tick.disabled : false,
+                pwText:  pw ? pw.textContent : null,
+                pwPend:  pw ? pw.classList.contains('import-pw-pending') : false,
+                pwEdit:  pw ? (pw.dataset.wasEdited || '') : ''
+            };
+        }
+
+        function putRowState(row, st) {
+            if (!st) { return; }
+            if (st.edited) { row.dataset.edited = st.edited; } else { delete row.dataset.edited; }
+            if (st.taken)  { row.dataset.taken  = st.taken;  } else { delete row.dataset.taken; }
+            row.classList.toggle('is-taken', st.isTaken);
+            var tick = row.querySelector('.import-row-tick');
+            if (tick) { tick.checked = st.on; tick.disabled = st.locked; }
+            var pw = row.querySelector('.import-pw');
+            if (pw && st.pwText !== null) {
+                pw.textContent = st.pwText;
+                pw.classList.toggle('import-pw-pending', st.pwPend);
+                if (st.pwEdit) { pw.dataset.wasEdited = st.pwEdit; } else { delete pw.dataset.wasEdited; }
+            }
+        }
+
+        function historyButtons() {
+            if (undoBtn) { undoBtn.disabled = undoStack.length === 0; }
+            if (redoBtn) { redoBtn.disabled = redoStack.length === 0; }
+        }
+
+        function push(entry) {
+            undoStack.push(entry);
+            if (undoStack.length > HISTORY_MAX) { undoStack.shift(); }
+            redoStack.length = 0;        // a new correction ends the redo path
+            historyButtons();
+        }
+
+        /* The lines taken out, so the create pass drops them from the stash as
+           well: the screen that reports the result is drawn from the stash, not
+           from this page, and a removed row would otherwise be back on it. */
+        function syncDropped() {
+            if (!dropped) { return; }
+            var out = [];
+            rowList().forEach(function (r) { if (r.dataset.line) { out.push(r.dataset.line); } });
+            var gone = (dropped.dataset.all || '').split(',').filter(function (l) {
+                return l !== '' && out.indexOf(l) < 0;
             });
+            dropped.value = gone.join(',');
+        }
+
+        /* `which` is 'before' or 'after': one function for both directions, so
+           undo and redo cannot drift apart. */
+        function run(entry, which) {
+            applying = true;
+            (entry.cells || []).forEach(function (c) {
+                c.el.value = c[which];
+                /* The site draws every select as a button (select_skin.php),
+                   which repaints its label on the select's own change event.
+                   Without this the value would be restored and the button would
+                   go on showing the position that was undone. */
+                if (c.el.tagName === 'SELECT') {
+                    c.el.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            });
+            (entry.ticks || []).forEach(function (t) { t.el.checked = t[which]; });
+            /* A row put back goes where it was, not at the end: the preview is
+               read against the spreadsheet beside it. */
+            (entry.dom || []).forEach(function (d) {
+                var wanted = d[which];                    // 'in' or 'out'
+                if (wanted === 'in' && !d.el.parentNode) {
+                    if (d.next && d.next.parentNode === d.parent) { d.parent.insertBefore(d.el, d.next); }
+                    else { d.parent.appendChild(d.el); }
+                } else if (wanted === 'out' && d.el.parentNode) {
+                    d.next = d.el.nextSibling;
+                    d.el.parentNode.removeChild(d.el);
+                }
+            });
+            (entry.rows  || []).forEach(function (r) { putRowState(r.row, r[which]); });
+            applying = false;
+            (entry.rows || []).forEach(function (r) { paint(r.row); });
+            snapTicks();
+            syncDropped();
+            count();
+            historyButtons();
+        }
+
+        /* A burst of typing in one cell is one correction, not one per letter:
+           the entry stays open until the cell is left, another is edited, or
+           the typing stops for three quarters of a second. */
+        function commitEdit() {
+            if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+            if (!openEdit) { return; }
+            var e = openEdit;
+            openEdit = null;
+            if (e.el.value === e.before) { return; }
+            e.el._prev = e.el.value;
+            push({
+                cells: [{ el: e.el, before: e.before, after: e.el.value }],
+                rows:  [{ row: e.row, before: e.rowBefore, after: rowState(e.row) }]
+            });
+        }
+
+        function noteEdit(cell, row) {
+            if (applying) { return; }
+            if (openEdit && openEdit.el !== cell) { commitEdit(); }
+            if (!openEdit) {
+                openEdit = { el: cell, row: row,
+                             before: cell._prev !== undefined ? cell._prev : cell.value,
+                             rowBefore: rowState(row) };
+            }
+            if (idleTimer) { clearTimeout(idleTimer); }
+            idleTimer = setTimeout(commitEdit, 750);
+        }
+
+        /* The ticks are compared against a mark left on each box rather than a
+           list kept here, so the header tick, which moves every row at once, is
+           one entry, and a row added or taken out cannot put the list out of
+           step with the table. */
+        function snapTicks() { tickList().forEach(function (t) { t._snap = t.checked; }); }
+        function noteTicks() {
+            if (applying) { return; }
+            var moved = [];
+            tickList().forEach(function (t) {
+                if (t._snap !== undefined && t.checked !== t._snap) {
+                    moved.push({ el: t, before: t._snap, after: t.checked });
+                }
+            });
+            snapTicks();
+            if (moved.length) { push({ ticks: moved }); }
+        }
+
+        function undo() {
+            commitEdit();
+            var entry = undoStack.pop();
+            if (!entry) { return; }
+            run(entry, 'before');
+            (entry.cells || []).forEach(function (c) { c.el._prev = c.before; });
+            redoStack.push(entry);
+            historyButtons();
+        }
+
+        function redoLast() {
+            var entry = redoStack.pop();
+            if (!entry) { return; }
+            run(entry, 'after');
+            (entry.cells || []).forEach(function (c) { c.el._prev = c.after; });
+            undoStack.push(entry);
+            historyButtons();
+        }
+
+        if (undoBtn) { undoBtn.addEventListener('click', undo); }
+        if (redoBtn) { redoBtn.addEventListener('click', redoLast); }
+
+        /* Ctrl+Z and Ctrl+Y, but never inside a text box: the browser's own undo
+           is already the right answer there, and taking it would make a
+           half-typed correction unfixable without losing the whole cell. */
+        document.addEventListener('keydown', function (e) {
+            if (!(e.ctrlKey || e.metaKey)) { return; }
+            var k = e.key.toLowerCase();
+            if (k !== 'z' && k !== 'y') { return; }
+            var el = document.activeElement;
+            if (el && el.tagName === 'INPUT' && el.type === 'text' && el.classList.contains('import-cell')) { return; }
+            if (!document.querySelector('.import-drawer.is-open')) { return; }
+            e.preventDefault();
+            (k === 'y' || e.shiftKey) ? redoLast() : undo();
         });
 
+        /* ───────────────── taking a row out, and adding one ──────────────
+           Both are corrections like any other, so both go on the Undo stack.
+           Nothing is created until Create is pressed, which is the moment the
+           page's typing becomes the server's business; until then a row taken
+           out is only off this screen. */
+        function removeRow(row) {
+            commitEdit();
+            var entry = { dom: [{ el: row, parent: row.parentNode, next: row.nextSibling,
+                                  before: 'in', after: 'out' }] };
+            push(entry);
+            run(entry, 'after');
+        }
+
+        function addRow() {
+            commitEdit();
+            if (!tpl || rowList().length >= MAXROWS) { return; }
+            var html = tpl.innerHTML.split('__K__').join(String(++newKey));
+            var box = document.createElement('tbody');
+            box.innerHTML = html;
+            var row = box.querySelector('tr');
+            if (!row) { return; }
+            /* Out of the box it was parsed in, or it still has a parent and the
+               insert below, which puts back only a row that has none, does
+               nothing: the first press appeared to add no row at all while the
+               entry it pushed worked perfectly from then on. */
+            box.removeChild(row);
+            var entry = { dom: [{ el: row, parent: tbody, next: null,
+                                  before: 'out', after: 'in' }] };
+            push(entry);
+            run(entry, 'after');
+            row.querySelectorAll('.import-cell').forEach(function (c) { c._prev = c.value; });
+            paint(row);
+            count();
+            var first = row.querySelector('.import-cell');
+            if (first) { first.focus(); }
+        }
+
+        if (addBtn) { addBtn.addEventListener('click', addRow); }
+
+        /* ─────────────── one set of delegated handlers ──────────────────
+           Registered in this order on the table body: record first, re-check
+           second, because the re-check is what unlocks a clashing row and the
+           recorder has to see the row as it was. */
+        tbody.addEventListener('input', function (e) {
+            var cell = e.target.closest ? e.target.closest('.import-cell') : null;
+            if (cell) { noteEdit(cell, cell.closest('.import-row')); }
+        });
+        tbody.addEventListener('change', function (e) {
+            var cell = e.target.closest ? e.target.closest('.import-cell') : null;
+            if (cell) { noteEdit(cell, cell.closest('.import-row')); commitEdit(); return; }
+            if (e.target.classList && e.target.classList.contains('import-row-tick')) {
+                count(); noteTicks();
+            }
+        });
+        tbody.addEventListener('focusout', function (e) {
+            if (e.target.closest && e.target.closest('.import-cell')) { commitEdit(); }
+        });
+        tbody.addEventListener('click', function (e) {
+            var del = e.target.closest ? e.target.closest('.import-row-del') : null;
+            if (!del) { return; }
+            e.preventDefault();
+            var row = del.closest('.import-row');
+            if (row) { removeRow(row); }
+        });
+
+        all.addEventListener('change', function () {
+            tickList().forEach(function (t) { if (!t.disabled) { t.checked = all.checked; } });
+            count();
+            noteTicks();
+        });
+
+        /* The re-check, after the recorders above. */
+        tbody.addEventListener('input', recheckFrom);
+        tbody.addEventListener('change', recheckFrom);
+
+        function recheckFrom(e) {
+            if (applying) { return; }
+            var cell = e.target.closest ? e.target.closest('.import-cell') : null;
+            if (!cell) { return; }
+            var row = cell.closest('.import-row');
+            if (!row) { return; }
+
+            row.dataset.edited = '1';
+            /* A clash is found on the server and cannot be re-tested here,
+               so changing the ID or the email is taken as an attempt to mend
+               it: the row is unlocked and the create pass decides. Changing
+               the name alone cannot mend a clash, so it does not unlock. */
+            if (row.dataset.taken && (cell.dataset.field === 'id' || cell.dataset.field === 'email')) {
+                var tick = row.querySelector('.import-row-tick');
+                if (tick && tick.disabled) { tick.disabled = false; tick.checked = true; }
+                row.classList.remove('is-taken');
+                delete row.dataset.taken;
+            }
+            /* The password comes from the name and the ID, so an edited
+               row's old one is wrong. It is worked out again on the
+               server at create; saying so beats showing a stale value. */
+            var pw = row.querySelector('.import-pw');
+            if (pw && !pw.dataset.wasEdited && !row.dataset.new) {
+                pw.dataset.wasEdited = '1';
+                pw.textContent = 'on create';
+                pw.classList.add('import-pw-pending');
+            }
+            paint(row);
+            count();
+        }
+
+        rowList().forEach(function (row) {
+            row.querySelectorAll('.import-cell').forEach(function (c) { c._prev = c.value; });
+        });
+        if (dropped) {
+            dropped.dataset.all = rowList().map(function (r) { return r.dataset.line || ''; })
+                                           .filter(function (l) { return l !== ''; }).join(',');
+        }
+        snapTicks();
         count();
+        historyButtons();
     })();
     </script>
     <?php
