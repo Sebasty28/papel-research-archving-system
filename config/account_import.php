@@ -296,6 +296,220 @@ function account_import_col_index(string $letters): int {
     return max(0, $n - 1);
 }
 
+/* ──────────────────────── the name columns ──────────────────────────── */
+
+/**
+ * What a heading says about a name, or null if it says nothing about one.
+ *
+ * A roll is exported from the registrar, from a Google Form, or from whatever
+ * the adviser before kept, so the name arrives under a dozen headings and in
+ * two orders. The BSIT 4-1 roll this was written from has "SURNAME, FIRST
+ * NAME" in one column and "MIDDLE NAME" in the next.
+ *
+ * Rather than list every spelling, the heading is read for the three words a
+ * name is made of, in the order it gives them:
+ *
+ *     Surname, First Name Middle Name    ->  last, first, middle   one column
+ *     Last Name, First Name Middle Name  ->  last, first, middle   one column
+ *     First Name Middle Name Surname     ->  first, middle, last   one column
+ *     First Name Middle Name Last Name   ->  first, middle, last   one column
+ *     Surname, First Name                ->  last, first          one column
+ *     Last Name                          ->  last                 its own
+ *     Middle Name                        ->  middle               its own
+ *
+ * One word means a column holding that part alone, and they are put together
+ * again in account_import_name_from(). Two or more mean one column holding the
+ * whole name, written in the order the heading gives, which is the only thing
+ * that tells "Abiera Vincent" from "Vincent Abiera" when nobody typed a comma.
+ *
+ * @return array{field:string,parts:array<int,string>}|null
+ */
+function account_import_name_header(string $key): ?array {
+    /* "M.I." arrives here as "mi", the punctuation already stripped. It is
+       only ever a middle initial on a roll, but it is two letters, so it is
+       matched whole and never as part of a longer heading. */
+    if ($key === 'mi') { return ['field' => 'middle', 'parts' => ['middle']]; }
+
+    /* Longest first within each group: "middle name" must win over "middle",
+       which is there for a column headed with the one word. */
+    $pat = '/(surnames?|last ?names?|family ?names?)'
+         . '|(first ?names?|given ?names?|fore ?names?)'
+         . '|(middle ?names?|middle ?initials?|middle)/';
+    if (!preg_match_all($pat, $key, $m, PREG_SET_ORDER)) { return null; }
+
+    $parts = [];
+    foreach ($m as $hit) {
+        $part = ($hit[1] ?? '') !== '' ? 'last'
+              : ((($hit[2] ?? '') !== '') ? 'first' : 'middle');
+        if (!in_array($part, $parts, true)) { $parts[] = $part; }
+    }
+    return ['field' => count($parts) === 1 ? $parts[0] : 'name', 'parts' => $parts];
+}
+
+/**
+ * Generational suffixes and the particles a surname carries along.
+ *
+ * account_import_password() keeps lists of its own a few screens up, and they
+ * are deliberately not shared: that function is the twin of the JavaScript in
+ * includes/password_generator.php and has to go on agreeing with it word for
+ * word. A particle added here for a roll must not quietly change what
+ * password a name generates.
+ */
+function account_import_is_suffix(string $word): bool {
+    return (bool)preg_match('/^(jr|sr|ii|iii|iv|vi|vii)\.?$/i', trim($word));
+}
+
+function account_import_is_particle(string $word): bool {
+    return in_array(mb_strtolower(trim($word)), [
+        'dela', 'delos', 'delas', 'de', 'del', 'dos', 'das', 'da', 'di',
+        'la', 'las', 'los', 'san', 'santa', 'sta', 'sto', 'van', 'von', 'bin',
+    ], true);
+}
+
+/**
+ * ["Abiera", "Vincent Gadiane"] out of "ABIERA, VINCENT GADIANE".
+ *
+ * @return array{0:string,1:string} the surname, then everything else.
+ */
+function account_import_split_surname_first(string $whole): array {
+    $bits = array_values(array_filter(array_map('trim', explode(',', $whole)),
+        static fn($p) => $p !== ''));
+
+    /* "Reyes, Rayver S., Jr." - the suffix was written last and belongs to
+       the surname, the same shape person_name_surname_first() knows. */
+    if (count($bits) >= 3 && account_import_is_suffix($bits[2])) {
+        return [$bits[0] . ' ' . $bits[2], $bits[1]];
+    }
+    if (count($bits) >= 2) {
+        return [$bits[0], implode(' ', array_slice($bits, 1))];
+    }
+
+    /* No comma, and the heading is all there is to go on: the surname is the
+       first word, with any particle that belongs to it ("DELA CRUZ JUAN").
+       The walk stops two short of the end so a name that is nothing but
+       particles still leaves something for the given name. */
+    $w = preg_split('/\s+/u', $bits[0] ?? '', -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    if (count($w) < 2) { return [implode(' ', $w), '']; }
+    $i = 0;
+    while ($i < count($w) - 2 && account_import_is_particle($w[$i])) { $i++; }
+    return [implode(' ', array_slice($w, 0, $i + 1)), implode(' ', array_slice($w, $i + 1))];
+}
+
+/**
+ * ["Vincent Gadiane", "Abiera"] out of "VINCENT GADIANE ABIERA".
+ *
+ * @return array{0:string,1:string} everything else, then the surname.
+ */
+function account_import_split_given_first(string $whole): array {
+    /* A file disagreeing with its own heading is commoner than it sounds, and
+       a comma means surname first in any roll, so the typing wins over the
+       heading. The one shape that is not that is the suffix written last. */
+    if (strpos($whole, ',') !== false) {
+        $bits = array_map('trim', explode(',', $whole));
+        if (count($bits) === 2 && account_import_is_suffix($bits[1])) {
+            $whole = $bits[0] . ' ' . $bits[1];
+        } else {
+            [$surname, $given] = account_import_split_surname_first($whole);
+            return [$given, $surname];
+        }
+    }
+
+    $w = preg_split('/\s+/u', $whole, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    if (count($w) < 2) { return ['', implode(' ', $w)]; }
+
+    /* "Jr." and "III" belong to the surname and are not it, so they are set
+       aside before the last word is read and put back after. */
+    $tail = [];
+    while (count($w) > 1 && account_import_is_suffix((string)end($w))) {
+        array_unshift($tail, array_pop($w));
+    }
+    $end = count($w) - 1;
+    while ($end > 1 && account_import_is_particle($w[$end - 1])) { $end--; }
+
+    return [implode(' ', array_slice($w, 0, $end)),
+            implode(' ', array_merge(array_slice($w, $end), $tail))];
+}
+
+/**
+ * One name, however many columns it was spread over.
+ *
+ * The preview has one Name box per person, because that is what the account
+ * has: there is one full_name column and the create form asks for it in one
+ * field. So a roll with First Name, Middle Name and Last Name beside each
+ * other is put together here, in the order a name is written, and what the
+ * person sees in the preview is what will be stored.
+ *
+ * The result is handed to normalize_person_name() by the caller, which is what
+ * re-cases A ROLL TYPED IN CAPITALS and turns round anything still holding a
+ * comma.
+ */
+function account_import_name_from(array $cells, array $map): string {
+    $val = static function (?int $col) use ($cells): string {
+        if ($col === null) { return ''; }
+        return trim(preg_replace('/\s+/u', ' ', (string)($cells[$col] ?? '')));
+    };
+    $join = static function (array $pieces): string {
+        return trim(implode(' ', array_filter($pieces, static fn($p) => $p !== '')));
+    };
+
+    $first  = $val($map['first']  ?? null);
+    $middle = $val($map['middle'] ?? null);
+    $last   = $val($map['last']   ?? null);
+
+    /* Three columns of their own: this is the whole of it. */
+    if (!isset($map['name'])) { return $join([$first, $middle, $last]); }
+
+    $whole = $val($map['name']);
+    if ($whole === '') { return $join([$first, $middle, $last]); }
+
+    $parts   = (array)($map['name_parts'] ?? []);
+    $hasLast = in_array('last', $parts, true);
+    $hasMid  = in_array('middle', $parts, true);
+    $lastFirst = ($parts !== [] && ($parts[0] ?? '') === 'last');
+
+    if ($parts === []) {
+        /* The heading said only "Name", so the order is whatever was typed.
+           With nothing to fold in there is nothing to work out either: the
+           column is the name, and a comma in it is normalize_person_name()'s
+           business. */
+        if ($middle === '' && $last === '') { return $whole; }
+        $hasLast   = ($last === '');
+        $lastFirst = $hasLast && strpos($whole, ',') !== false;
+    }
+
+    if (!$hasLast) {
+        /* The column holds the given name, and perhaps the middle with it;
+           the surname has a column of its own. */
+        $given = $whole;
+        $surname = $last;
+    } elseif ($lastFirst) {
+        [$surname, $given] = account_import_split_surname_first($whole);
+    } else {
+        [$given, $surname] = account_import_split_given_first($whole);
+    }
+
+    return $join([$given, $hasMid ? '' : $middle, $surname]);
+}
+
+/**
+ * The headings the name was read from, when it took more than one column.
+ *
+ * Empty when it took one, since there is then nothing to announce. The
+ * preview says this above the table: a Name box holding three columns' worth
+ * is a change to what was uploaded, and a change nobody is told about reads as
+ * the file having been misread.
+ */
+function account_import_name_columns(array $sheet, array $map, int $headerAt): array {
+    if ($headerAt < 0) { return []; }
+    $cols = [];
+    foreach (['name', 'first', 'middle', 'last'] as $field) {
+        if (!isset($map[$field])) { continue; }
+        $head = trim((string)($sheet[$headerAt][$map[$field]] ?? ''));
+        if ($head !== '') { $cols[] = $head; }
+    }
+    return count($cols) > 1 ? $cols : [];
+}
+
 /* ─────────────────────── making sense of the rows ───────────────────── */
 
 /**
@@ -304,6 +518,13 @@ function account_import_col_index(string $letters): int {
  * Returns [map, headerRowIndex] where map is field => column index, or
  * [positional, -1] when the first row is data rather than headings. People
  * export these from a dozen places, so the names are matched loosely.
+ *
+ * The name is not one field but four: 'name' for a column holding the whole
+ * of it, and 'first', 'middle' and 'last' for a roll that keeps them apart.
+ * Whichever turn up, account_import_name_from() makes one name of them.
+ * 'name_parts' rides in the same array and is **not a column**: it is what the
+ * heading said that column holds, in order, which is the only way to tell
+ * "Abiera Vincent" from "Vincent Abiera" when nobody typed a comma.
  */
 function account_import_map(array $rows, string $kind): array {
     $want = [
@@ -321,13 +542,29 @@ function account_import_map(array $rows, string $kind): array {
             $key = strtolower(preg_replace('/[^a-z0-9 ]/i', '', (string)$cell));
             $key = trim(preg_replace('/\s+/', ' ', $key));
             if ($key === '') { continue; }
+
+            /* Read for the parts of a name first. "Last Name" would match
+               nothing in $want, and "Surname, First Name" is a whole name in
+               an order no list of spellings could keep up with. */
+            $nm = account_import_name_header($key);
+            if ($nm !== null) {
+                if (!isset($map[$nm['field']])) {
+                    $map[$nm['field']] = $col;
+                    if ($nm['field'] === 'name') { $map['name_parts'] = $nm['parts']; }
+                }
+                continue;
+            }
+
             foreach ($want as $field => $names) {
                 if (!isset($map[$field]) && in_array($key, $names, true)) { $map[$field] = $col; }
             }
         }
         /* Two of the three is enough to call it a heading row. One could be a
-           person actually called "Name". */
-        if (count(array_intersect_key($map, ['id' => 1, 'name' => 1, 'email' => 1])) >= 2) {
+           person actually called "Name". A roll that keeps the parts of a name
+           apart has no Name column at all, so First or Last answers for it. */
+        $has = $map;
+        if (!isset($has['name']) && (isset($has['first']) || isset($has['last']))) { $has['name'] = true; }
+        if (count(array_intersect_key($has, ['id' => 1, 'name' => 1, 'email' => 1])) >= 2) {
             return [$map, $i];
         }
     }
@@ -403,7 +640,10 @@ function account_import_rows(array $sheet, string $kind, array $defaults, mysqli
            with fa0001bn2026 would otherwise read as two people. A student
            number is left exactly as the registrar writes it. */
         $id    = $kind === 'student' ? $get('id') : staff_id_clean($get('id'));
-        $name  = normalize_person_name($get('name'));
+        /* One Name box per person, whether the file kept the name in one
+           column or in three: the account has one full_name and the preview
+           shows what will be stored. */
+        $name  = normalize_person_name(account_import_name_from($cells, $map));
         $email = strtolower($get('email'));
         $pos   = $kind === 'student' ? '' : ($get('position') ?: (string)($defaults['position'] ?? ''));
         /* A spreadsheet typed up before a position was renamed names the old
@@ -454,6 +694,7 @@ function account_import_rows(array $sheet, string $kind, array $defaults, mysqli
     return [
         'rows'       => $out,
         'headerless' => $headerAt === -1,
+        'name_from'  => account_import_name_columns($sheet, $map, $headerAt),
         'kind'       => $kind,
     ];
 }

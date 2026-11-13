@@ -152,8 +152,57 @@ function start_session_once(): void {
           . ' minutes with nothing happening. Please sign in again.';
       }
     }
-    $_SESSION['seen'] = time();
+    /* **A request that only asks how long is left must not itself be the thing
+       that keeps the session alive.** `seen` is written on every request, so a
+       page polling for the time remaining would push the deadline forward each
+       time it looked at it, and a browser left open would never idle out at
+       all. `app/session_status.php` defines PAPEL_SESSION_PEEK before requiring
+       this file, which makes its request invisible to the clock: the idle wipe
+       above still runs, so a peek still reports an ended session, it simply
+       does not count as activity. The same flag as PAPEL_PASSWORD_GATE and
+       PAPEL_PAPER_PREVIEW, for the same reason: a page that has to be let out
+       of one rule says so before the rule is read. */
+    if (!defined('PAPEL_SESSION_PEEK')) {
+      $_SESSION['seen'] = time();
+    }
   }
+}
+
+/**
+ * How much of the idle window is left, as the server sees it.
+ *
+ * One answer for the two things that ask: `app/session_status.php`, which the
+ * page polls, and `includes/session_timer.php`, which is drawn with it so the
+ * first second on screen is already right and needs no fetch.
+ *
+ * `now` is the server's clock and every figure is worked out from it, never
+ * from the device's: a laptop ten minutes fast would otherwise announce an
+ * expiry that has not happened. The same rule the manuscript countdown keeps.
+ *
+ * `signed_in` is false for a visitor who was never signed in as well as for one
+ * whose session has just been wiped above, and the caller tells them apart by
+ * whether it asked while holding a session.
+ */
+function session_idle_state(): array {
+  start_session_once();
+  $u    = $_SESSION['user'] ?? null;
+  $now  = time();
+  $seen = (int)($_SESSION['seen'] ?? $now);
+  $tab  = 'student';
+  if (!empty($_SESSION['guest_login'])) {
+    $tab = 'guest';
+  } elseif ($u && ($u['user_role'] ?? '') !== 'student') {
+    $tab = 'faculty';
+  }
+  return [
+    'ok'        => true,
+    'signed_in' => (bool)($u || !empty($_SESSION['guest_login'])),
+    'now'       => $now,
+    'seen'      => $seen,
+    'expires'   => $seen + SESSION_IDLE_SECONDS,
+    'window'    => SESSION_IDLE_SECONDS,
+    'login'     => login_url($tab),
+  ];
 }
 
 function db(): mysqli {
@@ -765,6 +814,111 @@ function login_user(array $u): void {
     $_SESSION['user'] = $u;
     $_SESSION['just_logged_in'] = true;
 }
+
+/* ---------------------------------------------------------------------------
+   The first sign-in, and the password gate that follows it.
+
+   An account is created by somebody else: a Subject Adviser enrols a student,
+   the Coordinator an adviser, and the password is generated for them and
+   emailed (includes/password_generator.php). Until they choose one of their
+   own, the password that opens their account has been written down, sent over
+   mail and seen by whoever created it. So the first time they sign in they are
+   sent to pages/change_password.php and the rest of the site is closed to them
+   until they have set one.
+
+   **The test is the first sign-in, not "has never changed it".** The owner
+   chose that on 13 November 2026: it catches every new account and nobody who
+   is already using the site. It follows that the gate lives in the session and
+   not in a column - last_login is stamped as they come in, so by the time any
+   page runs the database can no longer tell - and that closing the tab is a way
+   past it. That is the price of not interrupting accounts already in use; if
+   that is ever to change, the rule to ask for instead is "the password in force
+   was set by somebody else", which `password_changes` already answers (no row,
+   or a latest row whose changed_by is not the user).
+   --------------------------------------------------------------------------- */
+
+/**
+ * Stamp a sign-in and say whether it was the account's first.
+ *
+ * Both sign-in surfaces call it (app/auth/login.php and archive/login.php, the
+ * page a Library Pass email links to, which signs real accounts in as well), so
+ * the stamp and the question are one piece of code and cannot drift apart.
+ */
+function login_mark_sign_in(int $userId): bool {
+    if ($userId <= 0) { return false; }
+    $conn  = db();
+    $first = false;
+    /* Asked rather than taken from the row the sign-in already read: that
+       SELECT carries its column list twice over, once for a database with
+       secondary_position and once without, and a bind list that does not match
+       its SELECT fails at run time and not at lint. One more query, once per
+       sign-in, is the cheaper mistake to avoid. */
+    if ($stmt = $conn->prepare("SELECT last_login FROM users WHERE user_id = ?")) {
+        $stmt->bind_param('i', $userId);
+        $stmt->execute();
+        $stmt->bind_result($last);
+        if ($stmt->fetch()) { $first = ($last === null || $last === ''); }
+        $stmt->close();
+    }
+    $up = $conn->prepare("UPDATE users SET last_login = NOW() WHERE user_id = ?");
+    $up->bind_param('i', $userId);
+    $up->execute();
+    $up->close();
+    return $first;
+}
+
+/** Hold this session at the gate. Called after login_user(), which regenerates
+ *  the session id; the data carries over either way, but the order is the one
+ *  that reads correctly. */
+function password_gate_open(): void {
+    start_session_once();
+    $_SESSION['force_password'] = true;
+}
+function password_gate_clear(): void {
+    start_session_once();
+    unset($_SESSION['force_password']);
+}
+/** Is this session held at the gate? A guest pass has no users row and no
+ *  password of its own to change, so it is never held. */
+function password_gate_held(): bool {
+    start_session_once();
+    return !empty($_SESSION['force_password'])
+        && !empty($_SESSION['user'])
+        && empty($_SESSION['guest_login']);
+}
+function password_gate_url(): string {
+    return BASE_URL . '/pages/change_password.php';
+}
+
+/**
+ * Close every page but the gate's own.
+ *
+ * Called from require_login() and require_role(), which between them guard
+ * every page a signed-in person can open; the public repository and the help
+ * pages are readable signed out and so are left alone, and sign-out is not
+ * guarded at all, which is what keeps this from being a trap with no way out.
+ * The gate's page defines PAPEL_PASSWORD_GATE before it asks for a login, or it
+ * would send itself to itself for ever.
+ *
+ * A background request is answered, not redirected, for the reason require_role
+ * answers a signed-out one: a page open in another tab goes on fetching, and
+ * handing those an HTML page with a 302 tells them nothing they can act on.
+ */
+function password_gate(): void {
+    if (!password_gate_held() || defined('PAPEL_PASSWORD_GATE')) { return; }
+
+    /* Sec-Fetch-Mode, not the method: a form posted from a tab that was already
+       open is a navigation and is better sent to the gate than answered with
+       JSON nobody will read. A browser too old to send the header, and curl,
+       both look like a navigation. */
+    if (($_SERVER['HTTP_SEC_FETCH_MODE'] ?? 'navigate') !== 'navigate') {
+        http_response_code(403);
+        header('Content-Type: application/json');
+        exit(json_encode(['error' => 'password_change_required', 'redirect' => password_gate_url()]));
+    }
+    header('Location: ' . password_gate_url());
+    exit;
+}
 /**
  * Is the guest pass behind this session still issued?
  *
@@ -834,10 +988,17 @@ function current_user(): ?array {
    login_redirect() is the one place this destination is named: require_login()
    and require_role() both go through it, so every protected page in the
    system already lands there without needing its own change. */
-function login_redirect(string $tab = 'student'): void {
-  header('Location: '.BASE_URL.'/archive/index.php?login_modal=1&role='.rawurlencode($tab)); exit;
+/* The address itself, so the one place it is named can also be handed to a
+   page: includes/session_timer.php sends an expired session there from a
+   button rather than from a redirect, and a second spelling of this URL would
+   be a second answer to "where does signing in happen". */
+function login_url(string $tab = 'student'): string {
+  return BASE_URL.'/archive/index.php?login_modal=1&role='.rawurlencode($tab);
 }
-function require_login(): void { if (!current_user()) { login_redirect(); } }
+function login_redirect(string $tab = 'student'): void {
+  header('Location: '.login_url($tab)); exit;
+}
+function require_login(): void { if (!current_user()) { login_redirect(); } password_gate(); }
 
 /* A browser signed in as the wrong account used to get a bare "Forbidden":
    a student session opening a pasted Coordinator link, or a guest pass
@@ -856,7 +1017,10 @@ function require_role(array $roles): void {
   /* Every post the account holds, not just the one it was created as: a
      Research Coordinator who is also a Subject Adviser opens both desks. For
      everybody else user_roles() is the one role it always was. */
-  if ($u && array_intersect(user_roles($u), $roles)) { return; }
+  /* The gate first, and only for an account that may open this page at all: a
+     session sent to the sign-in panel below has nothing to change a password
+     on, and one held at the gate must not be told it is the wrong role. */
+  if ($u && array_intersect(user_roles($u), $roles)) { password_gate(); return; }
 
   $tab = in_array('student', $roles, true) ? 'student' : 'faculty';
 
@@ -1597,6 +1761,113 @@ function password_change_record(int $userId, ?int $byUserId = null): void {
     $stmt->bind_param('ii', $userId, $by);
     $stmt->execute();
     $stmt->close();
+}
+
+/**
+ * Who hears that an account's password was changed.
+ *
+ * There is no supervisor column on an account, but there is created_by, and an
+ * account is made by the desk responsible for it. Following that one link gives
+ * the whole chain without naming a single role here:
+ *
+ *     a student's goes to the Subject Adviser who enrolled them
+ *     an adviser's to the Research Coordinator who added them
+ *     a Coordinator's, a Head's and the Librarian's to the Director
+ *     the Director's to nobody, because nobody created that account
+ *
+ * Should somebody later be enrolled from a different desk, the notice follows
+ * the account rather than an assumption written down here.
+ */
+function password_upline(int $userId): ?array {
+    if ($userId <= 0) { return null; }
+    $stmt = db()->prepare(
+        "SELECT c.user_id, c.full_name, c.user_role, c.admin_level
+           FROM users me
+           JOIN users c ON c.user_id = me.created_by
+          WHERE me.user_id = ?
+            AND c.is_active = 1
+            AND c.user_id <> me.user_id     -- an account that made itself tells nobody
+          LIMIT 1");
+    $stmt->bind_param('i', $userId);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc() ?: null;
+    $stmt->close();
+    return $row;
+}
+
+/**
+ * A person changing their own password: the checking, the update, the roll and
+ * the notice, in one place.
+ *
+ * Two pages ask for it - pages/settings.php and pages/change_password.php, the
+ * gate a first sign-in is held at - and a second copy of these rules would be a
+ * second opinion about what a password has to be. The boxes they are typed into
+ * are shared too (includes/password_form.php).
+ *
+ * @return array{ok: bool, message: string}
+ */
+function password_change_apply(array $u, string $current, string $new, string $confirm): array {
+    $userId = (int)($u['user_id'] ?? 0);
+    if ($userId <= 0) { return ['ok' => false, 'message' => 'There is nobody signed in to change.']; }
+
+    $conn = db();
+    $stmt = $conn->prepare("SELECT password FROM users WHERE user_id = ?");
+    $stmt->bind_param('i', $userId);
+    $stmt->execute();
+    $hash = $stmt->get_result()->fetch_assoc()['password'] ?? '';
+    $stmt->close();
+
+    if (!password_verify($current, $hash)) {
+        return ['ok' => false, 'message' => 'Your current password is incorrect.'];
+    }
+    if (strlen($new) < 8) {
+        return ['ok' => false, 'message' => 'Your new password must be at least 8 characters long.'];
+    }
+    if ($new !== $confirm) {
+        return ['ok' => false, 'message' => 'The new passwords you entered do not match.'];
+    }
+    if ($new === $current) {
+        return ['ok' => false, 'message' => 'Your new password must be different from your current one.'];
+    }
+
+    $new_hash = password_hash($new, PASSWORD_DEFAULT);
+    /* This used to clear plain_password alongside the hash, back when the
+       password was also stored in readable form. That column is gone, so naming
+       it here made prepare() fail and every self-service password change return
+       a 500. */
+    $up = $conn->prepare("UPDATE users SET password = ? WHERE user_id = ?");
+    $up->bind_param('si', $new_hash, $userId);
+    $up->execute();
+    $up->close();
+
+    /* The change itself is written down, whether or not there is anybody to
+       notify. A notice is read once and gone; the roll of who has changed
+       theirs, when and how often outlives it, and the Director has nobody above
+       them but still belongs in that list. Their own doing, so the roll names
+       them as the one who did it. */
+    password_change_record($userId, $userId);
+
+    /* The person who created the account is told that it happened, and nothing
+       more. No password, old or new, goes into this message or anywhere near
+       it: the point of the notice is that somebody who should not have changed
+       it can be caught, not that a second person learns the credential. The
+       role is included so the reader knows why it reached them. */
+    $upline = password_upline($userId);
+    if ($upline) {
+        $note = $conn->prepare(
+            "INSERT INTO notifications (user_id, paper_id, notification_type, message)
+             VALUES (?, NULL, 'security', ?)");
+        $msg = trim((string)($u['full_name'] ?? 'Someone'))
+             . ' (' . account_position($u) . ') changed their account password on '
+             . date('j M Y \a\t g:i A') . '.';
+        $note->bind_param('is', $upline['user_id'], $msg);
+        $note->execute();
+        $note->close();
+    }
+
+    return ['ok' => true, 'message' => $upline
+        ? 'Your password has been updated. ' . $upline['full_name'] . ' has been notified.'
+        : 'Your password has been updated.'];
 }
 
 /**

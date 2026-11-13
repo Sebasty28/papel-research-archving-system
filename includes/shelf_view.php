@@ -291,17 +291,29 @@ html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list .shelf-book {
 html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list [data-tall="1"].shelf-book { height: calc(var(--bh) - 9px); }
 html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list [data-tall="2"].shelf-book { height: calc(var(--bh) - 17px); }
 
-a.shelf-book:hover, a.shelf-book:focus-visible { color: var(--cover-foil); }
-html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list a.shelf-book:hover,
-html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list a.shelf-book:focus-visible {
+/* Reached for: the book is drawn off the shelf and turned towards the reader.
+   **A book that is not a link answers to the pointer too.** A reader who is
+   not signed in cannot open the paper, so its book is a <span>
+   (shelf_book_html() above) - but it still carries data-bv, which means
+   pressing it takes it off the shelf into the book viewer, where its card
+   offers "Sign in to read". Written a.shelf-book, the lift was the one thing
+   on the shelf that told a signed-out reader there was nothing to press, on a
+   shelf where every book is in fact pressable. So it is any book that is a
+   link or has a viewer; a book with neither (a draft with nothing filed yet)
+   is not pressable and stays put. */
+.shelf-book:is(a, [data-bv]):hover,
+.shelf-book:is(a, [data-bv]):focus-visible { color: var(--cover-foil); }
+html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list .shelf-book:is(a, [data-bv]) { cursor: pointer; }
+html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list .shelf-book:is(a, [data-bv]):hover,
+html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list .shelf-book:is(a, [data-bv]):focus-visible {
     transform: rotateY(-8deg) translateY(-10px) scale(1.04);
     z-index: 3;
 }
-html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list a.shelf-book:active {
+html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list .shelf-book:is(a, [data-bv]):active {
     transform: rotateY(0deg) translateY(-6px) scale(1.02);
 }
-html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list a.shelf-book:focus-visible { outline: none; }
-html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list a.shelf-book:focus-visible .shelf-cover {
+html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list .shelf-book:focus-visible { outline: none; }
+html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list .shelf-book:focus-visible .shelf-cover {
     box-shadow: 0 0 0 2px var(--white), 0 0 0 4px var(--maroon);
 }
 
@@ -367,6 +379,39 @@ html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list .paper-item > 
 }
 html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list .paper-item > .save-paper:focus-visible {
     outline: 2px solid var(--maroon); outline-offset: 1px;
+}
+
+/* Not saved, the mark waits until the book is reached for. A shelf of twenty
+   books carried twenty grey bookmarks hanging in the air above them, which
+   reads as the shelf's own furniture rather than as a control, and competes
+   with the one thing on a shelf that should stand out: a paper that is on it.
+   Saved is a different statement and is always drawn, the ribbon being part
+   of the book and the mark over its end the way it is taken back out.
+
+   Opacity, not display: the slot is a column that ends at the board, so a
+   mark taken out of the flow would let the book step up into its place and
+   back down again under the pointer. Only where there is a pointer to hover
+   with: on a touch screen nothing is ever hovered and the mark would be
+   unreachable, so it stays drawn there. Focus within the slot shows it too,
+   which is how it is still reached by the keyboard. */
+@media (hover: hover) {
+    html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list .paper-item > .save-paper:not(.is-saved) {
+        opacity: 0;
+        transition: opacity .18s ease;
+    }
+    html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list .paper-item:hover > .save-paper:not(.is-saved),
+    html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list .paper-item:focus-within > .save-paper:not(.is-saved) {
+        opacity: 1;
+    }
+}
+
+/* While a book is held up in the viewer it is out of its place on the shelf
+   (`.bv-taken`, includes/book_viewer.php). The mark belongs to the slot and
+   not to the book, so it has to be sent with it: left behind it is a bookmark
+   hanging in the air over the gap, pointing at nothing. The slot itself stays,
+   which is what keeps the gap a gap. */
+html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list .paper-item:has(> .shelf-book.bv-taken) > .save-paper {
+    visibility: hidden;
 }
 
 /* The cover: the front face of the book. Only where it sits in the book is
@@ -494,32 +539,54 @@ html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list .sp-title {
    spine is a face it always had. So the cover, the ribbon and everything the
    viewer copies are the same, and only the turn and the room it takes differ. */
 html[data-view="bookshelf"] .paper-list {
-    /* Taller than Hardbounds' books, in the proportion of a bound A4 paper
-       seen on its spine: at 156px a title had room for about four words, and
-       a long one was broken in the middle. Nothing sees the cover on this
-       shelf, and the viewer sizes the book it flies out from this height. */
-    --bh: 184px;
+    /* **The shelf measures its own books.** A thickness in pixels made a page
+       of twenty stand in the left-hand half of a desktop shelf with the rest
+       of the board bare, which reads as a shelf somebody has taken books off.
+       They are a share of the shelf's own width instead (container query
+       units: the well is the container, so this follows the sidebar being
+       folded, the window, and the view, none of which a number can). The four
+       thicknesses average about 4.75cqw, so a full page of twenty comes to
+       about 95% of the board and the slots below share out the rest.
+
+       The clamp is both ends of the range: a share of a 350px phone would be
+       a sliver with no room for a title, and on a very wide screen a book
+       would grow into a brick. The height is clamped the same way, so a thin
+       phone book is not also a tall one. */
+    container-type: inline-size;
+    --bd: clamp(26px, 4.0cqw, 72px);
+    /* About six times the thickness of a middling book, which is the
+       proportion of a bound A4 paper seen on its spine. */
+    --bh: clamp(190px, 29cqw, 330px);
     display: flex; flex-wrap: wrap;
     align-items: flex-end; align-content: flex-start;
     gap: 0;
 }
-/* Each slot is as wide as its book's spine and one row tall, so the rows of a
-   wrapping flex line fall on the boards painted every --row down the wall. */
+/* Each slot holds one spine and is one row tall, so the rows of a wrapping
+   flex line fall on the boards painted every --row down the wall.
+
+   **It may grow by a few pixels and no more.** The books of one page never
+   add up to exactly the width of the shelf, and the remainder as a space at
+   the right-hand end is the thing this view was wrong about. Shared out as
+   growth it is a hairline between one book and the next, which is how books
+   stand anyway. Capped at 7px, or the last page of a search - seven books on
+   a shelf built for twenty - would be spread across the whole board with
+   gaps you could file a paper in. */
 html[data-view="bookshelf"] .paper-list .paper-item,
 html[data-view="bookshelf"] .paper-list .paper-card {
     --book-h: var(--bh);
-    flex: 0 0 auto;
+    flex: 1 1 var(--bd);
+    min-width: var(--bd);
+    max-width: calc(var(--bd) + 7px);
     display: block;
-    width: calc(var(--bd) + 3px);
     height: var(--row);
     padding: 0;
-    perspective: 900px;
+    perspective: 1100px;
     perspective-origin: 50% 62%;
 }
 /* Four thicknesses and three heights, by the paper's own number. */
-html[data-view="bookshelf"] .paper-list :is(.paper-item, .paper-card):has(> .shelf-book[data-thick="1"]) { --bd: 24px; }
-html[data-view="bookshelf"] .paper-list :is(.paper-item, .paper-card):has(> .shelf-book[data-thick="2"]) { --bd: 28px; }
-html[data-view="bookshelf"] .paper-list :is(.paper-item, .paper-card):has(> .shelf-book[data-thick="3"]) { --bd: 33px; }
+html[data-view="bookshelf"] .paper-list :is(.paper-item, .paper-card):has(> .shelf-book[data-thick="1"]) { --bd: clamp(29px, 4.4cqw, 79px); }
+html[data-view="bookshelf"] .paper-list :is(.paper-item, .paper-card):has(> .shelf-book[data-thick="2"]) { --bd: clamp(33px, 5.0cqw, 90px); }
+html[data-view="bookshelf"] .paper-list :is(.paper-item, .paper-card):has(> .shelf-book[data-thick="3"]) { --bd: clamp(37px, 5.6cqw, 101px); }
 html[data-view="bookshelf"] .paper-list :is(.paper-item, .paper-card):has(> .shelf-book[data-tall="1"]) { --book-h: calc(var(--bh) - 9px); }
 html[data-view="bookshelf"] .paper-list :is(.paper-item, .paper-card):has(> .shelf-book[data-tall="2"]) { --book-h: calc(var(--bh) - 17px); }
 
@@ -534,24 +601,38 @@ html[data-view="bookshelf"] .paper-list .shelf-book {
 /* The back board's shadow is cast on the wall behind a book seen face on;
    edge on, it is only a smear down the side of the spine. */
 html[data-view="bookshelf"] .paper-list .shelf-book::after { box-shadow: none; }
-/* Reached for: drawn a little out of the row and up off the board. */
-html[data-view="bookshelf"] .paper-list a.shelf-book:hover,
-html[data-view="bookshelf"] .paper-list a.shelf-book:focus-visible,
-html[data-view="bookshelf"] .paper-list span.shelf-book:focus-visible {
-    transform: translateZ(calc(var(--bw) / -2 + 18px)) translateY(-8px) rotateY(90deg);
+/* Reached for: drawn a little out of the row and up off the board. A book
+   that is a span rather than a link is pressable too; see the same rule for
+   Hardbounds above. */
+html[data-view="bookshelf"] .paper-list .shelf-book:is(a, [data-bv]):hover,
+html[data-view="bookshelf"] .paper-list .shelf-book:is(a, [data-bv]):focus-visible {
+    transform: translateZ(calc(var(--bw) / -2 + 26px)) translateY(-11px) rotateY(90deg);
     z-index: 3;
 }
-html[data-view="bookshelf"] .paper-list a.shelf-book:active {
-    transform: translateZ(calc(var(--bw) / -2 + 10px)) translateY(-4px) rotateY(90deg);
+html[data-view="bookshelf"] .paper-list .shelf-book:is(a, [data-bv]):active {
+    transform: translateZ(calc(var(--bw) / -2 + 14px)) translateY(-5px) rotateY(90deg);
 }
-html[data-view="bookshelf"] .paper-list a.shelf-book:focus-visible .shelf-cover { box-shadow: none; }
+html[data-view="bookshelf"] .paper-list .shelf-book:focus-visible .shelf-cover { box-shadow: none; }
 html[data-view="bookshelf"] .paper-list .shelf-book:focus-visible .shelf-spine {
     box-shadow: 0 0 0 2px var(--white), 0 0 0 4px var(--maroon);
 }
-/* A thicker spine takes another line, then a larger title. */
-html[data-view="bookshelf"] .paper-list .shelf-book[data-thick="1"] .sp-title { font-size: 7.5px; line-height: 1.1; }
-html[data-view="bookshelf"] .paper-list .shelf-book[data-thick="2"] .sp-title { -webkit-line-clamp: 3; font-size: 7.5px; line-height: 1.1; }
-html[data-view="bookshelf"] .paper-list .shelf-book[data-thick="3"] .sp-title { -webkit-line-clamp: 3; font-size: 8.5px; line-height: 1.08; }
+/* What is stamped on it is a share of the thickness, so it grows with the
+   book rather than staying at the size a 20px spine needed. The floor is what
+   a phone's book carried before; the ceiling is where a spine stops reading as
+   a spine. A thicker one takes another line of the title. */
+html[data-view="bookshelf"] .paper-list .shelf-spine { gap: 7px; padding: 13px 0 11px; }
+html[data-view="bookshelf"] .paper-list .sp-end {
+    font-size: clamp(6px, calc(var(--bd) * .185), 11px);
+    max-height: 32%;
+}
+html[data-view="bookshelf"] .paper-list .sp-title {
+    -webkit-line-clamp: 3;
+    font-size: clamp(7px, calc(var(--bd) * .225), 15px);
+    line-height: 1.08;
+}
+html[data-view="bookshelf"] .paper-list .shelf-book[data-thick="2"] .sp-title,
+html[data-view="bookshelf"] .paper-list .shelf-book[data-thick="3"] .sp-title { -webkit-line-clamp: 4; }
+html[data-view="bookshelf"] .paper-list .sp-bars { height: 4px; }
 
 /* The bookmark: the mark sits above the spine; saved, the ribbon stands up
    out of the top of the book behind the spine, turned to face the reader as
@@ -592,6 +673,7 @@ html[data-view="bookshelf"] .paper-list .paper-item:has(> .save-paper.is-saved:f
 @media (prefers-reduced-motion: reduce) {
     html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list .shelf-book,
     html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list .shelf-ribbon,
+    html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list .paper-item > .save-paper:not(.is-saved),
     html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list .save-paper .material-symbols-outlined { transition: none; }
 }
 </style>

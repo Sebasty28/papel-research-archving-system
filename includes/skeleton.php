@@ -236,10 +236,12 @@ html.papel-skel .papel-skel-layer {
 .skel-side {
     /* The real pane's width, which the student can drag and which is kept on the
        device (papel.pdfDockWidth, read by the script below); the fallback is the
-       same expression the panel itself opens at (--pdf-dock-w in pdf_dock.php).
-       A guessed width would put the join in the wrong place and the swap would
-       still shift sideways, which is the jump being covered. */
-    flex: 0 0 var(--skel-side-w, min(46vw, 46rem));
+       same expression the pane itself opens at ($PDF_DOCK_WIDTH, set where the
+       upload page requires pdf_dock.php, and this shape is that page's alone).
+       **Change one and change the other**: a guessed width puts the join in the
+       wrong place and the swap still shifts sideways, which is the jump being
+       covered. */
+    flex: 0 0 var(--skel-side-w, clamp(280px, 23vw, 23rem));
     display: flex;
     flex-direction: column;
     gap: 0;

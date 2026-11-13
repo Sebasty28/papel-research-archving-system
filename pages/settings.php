@@ -5,103 +5,27 @@ $u = current_user();
 $conn = db();
 $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
 
-/* Who hears about a password being changed.
-
-   There is no supervisor column on an account, but there is created_by, and an
-   account is made by the desk responsible for it. Following that one link gives
-   the whole chain without naming a single role here:
-
-       a student's goes to the Subject Adviser who enrolled them
-       an adviser's to the Research Coordinator who added them
-       a Coordinator's, a Head's and the Librarian's to the Director
-       the Director's to nobody, because nobody created that account
-
-   Should somebody later be enrolled from a different desk, the notice follows
-   the account rather than an assumption written down here. */
-$notify_upline = null;
-$uq = $conn->prepare(
-    "SELECT c.user_id, c.full_name, c.user_role, c.admin_level
-       FROM users me
-       JOIN users c ON c.user_id = me.created_by
-      WHERE me.user_id = ?
-        AND c.is_active = 1
-        AND c.user_id <> me.user_id     -- an account that made itself tells nobody
-      LIMIT 1");
-$uq->bind_param('i', $u['user_id']);
-$uq->execute();
-$notify_upline = $uq->get_result()->fetch_assoc() ?: null;
-$uq->close();
+/* Who hears about a password being changed: the desk that created the account.
+   password_upline() in config/core.php, which the gate page reads too. */
+$notify_upline = password_upline((int)$u['user_id']);
 
 // account_position() in core.php names every role the way the rest of the
 // system does; this page used to carry its own copy of that list.
 $notify_role = $notify_upline ? account_position($notify_upline) : '';
 
 // ---- Change password ----
-// Runs before any output so the redirect below is safe.
+// Runs before any output so the redirect below is safe. The checking, the
+// update, the roll and the notice are password_change_apply() in
+// config/core.php, which pages/change_password.php calls too: one set of
+// rules, so the gate a first sign-in is held at cannot ask for a different
+// password from the one this page would accept.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'change_password') {
     csrf_verify();
-    $current = (string)($_POST['current_password'] ?? '');
-    $new     = (string)($_POST['new_password'] ?? '');
-    $confirm = (string)($_POST['confirm_password'] ?? '');
-
-    $stmt = $conn->prepare("SELECT password FROM users WHERE user_id = ?");
-    $stmt->bind_param('i', $u['user_id']);
-    $stmt->execute();
-    $hash = $stmt->get_result()->fetch_assoc()['password'] ?? '';
-    $stmt->close();
-
-    if (!password_verify($current, $hash)) {
-        flash('error', 'Your current password is incorrect.');
-    } elseif (strlen($new) < 8) {
-        flash('error', 'Your new password must be at least 8 characters long.');
-    } elseif ($new !== $confirm) {
-        flash('error', 'The new passwords you entered do not match.');
-    } elseif ($new === $current) {
-        flash('error', 'Your new password must be different from your current one.');
-    } else {
-        $new_hash = password_hash($new, PASSWORD_DEFAULT);
-        /* This used to clear plain_password alongside the hash, back when the
-           password was also stored in readable form. That column is gone, so
-           naming it here made prepare() fail and every self-service password
-           change return a 500. */
-        $up = $conn->prepare("UPDATE users SET password = ? WHERE user_id = ?");
-        $up->bind_param('si', $new_hash, $u['user_id']);
-        $up->execute();
-        $up->close();
-
-        /* The change itself is written down, whether or not there is anybody
-           to notify. A notice is read once and gone; the roll of who has
-           changed theirs, when and how often outlives it, and the Director has
-           nobody above them but still belongs in that list. */
-        // Their own doing, so the roll names them as the one who did it.
-        password_change_record((int)$u['user_id'], (int)$u['user_id']);
-
-        /* The person who created the account is told that it happened, and
-           nothing more. No password, old or new, goes into this message or
-           anywhere near it: the point of the notice is that somebody who should
-           not have changed it can be caught, not that a second person learns
-           the credential. */
-        if ($notify_upline) {
-            $note = $conn->prepare(
-                "INSERT INTO notifications (user_id, paper_id, notification_type, message)
-                 VALUES (?, NULL, 'security', ?)");
-            /* Who, and when, and nothing else. No password, old or new, goes
-               into this message or anywhere near it: the point is that a change
-               nobody authorised can be spotted, not that a second person learns
-               the credential. The role is included so the reader knows why it
-               reached them. */
-            $msg = trim((string)($u['full_name'] ?? 'Someone'))
-                 . ' (' . account_position($u) . ') changed their account password on '
-                 . date('j M Y \a\t g:i A') . '.';
-            $note->bind_param('is', $notify_upline['user_id'], $msg);
-            $note->execute();
-            $note->close();
-        }
-
-        flash('success', $notify_upline
-            ? 'Your password has been updated. ' . $notify_upline['full_name'] . ' has been notified.'
-            : 'Your password has been updated.');
-    }
+    $done = password_change_apply($u,
+        (string)($_POST['current_password'] ?? ''),
+        (string)($_POST['new_password'] ?? ''),
+        (string)($_POST['confirm_password'] ?? ''));
+    flash($done['ok'] ? 'success' : 'error', $done['message']);
     // Back to the Password section, which is where the result is about.
     header('Location: settings.php#password');
     exit;
@@ -136,6 +60,9 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
 <title>Settings · <?= e(APP_NAME) ?></title>
 <?php require_once ROOT_PATH.'/includes/site_head.php'; ?>
 <?php require_once ROOT_PATH.'/includes/page_theme.php'; ?>
+<?php /* The three password boxes, their eye and their styles: shared with
+         pages/change_password.php, the gate a first sign-in is held at. */ ?>
+<?php require_once ROOT_PATH.'/includes/password_form.php'; ?>
 <?php require_once ROOT_PATH.'/includes/page_sections.php'; ?>
 <style nonce="<?= $nonce ?>">
 /* Profile grid */
@@ -202,46 +129,7 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
 .switch input:checked + .slider { background: var(--maroon); }
 .switch input:checked + .slider::before { transform: translateX(18px); }
 
-/* Password form (fields themselves come from the shared .page-field styles).
-   The width is held on the boxes rather than on the form: a password box as
-   wide as the card looks like a search bar, but the note underneath is a
-   sentence, and at 420px it broke onto a second line with most of the card
-   still empty beside it. It now runs to the card's padding like any text. */
-.pw-form .page-field { max-width: 420px; }
-/* A password you cannot see is a password you cannot check, and these are
-   typed three times over. The eye sits inside the field rather than beside it
-   so the row keeps its shape. */
-.pw-wrap { position: relative; display: block; }
-.pw-wrap input { width: 100%; padding-right: 2.6rem; }
-.pw-eye {
-    position: absolute;
-    top: 50%;
-    right: .5rem;
-    transform: translateY(-50%);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 30px;
-    height: 30px;
-    padding: 0;
-    border: none;
-    border-radius: var(--r-control, 4px);
-    background: none;
-    color: var(--grey);
-    cursor: pointer;
-    transition: color .15s, background .15s;
-}
-.pw-eye:hover { color: var(--maroon); background: var(--cream); }
-.pw-eye:focus-visible { outline: 2px solid var(--maroon); outline-offset: 1px; }
-.pw-eye .material-symbols-outlined { font-size: 19px; }
-.pw-eye[aria-pressed="true"] { color: var(--maroon); }
-
-/* Who will be told, said on the form as well as in the dialog, so it is not a
-   surprise that only appears at the moment of committing. */
-.pw-notify { display: flex; align-items: flex-start; gap: .375rem; margin-top: .75rem; }
-.pw-notify .material-symbols-outlined { font-size: 16px; color: var(--maroon); flex: 0 0 auto; }
-
-.pw-hint { font-size: .75rem; color: var(--grey); margin-top: .3rem; }
+/* The password form's own styles are includes/password_form.php's. */
 
 /* The closing note under a card's content. These were style="margin-top"
    attributes, which the CSP drops, so the gap they asked for never showed. */
@@ -410,37 +298,7 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
             <form class="pw-form" method="post" action="settings.php">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="change_password">
-                <div class="page-field">
-                    <label for="current_password">Current password</label>
-                    <div class="pw-wrap">
-                        <input type="password" name="current_password" id="current_password" required autocomplete="current-password">
-                        <button type="button" class="pw-eye" data-eye="current_password"
-                                aria-label="Show password" title="Show password" aria-pressed="false">
-                            <span class="material-symbols-outlined">visibility</span>
-                        </button>
-                    </div>
-                </div>
-                <div class="page-field">
-                    <label for="new_password">New password</label>
-                    <div class="pw-wrap">
-                        <input type="password" name="new_password" id="new_password" required minlength="8" autocomplete="new-password">
-                        <button type="button" class="pw-eye" data-eye="new_password"
-                                aria-label="Show password" title="Show password" aria-pressed="false">
-                            <span class="material-symbols-outlined">visibility</span>
-                        </button>
-                    </div>
-                    <p class="pw-hint">At least 8 characters.</p>
-                </div>
-                <div class="page-field">
-                    <label for="confirm_password">Confirm new password</label>
-                    <div class="pw-wrap">
-                        <input type="password" name="confirm_password" id="confirm_password" required minlength="8" autocomplete="new-password">
-                        <button type="button" class="pw-eye" data-eye="confirm_password"
-                                aria-label="Show password" title="Show password" aria-pressed="false">
-                            <span class="material-symbols-outlined">visibility</span>
-                        </button>
-                    </div>
-                </div>
+                <?php password_form_fields(); ?>
                 <?php if ($notify_upline): ?>
                     <p class="pw-hint pw-notify">
                         <span class="material-symbols-outlined">info</span>
@@ -573,27 +431,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Appearance: shares the same storage keys as the browse page's
     // Quick Settings panel, so the two stay in sync.
-    /* Show or hide one password field. Each eye names its own field, so the
-       three on this form never get in each other's way, and the state is
-       announced through aria-pressed rather than by the icon alone. */
-    document.querySelectorAll('.pw-eye').forEach(function (eye) {
-        eye.addEventListener('click', function () {
-            var field = document.getElementById(eye.dataset.eye);
-            if (!field) return;
-            var showing = field.type === 'text';
-            field.type = showing ? 'password' : 'text';
-            eye.setAttribute('aria-pressed', showing ? 'false' : 'true');
-            eye.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
-            eye.title = showing ? 'Show password' : 'Hide password';
-            eye.querySelector('.material-symbols-outlined').textContent =
-                showing ? 'visibility' : 'visibility_off';
-            // The caret goes back where it was; toggling the type moves it to
-            // the end otherwise, which is maddening halfway through a password.
-            var at = field.value.length;
-            field.focus();
-            try { field.setSelectionRange(at, at); } catch (err) {}
-        });
-    });
+    // The eye on each password box is includes/password_form.php's, delegated.
 
     /* Cards or rows, the same key and the same attribute the Quick Settings
        panel on every browsing page uses, so setting it in either place is the

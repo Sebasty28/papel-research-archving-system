@@ -295,6 +295,17 @@ by default** (`papel.sideSide` keeps a move to the right).
   and paced by `sizeMarquee()`, the 7ch floor lifted so narrow letters do not widen it), stops under the
   pointer, and takes its place in the loop from the clock, since the strip is redrawn on every drag
   and every tab shown. The tooltip is the whole name.
+- **The side pane opens at `clamp(280px, 23vw, 23rem)`**, which is 353px of a 1534px window
+  against the form's 798px. It is `$PDF_DOCK_WIDTH`, set where this page requires
+  `includes/pdf_dock.php`, and it is **half the paper pages' `min(46vw, 46rem)`** on purpose: the
+  panel here is not a reader but the side pane, and what it holds on a first visit is the
+  contents, a list of short lines. The room belongs to the form, which is the page. The floor is
+  the one the handle already refuses to go below (`MIN` in `pdf_dock.php`), since a default the
+  student cannot drag back to is a default in the wrong place. Signed off by the owner on
+  13 November 2026, from a 1534px window; it was 706px, half of it, before that.
+  **`includes/skeleton.php` repeats the expression** (`.skel-side`), so the shape it covers the
+  page with is the shape the page is about to be: change one and change the other, or the swap
+  shifts sideways, which is the jump the skeleton is there to cover.
 - **The side pane** resizes from one handle on its inner edge (`#sideGrip`; mouse, finger, pen or the
   arrow keys; kept as `papel.pdfDockWidth`, which the PDF opens at), folds into a rail
   (`papel.sideCollapsed`; a button per tab and one to unfold), and moves sides. Closed, Corpus is his
@@ -763,6 +774,7 @@ its own palette is a bug, not a style choice.
 | `review_console.php` | The whole review desk. Four roles share it — configure with `$RC` |
 | `manage_page.php` | The `mgmt-*` stylesheet for the three management consoles |
 | `manage_console.php` | Bootstrap-class re-skin for management pages |
+| `password_form.php` | The three boxes a person changes their own password in, and the eye that shows one (Settings and the first-sign-in gate) |
 | `password_generator.php` | The Generate button on the create forms — builds `RayverReyes-056` from the name and ID already typed |
 | `action_dialogs.php` | Site-styled confirm on any `[data-confirm]` element |
 | `manage_save_confirm.php` | "Save these changes?" with a field-by-field diff |
@@ -939,6 +951,27 @@ Use the CSS custom properties — `--maroon`, `--dark-maroon`, `--soft-maroon`,
 runtime via `data-mode` / `data-color` on `<html>`, so a hardcoded colour breaks
 dark mode silently.
 
+**`--maroon` is the mark, `--maroon-surface` is the fill.** Under Old Night
+`--maroon` is `--accent-light`, which is plain **white** (see the note in the
+Old Night block of `includes/theme.php`): that is what a heading or an active
+icon on a dark page needs, and it is wrong for anything filled. A disc, a bar
+or a radio dot filled from `--maroon` turns white there, so a white glyph on
+it is white on white, and a pale "not chosen" dot beside it is the same
+colour. Both have happened: the Quick Settings colour picker marked the chosen
+palette with a dot no different from the unchosen one, and the book viewer's
+bookmark went white on white. Anything filled takes `--maroon-surface`, which
+does not lift.
+
+**`--page-bg` is the page's own ground, and it is not `--white`.** A dark
+palette paints `<body>` a shade darker than its surfaces: under Old Night the
+page is `#292B2E` and `--white` is `#2D2F32`. So anything meant to stand on the
+page itself and be invisible against it - a plate under a control laid over
+something that scrolls, a fade at the end of a strip - reads `--page-bg` and
+never `--white`, or it shows as a faint rectangle on a dark page and nowhere
+else. It is stated beside each `body` rule in `includes/theme.php`, so the token
+and the thing it describes cannot drift. The repository's View All Keywords
+overlay is the first reader of it.
+
 Chart.js colours must be **read from the tokens at draw time** and rebuilt when
 the theme changes — see `analytics/analytics_dashboard.php` for the pattern.
 
@@ -1008,6 +1041,120 @@ gave a HAP the Coordinator's navbar for months.
 
 Staff, librarians and the Director all sign in on the **faculty** tab. Only
 `selected_role` values `student`, `faculty` and `guest` exist.
+
+### The idle session says so before it goes, and again once it has
+
+A session dies after `SESSION_IDLE_SECONDS` (1800) with nothing asked of the
+server, enforced on the request itself in `start_session_once()` rather than left
+to the collector. Until 14 November 2026 the only word on it was after the fact:
+the next page opened bounced to the sign-in panel carrying a flash. Somebody
+twenty minutes into the upload form found out by pressing Submit, which is the
+worst moment to be told. `includes/session_timer.php` is the warning five minutes
+before (`SESSION_WARN_SECONDS`, 300) and the pop-up once it has gone, and
+`app/session_status.php` is what either one asks.
+
+- **A request that asks how long is left must not be the thing keeping the
+  session alive.** `seen` is stamped on every request, so a page polling for the
+  time remaining would push the deadline forward each time it looked at it and a
+  browser left open would never idle out at all. `app/session_status.php` defines
+  **`PAPEL_SESSION_PEEK`** before requiring `core.php`, and `start_session_once()`
+  then skips the stamp. The idle wipe above it still runs, so a peek still reports
+  a session that has ended; it simply does not count as activity. The same shape
+  as `PAPEL_PASSWORD_GATE` and `PAPEL_PAPER_PREVIEW`.
+- **That endpoint is both verbs.** GET is the peek; POST, with the token, is
+  "Stay signed in" and is an ordinary request, so `core.php`'s own stamp is what
+  extends the session and this file does nothing of its own. `csrf_valid()`, not
+  `csrf_verify()`, which refuses with a redirect that a fetch follows and reads as
+  a page of HTML.
+- **An ended session is answered 200, not 401.** The question was answered and the
+  answer is "nobody is signed in"; the page needs to read it to put its pop-up up.
+  A refusal code would be right about the session and wrong about the request.
+- **The server decides, twice.** The page holds a deadline and counts it down, but
+  a request in any other tab pushes that deadline back for all of them, so the
+  countdown confirms with the server **before** it warns and again **before** it
+  announces an expiry. The same rule the manuscript countdown keeps about a grant
+  it has counted out: reaching zero here is a question, not a verdict. Tabs also
+  gossip through `localStorage` (`papel_session_deadline`), which only ever moves
+  a deadline later, never earlier.
+- The clock is the server's less the device's (`skew`), as everywhere else: a
+  laptop ten minutes fast would announce an expiry that has not happened.
+- **Escape and the backdrop close the warning and neither closes the expiry.** A
+  warning is a question and may be waved away (the clock carries on, and the
+  expiry still arrives); an expired session has no working page behind it, so a
+  dialog that closed would leave somebody pressing buttons that all answer with
+  the sign-in panel. Dismissed, the warning does not come back; the expiry does.
+- The one way out is `login_url()`, which is now where that address is written and
+  what `login_redirect()` returns to: a second spelling of it would be a second
+  answer to "where does signing in happen". The tab follows the account, as it
+  does in `require_role()`: `student`, `faculty` for everybody else, `guest` for a
+  Library Pass.
+- It prints **nothing at all** for a visitor who is not signed in. There is no
+  session to lose, and a sign-in panel offered to somebody already looking at one
+  is noise.
+- **A poll that is not a peek keeps a session alive, and one already exists.**
+  `app/manuscript_grants.php` is asked every 30 seconds by
+  `includes/manuscript_timer.php` and is an ordinary request, so for a student
+  with a live grant or a request waiting the session never idles out and neither
+  pop-up can ever appear. That is older than this and was left alone deliberately,
+  being a change to when real people are signed out; making it a peek is one line
+  (`define('PAPEL_SESSION_PEEK', true);` above its `require`) if that is wanted.
+
+Checked against the running site with the window shortened to 420 seconds and put
+back in a `finally`: the warning at 5:00 counting to 4:58, "Stay signed in"
+extending it and closing the dialog, the session then aged past the window and the
+page noticing by itself, Escape refusing to close the expiry, the endpoint
+answering `signed_in: false`, and nothing printed at all for a signed-out visitor.
+The expiry was shot again at the real 1800 so the sentence reads as it will.
+
+### The first sign-in is held at a password gate
+
+An account is created by somebody else and its first password is generated and
+emailed (`includes/password_generator.php`), so until the person chooses one,
+the password that opens their account has been written down, sent over mail and
+seen by whoever created it. The **first** time they sign in they land on
+`pages/change_password.php` and nothing else on the site opens until they are
+done. Added 13 November 2026.
+
+- **The test is the first sign-in, not "has never changed it".** The owner chose
+  that: it catches every new account and interrupts nobody already using the
+  site. Two things follow. The gate lives in the **session**, not in a column,
+  because `last_login` is stamped as they come in and by the time any page runs
+  the database can no longer tell; and closing the tab is a way past it, which
+  is the price of not interrupting accounts already in use. If that is ever to
+  change, the rule to ask for instead is "the password in force was set by
+  somebody else", which `password_changes` already answers (no row, or a latest
+  row whose `changed_by` is not the user). **No column and no migration either
+  way.**
+- `login_mark_sign_in()` stamps the sign-in and says whether it was the first.
+  **Both sign-in surfaces call it**: `app/auth/login.php` and
+  `archive/login.php`, the page a Library Pass email links to, which signs real
+  accounts in as well and never used to stamp `last_login` at all. It asks for
+  `last_login` in a query of its own rather than adding a column to the sign-in
+  SELECT, which carries its list twice over (with `secondary_position` and
+  without) and whose bind list fails at run time and not at lint.
+- `password_gate()` closes every other page, from `require_login()` and
+  `require_role()`, and in `require_role` **after** the role check, or a session
+  held at the gate would be told it is the wrong role. Sign-out is guarded by
+  neither, which is what keeps this from being a trap with no way out, and the
+  gate's own page defines `PAPEL_PASSWORD_GATE` before asking for a login, or it
+  would send itself to itself for ever. A background request is answered
+  (`403 password_change_required` with the address) and not redirected, for the
+  reason `require_role` answers a signed-out one in JSON.
+- A **guest pass** is never held: it has no `users` row and no password of its
+  own to change.
+- **The page has no navbar.** A gate with links out of it is not a gate, and
+  every one of those links would only bounce back, which reads as a site that
+  has broken rather than as one asking for something. The shell is still shared
+  (`site_head.php`, `page_theme.php`), the letterhead is the real `.brand-mark`
+  on the navbar's own pale ground, and the only way past that is not setting a
+  password is Sign out.
+- **The rules and the boxes are shared with Settings**, not copied:
+  `password_change_apply()` in `config/core.php` does the checking, the update,
+  the roll (`password_changes`) and the notice to whoever created the account
+  (`password_upline()`), and `includes/password_form.php` is the three boxes and
+  the eye. A second copy would be a second opinion about what a password has to
+  be, which is the fault the generated-password twin is written down as a
+  warning about.
 
 ---
 
@@ -1271,6 +1418,39 @@ at the cost of a build:
   compared against a snapshot so the header tick is one entry without this
   knowing it ran.
 
+- **The name may be in one column or in three, and the heading says which.** A
+  roll is exported from the registrar, from a Google Form or from whatever the
+  adviser before kept, so it arrives as `Full Name`, as
+  `Surname, First Name Middle Name`, as `First Name Middle Name Last Name`, or
+  with `First Name`, `Middle Name` and `Last Name` beside each other. An account
+  has one `full_name` and the create form has one box, so
+  `account_import_name_from()` makes one name of whatever turned up and **the
+  preview shows that one Name box**, with a line above the table naming the
+  columns it was built from: a Name holding three columns' worth is a change to
+  what was uploaded, and a change nobody is told about reads as the file having
+  been misread.
+  - `account_import_name_header()` reads a heading for the three words a name is
+    made of, **in the order it gives them**, rather than against a list of
+    spellings no export would keep up with. One word is a column of that part
+    alone; two or more is one column holding the whole name, and the order is
+    the only thing that tells `Abiera Vincent` from `Vincent Abiera` when nobody
+    typed a comma. It runs **before** the `$want` lists, since `Last Name`
+    matches nothing there and `Name` matches nothing here.
+  - **The typing beats the heading.** A comma means surname first in any roll,
+    so `ABIERA, VINCENT` under a `First Name Last Name` heading is read as the
+    comma says. The one shape that is not that is the suffix written last
+    (`Reyes, Rayver S., Jr.`), which `person_name_surname_first()` already knows.
+  - `account_import_split_surname_first()` and `..._given_first()` keep a
+    particle with its surname (`Juan Dela Cruz`) and a suffix after it, so a
+    middle name from its own column goes in the right place:
+    `Juan Santos Dela Cruz`, not `Juan Dela Santos Cruz`. Their particle and
+    suffix lists are **deliberately not shared** with
+    `account_import_password()`, which is the twin of the JavaScript in
+    `includes/password_generator.php`: a particle added for a roll must not
+    quietly change what password a name generates.
+  - What must be read, and what must not be mistaken for a name column, is
+    `tests/_import_names_unit.php` (41 checks, the first block being the BSIT
+    4-1 roll this was written from).
 - **The rules are not restated.** A row goes through `person_name_problem()`,
   `student_number_problem()` or `staff_id_problem()`, and
   `account_email_problem()`, in the order the forms read them, so a file is
@@ -1928,6 +2108,46 @@ of it are two different acts, and this desk only ever needed the first.
     1-20 of 27", then with a `Keywords:` label; the figure belongs at the foot
     of the list where somebody who has read to the end is asking it, and chips
     say what they are by being chips.
+- **It says "View All Keywords", in words alone, and it travels with the
+  strip.** It was the `open_in_full` glyph, which is the one control in that
+  row whose job cannot be guessed: refresh, help, filters and settings are
+  marks a reader knows, and "open in full" beside a strip of keywords could as
+  easily mean the strip. The words answer that by themselves, so the glyph went
+  rather than standing in front of them saying the same thing less clearly, and
+  this is now the one control in the row that is not a mark. There is no
+  `aria-label`, the text being the button's name.
+  - **The strip and the button are one box** (`.kw-row` in `archive/index.php`),
+    because on a phone they share a line and CSS cannot move an element between
+    parents. On a desktop the box takes the middle of the toolbar, the strip
+    takes what the button leaves, and the button ends up exactly where the icon
+    stood: `margin-right: -.75rem` on the box, since the toolbar's own gap is
+    1rem and the tools stand .25rem apart, so without it the button would sit
+    12px further from the tool it has always been the first of. Measured: 115px
+    wide, its right edge at 1105px against the tools' left at 1109px, in a
+    1280px window.
+  - **Under 900px it lies over the strip's right-hand end** (`position:
+    absolute` in `.kw-row`), on the keywords' own line, which they already have
+    to themselves. There is no room beside them at that width, and up beside
+    the heading the words would push the four tools off the corner. The strip
+    goes on gliding underneath.
+  - **An overlay needs the page's own ground, and `--white` is not it.** Under
+    Old Night `<body>` is `#292B2E` while `--white` is `#2D2F32`, so a plate of
+    `--white` read as a faint rectangle hanging in the strip, on the dark page
+    only. `--page-bg` (`includes/theme.php`) is that ground, stated beside each
+    `body` rule so the two cannot drift. A `::before` carries it 2rem further
+    left as a fade, or a chip would appear at the button's edge rather than
+    arrive at it.
+  - **The room at the end of the track is a class, not a rule**
+    (`has-end-room`, set by `fitEnd()`). Without room there the last keyword
+    can never be brought out from under the overlay, which is a control hiding
+    the thing it is about; with it on a repository holding few enough keywords
+    to fit the line, the strip drags a hand's width into nothing and its faded
+    end promises more to come. It is measured from the chips (the last one's
+    right edge against the rail's own width), never from `scrollWidth`, which
+    already counts the room once it is on and would answer yes for ever. Read
+    again on a resize, which is how the desktop layout never gains it, and when
+    the fonts land. Checked against the running site: 30 chips on, 2 chips off
+    with the strip not scrollable at all.
 - **The button beside the strip opens every keyword in a dialog.** The strip
   carries the commonest thirty; the dialog carries all of them (146 as the
   repository stands), as chips that toggle, with a count, the same five-keyword
@@ -2149,12 +2369,52 @@ details card, the pop-up My Library always had; pressing the small book there pi
   it is let go is swallowed, or a turn ending off the book closed the window from the backdrop.
 - **The page behind is held on `<html>`** (`html.bv-locked`), measured before it is held: taking
   the scrollbar away moves the shelf a little, and the book would fly from the wrong place.
+- **A book held up here is not also on the shelf behind it.** `takeDown()` puts `.bv-taken` on
+  the element the page handed over (`.shelf-book`, or `.book` in My Library) for as long as it
+  is in the window, so the flight reads as that book being pulled out rather than as a copy of
+  it appearing, and the board shows the gap it left. `visibility`, not `display`: the slot keeps
+  its width, so the gap stays a gap and the books either side do not slide along to close it.
+  One at a time, since the arrows walk along the shelf and a book stepped past is back in its
+  place by then; taken down after the flight has been measured, and put back on `close`. The
+  shelf sends the slot's bookmark with it (`includes/shelf_view.php`), the mark belonging to the
+  slot rather than to the book: left behind, it hangs in the air over the gap pointing at
+  nothing.
+- **Closing is the flight run backwards** (`goHome()`). The book travels to the gap it left,
+  turning back to the way round it stood (`stood`, the shelf's own angle: -28deg in Hardbounds,
+  90 in Bookshelf), and the window closes when it lands, which is the moment the shelf book is
+  uncovered again, so the two change places without anything being seen to move. It is the same
+  act however it is asked for, so Escape is caught on the dialog's `cancel` event and flown
+  rather than let close at once; a second Escape while it is travelling is let through. While it
+  travels, `.is-leaving` takes the veil, the card, the arrows, the hint and the two marks out of
+  its way, and the page stays held on `<html>` until the real close, or taking the scrollbar back
+  would move the shelf under a book already on its way to it. Two exceptions: there is no flight
+  where there is nothing to fly to (no shelf book, or one the page has since taken away, which My
+  Library does), and **`data-bv-close="now"` closes at once** for a control that acts as soon as
+  the window is gone - "Sign in to read" opens the site's own panel, and a panel opened half a
+  second before a top-layer dialog closes opens underneath it.
 - On the repository a press with a modifier or a middle button is left alone, so "open in a new
   tab" still opens the paper; the handler runs in the capture phase, ahead of the one that loads
   links in the results column. The book a signed-out reader sees is a span made pressable
   (`tabindex`, `role="button"`, Enter and Space), and its card offers "Sign in to read", which
   closes the viewer first or the sign-in panel would open underneath a top-layer dialog. No
   abstract for that reader: the paper's own page, where it is shown, asks for a sign-in.
+  **That book answers to the pointer like any other**: the shelf's hover and active rules are
+  written `.shelf-book:is(a, [data-bv])` and not `a.shelf-book`, or the lift is the one thing on
+  the shelf telling a signed-out reader there is nothing to press, on a shelf where every book
+  is in fact pressable. A book with neither a link nor a viewer is not pressable and stays put.
+  Bookshelf repeats the rule with the same selector, since its own turn must outrank Hardbounds'
+  at equal specificity.
+- **The bookmark is at the top left while the book is held up** (`.bv-save`), opposite the
+  close, so a paper can be saved without setting it down. It is the shared button
+  (`includes/save_paper.php`) in the clothes the close wears, since it stands on the veil and
+  not on a card, and it carries the same `data-save-paper`, so one press answers for every copy
+  of itself and the ribbon follows. `fillSave()` points it at the paper in the window as each
+  one is dressed and unhooks it on close, or an is-saved left on it would stand the ribbon up on
+  whatever book is opened next. Hidden in the card, which has its Save in the actions, and
+  printed at all only where `info.saved` is true or false. **Saved, its disc is filled from
+  `--maroon-surface`**: `--maroon` is `--accent-light`, which is plain white under Old Night, so
+  a disc filled from it under a white glyph is a white mark on a white disc (see
+  "--maroon is the mark, --maroon-surface is the fill" under Styling).
 - **My Library still lets a book unsaved in the card stay on the shelf, faded, until the window
   closes**: the viewer raises `papel:book-viewer-closed`, and `papelBookViewer.isOpenFor(id)` is
   what the page's own save handler asks instead of looking at a dialog of its own.
@@ -2192,6 +2452,33 @@ the bookmark is the mark beside the book; pressing it carries it from one to the
 - Saved, the button's glyph fades and its hit area moves over the ribbon's end, so pressing the
   ribbon takes the paper back out; it is still the focusable control and still reads "Remove
   from My Library". Under the pointer the ribbon's end lifts a little, as if being taken hold of.
+- **Not saved, the mark waits until the book is reached for**: `opacity: 0` until the slot is
+  hovered or something in it has the focus. Twenty grey bookmarks hanging over a shelf of twenty
+  books read as the shelf's own furniture. Opacity and not `display`, or the book would step up
+  into the mark's place and down again under the pointer, and the rule is inside
+  `@media (hover: hover)`, since on a touch screen nothing is ever hovered and the mark would be
+  unreachable. Saved is a statement rather than a control and is always drawn.
+- **Cards and Rows wait the same way** (`includes/save_paper.php`), so a bookmark means one
+  thing in all four views: a mark not saved is `opacity: 0` with `pointer-events: none` until
+  the result is hovered or something in it has the focus, and a saved one is always drawn,
+  being the only thing on a card or a row that says the paper is in the reader's library. The
+  pointer-events matter here and not on the shelf: the mark is absolutely placed over the card
+  and an invisible button would otherwise save a paper with nothing on screen to say so.
+  **On a touch screen it stays drawn**, as on the shelf, and for a sharper reason: a single tap
+  anywhere on a result that is not a link already opens that paper in a window over the list
+  ("The record, opened small", `includes/browse_console_js.php`), so there is no spare tap to
+  reveal a bookmark with, and tap-to-reveal would open the preview over the mark in the same
+  gesture. Checked against the running site in both views: hidden with `elementFromPoint` at
+  its centre answering the card underneath, shown under the pointer and on focus, and drawn at
+  390px with touch emulated on.
+- **It goes up into the book viewer with the book.** The same ribbon is a face of the held-up
+  book (`.bv-ribbon`, includes/book_viewer.php, every figure the shelf's times `--bk-scale`), and
+  it is still there when the book is set down into the details card, that card's book being the
+  same element made smaller. Shown by `.bv:has(.save-paper.is-saved)`, so it answers a press on
+  the viewer's own mark, on the card's Save or on the shelf behind with nothing to keep in step,
+  and a reader with no library has neither button nor ribbon. The card's `.bv-slot` carries the
+  top padding that keeps the end inside the card: with the card's own 1.5rem it was 2px short and
+  the swallowtail crossed into the veil.
 - Checked by pressing it for real, both ways, and reading `paper_favorites` after each press:
   saved, the ribbon at opacity 1 and `translateY(0)` with the glyph gone; unsaved, back above the
   book at opacity 0, and `elementFromPoint` at the ribbon's end answers the button. When driving
@@ -2239,14 +2526,30 @@ out, of different thicknesses and heights, on the boards Hardbounds stands its b
   book's width so the spine lies in the plane of the page at its own size. So the cover, the
   ribbon and everything the viewer copies are the same in both, and only the turn and the room
   differ.
-- The well is a wrapping flex row, each slot as wide as its spine and one `--row` tall, so every
-  line of books falls on a board. Four thicknesses (`data-thick`, 20 to 33px) and the three
-  heights, all by the paper's number.
-- **Taller than Hardbounds' books** (`--bh: 184px` against 156). At 156 a spine held about four
-  words of a title, and a long word was broken in the middle. Nothing sees the cover on this
-  shelf. The viewer's flight therefore measures where it starts by the larger of the book's width
-  and its height over 1.444 (`open()` in `book_viewer.php`): by the width alone it set off with a
-  book shorter than the spine it was pulled from.
+- The well is a wrapping flex row, each slot holding one spine and one `--row` tall, so every
+  line of books falls on a board. Four thicknesses (`data-thick`) and the three heights, all by
+  the paper's number.
+- **The shelf measures its own books.** The thicknesses were pixels (20 to 33px), so a page of
+  twenty stood in the left-hand half of a desktop shelf with the rest of the board bare, which
+  reads as a shelf somebody has taken books off. They are a share of the shelf's own width
+  instead, in container query units (`container-type: inline-size` on the well, `--bd` 4.0 to
+  5.6cqw): the four average about 4.75cqw, so twenty come to about 95% of the board, and that
+  follows the sidebar being folded and the window with no number to keep up to date. A `clamp()`
+  at both ends, because a share of a 350px phone is a sliver with no room for a title.
+- **The last few per cent are shared out, not left at the end.** A slot is `flex: 1 1 var(--bd)`
+  with `max-width: calc(var(--bd) + 7px)`, so the remainder of a line becomes a hairline between
+  one book and the next, which is how books stand anyway. The cap is the point: without it the
+  last page of a search, seven books on a shelf built for twenty, would be spread across the
+  whole board. Measured at 1280px: twenty books fill 100% of the well with about 3px between
+  them, and seven fill 361px of it with the capped 7px.
+- **Taller than Hardbounds' books** (`--bh: clamp(190px, 29cqw, 330px)` against 156), about six
+  times the thickness of a middling book, which is the proportion of a bound A4 paper seen on
+  its spine. At 156 a spine held about four words of a title and a long word was broken in the
+  middle. Nothing sees the cover on this shelf. The viewer's flight therefore measures where it
+  starts by the larger of the book's width and its height over 1.444 (`open()` in
+  `book_viewer.php`): by the width alone it set off with a book shorter than the spine it was
+  pulled from. What is stamped on a spine is a share of `--bd` for the same reason the thickness
+  is a share of the shelf, with the old fixed sizes as the clamp's floor.
 - **What a spine says**: a head, the title and a foot, between pairs of bars, as the viewer's
   spine is stamped. In the repository the head is the programme and the foot the year, both from
   the mark, the year told apart by its shape since either half can be missing. The dashboard has

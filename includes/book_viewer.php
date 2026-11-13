@@ -71,6 +71,34 @@ html.bv-locked { overflow: hidden; }
 .bv-x:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 .bv.is-details .bv-x { display: none; }
 
+/* The bookmark, top left, opposite the close: the one control on the book
+   while it is held up, so a paper can be saved from here without setting it
+   down into the card. It is the shared button (includes/save_paper.php), so
+   one press answers for every copy of itself - the card's own Save, the mark
+   on the shelf behind - and the ribbon follows it. In the clothes the close
+   wears, because it stands on the veil and not on a card; the page's own
+   tokens for a mark are drawn to be read on the page. Hidden with the book
+   when it is set down, the card having a Save of its own, and printed at all
+   only for a reader who has a library. */
+.bv .bv-save {
+    position: absolute; top: .75rem; left: .75rem; z-index: 3;
+    display: inline-flex; padding: .35rem; border: 0; border-radius: 50%;
+    background: rgba(0, 0, 0, .28); color: #fff; cursor: pointer;
+}
+.bv .bv-save:hover { background: rgba(0, 0, 0, .45); color: #fff; }
+.bv .bv-save:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.bv .bv-save .material-symbols-outlined { font-size: 22px; }
+/* --maroon-surface, the fill: --maroon is --accent-light, which under Old
+   Night is plain white, so a disc filled from it under a white glyph is a
+   white mark on a white disc. The same rule as the colour picker's radio in
+   includes/theme.php, and the one that block states for Old Night. */
+.bv .bv-save.is-saved { background: var(--maroon-surface); color: #fff; }
+/* The page's --bad-text is a dark red, meant for a white card; on this veil
+   it cannot be read, so the refusal is said in a pale tint of it and in the
+   tooltip the shared script writes. */
+.bv .bv-save.is-failed { color: #ffd2cc; }
+.bv .bv-save[hidden], .bv.is-details .bv-save { display: none; }
+
 .bv-hint {
     position: absolute; left: 0; right: 0; bottom: 1.25rem; z-index: 2;
     margin: 0; text-align: center; pointer-events: none;
@@ -275,6 +303,55 @@ html.bv-locked { overflow: hidden; }
             color-mix(in srgb, var(--soft-maroon) 30%, #fff) 1.4px 2.3px);
 }
 
+/* ---- The gap it left on the shelf ----
+   A book held up here is not also standing on the shelf behind it. The one
+   that was pressed is hidden for as long as it is in the window, so the
+   flight reads as that book being pulled out rather than as a copy of it
+   appearing: the board shows a gap where it stood, the way a shelf does when
+   somebody has taken a paper off it.
+
+   visibility, not display: the slot keeps its width, so the gap stays a gap
+   and the books on either side do not slide along to close it. The class
+   goes on the element the page handed over (.shelf-book here, .book in My
+   Library), so a page needs no rule of its own; the shelf adds one for the
+   bookmark above the slot, which would otherwise hang over the space. */
+.bv-taken { visibility: hidden; }
+
+/* ---- The bookmark ribbon ----
+   A saved paper carries its ribbon up off the shelf with it: the same one
+   includes/shelf_view.php tucks into the pages, at this book's size (every
+   figure is the shelf's, times --bk-scale). It is a face of the book, in the
+   book's own preserve-3d space at half its thickness, so the boards hide the
+   part that is inside by depth rather than by a picture of depth, it turns
+   with the book, and it goes down into the details card with it, that card's
+   book being this same element made smaller.
+
+   Shown while the window holds a Save button that says saved, which is the
+   class the shared script keeps painted on every copy of itself
+   (includes/save_paper.php). So it answers a press here, in the card, or on
+   the shelf behind, with nothing to keep in step; a reader with no library
+   has no such button and so no ribbon. Out of the book and above it until
+   then, the way the shelf's slides in. */
+.bv-ribbon {
+    position: absolute;
+    right: calc(13px * var(--bk-scale, 1));
+    top: calc(-22px * var(--bk-scale, 1));
+    width: calc(12px * var(--bk-scale, 1));
+    height: calc(74px * var(--bk-scale, 1));
+    clip-path: polygon(0 0, 50% 16%, 100% 0, 100% 100%, 0 100%);
+    background:
+        linear-gradient(90deg, rgba(0, 0, 0, .28), rgba(255, 255, 255, .14) 45%, rgba(0, 0, 0, .22)),
+        var(--maroon-surface);
+    pointer-events: none;
+    opacity: 0;
+    transform: translateZ(0) translateY(calc(-36px * var(--bk-scale, 1)));
+    transition: transform .5s cubic-bezier(.2, .9, .25, 1), opacity .25s ease;
+}
+.bv:has(.save-paper.is-saved) .bv-ribbon {
+    opacity: 1;
+    transform: translateZ(0) translateY(0);
+}
+
 /* ===== The details card =====
    My Library's pop-up, the same layout and the same figures: the book small on
    the left (the slot here is only its place; the book itself is the one held
@@ -296,7 +373,14 @@ html.bv-locked { overflow: hidden; }
     /* After the book has most of the way to go, so the card arrives to meet it. */
     transition: opacity .28s ease .22s, visibility 0s;
 }
-.bv-slot { flex: 0 0 auto; width: calc(150px + 34px); padding: .5rem 0 0 .5rem; }
+/* The top padding is the ribbon's: a saved paper's bookmark stands out of the
+   top of the book, and the book is set down here at half the size it was held
+   up at, so the end needs about 31px of room above the board (22px at the
+   shelf's 108px, times the slot's width over that). With the card's own
+   1.5rem it was 2px short, and the swallowtail crossed the card's top edge
+   into the veil - a sliver whose width changed with the window. The ribbon
+   stands out of the book, not out of the card. Measured, not judged by eye. */
+.bv-slot { flex: 0 0 auto; width: calc(150px + 34px); padding: 1rem 0 0 .5rem; }
 .bv-slot-book { width: 150px; height: 216px; }
 .bv-body { flex: 1 1 auto; min-width: 0; padding-right: 1.5rem; }
 .bv-kicker { margin: 0 0 .375rem; font-size: .6875rem; letter-spacing: .06em; text-transform: uppercase; color: var(--grey); }
@@ -314,6 +398,33 @@ html.bv-locked { overflow: hidden; }
 }
 .bv-close:hover { color: var(--maroon); background: var(--cream); }
 
+/* ===== Putting it back =====
+   Closing is the flight run backwards: the book goes home to the gap it left
+   on the shelf, turning back to the angle it stood at, and only when it has
+   landed does the window close and the shelf book appear again (goHome() and
+   takeDown() in the script below). So everything else in the window has to be
+   out of the way while it travels - the veil, the card, the arrows, the hint
+   and the two marks - or the book flies out from behind furniture that is
+   still sitting there.
+
+   These come after the rules they undo, `.bv.is-details .bv-card` among them,
+   because they are the same weight and the later one wins. */
+.bv.is-leaving { background: transparent; }
+.bv.is-leaving .bv-card {
+    opacity: 0; visibility: hidden;
+    transition: opacity .18s ease, visibility 0s linear .18s;
+}
+.bv.is-leaving .bv-x,
+.bv.is-leaving .bv-save,
+.bv.is-leaving .bv-nav,
+.bv.is-leaving .bv-hint,
+.bv.is-leaving .bv-floor { opacity: 0; }
+/* The colours these already eased stay named: a bare `opacity` here would
+   replace the shared .save-paper transition on the bookmark. */
+.bv-x, .bv-save { transition: opacity .18s ease, background .15s, color .15s; }
+.bv-floor { transition: opacity .18s ease; }
+.bv.is-leaving .bv-book { cursor: default; }
+
 @media (max-width: 700px) {
     .bv-card { flex-direction: column; align-items: center; gap: 1rem; padding: 1.25rem 1rem; }
     .bv-slot-book { width: 120px; height: 173px; }
@@ -327,13 +438,21 @@ html.bv-locked { overflow: hidden; }
     .bv-next { right: .35rem; }
 }
 @media (prefers-reduced-motion: reduce) {
-    .bv[open], .bv-card, .bv.is-details .bv-card, .bv-hint, .bv-mover { animation: none; transition: none; }
+    .bv[open], .bv-card, .bv.is-details .bv-card, .bv-hint, .bv-mover, .bv-ribbon { animation: none; transition: none; }
 }
 </style>
 
 <dialog class="bv" id="bookViewer" aria-labelledby="bvTitle">
     <button type="button" class="bv-x" data-bv-close aria-label="Close">
         <span class="material-symbols-outlined" aria-hidden="true">close</span>
+    </button>
+
+    <?php /* The bookmark. No data-save-paper until a book is in the window:
+             the shared script finds its buttons by that attribute, and an
+             empty one would answer for a paper that is not there. */ ?>
+    <button type="button" class="save-paper bv-save" aria-pressed="false"
+            aria-label="Save to My Library" title="Save to My Library" hidden>
+        <span class="material-symbols-outlined" aria-hidden="true">bookmark</span>
     </button>
 
     <div class="bv-card">
@@ -365,6 +484,10 @@ html.bv-locked { overflow: hidden; }
                 <div class="bv-face bv-edge" aria-hidden="true"></div>
                 <div class="bv-face bv-top" aria-hidden="true"></div>
                 <div class="bv-face bv-bottom" aria-hidden="true"></div>
+                <?php /* Not a .bv-face: that class hides a face turned away,
+                         and a ribbon standing out of the top of a book is
+                         seen from behind it as well as in front. */ ?>
+                <div class="bv-ribbon" aria-hidden="true"></div>
             </div>
         </div>
     </div>
@@ -397,9 +520,12 @@ html.bv-locked { overflow: hidden; }
     var hintW = dlg.querySelector('.bv-hint-words');
     var prevB = dlg.querySelector('.bv-prev');
     var nextB = dlg.querySelector('.bv-next');
+    var saveB = dlg.querySelector('.bv-save');
     /* The shelf the book came off: the page's own books in their order, which
        one this is, and how to say what each one is. */
     var shelf = null;
+    /* The book that is out of its place on that shelf while it is held here. */
+    var taken = null;
 
     var still = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
     var touch = !!(window.matchMedia && window.matchMedia('(hover: none)').matches);
@@ -411,7 +537,11 @@ html.bv-locked { overflow: hidden; }
        on the book (its own perspective, and the turn). */
     var at   = { tx: 0, ty: 0, s: 1, rx: 8, ry: -28 };
     var W    = 300;
-    var mode = 'closed';      // 'inspect' | 'details' | 'moving' | 'closed'
+    var mode = 'closed';      // 'inspect' | 'details' | 'moving' | 'leaving' | 'closed'
+    /* The angle the book stood at on the shelf it came off, so it can be put
+       back the way round it was: Hardbounds holds its books at -28deg and
+       Bookshelf stands them spine out at 90. */
+    var stood = -28;
     var info = null;
     var tweenId = 0, spinId = 0;
     var swallowClick = false;
@@ -451,6 +581,16 @@ html.bv-locked { overflow: hidden; }
     }
 
     function ease(k) { return k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2; }
+
+    /* Out of its place on the shelf, and the one before it back in its own.
+       One at a time, because the arrows walk along the shelf: a book stepped
+       past has been put back by then. */
+    function takeDown(el) {
+        if (taken === el) { return; }
+        if (taken) { taken.classList.remove('bv-taken'); }
+        taken = el || null;
+        if (taken) { taken.classList.add('bv-taken'); }
+    }
 
     function stopSpin() { if (spinId) { cancelAnimationFrame(spinId); spinId = 0; } }
 
@@ -537,7 +677,9 @@ html.bv-locked { overflow: hidden; }
             sign.type = 'button';
             sign.className = 'btn-sm-maroon js-open-modal';
             sign.setAttribute('data-role', 'student');
-            sign.setAttribute('data-bv-close', '');
+            /* "now": no flight home, since the panel this opens would come up
+               under the dialog while the book was still travelling. */
+            sign.setAttribute('data-bv-close', 'now');
             sign.appendChild(icon('login', 'mi-18'));
             sign.appendChild(document.createTextNode(' Sign in to read'));
             acts.appendChild(sign);
@@ -558,6 +700,26 @@ html.bv-locked { overflow: hidden; }
             btn.appendChild(word);
             acts.appendChild(btn);
         }
+    }
+
+    /* The bookmark on the held-up book, pointed at the paper in the window.
+       It is painted here only as it is opened: from then on the shared script
+       owns it like any other copy of itself, since it carries the same
+       data-save-paper (includes/save_paper.php). A reader with no library
+       (info.saved is neither true nor false) has none, and it is unhooked
+       rather than left pointing at the last paper. */
+    function fillSave() {
+        var has = (info.saved === true || info.saved === false);
+        saveB.hidden = !has;
+        if (!has) { saveB.removeAttribute('data-save-paper'); return; }
+        var say = info.saved ? 'Remove from My Library' : 'Save to My Library';
+        saveB.setAttribute('data-save-paper', info.paperId);
+        saveB.classList.toggle('is-saved', !!info.saved);
+        saveB.classList.remove('is-failed');
+        saveB.removeAttribute('aria-busy');
+        saveB.setAttribute('aria-pressed', info.saved ? 'true' : 'false');
+        saveB.setAttribute('aria-label', say);
+        saveB.title = say;
     }
 
     function icon(name, extra) {
@@ -659,6 +821,7 @@ html.bv-locked { overflow: hidden; }
         front.innerHTML = info.face || '';
         fillSpine();
         fillCard();
+        fillSave();
     }
 
     /* ---- Previous and next ----
@@ -677,6 +840,7 @@ html.bv-locked { overflow: hidden; }
         mover.classList.add('is-away');
         tween({ tx: -dir * away, ry: at.ry - dir * 40 }, 220, function () {
             shelf.index = to;
+            takeDown(shelf.items[to]);
             dress(data);
             fillFront();
             fitAll();
@@ -715,6 +879,9 @@ html.bv-locked { overflow: hidden; }
         var from = source
             ? placeOf(source, Math.max(source.offsetWidth || 0, (source.offsetHeight || 0) / 1.444) || null)
             : { tx: 0, ty: 40, s: .4 };
+        /* After it has been measured, and before the first frame: the book in
+           the window is this book, so the shelf shows the gap it left. */
+        takeDown(source);
 
         dlg.classList.remove('is-details');
         dlg.classList.add('is-inspect');
@@ -725,7 +892,7 @@ html.bv-locked { overflow: hidden; }
         fillFront();
         fitAll();
 
-        var stood = (nav && typeof nav.turn === 'number') ? nav.turn : -28;
+        stood = (nav && typeof nav.turn === 'number') ? nav.turn : -28;
         at = { tx: from.tx, ty: from.ty, s: from.s, rx: 0, ry: stood };
         apply();
         mode = 'moving';
@@ -777,7 +944,9 @@ html.bv-locked { overflow: hidden; }
     /* ---- Turning it by hand ---- */
     var drag = null;
     book.addEventListener('pointerdown', function (e) {
-        if (e.button !== 0 || mode === 'moving' || mode === 'closed') { return; }
+        /* Only while it is being looked at or is lying in the card: not while
+           it is flying in, stepping along the shelf or on its way home. */
+        if (e.button !== 0 || (mode !== 'inspect' && mode !== 'details')) { return; }
         stopSpin();
         drag = { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, t: performance.now(), vx: 0, vy: 0, moved: false };
         book.classList.add('is-held');
@@ -821,7 +990,7 @@ html.bv-locked { overflow: hidden; }
     });
 
     book.addEventListener('keydown', function (e) {
-        if (mode === 'moving') { return; }
+        if (mode === 'moving' || mode === 'leaving') { return; }
         if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
             if (mode === 'inspect') { setDown(); } else if (mode === 'details') { pickUp(); }
@@ -838,31 +1007,81 @@ html.bv-locked { overflow: hidden; }
     /* Page Up and Page Down step along the shelf. Not the arrows, which turn
        the book when it has the focus, as they always have. */
     dlg.addEventListener('keydown', function (e) {
+        if (mode === 'leaving') { return; }
         if (e.key === 'PageUp')   { e.preventDefault(); step(-1); }
         if (e.key === 'PageDown') { e.preventDefault(); step(1); }
     });
 
-    /* ---- Putting it away ---- */
+    /* ---- Putting it away ----
+       The flight run backwards: the book goes home to the gap it left on the
+       shelf, turning back to the way round it stood, and the window closes
+       when it lands - so the paper is seen being put back where it was taken
+       from, as it was seen being taken out. The shelf book is uncovered by
+       the close handler below, at the moment the flying one arrives over it.
+
+       Where there is nothing to fly to (no shelf book, or one the page has
+       since taken away, which My Library does) the window simply closes. */
+    function goHome() {
+        if (mode === 'leaving' || mode === 'closed') { return; }
+        var home = (taken && taken.isConnected && taken.getClientRects().length)
+            ? placeOf(taken, Math.max(taken.offsetWidth || 0, (taken.offsetHeight || 0) / 1.444) || null)
+            : null;
+        if (!home) { dlg.close(); return; }
+        mode = 'leaving';
+        drag = null;
+        book.classList.remove('is-held');
+        dlg.classList.add('is-leaving');
+        tween({ tx: home.tx, ty: home.ty, s: home.s, rx: 0, ry: stood }, 460, function () {
+            dlg.close();
+        });
+    }
+
     dlg.addEventListener('click', function (e) {
         if (swallowClick) { e.preventDefault(); e.stopPropagation(); swallowClick = false; return; }
+        if (mode === 'leaving') { return; }
         var stepper = e.target.closest ? e.target.closest('[data-bv-step]') : null;
         if (stepper) { step(parseInt(stepper.getAttribute('data-bv-step'), 10)); return; }
         var closer = e.target.closest ? e.target.closest('[data-bv-close]') : null;
         /* The dialog has no padding and the layer takes no pointer, so a click
            that lands on the dialog itself is a click on the space round the
            book or the card. */
-        if (closer || e.target === dlg) { dlg.close(); }
+        if (!closer && e.target !== dlg) { return; }
+        /* data-bv-close="now" is for a control that does something else as
+           soon as this window is gone: the "Sign in to read" button opens the
+           site's own panel, and a panel opened half a second before a
+           top-layer dialog closes opens underneath it. */
+        if (closer && closer.getAttribute('data-bv-close') === 'now') { dlg.close(); }
+        else { goHome(); }
+    });
+    /* Escape. The dialog's own answer is to close at once; it is the same act
+       as pressing the X, so it takes the same flight. Pressed again while the
+       book is on its way, it is let through and the window goes. */
+    dlg.addEventListener('cancel', function (e) {
+        if (mode === 'leaving') { return; }
+        e.preventDefault();
+        goHome();
     });
     dlg.addEventListener('close', function () {
         stopSpin();
         if (tweenId) { cancelAnimationFrame(tweenId); tweenId = 0; }
         drag = null;
         mode = 'closed';
+        /* Back on the shelf, in the place it was taken from: at this moment
+           the flying book is over that gap, so the two change places without
+           anything being seen to move. */
+        takeDown(null);
+        dlg.classList.remove('is-leaving');
         document.documentElement.classList.remove('bv-locked');
         var id = info ? info.paperId : '';
         info = null;
         shelf = null;
         mover.classList.remove('is-away');
+        /* Unhooked, or a paper saved elsewhere on the page would paint a
+           button nobody can see, and its is-saved would stand the ribbon up
+           on whatever book is opened next. */
+        saveB.hidden = true;
+        saveB.removeAttribute('data-save-paper');
+        saveB.classList.remove('is-saved', 'is-failed');
         /* For a page that has something to tidy once the window is gone: My
            Library takes a book off its shelf that was unsaved while open. */
         document.dispatchEvent(new CustomEvent('papel:book-viewer-closed', { detail: { paperId: id } }));

@@ -102,6 +102,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                  '. Ask your Subject Adviser to renew it.';
       } else {
         login_throttle_clear($username);
+        /* This page signs real accounts in as well as Library Passes, and it
+           never stamped last_login. So it is the same call the other sign-in
+           makes, or a first sign-in through here would be a first sign-in
+           again next time, and the gate would be asked for twice. */
+        $first_sign_in = login_mark_sign_in((int)$row['user_id']);
         login_user([
           'user_id'     => $row['user_id'],
           'username'    => $row['username'],
@@ -110,6 +115,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           'user_role'   => $row['user_role'],
           'admin_level' => (int)($row['admin_level'] ?? 1),
         ]);
+        if ($first_sign_in) {
+          password_gate_open();
+          header('Location: ' . password_gate_url());
+          exit;
+        }
         header('Location: index.php');
         exit;
       }

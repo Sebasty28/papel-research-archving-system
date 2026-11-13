@@ -964,10 +964,24 @@ html[data-view="rows"] .paper-list .paper-pin-mark .pin-word { display: none; }
    Scoped to this page rather than written into includes/browse_console.php,
    which the dashboards and the four review desks also read. */
 .main-col { min-width: 0; }
+/* The strip and the View All Keywords button, which share a line on a phone.
+   This box is what takes the middle of the toolbar; the strip inside it takes
+   whatever the button leaves. The negative margin is not decoration: the
+   toolbar's own gap is 1rem and the tools stand .25rem apart, so without it
+   the button would sit three quarters of an inch further from the tool it has
+   always been the first of, which is a move and not the same position. */
+.kw-row {
+    flex: 1 1 10rem;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: .25rem;
+    margin-right: -.75rem;
+}
 .kw-rail {
     /* The middle of the toolbar: it takes what the count and the tools leave,
        and never pushes either of them out of the row. */
-    flex: 1 1 10rem;
+    flex: 1 1 auto;
     min-width: 0;
     overflow-x: auto;
     overflow-y: hidden;
@@ -988,6 +1002,17 @@ html[data-view="rows"] .paper-list .paper-pin-mark .pin-word { display: none; }
     -webkit-user-select: none;
 }
 .kw-rail::-webkit-scrollbar { display: none; }
+/* The worded button. Everything else about it comes from .toolbar-btn, which
+   it is; what it needs is room for its words, since that rule is a 26px
+   square made for one glyph. */
+.kw-more {
+    flex: 0 0 auto;
+    width: auto;
+    padding: 0 .5rem;
+    font-size: .6875rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
 /* Nothing in front of the strip: an empty end of the row takes no space. */
 .toolbar-left:empty { display: none; }
 /* Shown for a moment when a sixth keyword is pressed, in the colours a
@@ -1160,8 +1185,54 @@ html.kw-locked { overflow: hidden; }
     /* The keywords take the whole row: on a phone they and the tools on one
        line leave the keywords about 60px. The tools go up beside the heading
        (below), so the strip has the row to itself. */
-    .kw-rail { flex-basis: 100%; order: 3; }
+    .kw-row { flex-basis: 100%; order: 3; position: relative; margin-right: 0; }
     .kw-chip { font-size: .75rem; padding: .2rem .6rem; }
+
+    /* **View All Keywords rides at the right-hand end of the strip's own
+       line, over it.** There is no room beside the strip at this width (the
+       whole point of giving it the row), and up beside the heading the words
+       would push the four tools off the corner. Laid over the strip it costs
+       no line of its own, and the strip goes on gliding underneath.
+
+       It needs a ground of its own, or a chip passing under it would be read
+       through the words, and the strip's own fade only covers the last
+       1.5rem; `::before` carries that ground a little further left so a chip
+       arrives at it rather than appearing at its edge. The ground has to
+       survive :hover too: a touch screen leaves :hover on after a tap, and
+       browse_console.php answers that by putting the fill back to transparent,
+       which on a button standing over something else would make its words
+       unreadable from the moment it was pressed.
+
+       The track carries the button's width at its end, so every keyword can
+       still be scrolled clear of it and pressed. Without that the last chips
+       on the strip would be under the overlay and unreachable, which is a
+       control hiding the thing it is about. */
+    .kw-more, .kw-more:hover {
+        position: absolute;
+        right: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        height: 28px;
+        padding: 0 .4rem;
+        font-size: .75rem;
+        /* The page's own ground, not --white: under Old Night <body> is a
+           shade darker than the surfaces, and a plate of --white over it
+           would read as a faint rectangle hanging in the strip. */
+        background: var(--page-bg);
+        color: var(--maroon);
+        z-index: 1;
+    }
+    .kw-more::before {
+        content: '';
+        position: absolute;
+        right: 100%;
+        top: 0;
+        bottom: 0;
+        width: 2rem;
+        background: linear-gradient(to right, transparent, var(--page-bg));
+        pointer-events: none;
+    }
+    .kw-rail.has-end-room .kw-set { padding-right: 9.5rem; }   /* the button (120px) and its fade (32px) */
 
     /* **The tools sit in the column's top right-hand corner**, on the
        heading's own line, rather than on the row below it where they were a
@@ -1365,6 +1436,13 @@ html.kw-locked { overflow: hidden; }
                          not give for free, and that is all the script adds. Printed
                          once: it used to be printed twice so an automatic roll could
                          wrap without a seam, and the roll has gone. */ ?>
+                <?php /* The strip and the way to see every keyword at once travel
+                         together in one box, because on a phone they share a line:
+                         the button cannot be in .toolbar-right there and also be at
+                         the right-hand end of the strip, and CSS cannot move an
+                         element between parents. One element in one place, put where
+                         it belongs at each width by the stylesheet. */ ?>
+                <div class="kw-row">
                 <div class="kw-rail" id="kwRail" role="group" aria-label="Browse by keyword">
                     <div class="kw-track">
                         <span class="kw-set">
@@ -1379,21 +1457,31 @@ html.kw-locked { overflow: hidden; }
                         </span>
                     </div>
                 </div>
+                <?php /* The two page arrows stood where this does, and before that
+                         beside the count at the other end of the row. The pages are at
+                         the foot of the list, with their numbers; in this row they were
+                         two more chevrons next to a strip that is already scrolled
+                         sideways, which is the one place a chevron means something
+                         else. Their place is now the way to see every keyword at once,
+                         which is what the strip beside it cannot do.
+
+                         It says so in words, and in words alone. It was the
+                         `open_in_full` glyph, which is the one control in this row
+                         whose job cannot be guessed from its mark: refresh, help,
+                         filters and settings are all marks a reader already knows,
+                         and "open in full" beside a strip of keywords could as
+                         easily mean the strip itself. The words answer that by
+                         themselves, so the glyph went with them rather than sitting
+                         in front of them saying the same thing less clearly. There
+                         is no aria-label: the text is the button's name, and a label
+                         would say something else over the top of it. */ ?>
+                <?php if ($keyword_all): ?>
+                    <button type="button" class="toolbar-btn kw-more" id="kwMoreBtn"
+                            title="View all keywords" aria-haspopup="dialog">View All Keywords</button>
+                <?php endif; ?>
+                </div>
             <?php endif; ?>
             <div class="toolbar-right">
-                <?php /* The two page arrows stood here, and before that beside the
-                         count at the other end of the row. The pages are at the foot
-                         of the list, with their numbers; in this row they were two
-                         more chevrons next to a strip that is already scrolled
-                         sideways, which is the one place a chevron means something
-                         else. Their place is now the way to see every keyword at
-                         once, which is what the strip beside it cannot do. */ ?>
-                <?php if ($keyword_all): ?>
-                    <button type="button" class="toolbar-btn" id="kwMoreBtn"
-                            title="All keywords" aria-label="All keywords" aria-haspopup="dialog">
-                        <span class="material-symbols-outlined">open_in_full</span>
-                    </button>
-                <?php endif; ?>
                 <a class="toolbar-btn" href="index.php?browse=1" title="Refresh (clears search and filters)"><span class="material-symbols-outlined">refresh</span></a>
                 <a class="toolbar-btn" href="../pages/help_center.php" title="Help"><span class="material-symbols-outlined">help</span></a>
                 <?php /* Only ever seen on a narrow screen; the stylesheet hides it the
@@ -2070,9 +2158,37 @@ function loadResults(url, pushState) {
    the rail with it: window.papelKeywordRail is called from loadResults() as
    well as on load. */
 (function () {
+    /* **Room at the end of the track for the overlay to stand on, and only
+       where the strip has somewhere to scroll.** On a phone View All Keywords
+       lies over the strip's right-hand end, so without that room the last
+       keyword can never be brought out from under it, which is a control
+       hiding the thing it is about. On a repository with few enough keywords
+       to fit the line the same room is a lie: the strip would drag a hand's
+       width into nothing and the faded end would promise more to come.
+
+       Measured from the chips rather than from the rail's own scrollWidth,
+       which already counts the room once it is on and would then go on
+       answering yes for ever. The two rectangles both move with scrollLeft,
+       so their difference is the content's width wherever the strip is
+       standing. Read again on a resize, which is also how the desktop layout
+       - where the button sits beside the strip and nothing is covered - never
+       gains it, and once more when the fonts land, since the chips are as
+       wide as their words. */
+    function fitEnd() {
+        var rail = document.getElementById('kwRail');
+        var set  = rail && rail.querySelector('.kw-set');
+        if (!set || !set.lastElementChild) { return; }
+        var content = set.lastElementChild.getBoundingClientRect().right
+                    - set.getBoundingClientRect().left;
+        rail.classList.toggle('has-end-room', content > rail.clientWidth + 1);
+    }
+    window.addEventListener('resize', fitEnd);
+    if (document.fonts && document.fonts.ready) { document.fonts.ready.then(fitEnd); }
+
     window.papelKeywordRail = function () {
         var rail = document.getElementById('kwRail');
         if (!rail) { return; }
+        fitEnd();
 
         var dragging = false;
         var moved    = false;   // a drag, not a press: the click is then dropped

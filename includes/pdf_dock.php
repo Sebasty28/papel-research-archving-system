@@ -61,14 +61,30 @@ $PDF_DOCK_HOME_NAME = $PDF_DOCK_HOME_NAME ?? 'the page';
 $PDF_DOCK_MINIMISE  = !empty($PDF_DOCK_MINIMISE) && !$PDF_DOCK_HOME;
 $PDF_DOCK_CARD      = $PDF_DOCK_CARD ?? null;
 $PDF_DOCK_SIDES     = array_values(array_intersect(['left', 'right'], (array)($PDF_DOCK_SIDES ?? ['left', 'right'])));
+
+/* $PDF_DOCK_WIDTH: the width the panel opens at where the student has never
+   dragged the handle. A length for CSS, not a number of pixels, because the
+   answer depends on the window; `min(46vw, 46rem)` is the paper pages', wide
+   enough to read a thesis in beside the record.
+   The upload page sets its own, the panel there being the side pane that holds
+   the contents rather than a reader (see the panes section of CLAUDE.md).
+   Printed into a rule, so it is checked rather than trusted: anything but the
+   handful of characters a length is made of would be a way to close the rule
+   and write others. */
+$PDF_DOCK_WIDTH = (string)($PDF_DOCK_WIDTH ?? 'min(46vw, 46rem)');
+if (!preg_match('/^[0-9a-zA-Z%.,()\/*+ -]{1,80}$/', $PDF_DOCK_WIDTH)) {
+    $PDF_DOCK_WIDTH = 'min(46vw, 46rem)';
+}
 ?>
 <?php /* Versioned, so a change to the viewer reaches browsers holding the old copy. */ ?>
 <link rel="stylesheet" href="<?= e(asset_url('assests/css/papel-pdf-view.css')) ?>">
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
-/* Starting width. Dragging the panel's edge overwrites this on :root in pixels,
-   so the panel and the margin that keeps the record clear of it always move
-   together: there is one number, not two that could disagree. */
-:root { --pdf-dock-w: min(46vw, 46rem); }
+/* Starting width ($PDF_DOCK_WIDTH above). Dragging the panel's edge overwrites
+   this on :root in pixels, so the panel and the margin that keeps the record
+   clear of it always move together: there is one number, not two that could
+   disagree. A width the student has dragged before is written here by
+   applyStored() at the foot of this file, so this is only ever the default. */
+:root { --pdf-dock-w: <?= $PDF_DOCK_WIDTH ?>; }
 
 .pdf-dock {
     position: fixed;

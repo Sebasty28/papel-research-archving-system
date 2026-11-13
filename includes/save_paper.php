@@ -121,10 +121,55 @@ html[data-view="rows"] .paper-list .paper-item .paper-title { padding-right: 0; 
         position: absolute; top: .45rem; right: 1.25rem;
     }
 }
+/* ===== The mark waits until the result is reached for =====
+   The two shelves already do this (includes/shelf_view.php): twenty grey
+   bookmarks hanging down the right-hand side of a page of results read as
+   the list's own furniture rather than as a control, and compete with the
+   one thing on the page that should stand out, which is a paper. Cards and
+   Rows now do the same, so a bookmark means the same thing in all four views.
+
+   Saved is a statement and not a control, so a filled mark is always drawn:
+   on a shelf the ribbon in the book's pages says the paper is in the
+   reader's library, and on a card or a row this mark is the only thing that
+   does.
+
+   Opacity, not display: the mark is absolutely placed in Cards and holds a
+   column of its own in Rows, so taking it out of the flow would move the
+   title's gutter and the row's own fields as the pointer crossed them. It
+   must not be pressable while it cannot be seen, hence pointer-events: a tap
+   that landed on an invisible bookmark would save a paper with nothing on
+   screen to say so. Focus shows it, which is how the keyboard still reaches
+   it.
+
+   Only where there is a pointer that hovers, which is the shelves' rule and
+   for a sharper reason here. On a touch screen a single tap anywhere on a
+   result that is not a link already opens that paper's page in a window over
+   the list (includes/browse_console_js.php, "The record, opened small"), so
+   there is no spare tap to reveal a bookmark with: a tap that showed the mark
+   would open the preview over it in the same gesture. The mark therefore
+   stays drawn on a phone, as it does on the two shelves, rather than becoming
+   unreachable. */
+@media (hover: hover) {
+    html:is([data-view="cards"], [data-view="rows"]) .paper-list .paper-item > .save-paper:not(.is-saved) {
+        opacity: 0; pointer-events: none;
+        transition: opacity .18s ease, color .15s, border-color .15s, background .15s;
+    }
+    html:is([data-view="cards"], [data-view="rows"]) .paper-list .paper-item:hover > .save-paper:not(.is-saved),
+    html:is([data-view="cards"], [data-view="rows"]) .paper-list .paper-item:focus-within > .save-paper:not(.is-saved) {
+        opacity: 1; pointer-events: auto;
+    }
+}
 /* The hover peek is a copy of the row for reading; a second bookmark in it
    would be a control floating over the one it was copied from. */
 .row-peek .save-paper { display: none; }
-@media (prefers-reduced-motion: reduce) { .save-paper { transition: none; } }
+@media (prefers-reduced-motion: reduce) {
+    .save-paper { transition: none; }
+    /* Same specificity as the reveal above and later in the file, which is
+       what makes it win: the mark appears and goes, it does not fade. */
+    html:is([data-view="cards"], [data-view="rows"]) .paper-list .paper-item > .save-paper:not(.is-saved) {
+        transition: none;
+    }
+}
 </style>
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 (function () {

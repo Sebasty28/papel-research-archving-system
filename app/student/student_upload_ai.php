@@ -14810,6 +14810,21 @@ document.addEventListener('DOMContentLoaded', () => {
    (see "The side card" in the script above), and stays beside the form on every
    step. A card level with the form's own, not a strip down the window's edge. */
 $PDF_DOCK_CARD      = '.col-lg-11.upload-shell';
+/* **The side pane's starting width, and so this page's two-pane split.** Half
+   the paper pages' min(46vw, 46rem), because the panel here is not a reader: it
+   is the side pane, and what it holds on a first visit is the contents, a list
+   of short lines. The room belongs to the form, which is the page. The owner
+   signed this split off on 13 November 2026 from a 1534px window, where it is
+   353px against the form's 798px; the figure before it was 706px, half the
+   window, and the form had the other half.
+   The floor is the one the handle already refuses to go below (MIN in
+   pdf_dock.php): 23vw of a 1100px window is 253px, and a default the student
+   could not drag back to is a default in the wrong place.
+   Only the default. A student who drags the handle has their own width kept on
+   the device (papel.pdfDockWidth), which applyStored() writes over this, and
+   the PDF opens at whatever that is. includes/skeleton.php repeats the
+   expression, so the shape it covers the page with is the shape it will be. */
+$PDF_DOCK_WIDTH     = 'clamp(280px, 23vw, 23rem)';
 require ROOT_PATH.'/includes/pdf_dock.php';
 ?>
 <?php require ROOT_PATH.'/includes/site_footer.php'; ?>

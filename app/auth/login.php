@@ -220,9 +220,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
       }
 
-      $stmt2 = $conn->prepare("UPDATE users SET last_login = NOW() WHERE user_id = ?");
-      $stmt2->bind_param('i', $user_id);
-      $stmt2->execute();
+      /* Stamps the sign-in and says whether it was this account's first. The
+         password it was created with was generated for it and emailed, so a
+         first sign-in is sent to change it before anything else (see "The
+         first sign-in, and the password gate" in config/core.php). */
+      $first_sign_in = login_mark_sign_in((int)$user_id);
 
       /* admin_level rides along with the rest.
          Without it every "$u['admin_level'] ?? 1" on the site read 1, so a Head
@@ -240,6 +242,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
              be a query per page for a column almost nobody has filled in. */
           'secondary_position' => $secondary_position,
       ]);
+
+      /* After login_user(), which regenerates the session id. Nothing else is
+         offered until a password of their own is set, so where they asked to
+         go does not come into it; the gate sends them on when they are done. */
+      if ($first_sign_in) {
+          password_gate_open();
+          $login_done(password_gate_url());
+      }
 
       $redirect = $_POST['redirect'] ?? $_GET['redirect'] ?? null;
       $login_done($redirect === 'archive' ? BASE_URL.'/archive/index.php' : role_home($user_role));

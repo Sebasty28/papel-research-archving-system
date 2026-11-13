@@ -157,6 +157,14 @@ html[data-color="old-night"] {
     --ink:          var(--ink-base);
     --border:       var(--border-base);
     --white:        #FFFFFF;
+    /* **The page's own ground**, which is not always --white. A dark palette
+       paints <body> a shade darker than its surfaces, so anything that has to
+       stand on the page itself and be invisible against it - a plate under a
+       control laid over something that scrolls, a fade at the end of a strip -
+       reads --page-bg and never --white, or it shows as a faint rectangle on a
+       dark page and nowhere else. Stated beside each body rule below so the
+       two cannot drift. */
+    --page-bg:      var(--white);
     /* Muted text. #9F9F9F sat at 2.65:1 on white, then #6E6A6E at 5.32:1,
        which clears AA but not the AAA this palette is now held to. It carries
        hints, table headers, timestamps and empty-state copy on nearly every
@@ -267,7 +275,8 @@ html[data-mode="dark"] {
 
     color-scheme: dark;                    /* native controls follow */
 }
-html[data-mode="dark"] body { background: #14171E; }
+html[data-mode="dark"] { --page-bg: #14171E; }
+html[data-mode="dark"] body { background: var(--page-bg); }
 
 /* ---------------------------------------------------------------
    3b. The dark palette brings its own surfaces.
@@ -288,7 +297,8 @@ html[data-mode="dark"][data-color="old-night"] {
     --header-frost-solid:  rgba(45, 47, 50, .97);
     --header-frost-edge:   rgba(255, 255, 255, .13);
 }
-html[data-mode="dark"][data-color="old-night"] body { background: #292B2E; }
+html[data-mode="dark"][data-color="old-night"] { --page-bg: #292B2E; }
+html[data-mode="dark"][data-color="old-night"] body { background: var(--page-bg); }
 
 /* A few places paint a literal white that would glare on a dark page. */
 html[data-mode="dark"] .doc-surface,
@@ -322,9 +332,17 @@ html[data-mode="dark"] img:not([src*=".svg"]) { filter: brightness(.92); }
     background: #E2DCDC;
     margin: 0; flex: 0 0 auto; cursor: pointer;
 }
-/* --maroon, not --accent: under Old Night the raw accent is a dark maroon on a
-   dark panel (1.67:1), and --maroon is the form of it that lifts to be seen. */
-.qs-color input[type="radio"]:checked { background: var(--maroon); }
+/* **--maroon-surface, the fill, and not --maroon.** This is the same control
+   as the Density and View rows above it (.qs-radio, includes/browse_console.php),
+   and it has to be filled from the same token or the two disagree in one panel.
+   It used to read --maroon "because the raw accent is a dark maroon on a dark
+   panel and --maroon is the form of it that lifts" - but --maroon is
+   --accent-light, which under Old Night is plain white, and the dot that is
+   *not* chosen is a pale #E2DCDC. So in dark mode both palettes were marked
+   with a near-white dot and the panel could not say which one the reader was
+   looking at. A filled control takes the fill; see the note on --accent-light
+   in the Old Night block above. */
+.qs-color input[type="radio"]:checked { background: var(--maroon-surface); }
 /* A solid dot of the palette's own accent: an inset ring here would hollow it
    out and leave only a rim of the colour it is meant to be showing. */
 .qs-swatch {

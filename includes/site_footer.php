@@ -753,4 +753,9 @@ if (current_user()) { require_once ROOT_PATH.'/includes/notif_actions.php'; }
    costs those pages two indexed lookups and no markup. After loading_bar.php
    on purpose: it polls with the papelQuiet flag that file reads. */
 require_once ROOT_PATH.'/includes/manuscript_timer.php';
+/* The warning five minutes before the session goes idle, and the pop-up that
+   says it has gone. Nothing at all for a visitor who is not signed in: there
+   is no session to lose. After loading_bar.php for the same reason the
+   manuscript countdown is, its polls carrying that file's papelQuiet flag. */
+require_once ROOT_PATH.'/includes/session_timer.php';
 require ROOT_PATH.'/includes/accessibility.php'; ?>

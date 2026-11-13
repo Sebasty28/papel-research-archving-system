@@ -98,6 +98,7 @@ function manage_import_handle(string $kind, mysqli $conn, string $self, int $cre
             manage_import_set($kind, [
                 'rows'       => $parsed['rows'],
                 'headerless' => $parsed['headerless'],
+                'name_from'  => $parsed['name_from'],
                 'ctx'        => $ctx,
                 'file'       => (string)($_FILES['import_file']['name'] ?? ''),
             ]);
@@ -310,6 +311,10 @@ function manage_import_card(string $kind): void {
                            accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
                     <small class="mgmt-hint">
                         Headings on the first row: <?= e(implode(', ', $spec['headers'])) ?>.
+                        The name may be written the roll's way instead, as
+                        <em>Surname, First Name Middle Name</em>, as
+                        <em>First Name Middle Name Last Name</em>, or in a column each; they
+                        are put together into one name in the preview.
                         Up to <?= ACCOUNT_IMPORT_MAX_ROWS ?> rows. The old .xls format is not read; save as .xlsx or CSV.
                     </small>
                 </div>
@@ -394,6 +399,21 @@ function manage_import_preview(string $kind): void {
                     No headings were recognised, so the columns were read in order:
                     <?= e(implode(', ', $spec['headers'])) ?>. Check the first row below is a person
                     and not a heading.
+                </p>
+            <?php endif; ?>
+            <?php /* An account has one full_name, so a roll that keeps the parts of a
+                     name in separate columns is put together into the one Name box
+                     below. That is a change to what was uploaded, and a change nobody
+                     is told about reads as the file having been misread. */ ?>
+            <?php if (!empty($stash['name_from'])):
+                $nameCols = array_values($stash['name_from']);
+                $lastCol  = array_pop($nameCols);
+                $saidCols = $nameCols ? implode(', ', $nameCols) . ' and ' . $lastCol : $lastCol;
+            ?>
+                <p class="import-warn">
+                    <span class="material-symbols-outlined" aria-hidden="true">info</span>
+                    <?= e($saidCols) ?> were read as one name, in the order a name is
+                    written. Check a row or two below.
                 </p>
             <?php endif; ?>
             <?php if ($over): ?>
