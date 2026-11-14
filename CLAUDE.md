@@ -441,6 +441,56 @@ sets `body.style.overflow` while it is open, so the full view also forces `<body
 only sections being submitted have one: a tab for a section left out "expanded" a hidden box,
 which looked like the full view closing itself.
 
+### `order` sorts the children that exist, and the page arrives in pieces
+
+**Place grid children on named tracks, not with `order`.** `order` is resolved
+against the children present *at that layout*, and the browser lays a page out
+while the HTML is still arriving. `.layout` is
+`grid-template-columns: var(--sidebar-w) 1fr` with the panel on the left, and
+`#mainCol` comes first in the source: until `<aside id="sidebarCol">` has
+parsed, the main column is the only item, so it takes **track 1** and renders
+at the sidebar's 226px. When the aside lands it is pushed into track 2 and
+jumps 227px to the right, widening to 888px.
+
+Measured against staging, cold, at 1534px, one frame apart:
+
+```
+t=1535  aside=false  #mainCol [207, 355, 226, 169]
+t=1543  aside=true   #mainCol [434, 355, 888, 714]
+```
+
+The browser charged that single frame **0.355**, which was the whole of the
+public repository's CLS. `includes/skeleton.php` had the identical fault in
+`.skel-desk` (0.0452), so the layer drawn to cover the jump was making one of
+its own. Both are explicit `grid-column` now, and the worst remaining shift on
+that page is **0.0035**.
+
+Four things worth keeping from it:
+
+- **A DevTools trace named `div#papelSkel.papel-skel-layer`,** and the
+  skeleton was not what moved. The overlay is simply the largest box in the
+  shifting region, and the panel attributes a shift to the biggest source it
+  can name. Read every source of an entry, with its before and after rect,
+  before believing the first one.
+- **Read x as well as y.** The first pass of this logged only `y` and
+  `height`, and the rects came back identical, which read as "nothing moved".
+  The whole of it was horizontal.
+- **It cannot be reproduced on the dev box without help.** Localhost serves
+  the document in one chunk, so the parser never sees a half-built grid and
+  the jump never happens. Throttle the body
+  (`Network.emulateNetworkConditions`) so the HTML streams, or test against
+  staging. A warm load hides it for the same reason, so disable the cache.
+- **Nobody ever saw it.** The loading skeleton was up for the whole of it. CLS
+  charges a shift whether or not something is covering it, which is the same
+  lesson as the upload page's `done()` ordering: covering a jump and not
+  causing one are different things.
+
+The residual 0.0035 is the vertical scrollbar appearing when the results make
+the page taller, which shifts the centred `.wrap` 5px left. `scrollbar-gutter:
+stable` would end it and would also narrow every page by the scrollbar's width
+whether it scrolls or not; that is a visible change to every page for 0.0035
+and has not been made.
+
 ### The step bar pins itself and folds down
 
 **In the panes it is a row of its own.** `placeStepBar()` lifts `.upload-steps`

@@ -378,8 +378,19 @@ html.papel-skel-rail .skel-tab { width: auto; height: 30px; border-radius: 8px; 
    reader at 1051px (includes/paper_record_css.php). */
 @media (min-width: 901px) {
     html.sidebar-left .skel-desk { grid-template-columns: var(--skel-rail-w, 226px) 1fr; }
-    html.sidebar-left .skel-desk > .skel-rail { order: 1; }
-    html.sidebar-left .skel-desk > .skel-col  { order: 2; }
+    /* Named tracks rather than `order`, the same fault and the same fix as
+       the real layout's in includes/browse_console.php, which carries the
+       measurements. `order` sorts only the children that exist, and this
+       markup streams like any other: until `.skel-rail` has parsed,
+       `.skel-col` is the only item, takes track 1 and renders at the rail's
+       226px, then jumps to track 2 when the rail arrives. Measured locally
+       with the body throttled so the parser sees it in pieces: `.skel-col`
+       [207, 355, 240, 71] -> [439, 355, 888, 341], charged 0.0452.
+       A skeleton that shifts is the jump it exists to cover, doing it itself. */
+    html.sidebar-left .skel-desk > .skel-rail { grid-column: 1; }
+    html.sidebar-left .skel-desk > .skel-col  { grid-column: 2; }
+    html:not(.sidebar-left) .skel-desk > .skel-col  { grid-column: 1; }
+    html:not(.sidebar-left) .skel-desk > .skel-rail { grid-column: 2; }
     /* Beside the rail, the field spans the results column it searches: the
        rail and the 6px gutter off what .wrap leaves. */
     .skel-band .skel-search { width: calc(100% - var(--skel-rail-w, 226px) - 6px); }

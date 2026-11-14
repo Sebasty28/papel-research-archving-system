@@ -858,8 +858,39 @@ html.sidebar-left .js-side-swap .side-icon-right { display: inline-flex; }
     html.sidebar-left .layout {
         grid-template-columns: var(--sidebar-w, 226px) 1fr;
     }
-    html.sidebar-left #sidebarCol { order: 1; }
-    html.sidebar-left #mainCol    { order: 2; }
+    /* **Named tracks, not `order`.** `order` only sorts the children that
+       exist, and the browser lays this grid out while the HTML is still
+       arriving: `#mainCol` comes first in the source, so until `<aside>` has
+       parsed it is the only item, takes track 1, and renders at the sidebar's
+       226px. When the aside lands it is pushed into track 2 and jumps 227px
+       to the right, widening from 226px to 888px.
+
+       Measured on staging, cold, at 1534px: `#mainCol` at [207, 355, 226,
+       169] with `aside=false`, then [434, 355, 888, 714] eight milliseconds
+       later with `aside=true`. The browser charged that one frame **0.355**,
+       which was the whole of the page's CLS and the 0.3171 a DevTools trace
+       put against `div#papelSkel`: the overlay is merely the biggest box in
+       the shifting region, not the thing that moved.
+
+       Only on a cold load, because a warm one parses from cache in a single
+       chunk, which is why it never showed on the dev box. Nobody ever saw it
+       either, the loading skeleton being up at the time; the browser counts a
+       shift whether or not something is covering it.
+
+       Placing both children explicitly fixes the track from the first layout,
+       with or without the aside in the DOM. Keep this placement if the panel
+       is ever rebuilt: a filter replaces the inside of both columns from
+       script, and that code expects the elements to stay where they are. */
+    html.sidebar-left #sidebarCol { grid-column: 1; }
+    html.sidebar-left #mainCol    { grid-column: 2; }
+}
+/* The same reasoning the other way round, and it is not hypothetical: with
+   the panel on the right the source order happens to match the tracks, so
+   this only states what the browser already does. It is here so the two
+   sides cannot drift, and so nobody reintroduces `order` on one of them. */
+@media (min-width: 901px) {
+    html:not(.sidebar-left) #mainCol    { grid-column: 1; }
+    html:not(.sidebar-left) #sidebarCol { grid-column: 2; }
 }
 
 /* ===== The sidebar folded away =====
