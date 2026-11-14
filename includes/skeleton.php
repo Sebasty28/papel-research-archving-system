@@ -387,10 +387,15 @@ html.papel-skel-rail .skel-tab { width: auto; height: 30px; border-radius: 8px; 
        with the body throttled so the parser sees it in pieces: `.skel-col`
        [207, 355, 240, 71] -> [439, 355, 888, 341], charged 0.0452.
        A skeleton that shifts is the jump it exists to cover, doing it itself. */
-    html.sidebar-left .skel-desk > .skel-rail { grid-column: 1; }
-    html.sidebar-left .skel-desk > .skel-col  { grid-column: 2; }
-    html:not(.sidebar-left) .skel-desk > .skel-col  { grid-column: 1; }
-    html:not(.sidebar-left) .skel-desk > .skel-rail { grid-column: 2; }
+    /* `grid-row: 1` with every one of them: a named column and an automatic
+       row leaves the second item to sparse auto-placement, which only moves
+       forward, so it is given a row of its own and the rail is drawn under
+       the results instead of beside them. See the same note in
+       includes/browse_console.php, where that shipped once. */
+    html.sidebar-left .skel-desk > .skel-rail { grid-column: 1; grid-row: 1; }
+    html.sidebar-left .skel-desk > .skel-col  { grid-column: 2; grid-row: 1; }
+    html:not(.sidebar-left) .skel-desk > .skel-col  { grid-column: 1; grid-row: 1; }
+    html:not(.sidebar-left) .skel-desk > .skel-rail { grid-column: 2; grid-row: 1; }
     /* Beside the rail, the field spans the results column it searches: the
        rail and the 6px gutter off what .wrap leaves. */
     .skel-band .skel-search { width: calc(100% - var(--skel-rail-w, 226px) - 6px); }

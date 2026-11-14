@@ -881,16 +881,24 @@ html.sidebar-left .js-side-swap .side-icon-right { display: inline-flex; }
        with or without the aside in the DOM. Keep this placement if the panel
        is ever rebuilt: a filter replaces the inside of both columns from
        script, and that code expects the elements to stay where they are. */
-    html.sidebar-left #sidebarCol { grid-column: 1; }
-    html.sidebar-left #mainCol    { grid-column: 2; }
+    /* **`grid-row: 1` as well, or the panel lands underneath the results.**
+       Naming a column without a row leaves the row to auto-placement, which
+       is *sparse*: it only ever moves forward. `#mainCol` comes first in the
+       source and is placed at row 1 column 2, which puts the cursor past
+       column 1 of row 1, so `#sidebarCol` cannot go back and is given a row
+       of its own. The grid then computes `grid-template-rows: 812px 495px`
+       and the filters sit below the papers, which is what 1.5.2 shipped.
+       Both are pinned to row 1 so they stand beside each other. */
+    html.sidebar-left #sidebarCol { grid-column: 1; grid-row: 1; }
+    html.sidebar-left #mainCol    { grid-column: 2; grid-row: 1; }
 }
 /* The same reasoning the other way round, and it is not hypothetical: with
    the panel on the right the source order happens to match the tracks, so
    this only states what the browser already does. It is here so the two
    sides cannot drift, and so nobody reintroduces `order` on one of them. */
 @media (min-width: 901px) {
-    html:not(.sidebar-left) #mainCol    { grid-column: 1; }
-    html:not(.sidebar-left) #sidebarCol { grid-column: 2; }
+    html:not(.sidebar-left) #mainCol    { grid-column: 1; grid-row: 1; }
+    html:not(.sidebar-left) #sidebarCol { grid-column: 2; grid-row: 1; }
 }
 
 /* ===== The sidebar folded away =====

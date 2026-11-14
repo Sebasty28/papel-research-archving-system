@@ -465,6 +465,26 @@ public repository's CLS. `includes/skeleton.php` had the identical fault in
 its own. Both are explicit `grid-column` now, and the worst remaining shift on
 that page is **0.0035**.
 
+**Name the row as well as the column, or the panel lands under the results.**
+This is how 1.5.2 broke the repository's layout on the live site and had to be
+mended in 1.5.4. A named column with the row left to auto-placement is not
+enough, because auto-placement is *sparse*: it only ever moves forward.
+`#mainCol` comes first in the source and is placed at row 1 column 2, which
+puts the cursor past column 1 of row 1, so `#sidebarCol` cannot be put back
+there and is given a row of its own. The grid computed
+`grid-template-rows: 812px 495px` and the filters were drawn below the papers.
+Every one of these rules carries `grid-row: 1`.
+
+**The check that passed and should not have.** The verification after 1.5.2
+read each column's `x` and asserted the panel was on the correct side. Both
+`x` values were right; the panel was simply 753px further down. Assert what a
+reader would look at - that the two columns start beside each other - and not
+only the axis the change was about. It is the same mistake as logging `y` and
+not `x` when the shift turned out to be horizontal, made twice in two days in
+opposite directions. There is a deliberate 66px offset between the two tops
+(the sidebar starts where `.search-band` ends), so the test is "within about
+that", not "equal".
+
 Four things worth keeping from it:
 
 - **A DevTools trace named `div#papelSkel.papel-skel-layer`,** and the
