@@ -44,9 +44,14 @@ if (!$u) {
                     ['label' => role_home_label('admin'), 'href' => BASE_URL.'/app/faculty/head_review_dashboard.php', 'match' => ['head_review_dashboard.php']],
                 ];
             } else {
+                /* Storage Folder is the Director's page too, and is offered here
+                   because where papers are filed is the Coordinator's to decide.
+                   Level 1 only: this branch is already the Coordinator, the head
+                   of academic programs having been answered above. */
                 $nav_links = [
                     ['label' => role_home_label('admin'), 'href' => BASE_URL.'/app/admin/admin_review_dashboard.php', 'match' => ['admin_review_dashboard.php']],
                     ['label' => 'Manage Faculty',      'href' => BASE_URL.'/app/admin/admin_manage_faculty.php',  'match' => ['admin_manage_faculty.php']],
+                    ['label' => 'Storage Folder',      'href' => BASE_URL.'/app/admin/gdrive_settings.php',       'match' => ['gdrive_settings.php']],
                 ];
             }
             break;
@@ -148,14 +153,35 @@ $login_notif_popup_items = $show_login_notif_popup
          the rest wait in data-src until the page has loaded, so photos nobody
          has seen yet do not hold up the first paint. */ ?>
 <?php if (empty($hero_under_nav)): ?>
-<?php $nav_photos = array_map('basename', glob(ROOT_PATH . '/assests/images/navbar-photo*.jpg') ?: []);
-      shuffle($nav_photos); ?>
+<?php /* nav_photo_order() in config/core.php, shared with the repository's own
+         banner, which used to glob and shuffle for itself. The order rotates by
+         the day rather than on every request: this first photo is the Largest
+         Contentful Paint on every page of the site, and a fresh shuffle meant
+         it was a different 200KB file almost every page, so the cache never
+         helped and <head> could not preload it. */
+      $nav_photos = nav_photo_order(); ?>
 <div class="nav-photo" id="navPhoto" aria-hidden="true">
-    <?php foreach ($nav_photos as $i => $photo): ?>
+    <?php foreach ($nav_photos as $i => $photo): $set = nav_photo_srcset($photo); ?>
         <?php if ($i === 0): ?>
-            <img class="nav-slide is-active" src="<?= e(BASE_URL) ?>/assests/images/<?= e($photo) ?>" alt="" decoding="async">
+            <?php /* fetchpriority="high" is the whole of the LCP fix. The image is
+                     already in the HTML and is not lazy-loaded, but Chrome starts it
+                     at Low priority and it was queued 1,011ms into the load and then
+                     downloaded in 8ms: 593ms of the 1,117ms LCP was waiting, not
+                     transferring. site_head.php preloads the same file, and the two
+                     agree because nav_photo_order() answers the same for both. */ ?>
+            <picture>
+                <?php if ($set !== ''): ?><source type="image/webp" srcset="<?= e($set) ?>" sizes="100vw"><?php endif; ?>
+                <img class="nav-slide is-active" src="<?= e(BASE_URL) ?>/assests/images/<?= e($photo) ?>"
+                     alt="" decoding="async" fetchpriority="high">
+            </picture>
         <?php else: ?>
-            <img class="nav-slide" data-src="<?= e(BASE_URL) ?>/assests/images/<?= e($photo) ?>" alt="" decoding="async">
+            <?php /* The rest wait in data-* until the page has loaded: four photos
+                     nobody has seen yet must not compete with the one on screen. */ ?>
+            <picture>
+                <?php if ($set !== ''): ?><source type="image/webp" data-srcset="<?= e($set) ?>" sizes="100vw"><?php endif; ?>
+                <img class="nav-slide" data-src="<?= e(BASE_URL) ?>/assests/images/<?= e($photo) ?>"
+                     alt="" decoding="async" loading="lazy">
+            </picture>
         <?php endif; ?>
     <?php endforeach; ?>
 </div>
@@ -503,6 +529,13 @@ $login_notif_popup_items = $show_login_notif_popup
        not needed until five seconds from now. */
     window.addEventListener('load', function () {
         slides.forEach(function (img) {
+            /* The <source> first and the <img> after: a picture is resolved
+               from its sources, so a src set before them is fetched and then
+               dropped for the WebP. */
+            var webp = img.previousElementSibling;
+            if (webp && webp.tagName === 'SOURCE' && webp.dataset.srcset) {
+                webp.srcset = webp.dataset.srcset; delete webp.dataset.srcset;
+            }
             if (img.dataset.src) { img.src = img.dataset.src; delete img.dataset.src; }
         });
     });

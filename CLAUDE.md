@@ -59,6 +59,74 @@ feedback. So `draft` means either "never submitted" *or* "returned" — see the
 on the same desk. They have not been consolidated; be careful when writing a
 role check that you cover both.
 
+### What the Research Coordinator runs, and what stays the Director's
+
+The two are not the same kind of account. The **Director is the higher-up**:
+the record is theirs, which is the administrator accounts and the archive. The
+**Research Coordinator is the head of research on the campus**, and the running
+of it is theirs. Settings that decide how papers are handled therefore belong to
+both. Widened 14 November 2026 at the owner's instruction.
+
+Ask `config/core.php`, never a role string:
+
+| | |
+|---|---|
+| `is_research_coordinator($u)` | `admin` **at level 1**. The level is the whole question: a Head of Academic Programs is an `admin` too and differs by nothing else, so a bare role check hands the head the Coordinator's pages. |
+| `can_manage_research_operations($u)` | the Director, or that. |
+| `require_research_operations()` | closes a page to everybody else. |
+
+Both read `user_has_role()` and `user_level_for()`, so a **second post counts**:
+a librarian who also holds the Research Coordinator post is the Coordinator
+here. Checked against all seven role shapes.
+
+**What moved:**
+
+- **The Storage Folder** (`app/admin/gdrive_settings.php`). The line was in the
+  wrong place: the Coordinator could already connect Drive
+  (`pages/gdrive_callback.php`) but could not say which folder the papers went
+  into, so they owned half of one setting. The navbar offers it, and the
+  callback now returns either of them to that page rather than only the
+  Director, so a Coordinator who connected Drive is no longer dropped on a page
+  that says nothing about Drive. `gdrive_folder_unusable_message()` names them
+  too.
+- **The whole support queue** (`app/support_requests.php`). `$isDirector` is
+  `$seesAll`, because that is what every one of its eleven uses meant. A
+  Coordinator saw only the requests routed to them by name and had no way to
+  tell whether anybody was answering the rest.
+
+**What deliberately did not move, and must not without the owner saying so:**
+
+- **`app/admin/super_admin_manage_admins.php`**, which creates and edits
+  administrator accounts. A Coordinator who could open it could mint a second
+  Coordinator, or a Director, which is exactly the escalation the primary list
+  is written to prevent. See `secondary_position_options()` under "One person,
+  two posts" below, which refuses the same thing from the other direction.
+- **`secondary_position_options()`**, for the same reason.
+- **`reset_system_data.php`**, which empties the system.
+
+Two traps met in the doing, both worth keeping:
+
+- **`require_role()` cannot express this**, knowing roles and not levels:
+  `['super_admin', 'admin']` lets the head in. It still runs first, being what
+  answers a signed-out visitor, a background request and the password gate, and
+  the level is checked after it.
+- **A refused head keeps their session.** `require_role()` empties the session
+  for a wrong role, which is right for an account with no business on the page;
+  a head is a real administrator who opened the wrong one, and signing them out
+  of the site for it reads as a fault rather than an answer. They are sent to
+  their own desk with a line saying why.
+- **A hard-coded breadcrumb can sign somebody out.** That page's middle crumb
+  pointed at `super_admin_review_dashboard.php`, which `require_role()` refuses
+  and therefore signs out: opening the page to the Coordinator turned the crumb
+  into a trap. It reads `role_home()` and `role_home_label()` now, so it is the
+  reader's own desk. Check where a page's crumbs point before widening who may
+  open it.
+
+Driven against the running site for all six roles: the Director and the
+Coordinator get 200 and the navbar link, the head gets 302 to their own desk
+with their session intact and no link, and an adviser, a librarian and a student
+are refused as before. The support queue is whole for the first two and still
+scoped to their own rows for everybody else.
 ### One person, two posts
 
 The constitution lets a member of staff hold two positions at once, a Research
@@ -564,10 +632,12 @@ are two separate settings and fail separately.
   folder (`ok`, `unset`, `not_found`, `not_folder`, `trashed`, `read_only`, `unknown`).
   `unknown` means Drive could not be asked and is **not** a verdict; only the four
   definite faults (`gdrive_folder_is_unusable()`) stop a submission.
-- The Storage Folder page (`app/admin/gdrive_settings.php`, **Director only**) checks a
-  folder before saving it and refuses with the reason; it also shows whether the current
-  one is usable, since "connected" says nothing about that. The Coordinator can connect
-  Drive (`pages/gdrive_callback.php`) but cannot change the folder.
+- The Storage Folder page (`app/admin/gdrive_settings.php`, the **Research Coordinator
+  and the Director**: see "What the Research Coordinator runs" above) checks a folder
+  before saving it and refuses with the reason; it also shows whether the current one
+  is usable, since "connected" says nothing about that. Either of them can also connect
+  Drive (`pages/gdrive_callback.php`). It was the Director alone until 14 November 2026,
+  which left the Coordinator owning half of one setting.
 - A submission checks the folder first and tells the student in words, without the ID.
 
 **Setting up a copy of the site** (staging, production) needs three things by hand, none
@@ -1180,6 +1250,103 @@ and pass for the wrong reason - assert the address as well as the page; and the
 fresh-profile "Make it yours" card lies over the foot of the page and will
 answer a press meant for the menu sheet.
 
+### The campus photos, and the Largest Contentful Paint
+
+The photo behind the navbar is the LCP element on nearly every page, and the
+same photo in the repository's own banner is the LCP there. A Chrome trace of
+staging on 14 November 2026 put it at 1,117ms, of which **593ms was load
+delay**: the image was discovered in the HTML and not lazy-loaded, but it
+started at **Low** priority, was not queued until 1,011ms into the load, and
+then downloaded in 8ms. It was waiting for a turn, not transferring.
+
+**One order, chosen once.** `nav_photo_files()`, `nav_photo_order()` and
+`nav_photo_srcset()` in `config/core.php`; `includes/site_header.php` and
+`archive/index.php` both read them, where each used to `glob()` and `shuffle()`
+for itself.
+
+- **It rotates by the day and no longer shuffles per request.** A fresh shuffle
+  made the LCP file different almost every page, so the cache never helped, and
+  `<head>` cannot preload a file that is chosen after `<head>` is printed. The
+  variety was wanted at the scale a person notices, which is the day, not the
+  click.
+- **`fetchpriority="high"` on the first slide, and a matching `<link
+  rel="preload">` in `site_head.php`.** They are two halves of one fix and
+  their URLs must agree exactly, or the browser preloads one file and the page
+  fetches another. Checked by reading both out of the rendered HTML and
+  comparing them, and by counting requests: no photo is fetched twice.
+- **`<picture>` with a typed `<source>`, never `srcset` alone.** `srcset`
+  chooses by **width**, not by format: a browser that cannot decode WebP still
+  picks a WebP candidate and shows a broken image. Only `<source
+  type="image/webp">` lets it skip the format, and the `<img src>` stays the
+  JPEG every browser can read. The preload carries `type="image/webp"` for the
+  same reason. This was written the wrong way first and caught before it
+  shipped.
+- **Three widths, WebP, generated beside the JPEGs**
+  (`navbar-photo<n>-{1280,1920,3840}.webp`). The strip is full width and 339px
+  tall, so the 3840px original is the 2x image for a 1920px screen and four
+  times the pixels a 1366px laptop can show. Measured: the whole set was
+  **1,114KB of JPEG on every page**; at 1920 it is **319KB** and at 1280
+  **160KB**, and a 1536px window loads 82KB for the one photo that paints.
+  Regenerate with the same widths if a photo is added, or `nav_photo_srcset()`
+  finds nothing for it and quietly serves the JPEG, which still works.
+- The four waiting slides keep `data-src` until `load`, as before, and their
+  `<source>` keeps `data-srcset`. **The source is promoted before the img**: a
+  picture resolves from its sources, so a `src` set first is fetched and then
+  dropped for the WebP.
+
+**Measured, before against after.** Eleven cold loads of the student dashboard
+each way at 1536px with the cache off, the pre-change code served from a
+`git worktree` of HEAD beside the live one so nothing had to be reverted to
+compare:
+
+| | median LCP | mean | photo bytes |
+|---|---|---|---|
+| before | 1,924 ms | 2,136 ms | 201-283KB, a different file almost every load |
+| after | 1,220 ms | 1,355 ms | 82KB, the same file every load |
+
+**37% off the median**, and a random after-run beats a random before-run in
+82% of pairs. Both spreads are wide (a 4,908ms outlier before, 2,200ms after),
+which is why this is reported on eleven runs and a median rather than on one
+reading. In several after-runs LCP and FCP are the same figure to the
+millisecond: the photo now paints with the first paint instead of after it,
+which is the load delay being gone rather than merely smaller. These are
+localhost numbers, where the network is free; the 593ms of queueing the
+staging trace showed has more room to improve than this can demonstrate.
+
+**The slideshow keeps minting LCP candidates, and that is not fixed.** Measured
+locally: left alone with no interaction, LCP was reported at 8,492ms against
+the *fourth* photo, because each crossfade paints a new image. Over a 4.5s
+window, before the first fade, it is the first photo as intended. LCP stops
+updating at the first interaction, so a reader who does anything at all freezes
+it early, but a page left open reports a figure that is about the slideshow
+rather than the load. Fixing it means crossfading one element rather than five,
+which loses nothing visually but is a rewrite of both slideshows; it was left
+alone deliberately.
+
+**The repository's results swap yields before its housekeeping.** A click that
+swaps the results used to run `papelSyncQuickSettings()` and
+`papelKeywordRail()` inside the same callback as the two `innerHTML` writes,
+and the second of those reads geometry, forcing the layout the writes had
+just invalidated. They now run in a `requestAnimationFrame` plus a
+`setTimeout(0)`, which is what yields after the paint; rAF alone still runs
+before it. Nothing visible is deferred: Quick Settings is a closed panel and
+the keyword strip renders from its own HTML, only its drag handler and
+end-room class arriving a frame later.
+
+Measured honestly, this is a small win on the dev box: the click's processing
+went **25ms to 16ms** at 4x CPU throttle over 27 papers, with the deferred
+work confirmed to have run (the rail wired, `has-end-room` set, the view radio
+re-ticked). The staging trace that prompted it reported **390ms** of
+processing on that click; that was another machine and another dataset and it
+has not been reproduced here, so re-trace staging after a deploy rather than
+assuming the figure moved.
+
+**What was checked and what was not.** Production already negotiates **h3**
+(Cloudflare, TTFB about 640ms) while staging is **http/1.1** at about 1,100ms,
+so the trace's "upgrade to HTTP/2 or HTTP/3" advice is already true where it
+matters and a trace taken on staging overstates protocol and latency problems
+for production. The JPEG fallback is the standard `<picture>` pattern and was
+not exercised in a browser without WebP.
 ### Styling
 
 Use the CSS custom properties — `--maroon`, `--dark-maroon`, `--soft-maroon`,
@@ -1467,6 +1634,57 @@ one type means two different things (an approval is "forwarded" to one reader
 and "published" to another, a manuscript notice is a request to a librarian and
 an answer to a student).
 
+**The letter's own look** is `email_layout()`, rewritten 14 November 2026.
+
+- **It is lettered in the site's two faces**, `Plus Jakarta Sans` for the
+  letterhead and headings and `Inter` for running text, the same
+  `--font-head` and `--font-body` the pages use, where it used to set Georgia.
+  Mail is the awkward case for web fonts: the `<link>` is honoured by Apple
+  Mail and iOS and stripped by Gmail and Outlook, so each stack names the real
+  face first and then falls back exactly as the site does. Never rely on the
+  web font arriving.
+- The band under the letterhead reads **"PAPEL: The Research Repository and
+  Archiving System"**. "PAPEL" on its own means nothing to somebody reading
+  their first message from it.
+- **The "The Research Office / PUP Biñan Campus" sign-off is gone.** The
+  footer already says who sent it, and the block was a second signature under
+  the first.
+- **The footer is the site's own credit line** (`includes/site_footer.php`):
+  `© <year> PAPEL · PUP Biñan Campus`, with Terms and Privacy under it. Those
+  two links are not decoration: legitimate mail is expected to say what it is
+  bound by, and a filter reads their absence as a point against it. They are
+  dropped rather than printed dead where there is no `BASE_URL`.
+
+**PHPMailer defaults to ISO-8859-1, and that was eating every ñ.** Nothing set
+`CharSet`, so `public $CharSet = self::CHARSET_ISO88591` in
+`mailer/PHPMailer.php` stood, and UTF-8 bytes went out labelled Latin-1: "PUP
+Biñan Campus" arrived as "PUP BiÃ±an Campus". The letterhead was right only
+because it spells the n as `&ntilde;`, which is ASCII, so the fault looked like
+it belonged to one line of body text rather than to every message on the site.
+`send_email()` now sets `CharSet = 'UTF-8'` and `Encoding = 'base64'`, the
+latter so those bytes survive a server that is not 8-bit clean. Anything with a
+ñ, a ₱ or a curly quote in it was affected; check a letter's bytes
+(`mb_check_encoding`, and `c3b1` for ñ) rather than reading it on screen, where
+a client may guess the charset and hide the fault.
+
+**Every message carries a subject, and the subject fits the kind of message.**
+An absent or generic one is among the oldest things a spam filter scores
+against, and it tells the reader nothing. Two parts to it:
+
+- `create_notification()`'s map now names **all nine** values
+  `notifications.notification_type` accepts. Four were missing (`comment`,
+  `security`, `support`, `account`) and fell through to "PAPEL Notification:
+  Account", which repeats the sender's own name and says nothing about what
+  happened. The fallback for anything unmapped is "An Update from PAPEL" and
+  never the word "Notification". Check the map against the ENUM when adding a
+  type, remembering that a value the ENUM does not hold is stored as an empty
+  string in silence.
+- `send_email()` keeps a floor under its callers: an empty subject is replaced
+  and logged, so a new caller that forgets reaches the inbox rather than the
+  spam folder. Every current caller passes one.
+
+Remember the subject is printed as the heading inside the letter too, so each
+one has to read as a line of English at the top of a page.
 **Mail actually sends from this machine.** Anything that creates a notification
 reaches a real inbox, so test against `@example.com` addresses, which are
 reserved and cannot receive mail. Seeding a paper on a real student's account
@@ -1476,6 +1694,138 @@ and approving it will email that student.
 
 ## Business rules worth knowing
 
+### Correcting your own name and email
+
+Settings showed the whole of Personal Information as read-only under "Managed
+by your administrator" and sent everybody to support. That is right for a
+student and wrong for everybody else: a member of staff who marries, or whose
+address changes, had to ask the desk that enrolled them to retype it, and the
+Director has no such desk at all. Added 14 November 2026.
+
+| | |
+|---|---|
+| Who | `profile_self_edit_roles()`: `faculty`, `admin`, `head_academic`, `super_admin`, `librarian` |
+| Who not | A student, and a Library Pass, which has no `users` row to correct |
+| What | The full name and the email, and nothing else |
+| Where | `pages/settings.php`, Personal Information; the rules are `profile_self_update()` in `config/core.php` |
+
+- **Only the name and the email.** The role, the staff or student number and the
+  programme are not personal details but what the account *is*: a role somebody
+  could set on themselves is the escalation the management consoles are careful
+  to prevent, a number is issued by the campus, and a programme decides a
+  paper's filing folder and every report it appears in. They stay on the card as
+  text, with a line saying support corrects them.
+- **The primary role decides, and `user_has_role()` is the wrong question
+  here.** That helper is for what somebody may *open*, where a second post
+  really does add a desk. This asks whose record the row is, and an account has
+  one of those. Written the other way round (as it was first), a student who had
+  been given a staff second post came back editable, which is the one thing this
+  is meant to prevent; a member of staff holding two posts is unaffected, their
+  primary role being in the list already. Checked with a made-up student
+  carrying a Librarian second post: `user_roles()` says `student,librarian` and
+  `profile_self_editable()` still says no.
+- **A student is told it is somebody else's to do**, in those words, rather than
+  being left to wonder why the boxes are missing: their name and email are what
+  an adviser's roll is checked against and what `student_expiry_date()` counts
+  from.
+- **Hiding the form is not refusing the post.** `profile_self_update()` asks
+  `profile_self_editable()` itself, so a student posting `action=update_profile`
+  by hand is refused by the thing that does the writing. Driven against the
+  running site: the row was unchanged and the page said so.
+- **The rules are not restated.** It calls `normalize_person_name()`,
+  `person_name_problem()`, `account_email_problem()` and `email_account_owner()`
+  the consoles call, so a name is turned round from surname-first and re-cased
+  here exactly as it would be there, and a Gmail address's dots and `+tag` do
+  not make one inbox look like two. `profile_rule_message()` turns the pronoun
+  round ("Enter **their** full name" is written for somebody typing into
+  another person's account) and changes nothing about what is valid.
+- **The notice is `account_change_notice()`**, which writes the in-app
+  notification and the email, and tells the **old** address as well when the
+  address itself changed: otherwise the only warning that an account has moved
+  goes to the address it moved to. No "by" name is passed, the reader being the
+  person who did it.
+- **The desk that set the account up is told when the address changes, and only
+  then.** An email address is the recovery address: change it and the next
+  password reset goes to whoever changed it, so editing it quietly is a cleaner
+  way to take an account over than changing the password, which the owner
+  notices the moment they cannot sign in. The loud change was already reported
+  upward by `password_change_apply()` and the quiet one was not. A name is
+  cosmetic and is left alone, or a desk would hear about every corrected typo
+  and stop reading these. Who hears what, in full:
+
+  | | In-app | Email |
+  |---|---|---|
+  | The person who changed it | yes, type `account` | yes, to the new address |
+  | Their old address | no | yes, only when the address changed |
+  | Whoever created the account | yes, type `security` | yes, same condition |
+
+  - It goes through `create_notification()`, so it **emails as well**, where the
+    password notice is in-app only. A takeover warning that waits in a
+    notification centre until the reader next signs in is not a warning. The
+    fifth argument carries the subject, `security` not being in that function's
+    map and "PAPEL Notification: Security" saying nothing; remember the subject
+    is printed as the heading inside the letter too.
+  - **Both addresses are named in it.** Unlike a password they are not a
+    credential, and seeing them is the whole use of the notice: it is what lets
+    the reader tell a correction from a theft.
+  - **The Director has no creator**, so `password_upline()` answers null and
+    nobody is told. That is already true of their password changes, and it means
+    the most powerful account on the site is the one nobody is watching. Driven
+    with a seeded account whose `created_by` is NULL: the change goes through,
+    the page does not claim anyone was told, and nothing is written.
+- **The session is written back.** The navbar, the avatar menu and the password
+  dialog's `data-confirm-match` all print `$_SESSION['user']`, so without that
+  the correction would not show until the next sign-in. Measured: all five
+  places show the new name on the very next request.
+- The boxes are the shared `.page-field` (`includes/page_theme.php`) with the
+  focus edge from `includes/focus_ring.php`, so they are the same control as
+  every other field on the site; only the bottom margin and the height are
+  overridden, the profile grid's own gap already separating the rows. The
+  `<dt>` holds the `<label>`, so the uppercase caption still names the box to a
+  screen reader and still moves the cursor when clicked.
+
+**The card's layout, and the three things that put it out of true.** The grid is
+two columns of label-over-value, and mixing a one-line fact with a 37px box in
+one row is what breaks it.
+
+- **Email sits beside Full name**, not beside the Faculty ID where it was. The
+  two editable boxes then share a row and the facts have rows of their own, so
+  no row pairs a tall cell with a short one and there is no dead band under the
+  shorter column. Keep like with like if a field is ever added: that ordering is
+  the fix, not a preference.
+- **Every value slot is one height** (`--value-h`, built from the box's own
+  padding, line and border so the two cannot drift), and its first line is
+  placed with `padding-top` rather than the cell being centred. Centring the
+  cell looked right until a value carried a hint under it: the student's expiry
+  says what it is counted from, and the pair was centred together, so its date
+  rode 3px above the one beside it.
+- **Hints are ranged left.** The `text-align: justify` rule a few lines up
+  reaches `.profile-hint`, and two lines of micro-copy is the worst measure to
+  justify: the words in "Letters, spaces, full stops, hyphens and apostrophes"
+  were pushed apart into rivers. The same rule is turned off for the intro and
+  the notes **on a phone only**, where every justified line holds six or seven
+  words; the desktop paragraph keeps it.
+- **On a phone** the band is dropped (one column has nothing to line up
+  against, so it only adds height), the boxes go to **16px**, which is the floor
+  below which iOS zooms the page in on focus and leaves the form wider than the
+  window, and Save runs the full width.
+
+Judged by reading the pixels, not by eye: every row's two values share a
+baseline to 0px at 1280px for both a staff account and a student, and the
+label-to-label rhythm at 390px is even. A chip reads 2px lower at the top of its
+line box than the plain text beside it, which is its smaller font, and the
+baselines still match: compare baselines, not box edges, and never box centres,
+which a hint makes meaningless.
+Checked against the running site for all six roles (the five above plus a
+student), in both palettes: the boxes appear for staff and not for a student,
+a surname-first name is turned round, an all-capitals one re-cased, a digit in
+a name and a bare domain refused in words, an address another account holds
+refused, a stale CSRF token answered 403 with the row untouched, and the
+notification written with the type `account` rather than the empty string an
+invalid ENUM value would leave. The upline notice was driven separately: a name-only
+change told the creator nothing, an address change wrote them a `security` notice
+naming both addresses, and an account with no creator changed its address without
+error and without claiming anybody had been told.
 ### What a management console may be told
 
 The three consoles (an adviser's students, the Coordinator's advisers and

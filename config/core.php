@@ -1320,6 +1320,139 @@ function user_level_for(?array $u, string $role): int {
     return $map && $map['role'] === $role ? (int)$map['level'] : (int)($u['admin_level'] ?? 1);
 }
 
+/* ---------------------------------------------------------------------------
+   Who runs the research operation
+
+   The Director and the Research Coordinator are not the same kind of account.
+   The Director is the higher-up: the record is theirs, which is the admin
+   accounts and the archive. The Coordinator is the head of research on the
+   campus, and the day-to-day running of it is theirs. Settings that decide
+   how papers are handled therefore belong to both, and the Storage Folder was
+   the clearest case of the line being drawn in the wrong place: the
+   Coordinator could already connect Drive but could not say which folder the
+   papers went into, so they owned half of one setting.
+
+   What is deliberately NOT here: creating and editing administrator accounts
+   (app/admin/super_admin_manage_admins.php) and handing out any position
+   (secondary_position_options()). A Coordinator who could do either could mint
+   a second Coordinator, or a Director, and that is the escalation the primary
+   list is written to prevent. Those stay the Director's. See the note under
+   "One person, two posts" in CLAUDE.md before moving either.
+   --------------------------------------------------------------------------- */
+
+/**
+ * Is this account the Research Coordinator?
+ *
+ * The level is the whole question. A Head of Academic Programs is an `admin`
+ * too and differs only by admin_level, so a bare role check hands the head
+ * every page meant for the Coordinator. Asked through user_has_role() and
+ * user_level_for(), so a second post counts: somebody who advises and
+ * coordinates is the Coordinator here as well.
+ */
+/* ---------------------------------------------------------------------------
+   The campus photos behind the navbar and the repository's banner
+
+   One set of files, read from disk so a photo can be added or dropped by
+   adding or deleting it, and one order, so the navbar strip and the banner are
+   never picking differently. Both used to call glob() and shuffle() for
+   themselves.
+   --------------------------------------------------------------------------- */
+
+/** Every campus photo, by base name, in a fixed alphabetical order. */
+function nav_photo_files(): array {
+    static $files = null;
+    if ($files === null) {
+        $files = array_map('basename', glob(ROOT_PATH . '/assests/images/navbar-photo*.jpg') ?: []);
+        sort($files);                     // glob is not guaranteed to be ordered
+    }
+    return $files;
+}
+
+/**
+ * The photos in the order a page should show them, the first being the one
+ * painted straight away.
+ *
+ * **It rotates by the day, and no longer shuffles on every request.** A fresh
+ * shuffle meant the first photo - which is the Largest Contentful Paint on
+ * every page of the site - was a different file almost every time, so the
+ * reader downloaded a new 200KB image on page after page and the cache never
+ * helped. It also cannot be preloaded from <head>, because <head> is printed
+ * before the shuffle happens. Rotating by the day keeps the variety that was
+ * wanted, at the scale a person actually notices it, and makes the first photo
+ * the same file for every page and every reader that day: fetched once, then
+ * served from cache.
+ */
+function nav_photo_order(): array {
+    $files = nav_photo_files();
+    if (count($files) < 2) { return $files; }
+    $shift = (int)date('z') % count($files);
+    return array_merge(array_slice($files, $shift), array_slice($files, 0, $shift));
+}
+
+/**
+ * The srcset for one campus photo, or '' where the WebP set is not on disk.
+ *
+ * The strip is full width and 339px tall, so the 3840px original is the 2x
+ * image for a 1920px screen and four times the pixels a 1366px laptop can
+ * show: the whole set came to 1,114KB of JPEG on every page. The same set at
+ * 1920 is 316KB and at 1280 is 160KB. The JPEG stays as the <img> src, so a
+ * browser that cannot read WebP, or a copy of the site deployed before the
+ * .webp files were, shows exactly what it showed before.
+ */
+function nav_photo_srcset(string $photo): string {
+    $stem = preg_replace('/\.jpg$/i', '', $photo);
+    $out  = [];
+    foreach ([1280, 1920, 3840] as $w) {
+        $rel = '/assests/images/' . $stem . '-' . $w . '.webp';
+        if (is_file(ROOT_PATH . $rel)) { $out[] = BASE_URL . $rel . ' ' . $w . 'w'; }
+    }
+    return implode(', ', $out);
+}
+
+function is_research_coordinator(?array $u): bool {
+    return user_has_role($u, 'admin') && user_level_for($u, 'admin') === 1;
+}
+
+/** The two accounts that run the research operation. */
+function can_manage_research_operations(?array $u): bool {
+    return user_has_role($u, 'super_admin') || is_research_coordinator($u);
+}
+
+/**
+ * Close a page to everybody but those two.
+ *
+ * require_role() cannot say this on its own: it reads roles and knows nothing
+ * of admin_level, so ['super_admin', 'admin'] would let the Head of Academic
+ * Programs in. It runs first all the same, because it is what answers a signed
+ * out visitor, a background request and the password gate.
+ *
+ * A head who lands here is sent home with a word about it and **keeps their
+ * session**. require_role() empties the session for a wrong role, which is
+ * right for an account that has no business on the page at all; a head is a
+ * real administrator who opened the wrong one, and signing them out of the
+ * site for it reads as a fault rather than as an answer.
+ */
+function require_research_operations(): void {
+    require_role(['super_admin', 'admin']);
+    $u = current_user();
+    if (can_manage_research_operations($u)) { return; }
+
+    $opening_page = ($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET'
+        && ($_SERVER['HTTP_SEC_FETCH_MODE'] ?? 'navigate') === 'navigate';
+    if (!$opening_page) {
+        http_response_code(403);
+        header('Content-Type: application/json');
+        exit(json_encode([
+            'success' => false,
+            'error'   => 'wrong_role',
+            'message' => 'That setting belongs to the Research Coordinator and the Director.',
+        ]));
+    }
+    flash('error', 'That page belongs to the Research Coordinator and the Director.');
+    header('Location: ' . role_home((string)($u['user_role'] ?? '')));
+    exit;
+}
+
 /**
  * What to call an account, worked out from what the database holds.
  *
@@ -1868,6 +2001,180 @@ function password_change_apply(array $u, string $current, string $new, string $c
     return ['ok' => true, 'message' => $upline
         ? 'Your password has been updated. ' . $upline['full_name'] . ' has been notified.'
         : 'Your password has been updated.'];
+}
+
+/* ---------------------------------------------------------------------------
+   Correcting your own name and email
+
+   Settings showed the whole of Personal Information as read-only and sent
+   everybody to support, which is right for a student and wrong for everybody
+   else: a member of staff who marries, or whose address changes, had to ask
+   the desk that enrolled them to retype it, and the Director has no such desk
+   at all. Staff now keep their own two details. A student still goes through
+   support, because their name and email are what an adviser's roll is checked
+   against and what the account's life is counted from, so a correction there
+   is somebody else's to make.
+
+   Only the name and the email. The role, the staff or student number and the
+   programme are not personal details but what the account *is*: a role a
+   person could set on themselves is the escalation the management consoles
+   are careful to prevent, a number is issued by the campus, and a programme
+   decides a paper's filing folder and every report it appears in.
+   --------------------------------------------------------------------------- */
+
+/** The roles that keep their own record. Students and a Library Pass do not. */
+function profile_self_edit_roles(): array {
+    return ['faculty', 'admin', 'head_academic', 'super_admin', 'librarian'];
+}
+
+/**
+ * May this account correct its own details?
+ *
+ * The **primary** role decides, not user_has_role(). That rule is for deciding
+ * what somebody may open, where a second post really does add a desk; this
+ * question is whose record the row is, and an account has one of those. Asked
+ * the other way a student who had been given a staff second post would be let
+ * in to edit a student's name and email, which is the one thing this is meant
+ * to prevent. A member of staff with two posts is unaffected: their primary
+ * role is already in the list.
+ */
+function profile_self_editable(?array $u): bool {
+    if (!$u || (int)($u['user_id'] ?? 0) <= 0) { return false; }
+    return in_array((string)($u['user_role'] ?? ''), profile_self_edit_roles(), true);
+}
+
+/**
+ * A rule's complaint, worded for somebody reading it about their own account.
+ *
+ * person_name_problem() and account_email_problem() are written for a
+ * management console, where the account being typed into is somebody else's:
+ * "Enter their full name." The rules themselves are not restated here, because
+ * a second copy would be a second opinion about what a name may be (the
+ * mistake includes/manage_validate.php exists to avoid); only the pronoun is
+ * turned round, which is a matter of who is reading and not of what is valid.
+ */
+function profile_rule_message(string $msg): string {
+    return strtr($msg, [
+        'Enter their full name.'          => 'Enter your full name.',
+        'Please write their name out'     => 'Please write your name out',
+        'Enter their email address.'      => 'Enter your email address.',
+    ]);
+}
+
+/**
+ * Apply a correction somebody has made to their own name and email.
+ *
+ * The checking, the write and the notice, in one place, so the page is only
+ * the form: the same bargain password_change_apply() above strikes with
+ * pages/change_password.php.
+ */
+function profile_self_update(array $u, string $name, string $email): array {
+    $userId = (int)($u['user_id'] ?? 0);
+    if ($userId <= 0) {
+        return ['ok' => false, 'message' => 'There is nobody signed in to change.'];
+    }
+    /* Checked here and not only on the page: a student posting this form by
+       hand must be refused by the thing that does the writing. */
+    if (!profile_self_editable($u)) {
+        return ['ok' => false, 'message' =>
+            'Your details are kept by the desk that set up your account. '
+          . 'Contact support to have them corrected.'];
+    }
+
+    /* The same turn-round and re-casing the consoles apply, so "REYES, RAYVER S."
+       is filed as "Rayver S. Reyes" here exactly as it would be there. */
+    $name  = normalize_person_name($name);
+    $email = trim($email);
+
+    if ($why = person_name_problem($name)) {
+        return ['ok' => false, 'message' => profile_rule_message($why), 'field' => 'full_name'];
+    }
+    if ($why = account_email_problem($email)) {
+        return ['ok' => false, 'message' => profile_rule_message($why), 'field' => 'email'];
+    }
+
+    /* Somebody else may already hold that inbox. email_account_owner() reads it
+       the way the consoles do, so the dots and the "+tag" of a Gmail address do
+       not make one address look like two. */
+    $owner = email_account_owner($email);
+    if ($owner && (int)$owner['user_id'] !== $userId) {
+        return ['ok' => false, 'field' => 'email', 'message' =>
+            'That email address is already on another account. '
+          . 'If it is yours, contact support rather than enrolling twice.'];
+    }
+
+    $before = account_snapshot($userId);
+    if (trim((string)($before['full_name'] ?? '')) === $name
+        && strcasecmp(trim((string)($before['email'] ?? '')), $email) === 0) {
+        return ['ok' => true, 'changed' => false,
+                'message' => 'Your details are already written that way.'];
+    }
+
+    $conn = db();
+    $up = $conn->prepare("UPDATE users SET full_name = ?, email = ? WHERE user_id = ?");
+    $up->bind_param('ssi', $name, $email, $userId);
+    $up->execute();
+    $up->close();
+
+    /* account_change_notice() writes the in-app notice and the email, and tells
+       the *old* address as well when the address itself changed: otherwise the
+       only warning that an account has moved goes to the address it moved to.
+       No "by" name, since the person reading it is the person who did it. */
+    $after = account_snapshot($userId);
+    account_change_notice($userId, $before, $after);
+
+    /* The desk that set the account up is told when the **address** changes, and
+       not when only the name does.
+
+       An email address is the recovery address: change it and the next password
+       reset goes to whoever changed it, so editing it quietly is a cleaner way
+       to take an account over than changing the password, which the owner
+       notices the moment they cannot sign in. The loud change was already
+       reported upward (password_change_apply() above) and the quiet one was not.
+       A name is cosmetic and is left alone, or a desk would hear about every
+       corrected typo and stop reading these.
+
+       Unlike the password notice, which is in-app only, this one emails as well:
+       a takeover warning that waits in a notification centre until the reader
+       next signs in is not a warning. Both addresses are named, because unlike a
+       password they are not a credential and seeing them is the whole use of the
+       notice: it is what lets the reader tell a correction from a theft.
+
+       The Director has no creator, so password_upline() answers null and nobody
+       is told. That is already true of their password changes. */
+    $oldMail = trim((string)($before['email'] ?? ''));
+    $newMail = trim((string)($after['email']  ?? ''));
+    if ($oldMail !== '' && strcasecmp($oldMail, $newMail) !== 0) {
+        $upline = password_upline($userId);
+        if ($upline) {
+            create_notification((int)$upline['user_id'], null, 'security',
+                trim((string)($after['full_name'] ?? 'Someone'))
+                . ' (' . account_position($u) . '), whose account you set up, changed'
+                . ' their email address from ' . $oldMail . ' to ' . $newMail
+                . ' on ' . date('j M Y \a\t g:i A') . '.'
+                . ' If they did not do this, the account may have been taken over:'
+                . ' the address on an account is where its password resets are sent.',
+                'An account you set up changed its email address');
+        }
+    }
+
+    /* The navbar, the avatar and this page all print the session's copy, so
+       without this the correction does not appear until the next sign-in. */
+    start_session_once();
+    if (!empty($_SESSION['user']) && (int)($_SESSION['user']['user_id'] ?? 0) === $userId) {
+        $_SESSION['user']['full_name'] = $name;
+        $_SESSION['user']['email']     = $email;
+    }
+
+    $said = 'Your details have been updated. A confirmation has been sent to your email.';
+    /* Told before they wonder: an address change is reported to the desk that
+       set the account up, and somebody should learn that from the page rather
+       than from the reply to it. */
+    if (isset($upline) && $upline) {
+        $said .= ' ' . $upline['full_name'] . ', the ' . account_position($upline)
+               . ' who set up your account, has been told that the address changed.';
+    }
+    return ['ok' => true, 'changed' => true, 'message' => $said];
 }
 
 /**
@@ -2759,16 +3066,33 @@ function create_notification(int $user_id, ?int $paper_id, string $type,
   try {
     $recipient = get_user($user_id);
     if ($recipient && !empty($recipient['email'])) {
-      // Map notification types to friendly email subject lines
+      /* One subject per notification type, and every type the ENUM allows is
+         named. Four of the nine were missing (comment, security, support,
+         account), so they fell through to "PAPEL Notification: Account": a
+         subject that says nothing about what happened, repeats the sender's own
+         name, and reads to a filter like the generic bulk mail it resembles.
+         The subject is also printed as the heading inside the letter, so each
+         one has to work as a line of English at the top of a page, which is why
+         none of them is a bare noun.
+
+         Check this list against notifications.notification_type before adding a
+         type: a value the ENUM does not hold is stored as an empty string in
+         silence (see the note on that trap), and would land here too. */
       $subjects = [
         'submission'  => 'New Paper Submission Requires Your Review',
         'approval'    => 'Your Paper Has Been Approved',
         'decline'     => 'Your Paper Needs Revisions',
-        'reminder'    => 'PAPEL Reminder: Papers Pending Your Action',
+        'reminder'    => 'Papers Are Waiting for Your Action',
         'manuscript'  => 'About Your Manuscript Request',
+        'comment'     => 'A Reviewer Left a Comment on Your Paper',
+        'security'    => 'A Security Change on Your Account',
+        'support'     => 'About Your Support Request',
+        'account'     => 'Your Account Details Were Updated',
       ];
       if ($subject === '') {
-        $subject = $subjects[$type] ?? ('PAPEL Notification: ' . ucfirst($type));
+        /* The fallback names the act, not the type, and never the word
+           "Notification", which is what the old one led with. */
+        $subject = $subjects[$type] ?? ('An Update from ' . APP_NAME);
       }
 
       /* Written as a letter rather than posted as a bare sentence. The message
@@ -2888,6 +3212,7 @@ function email_action(string $label, string $url): string {
 function email_layout(string $bodyHtml, string $heading = ''): string {
   $appName = defined('APP_NAME') ? APP_NAME : 'PAPEL';
   $year    = date('Y');
+  $base    = defined('BASE_URL') ? BASE_URL : '';
 
   /* PUP maroon, the same values the site itself uses (--accent and
      --accent-dark in includes/theme.php), so a message looks like it came from
@@ -2899,19 +3224,36 @@ function email_layout(string $bodyHtml, string $heading = ''): string {
   $rule     = '#DED5D3';   // hairlines
   $ground   = '#F1EDEC';   // behind the sheet
 
-  /* A serif for the institutional lines and headings, a system sans for
-     running text. Georgia is one of the few faces that is genuinely present
-     across mail clients, and it carries the academic register the plain
-     sans-serif was missing. */
-  $serif = "Georgia,'Times New Roman',Times,serif";
-  $sans  = "'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+  /* The site's own two faces (--font-head and --font-body in
+     includes/site_head.php) rather than the Georgia this used to set: a letter
+     from PAPEL should be lettered like PAPEL. Mail is the awkward case for web
+     fonts, so each stack names the real face first and falls back the way the
+     site does. Apple Mail and iOS honour the <link> below and show the real
+     thing; Gmail and Outlook strip it and land on the system sans, which is
+     why the fallbacks are the ones the site itself names. */
+  $head = "'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+  $sans = "'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 
   $headingHtml = $heading !== ''
-    ? '<tr><td style="padding:34px 44px 0;font-family:' . $serif . ';">
-         <h1 style="margin:0;color:' . $maroon . ';font-size:21px;font-weight:normal;line-height:1.4;">'
+    ? '<tr><td style="padding:34px 44px 0;font-family:' . $head . ';">
+         <h1 style="margin:0;color:' . $maroon . ';font-size:21px;font-weight:700;line-height:1.4;letter-spacing:-.2px;">'
            . htmlspecialchars($heading) . '</h1>
          <div style="border-top:2px solid ' . $maroon . ';width:38px;margin-top:14px;font-size:0;line-height:0;">&nbsp;</div>
        </td></tr>'
+    : '';
+
+  /* Terms and Privacy, as the site's own footer carries them. Legitimate mail
+     is expected to say where it came from and what it is bound by, and a
+     filter reads their absence as one more point against it. Dropped entirely
+     where there is no BASE_URL to point at, rather than printing a dead link. */
+  $footLinks = $base !== ''
+    ? '<div style="margin-top:7px;">
+         <a href="' . htmlspecialchars($base) . '/pages/terms_and_conditions.php"
+            style="color:' . $muted . ';text-decoration:underline;">Terms &amp; Conditions</a>
+         <span style="color:' . $rule . ';">&nbsp;&middot;&nbsp;</span>
+         <a href="' . htmlspecialchars($base) . '/pages/privacy.php"
+            style="color:' . $muted . ';text-decoration:underline;">Privacy</a>
+       </div>'
     : '';
 
   return '<!doctype html>
@@ -2921,6 +3263,7 @@ function email_layout(string $bodyHtml, string $heading = ''): string {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light">
 <meta name="supported-color-schemes" content="light">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>:root{color-scheme:light;supported-color-schemes:light;}</style>
 </head>
 <body style="margin:0;padding:0;background-color:' . $ground . ';-webkit-text-size-adjust:100%;">
@@ -2934,20 +3277,22 @@ function email_layout(string $bodyHtml, string $heading = ''): string {
 
         <!-- Letterhead. The institution is named first, the system second. -->
         <tr><td style="background-color:' . $maroon . ';padding:26px 44px 22px;" bgcolor="' . $maroon . '">
-          <div style="font-family:' . $serif . ';font-size:15px;font-weight:normal;color:#ffffff;line-height:1.45;">
+          <div style="font-family:' . $head . ';font-size:17px;font-weight:700;color:#ffffff;line-height:1.4;letter-spacing:-.2px;">
             Polytechnic University of the Philippines
           </div>
-          <div style="font-family:' . $sans . ';font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#E8C9C9;line-height:1.4;margin-top:3px;">
+          <div style="font-family:' . $sans . ';font-size:11px;font-weight:500;letter-spacing:1.5px;text-transform:uppercase;color:#E8C9C9;line-height:1.4;margin-top:4px;">
             Bi&ntilde;an Campus
           </div>
         </td></tr>
 
         <!-- A narrower band carries the system name, so the two identities stay
-             distinct instead of competing in one block. -->
+             distinct instead of competing in one block. The full name is spelled
+             out: "PAPEL" alone means nothing to somebody reading their first
+             message from it. -->
         <tr><td style="background-color:' . $maroonDk . ';padding:11px 44px;" bgcolor="' . $maroonDk . '">
-          <div style="font-family:' . $sans . ';font-size:12px;letter-spacing:3px;text-transform:uppercase;color:#ffffff;line-height:1;">
-            ' . htmlspecialchars($appName) . '
-            <span style="color:#C98C8C;letter-spacing:0;text-transform:none;font-size:12px;">&nbsp; Research Repository</span>
+          <div style="font-family:' . $sans . ';font-size:12px;color:#ffffff;line-height:1.45;">
+            <span style="font-weight:600;letter-spacing:2.5px;text-transform:uppercase;">' . htmlspecialchars($appName) . '</span><span style="color:#C98C8C;">:</span>
+            <span style="color:#E8C9C9;">&nbsp;The Research Repository and Archiving System</span>
           </div>
         </td></tr>
 
@@ -2958,18 +3303,12 @@ function email_layout(string $bodyHtml, string $heading = ''): string {
           <div style="color:' . $ink . ';">' . $bodyHtml . '</div>
         </td></tr>
 
-        <!-- Sign-off -->
-        <tr><td style="padding:0 44px 30px;font-family:' . $sans . ';font-size:15px;line-height:1.7;color:' . $ink . ';">
-          <div style="border-top:1px solid ' . $rule . ';padding-top:18px;">
-            <div style="font-family:' . $serif . ';font-size:15px;color:' . $maroon . ';">The Research Office</div>
-            <div style="font-size:13px;color:' . $muted . ';margin-top:2px;">PUP Bi&ntilde;an Campus</div>
-          </div>
-        </td></tr>
-
-        <!-- Footer -->
+        <!-- Footer. The same credit line includes/site_footer.php prints,
+             so the letter signs off the way every page does. -->
         <tr><td style="background-color:#FAF7F6;border-top:1px solid ' . $rule . ';padding:18px 44px 20px;font-family:' . $sans . ';font-size:11px;line-height:1.7;color:' . $muted . ';">
-          This message was sent automatically. Please do not reply to it.<br>
-          &copy; ' . $year . ' Polytechnic University of the Philippines, Bi&ntilde;an Campus. All rights reserved.
+          This message was sent automatically. Please do not reply to it.
+          <div style="margin-top:7px;">&copy; ' . $year . ' ' . htmlspecialchars($appName) . ' &middot; PUP Bi&ntilde;an Campus</div>
+          ' . $footLinks . '
         </td></tr>
 
       </table>
@@ -2996,6 +3335,17 @@ function email_layout(string $bodyHtml, string $heading = ''): string {
  * content is recoverable; false means "assume they did not receive it".
  */
 function send_email(string $to, string $subject, string $body): bool {
+  /* A message with no Subject is one of the oldest things a filter scores
+     against, and it reads as machine noise to the person as well. Every
+     caller does pass one; this is the floor under them, so a new one that
+     forgets lands in the inbox rather than the spam folder. The name of the
+     system alone is a poor subject, which is the point of saying so here
+     rather than quietly sending it. */
+  $subject = trim($subject);
+  if ($subject === '') {
+      $subject = (defined('APP_NAME') ? APP_NAME : 'PAPEL') . ' notification';
+      error_log('send_email: no subject given for ' . $to . '; a type-specific one belongs here');
+  }
   // Load Composer autoloader if available
   if (file_exists(__DIR__ . '/../vendor/autoload.php')) {
     require_once __DIR__ . '/../vendor/autoload.php';
@@ -3028,6 +3378,15 @@ function send_email(string $to, string $subject, string $body): bool {
       $mail->setFrom(SMTP_USER, APP_NAME);
       $mail->addAddress($to);
       $mail->isHTML(true);
+      /* PHPMailer defaults to ISO-8859-1 (CHARSET_ISO88591 in
+         mailer/PHPMailer.php), and nothing here used to say otherwise, so
+         every letter went out as Latin-1 carrying UTF-8 bytes: "Biñan"
+         arrived as "BiÃ±an". The letterhead was right only because it
+         spells the n with an HTML entity; any ñ, ₱ or curly quote a caller
+         put in a body was mangled. Base64 keeps those bytes intact through
+         a server that is not 8-bit clean. */
+      $mail->CharSet  = 'UTF-8';
+      $mail->Encoding = 'base64';
       $mail->Subject = $subject;
       $mail->Body    = email_layout(nl2br($body), $subject);
       $mail->AltBody = email_plain($body);

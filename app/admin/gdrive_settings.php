@@ -3,12 +3,20 @@
  * Storage folder, where every uploaded paper is kept.
  *
  * This was a field tucked into a sidebar card on the Director's dashboard,
+ * and for a while it was the Director's alone to change. It is the Research
+ * Coordinator's as well now: running the research operation is their job,
+ * and they could already connect Drive.
  * which gave no room to say what the setting actually does. It is one of the
  * few settings that changes where people's files physically land, so it gets a
  * page that explains itself before it asks for anything.
  */
 require_once '../../config/core.php';
-require_role(['super_admin']);
+/* The Director and the Research Coordinator, who runs research on the
+   campus and could already connect Drive without being able to say which
+   folder the papers went into. Not require_role(['super_admin','admin']),
+   which would also let in the Head of Academic Programs: that role is an
+   admin at level 2 and differs by nothing else. */
+require_research_operations();
 require_once '../../config/gdrive_config.php';
 
 $conn = db();
@@ -155,7 +163,11 @@ if ($sc) $stored = (int)($sc->fetch_assoc()['n'] ?? 0);
     <div class="wrap crumb-inner">
         <a href="<?= e(BASE_URL) ?>/archive/index.php">Home</a>
         <span class="material-symbols-outlined crumb-arrow">chevron_right</span>
-        <a href="super_admin_review_dashboard.php">Oversight</a>
+        <?php /* The reader's own desk, not the Director's. Hard-coded to
+                 super_admin_review_dashboard.php, this crumb sent a Research
+                 Coordinator to a page require_role() refuses, and a refused
+                 role is signed out: a breadcrumb that logs you out. */ ?>
+        <a href="<?= e(role_home((string)($u['user_role'] ?? ''))) ?>"><?= e(role_home_label((string)($u['user_role'] ?? ''))) ?></a>
         <span class="material-symbols-outlined crumb-arrow">chevron_right</span>
         <span class="crumb-current">Storage Folder</span>
     </div>

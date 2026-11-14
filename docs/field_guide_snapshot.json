@@ -1,5 +1,5 @@
 {
- "built": "2026-11-14 15:31",
+ "built": "2026-11-14 23:16",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -41,7 +41,7 @@
    "lines": 139
   },
   "app/admin/gdrive_settings.php": {
-   "lines": 368
+   "lines": 380
   },
   "app/admin/super_admin_manage_admins.php": {
    "lines": 571
@@ -149,7 +149,7 @@
    "lines": 245
   },
   "app/support_requests.php": {
-   "lines": 294
+   "lines": 299
   },
   "archive/archive_handler.php": {
    "lines": 15
@@ -161,7 +161,7 @@
    "lines": 954
   },
   "archive/index.php": {
-   "lines": 2728
+   "lines": 2764
   },
   "archive/login.php": {
    "lines": 1093
@@ -176,7 +176,7 @@
    "lines": 265
   },
   "config/core.php": {
-   "lines": 5491
+   "lines": 5850
   },
   "config/error_handler.php": {
    "lines": 228
@@ -335,10 +335,10 @@
    "lines": 766
   },
   "includes/site_head.php": {
-   "lines": 1715
+   "lines": 1749
   },
   "includes/site_header.php": {
-   "lines": 701
+   "lines": 734
   },
   "includes/skeleton.php": {
    "lines": 716
@@ -392,7 +392,7 @@
    "lines": 227
   },
   "pages/gdrive_callback.php": {
-   "lines": 37
+   "lines": 41
   },
   "pages/help_center.php": {
    "lines": 325
@@ -404,7 +404,7 @@
    "lines": 219
   },
   "pages/settings.php": {
-   "lines": 633
+   "lines": 748
   },
   "pages/terms_and_conditions.php": {
    "lines": 164

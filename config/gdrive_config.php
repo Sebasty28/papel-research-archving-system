@@ -193,7 +193,7 @@ function gdrive_folder_explain(array $check, string $audience = 'admin'): string
     if ($audience === 'student') {
         return 'Papers cannot be stored right now, because the Google Drive storage folder cannot be used. '
              . 'Nothing was submitted. Please let your Research Coordinator or the Director know, then try again. '
-             . 'The Director can fix it under Storage Folder.';
+             . 'The Research Coordinator or the Director can fix it under Storage Folder.';
     }
     switch ($check['state']) {
         case 'not_found':

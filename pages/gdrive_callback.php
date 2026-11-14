@@ -18,7 +18,11 @@ if (isset($_GET['code'])) {
                 flash('success', 'Google Drive connected. Students can submit papers again.');
                 // Back to the page the connect button lives on, so the new
                 // status is visible rather than only asserted.
-                if ($u['user_role'] === 'super_admin') {
+                /* Both of the accounts that own that page come back to it, so the
+                   new status is visible rather than only asserted. It used to be
+                   the Director alone, so a Coordinator who connected Drive was
+                   returned to a page that says nothing about Drive. */
+                if (can_manage_research_operations($u)) {
                     $redirect = BASE_URL . '/app/admin/gdrive_settings.php';
                 }
             } else {

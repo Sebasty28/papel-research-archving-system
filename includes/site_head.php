@@ -9,6 +9,40 @@
 <?php require_once __DIR__ . '/favicon.php'; ?>
 <?php require_once __DIR__ . '/splash.php'; ?>
 <?php require_once __DIR__ . '/skeleton.php'; ?>
+<?php /* Bootstrap's stylesheet is the first thing in this head and the first
+         request on a new origin, so the DNS lookup and the TLS handshake for it
+         sit in front of the page's own first paint. Google Fonts already had
+         this pair below; jsDelivr never did. */ ?>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<?php
+/* ---- The Largest Contentful Paint, asked for before anything else ----
+   On nearly every page the LCP element is the campus photo behind the navbar,
+   and on the repository it is the same photo in that page's own banner. Either
+   way it is nav_photo_order()[0], which is why that function rotates by the day
+   instead of shuffling per request: a file this file cannot name is a file it
+   cannot preload.
+
+   Measured on staging before this: the image was discovered in the HTML but
+   started at Low priority, was not queued until 1,011ms into the load, and then
+   downloaded in 8ms. 593ms of a 1,117ms LCP was spent waiting for a turn. The
+   preload here and the fetchpriority="high" in site_header.php are the two
+   halves of the same fix; imagesrcset must match the srcset on the <img>
+   exactly, or the browser preloads one file and then fetches another. */
+$lcp_photo = function_exists('nav_photo_order') ? (nav_photo_order()[0] ?? '') : '';
+if ($lcp_photo !== ''):
+    $lcp_set = function_exists('nav_photo_srcset') ? nav_photo_srcset($lcp_photo) : '';
+?>
+<?php if ($lcp_set !== ''): ?>
+<?php /* type="image/webp" so a browser that cannot decode WebP skips this
+         line rather than preloading a file it will not use. That browser
+         takes the <img> src, which is still the JPEG. */ ?>
+<link rel="preload" as="image" type="image/webp" fetchpriority="high"
+      imagesrcset="<?= e($lcp_set) ?>" imagesizes="100vw">
+<?php else: ?>
+<link rel="preload" as="image" fetchpriority="high"
+      href="<?= e(BASE_URL) ?>/assests/images/<?= e($lcp_photo) ?>">
+<?php endif; ?>
+<?php endif; ?>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

@@ -31,7 +31,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'chang
     exit;
 }
 
-// ---- Profile data (read-only; managed by an administrator) ----
+/* ---- Correct your own name and email ----
+   Staff keep their own record; a student is sent to support. The rules, the
+   write and the notice are profile_self_update() in config/core.php, which
+   re-checks who is allowed: this page hides the form from a student, and
+   hiding a form is not the same as refusing the post it would have made. */
+$can_edit_profile = profile_self_editable($u);
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update_profile') {
+    csrf_verify();
+    $done = profile_self_update($u,
+        (string)($_POST['full_name'] ?? ''),
+        (string)($_POST['email'] ?? ''));
+    flash($done['ok'] ? 'success' : 'error', $done['message']);
+    /* Back to the section the result is about. The redirect also means the
+       page below re-reads the row, so it prints what was just written. */
+    header('Location: settings.php#personal');
+    exit;
+}
+
+// ---- Profile data (staff keep their own name and email; see above) ----
 $stmt = $conn->prepare("SELECT username, email, full_name, user_role, admin_level, program, student_id, faculty_id, section, academic_year, expires_on, created_at, last_login FROM users WHERE user_id = ?");
 $stmt->bind_param('i', $u['user_id']);
 $stmt->execute();
@@ -73,6 +92,51 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
 /* A date on its own invites "why then?": the reason sits under it. */
 .profile-hint { display: block; font-size: .6875rem; color: var(--grey); margin-top: .15rem; line-height: 1.5; }
 .profile-field dd.profile-warn { color: var(--dark-maroon); font-weight: 500; }
+
+/* ---- The two boxes staff correct themselves ----
+   The <dd> carries .page-field, so the box is drawn by the shared rule in
+   includes/page_theme.php that every other field on the site uses, and the
+   focus edge by includes/focus_ring.php.
+
+   --value-h is the whole of the alignment. A read-only value is one line of
+   text and an input is a bordered box half as tall again, so a row holding one
+   of each put its two values on different centre lines and the columns read as
+   out of step. Every value slot is that height and centres what is in it, so a
+   fact and a box sit on the same line whatever a row happens to hold. It is
+   measured from the box: .4rem of padding twice over, a .875rem line, and
+   1.5px of border twice over.
+
+   The <dt> holds the <label>, so the uppercase caption is what names the box
+   to a screen reader and what moves the cursor when it is clicked. */
+.profile-grid { --value-h: 2.3125rem; }
+.profile-field dt label { cursor: pointer; }
+.profile-field dd {
+    min-height: var(--value-h);
+    /* The first line is put where the input puts its text, rather than the
+       whole cell being centred: a value that carries a hint under it (the
+       student's expiry says what it is counted from) would otherwise have
+       the pair centred together and its date would ride 3px up on the one
+       beside it. Built from the box's own figures so the two cannot drift. */
+    padding-top: calc(.4rem + 1.5px);
+}
+.profile-field dd.page-field { margin-bottom: 0; display: block; }
+.profile-field dd.page-field input { padding: .4rem .6rem; }
+/* A hint belongs to the box above it, so it sits outside that centred band. */
+.profile-field dd .profile-hint { margin-top: .3rem; }
+/* Justified micro-copy opens rivers between the words: the .settings-note rule
+   below reaches .profile-hint, and two lines of hint is the worst measure to
+   justify. The paragraph keeps it; these do not. */
+.profile-hint { text-align: left !important; }
+/* The button belongs to the card, not to the note above it. */
+.profile-form { margin-top: 1rem; }
+.profile-form .settings-note { margin-top: 0; }
+/* The student's line leads with the info mark, as the password notice does. */
+.settings-note .material-symbols-outlined {
+    font-size: 1rem;
+    vertical-align: -.175rem;
+    margin-right: .15rem;
+    color: var(--maroon);
+}
 
 /* Option rows (appearance + notifications) */
 .option-row {
@@ -144,7 +208,22 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
 .option-text span { display: block; }
 
 @media (max-width: 700px) {
-    .profile-grid { grid-template-columns: 1fr; }
+    .profile-grid { grid-template-columns: 1fr; gap: .875rem; }
+    /* One column has nothing to line up against, so the band only adds
+       height; the fields sit closer together instead. */
+    .profile-field dd { min-height: 0; }
+    /* 16px is the floor below which iOS zooms the page in on focus, which
+       leaves the form wider than the window and the reader scrolling
+       sideways to find the box they are typing in. */
+    .profile-field dd.page-field input { font-size: 16px; padding: .5rem .6rem; }
+    /* A thumb reaches a full-width button at the foot of the card. */
+    .profile-form .btn-page { width: 100%; }
+    /* Justified text wants a long measure. At this width the lines hold six
+       or seven words and the spaces between them stretch into rivers, which
+       is what the intro and the notes were doing on a phone. Ranged left. */
+    .page-intro p, .option-text span, .settings-note, .pw-notify {
+        text-align: left;
+    }
     .option-row { flex-direction: column; align-items: flex-start; gap: .625rem; }
     .page-intro h1 { font-size: 1.375rem; }
     .page-card-header { flex-wrap: wrap; row-gap: .25rem; }
@@ -213,13 +292,33 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
     <section class="page-card" id="sec-personal" role="tabpanel" aria-labelledby="tab-personal">
         <div class="page-card-header">
             <h2>Personal Information</h2>
-            <span class="hint">Managed by your administrator</span>
+            <span class="hint"><?= $can_edit_profile
+                ? 'Your name and email are yours to keep right'
+                : 'Managed by your administrator' ?></span>
         </div>
         <div class="page-card-body">
             <dl class="profile-grid">
                 <div class="profile-field">
-                    <dt>Full name</dt>
-                    <dd><?= e($profile['full_name'] ?? '') ?></dd>
+                    <dt><label for="pf_full_name">Full name</label></dt>
+                    <dd class="<?= $can_edit_profile ? 'page-field' : '' ?>"><?php if ($can_edit_profile): ?>
+                        <input type="text" id="pf_full_name" name="full_name" form="profileForm"
+                               value="<?= e($profile['full_name'] ?? '') ?>"
+                               maxlength="100" autocomplete="name" required
+                               aria-describedby="pf_name_hint">
+                        <span class="profile-hint" id="pf_name_hint">Letters, spaces, full stops,
+                            hyphens and apostrophes. Written surname first, it is turned round for you.</span>
+                    <?php else: ?><?= e($profile['full_name'] ?? '') ?><?php endif; ?></dd>
+                </div>
+                <div class="profile-field">
+                    <dt><label for="pf_email">Email</label></dt>
+                    <dd class="<?= $can_edit_profile ? 'page-field' : '' ?>"><?php if ($can_edit_profile): ?>
+                        <input type="email" id="pf_email" name="email" form="profileForm"
+                               value="<?= e($profile['email'] ?? '') ?>"
+                               maxlength="150" autocomplete="email" required
+                               aria-describedby="pf_mail_hint">
+                        <span class="profile-hint" id="pf_mail_hint">Where your password resets and
+                            every notice are sent. Changing it tells the old address too.</span>
+                    <?php else: ?><?= e($profile['email'] ?? '') ?><?php endif; ?></dd>
                 </div>
                 <div class="profile-field">
                     <dt>Role</dt>
@@ -228,10 +327,6 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
                 <div class="profile-field">
                     <dt><?= e($id_label) ?></dt>
                     <dd><?= e((string)$id_value) ?></dd>
-                </div>
-                <div class="profile-field">
-                    <dt>Email</dt>
-                    <dd><?= e($profile['email'] ?? '') ?></dd>
                 </div>
                 <?php if (!empty($profile['program'])): ?>
                 <div class="profile-field">
@@ -273,10 +368,30 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
                 </div>
                 <?php endif; ?>
             </dl>
-            <p class="page-note settings-note">
-                Need a correction to your name, program, or email?
-                <a href="<?= e(BASE_URL) ?>/pages/contact_support.php?subject=Profile%20Correction">Contact support</a>.
-            </p>
+            <?php if ($can_edit_profile): ?>
+                <?php /* The boxes are in the <dl> above, tied to this form by their
+                         form= attribute: a <form> cannot wrap half a definition list
+                         without putting a block element where the grid expects a row. */ ?>
+                <form class="profile-form" id="profileForm" method="post" action="settings.php">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="action" value="update_profile">
+                    <p class="page-note settings-note">
+                        Your role, <?= e($id_label) ?> and the dates are the campus's record of
+                        the account and are not yours to change.
+                        <a href="<?= e(BASE_URL) ?>/pages/contact_support.php?subject=Profile%20Correction">Contact support</a>
+                        for a correction to one of those.
+                    </p>
+                    <button type="submit" class="btn-page btn-confirm"
+                            data-confirm="Save these details? Your name and email are what the rest of the site prints and writes to, and the old address is told of a change.">Save changes</button>
+                </form>
+            <?php else: ?>
+                <p class="page-note settings-note">
+                    <span class="material-symbols-outlined">info</span>
+                    These details are your adviser's record of you, so a correction is theirs to make.
+                    <a href="<?= e(BASE_URL) ?>/pages/contact_support.php?subject=Profile%20Correction">Contact support</a>
+                    first and they will put it right.
+                </p>
+            <?php endif; ?>
         </div>
     </section>
 

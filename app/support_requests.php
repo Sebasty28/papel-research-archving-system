@@ -18,7 +18,12 @@ require_role(['faculty', 'admin', 'super_admin', 'head_academic']);
 
 $conn = db();
 $u    = current_user();
-$isDirector = ($u['user_role'] ?? '') === 'super_admin';
+/* Who sees the whole queue rather than only what was addressed to them.
+   The Research Coordinator is the head of research on the campus, so the
+   requests staff and students raise are theirs to see as much as the
+   Director's; before this a Coordinator saw only the ones routed to them
+   by name and had no way to tell whether anybody was answering the rest. */
+$seesAll = can_manage_research_operations($u);
 
 /* Marking one done. Resetting the password or saving the details clears the
    request on its own, so this is for the ones settled another way: answered in
@@ -32,9 +37,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
        second clause a request could be cleared off somebody else's desk by
        anyone who guessed the number. Read first, so the person who asked can be
        told, and so the scope is checked once rather than twice. */
-    $where = "request_id = ?" . ($isDirector ? '' : ' AND handler_user_id = ?');
+    $where = "request_id = ?" . ($seesAll ? '' : ' AND handler_user_id = ?');
     $find = $conn->prepare("SELECT * FROM support_requests WHERE $where");
-    if ($isDirector) $find->bind_param('i', $id);
+    if ($seesAll) $find->bind_param('i', $id);
     else             $find->bind_param('ii', $id, $u['user_id']);
     $find->execute();
     $row = $find->get_result()->fetch_assoc();
@@ -68,12 +73,12 @@ if (!isset($kinds[$filter])) $filter = '';
 $sql = "SELECT r.*, h.full_name AS handler_name
           FROM support_requests r
           LEFT JOIN users h ON h.user_id = r.handler_user_id
-         WHERE " . ($isDirector ? '1' : 'r.handler_user_id = ?');
+         WHERE " . ($seesAll ? '1' : 'r.handler_user_id = ?');
 if ($filter !== '') $sql .= " AND r.kind = ?";
 $sql .= " ORDER BY r.created_at DESC";
 
 $stmt = $conn->prepare($sql);
-if ($isDirector) {
+if ($seesAll) {
     if ($filter !== '') $stmt->bind_param('s', $filter);
 } else {
     if ($filter !== '') $stmt->bind_param('is', $u['user_id'], $filter);
@@ -85,9 +90,9 @@ $stmt->close();
 
 // Counts for the tabs, taken without the kind filter so both always show.
 $countSql = "SELECT kind, COUNT(*) c FROM support_requests"
-          . ($isDirector ? '' : ' WHERE handler_user_id = ?') . ' GROUP BY kind';
+          . ($seesAll ? '' : ' WHERE handler_user_id = ?') . ' GROUP BY kind';
 $cs = $conn->prepare($countSql);
-if (!$isDirector) $cs->bind_param('i', $u['user_id']);
+if (!$seesAll) $cs->bind_param('i', $u['user_id']);
 $cs->execute();
 $counts = ['password' => 0, 'account' => 0];
 foreach ($cs->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
@@ -160,7 +165,7 @@ $PAGE_SKELETON = 'table';
     <div class="mgmt-head">
         <h1>Support Requests</h1>
         <p>
-            <?= $isDirector
+            <?= $seesAll
                 ? 'Every request for a new password or a correction to an account.'
                 : 'People whose accounts you set up, asking for a new password or a correction. '
                 . 'Open one to go to the roll it sits on.' ?>
@@ -191,7 +196,7 @@ $PAGE_SKELETON = 'table';
                         <tr>
                             <th>Who is asking</th>
                             <th>What for</th>
-                            <?php if ($isDirector): ?><th>Addressed to</th><?php endif; ?>
+                            <?php if ($seesAll): ?><th>Addressed to</th><?php endif; ?>
                             <th>Received</th>
                             <th></th>
                             <th></th>
@@ -200,7 +205,7 @@ $PAGE_SKELETON = 'table';
                     <tbody>
                     <?php if (!$requests): ?>
                         <tr>
-                            <td colspan="<?= $isDirector ? 6 : 5 ?>">
+                            <td colspan="<?= $seesAll ? 6 : 5 ?>">
                                 <div class="mgmt-empty">
                                     <span class="material-symbols-outlined">inbox</span>
                                     Nothing is waiting for you.
@@ -238,7 +243,7 @@ $PAGE_SKELETON = 'table';
                                 </span>
                                 <span class="sr-msg"><?= e($r['message']) ?></span>
                             </td>
-                            <?php if ($isDirector): ?>
+                            <?php if ($seesAll): ?>
                                 <td>
                                     <?= e($r['handler_name'] ?: 'Account removed') ?>
                                     <span class="mgmt-sub"><?= e(support_handler_roles()[$r['handler_role']] ?? $r['handler_role']) ?></span>

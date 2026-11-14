@@ -32,7 +32,7 @@ require_once __DIR__ . '/../config/gdrive_config.php';
 $before = get_system_gdrive_token();
 if (!$before) {
     fwrite(STDERR, "Google Drive has never been connected. Connect it from the\n"
-                 . "Director's Storage Folder page, then run this again.\n");
+                 . "Storage Folder page, then run this again.\n");
     exit(1);
 }
 if (empty($before['refresh_token'])) {

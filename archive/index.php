@@ -1379,9 +1379,12 @@ html.kw-locked { overflow: hidden; }
 </div>
 
 <!-- ===== 4. Hero banner ===== -->
-<?php /* A slideshow of the campus photos, in a fresh random order on every
-         visit: shuffled here rather than in the script so the first photo is
-         already a random one at first paint, not swapped in a moment later.
+<?php /* A slideshow of the campus photos, in the order nav_photo_order()
+         gives (config/core.php), which the navbar strip uses too: one set of
+         files and one order, where both used to glob and shuffle for
+         themselves. It rotates by the day rather than per request, because
+         this first photo is the page's Largest Contentful Paint and a file
+         that changes every visit can be neither cached nor preloaded.
          Only that first one carries a src; the rest wait in data-src until the
          page has loaded (see the slideshow script), so four photos nobody has
          seen yet do not hold up the first paint. The first is the only one
@@ -1392,14 +1395,24 @@ html.kw-locked { overflow: hidden; }
          from disk rather than listed here, so a photo can be added or dropped
          by adding or deleting the file: a hard-coded list broke the banner
          the first time one was removed. Made for a 3840×680 canvas. */
-      $hero_photos = array_map('basename', glob(ROOT_PATH . '/assests/images/navbar-photo*.jpg') ?: []);
-      shuffle($hero_photos); ?>
+      $hero_photos = nav_photo_order(); ?>
 <section class="hero" id="heroBanner">
     <?php foreach ($hero_photos as $i => $photo): ?>
+        <?php $set = nav_photo_srcset($photo); ?>
         <?php if ($i === 0): ?>
-            <img class="hero-slide is-active" src="../assests/images/<?= e($photo) ?>" alt="PUP Biñan Campus">
+            <?php /* The LCP element on this page. site_head.php preloads the very
+                     same file; imagesrcset there and srcset here must agree. */ ?>
+            <picture>
+                <?php if ($set !== ''): ?><source type="image/webp" srcset="<?= e($set) ?>" sizes="100vw"><?php endif; ?>
+            <img class="hero-slide is-active" src="../assests/images/<?= e($photo) ?>"
+                 alt="PUP Biñan Campus" fetchpriority="high">
+            </picture>
         <?php else: ?>
-            <img class="hero-slide" data-src="../assests/images/<?= e($photo) ?>" alt="" aria-hidden="true" decoding="async">
+            <picture>
+                <?php if ($set !== ''): ?><source type="image/webp" data-srcset="<?= e($set) ?>" sizes="100vw"><?php endif; ?>
+                <img class="hero-slide" data-src="../assests/images/<?= e($photo) ?>"
+                     alt="" aria-hidden="true" decoding="async" loading="lazy">
+            </picture>
         <?php endif; ?>
     <?php endforeach; ?>
     <?php /* Zen Mode has no banner. The class is put on here, where the element
@@ -2069,7 +2082,10 @@ if (bannerToggle && heroBanner) {
        first, and the other four are only needed five seconds from now. */
     window.addEventListener('load', function () {
         slides.forEach(function (img) {
-            if (img.dataset.src) { img.src = img.dataset.src; delete img.dataset.src; }
+            /* srcset before src: the other way round the browser picks a
+               candidate from src alone and then re-picks, fetching twice. */
+            if (img.dataset.srcset) { img.srcset = img.dataset.srcset; delete img.dataset.srcset; }
+            if (img.dataset.src)    { img.src    = img.dataset.src;    delete img.dataset.src; }
         });
     });
 
@@ -2183,10 +2199,30 @@ function loadResults(url, pushState) {
                 if (side) side.innerHTML = data.sidebar;
             }
             setResultsLoading(false);
-            // The swap replaced the Quick Settings controls: re-tick them.
-            if (window.papelSyncQuickSettings) window.papelSyncQuickSettings();
-            // The swap replaced the keyword strip with a fresh node of its own.
-            if (window.papelKeywordRail) window.papelKeywordRail();
+            /* **Everything the reader cannot see yet waits for the paint.**
+               Measured on staging, a click here took 474ms, of which 390ms was
+               this callback: two innerHTML writes, and then work that reads
+               geometry straight afterwards, which forces the layout the writes
+               had just invalidated. The results are on screen as soon as the
+               two writes above are done, so the browser should be allowed to
+               show them before any of the rest runs.
+
+               rAF then a timeout, not rAF alone: a rAF callback still runs
+               before the paint it is scheduled with, so the work would land in
+               the same frame and change nothing. The pair yields after it.
+
+               Nothing visible is deferred. Quick Settings is a closed panel, so
+               its radios are not on screen; the keyword strip renders from its
+               own HTML and only its drag handler and end-room class come from
+               script, and neither is missed in the frame before they arrive. */
+            requestAnimationFrame(function () {
+                setTimeout(function () {
+                    // The swap replaced the Quick Settings controls: re-tick them.
+                    if (window.papelSyncQuickSettings) window.papelSyncQuickSettings();
+                    // The swap replaced the keyword strip with a fresh node of its own.
+                    if (window.papelKeywordRail) window.papelKeywordRail();
+                }, 0);
+            });
             /* The search box is outside the column that was swapped, so it
                keeps whatever it held: after Back, or a keyword pressed from a
                page whose box said something else, it would be showing a search
