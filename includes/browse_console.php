@@ -491,7 +491,8 @@ html[data-view="rows"] .paper-list .paper-item .paper-program {
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    background: #E2DCDC;
+    background: var(--control-empty);
+    box-shadow: inset 0 0 0 1px var(--control-rim);
     margin: 0;
     flex-shrink: 0;
     cursor: pointer;
@@ -715,7 +716,25 @@ html[data-view="rows"] .paper-list .paper-item .paper-program {
         -webkit-overflow-scrolling: touch;
         margin: 0;
         padding: 3rem 1rem 2rem;
-        background: var(--cream);
+        /* **Opaque, whatever the palette.** This is the one place the panel
+           lies *over* the page rather than beside it, and --cream is
+           rgba(255,255,255,.06) under Old Night: a 6% veil, so the results and
+           the banner photo were legible straight through the filters, which
+           reads as a glass panel nobody asked for. (No blur was involved; the
+           token alone did it.)
+
+           The tint is painted as an image over an opaque ground rather than
+           swapped for a different colour, so the light palette is untouched -
+           its cream is opaque and covers the ground exactly as before - while
+           the dark one gets that 6% white over the surface colour, which lifts
+           the drawer off the page behind its veil. Anything else that paints a
+           panel over scrolling content wants the same treatment; see the
+           accessibility panel's sticky header, which had this bug too.
+
+           **Twin**: archive/index.php keeps its own copy of this drawer rule,
+           its styling being tangled with the banner's. Change both or neither. */
+        background-color: var(--white);
+        background-image: linear-gradient(var(--cream), var(--cream));
         box-shadow: -4px 0 24px rgba(51, 0, 0, .18);
         transform: translateX(100%);
         transition: transform .3s cubic-bezier(.4, 0, .2, 1);
@@ -996,7 +1015,8 @@ html.sidebar-left .js-side-hide .side-icon-right { display: inline-flex; }
     height: 12px;
     border: none;
     border-radius: 50%;
-    background: #E2DCDC;
+    background: var(--control-empty);
+    box-shadow: inset 0 0 0 1px var(--control-rim);
     flex-shrink: 0;
     cursor: pointer;
     margin: 0;

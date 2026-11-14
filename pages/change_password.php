@@ -53,6 +53,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'chang
         /* The gate comes down first: role_home() is a page this would
            otherwise bounce straight back here. */
         password_gate_clear();
+        /* And the next page offers the view chooser (includes/view_welcome.php,
+           printed with the footer, which reads this and clears it). Here rather
+           than at sign-in, because this is the one moment we know the account is
+           new to the person using it: they have just set the password that was
+           emailed to them. Anybody who closes it without choosing finds it again
+           in Settings > Appearance. */
+        $_SESSION['papel_view_tour'] = 1;
         flash('success', $done['message']);
         header('Location: ' . role_home((string)($u['user_role'] ?? '')));
         exit;

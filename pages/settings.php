@@ -112,7 +112,8 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
 .switch .slider {
     position: absolute;
     inset: 0;
-    background: #E2DCDC;
+    background: var(--control-empty);
+    box-shadow: inset 0 0 0 1px var(--control-rim);
     border-radius: 999px;
     cursor: pointer;
     transition: background .2s;
@@ -350,6 +351,34 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
                     <span>The palette the whole site is drawn in. Old Night is the dark one; choosing it is how the site goes dark.</span>
                 </div>
                 <div class="segmented" id="colourChoices"></div>
+            </div>
+            <div class="option-row">
+                <div class="option-text">
+                    <strong>How papers are shown</strong>
+                    <?php /* The same dialog a new account is offered on its first
+                             page (includes/view_welcome.php), with a picture of
+                             each view: the words "Hardbounds" and "Bookshelf" are
+                             not ones anybody can picture, which is the whole
+                             reason that dialog has screenshots in it. */ ?>
+                    <span>Cards, Rows, Hardbounds or Bookshelf, with a picture of each. The same choice as the View list in Quick Settings.</span>
+                </div>
+                <div class="option-actions">
+                    <button type="button" class="btn-page-outline" data-view-tour>Choose&hellip;</button>
+                </div>
+            </div>
+            <div class="option-row">
+                <div class="option-text">
+                    <strong>Zen Mode</strong>
+                    <?php /* The same control as the one in the profile menu,
+                             printed by includes/zen_mode.php and wired by the
+                             one delegated handler there, so there is no second
+                             opinion about what the switch is or what it does.
+                             It says what it puts away, because a reader who
+                             finds the footer gone should be able to find out
+                             here why. */ ?>
+                    <span>Puts the page's furniture away: the breadcrumb strip, the footer, the photo behind the navbar, the accessibility bar, the back-to-top button and the repository's banner, with the side panel folded to its rail. The navbar stays, and this switch is in the profile menu too.</span>
+                </div>
+                <div class="option-actions"><?php zen_switch('row'); ?></div>
             </div>
             <div class="option-row">
                 <div class="option-text">

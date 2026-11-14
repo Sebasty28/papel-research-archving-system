@@ -77,6 +77,14 @@ html.papel-skel .papel-skel-layer {
        itself: it is scenery. */
     cursor: progress;
 }
+/* Zen Mode has no breadcrumb strip, so the bars' bottom edge is the navbar's
+   alone. This is only the first frames: place() below writes the measured edge
+   as soon as there is a DOM to measure. Without it the layer starts 36px (and
+   24 on a phone) below the bar and a band of the settling page shows above it,
+   which is the one thing this layer exists to prevent. */
+html.zen-on.papel-skel .papel-skel-layer {
+    top: var(--papel-skel-top, var(--nav-h, 56px));
+}
 html.papel-skel-out .papel-skel-layer {
     opacity: 0;
     pointer-events: none;
@@ -89,7 +97,11 @@ html.papel-skel-out .papel-skel-layer {
 .papel-skel-layer {
     --skel-a: color-mix(in srgb, var(--ink) 8%, transparent);
     --skel-b: color-mix(in srgb, var(--ink) 16%, transparent);
+    /* .wrap's padding, at the two widths site_head.php changes it. */
+    --skel-gutter: 24px;
 }
+@media (max-width: 600px) { .papel-skel-layer { --skel-gutter: 1rem; } }
+@media (max-width: 380px) { .papel-skel-layer { --skel-gutter: .75rem; } }
 .skel-b {
     border-radius: 6px;
     background: linear-gradient(90deg, var(--skel-a) 0%, var(--skel-b) 50%, var(--skel-a) 100%);
@@ -153,7 +165,11 @@ html.papel-skel .papel-skel-layer {
 .skel-wrap {
     max-width: 1168px;
     margin: 0 auto;
-    padding: 24px;
+    /* --skel-gutter is .wrap's own padding (includes/site_head.php), which
+       narrows twice on a phone. A flat 24px left every block 8px in from the
+       content it stands in for at 390px, and 12px at 320: a sideways shift of
+       the whole page as the layer lifts, which is the jump being covered. */
+    padding: 24px var(--skel-gutter);
 }
 .skel-desk {
     display: grid;
@@ -191,16 +207,47 @@ html.papel-skel .papel-skel-layer {
 
 /* ----- The repository: the photo band and the search band above the desk ----- */
 /* The band it stands in for is a photograph, so it is the stronger of the
-   two tones: the paler one read as a gap above the page. */
-.skel-hero { height: 240px; background: var(--skel-b); }
-.skel-band { height: 50px; display: flex; align-items: center; }
-.skel-band .skel-wrap { width: 100%; padding: 0 24px; }
+   two tones: the paler one read as a gap above the page. Its height is the
+   page's own: archive/index.php sets --hero-h on :root and takes it down to
+   150, 115 and 100 as the window narrows, so it is read here rather than
+   repeated, which is one figure that cannot drift at a breakpoint. A flat
+   240px left a phone's band 140px too tall and every result below it that
+   much too low, which is the page jumping as the layer lifts. */
+.skel-hero { height: var(--hero-h, 240px); background: var(--skel-b); }
+/* The field is pulled up into the banner by --hero-overlap, the figure that
+   moves the real .search-band. */
+.skel-band {
+    /* 50px is the desktop field. Measured on the running page, it is 70px
+       below 901px, where the search row becomes one column, and 54px below
+       481px, where the field's padding is cut for a phone. */
+    --skel-field-h: 50px;
+    margin-top: calc(-1 * var(--hero-overlap, 24px));
+    height: var(--skel-field-h);
+    display: flex;
+    align-items: center;
+}
+.skel-band .skel-wrap { width: 100%; padding: 0 var(--skel-gutter); }
+/* The gap under the field is .layout's own margin-top, 1rem and .75rem. */
+.skel-band + .skel-wrap { padding-top: 1rem; }
+@media (max-width: 900px) {
+    .skel-band { --skel-field-h: 70px; }
+    .skel-band + .skel-wrap { padding-top: .75rem; }
+}
+@media (max-width: 480px) { .skel-band { --skel-field-h: 54px; } }
+/* In Zen the banner is folded, so the skeleton has none either, and the field
+   stands 1.25rem under the bar with the results a rem under it: .hero.collapsed's
+   own two rules in archive/index.php, which beat the narrow widths' .75rem for
+   the same reason this does. A banner drawn here that the page is not about to
+   paint would be the jump this layer covers, upside down. */
+html.zen-on .skel-hero { display: none; }
+html.zen-on .skel-band { margin-top: 1.25rem; }
+html.zen-on .skel-band + .skel-wrap { padding-top: 1rem; }
 /* Full width: below the breakpoint the repository is one column and the real
    field runs the whole of it. Narrowed to the results column above, in the
    query with the swap. A flat 73% was 40px short of the real field at 1280px
    and 230px short at 900, which shows at whichever edge the column does not
    start from. */
-.skel-band .skel-search { width: 100%; height: 50px; border-radius: 10px; }
+.skel-band .skel-search { width: 100%; height: var(--skel-field-h); border-radius: 10px; }
 
 /* ----- The reader: the paper's heading, then its cards beside a narrow rail ----- */
 .skel-read-top { display: flex; flex-direction: column; gap: .45rem; padding-bottom: 28px; }
@@ -326,6 +373,14 @@ html.papel-skel-rail .skel-tab { width: auto; height: 30px; border-radius: 8px; 
     /* Beside the rail, the field spans the results column it searches: the
        rail and the 6px gutter off what .wrap leaves. */
     .skel-band .skel-search { width: calc(100% - var(--skel-rail-w, 226px) - 6px); }
+    /* And the panel beside it starts on the field's own line, not at the top
+       of the results: the repository pulls .sidebar-right up by the field's
+       height and a rem (archive/index.php), with 6px of the panel's own
+       padding above its first card. Measured at 901, 1280 and 1440px: the
+       first card sits 60px above the heading beside it. */
+    .skel-band + .skel-wrap .skel-rail {
+        margin-top: calc(6px - var(--search-h, 50px) - 1rem);
+    }
 
     /* ----- The panel folded to its rail (papel_sidebar_folded) -----
        The one width every shape above reads, so the results column and the
@@ -430,7 +485,14 @@ html.papel-skel-rail .skel-tab { width: auto; height: 30px; border-radius: 8px; 
         var el = document.getElementById('papelSkel');
         if (!el) { return; }
         var low = 0;
-        var bars = [document.querySelector('.main-nav'), document.querySelector('.crumb-bar')];
+        /* The header itself, not only the row of links inside it: .main-nav is
+           a child and ends 2px above the bar's own bottom edge. With the strip
+           below it that never showed, the strip being lower; in Zen Mode, where
+           there is no strip, those 2px were a line of the settling page above
+           the blocks and every block under them sat 2px high. */
+        var bars = [document.querySelector('.site-header'),
+                    document.querySelector('.main-nav'),
+                    document.querySelector('.crumb-bar')];
         for (var i = 0; i < bars.length; i++) {
             if (!bars[i]) { continue; }
             var b = bars[i].getBoundingClientRect().bottom;

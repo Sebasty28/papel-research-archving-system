@@ -29,6 +29,18 @@
 
     --border:       #E6D4D4;
     --border-soft:  rgba(177,125,125,.35);
+    /* The controls that are drawn *by* their background: a tick box, a radio,
+       the dots in Quick Settings and in the filters. Mixed off the ink and the
+       surface rather than written as a colour, so one pair of values serves
+       both palettes: the old #E2DCDC was a light-mode chip that the dark page
+       turned into a near-white one, and before that the dark page painted the
+       box the colour of the card and it disappeared altogether.
+       --control-rim is what makes an empty box read as a box: the fill alone
+       is 1.45:1 against white and 1.67:1 against the dark surface, and a
+       control has to clear 3:1 to be seen. Measured with the rim: 3.2:1 and
+       3.9:1. */
+    --control-empty: color-mix(in srgb, var(--ink) 18%, var(--white));
+    --control-rim:   color-mix(in srgb, var(--ink) 50%, var(--white));
     --shadow-sm:    0 1px 3px rgba(51,0,0,.07);
     --shadow-md:    0 6px 18px rgba(51,0,0,.10);
     /* Cast upwards, for something sitting on a photo: the Public Repository's
@@ -1462,7 +1474,7 @@ select.lf-input {
        glyph and the word on one line, as in the avatar dropdown these two are
        taken from: they are the sheet's quiet end, under the pages above. */
     .nav-account a,
-    .nav-account button[data-profile-theme-toggle] {
+    .nav-account button {
         display: flex;
         align-items: center;
         gap: .5rem;
@@ -1478,7 +1490,7 @@ select.lf-input {
         cursor: pointer;
     }
     .nav-account a .material-symbols-outlined,
-    .nav-account button[data-profile-theme-toggle] .material-symbols-outlined { color: var(--maroon); }
+    .nav-account button .material-symbols-outlined { color: var(--maroon); }
     /* Keep the glyph and word on one measured line. A rule under the pair
        gives these navigation actions the same clean underline as the links
        above, while the entire row remains the touch target. */
@@ -1499,8 +1511,8 @@ select.lf-input {
     }
     .nav-account a:hover .nav-action-content::after,
     .nav-account a:focus-visible .nav-action-content::after,
-    .nav-account button[data-profile-theme-toggle]:hover .nav-action-content::after,
-    .nav-account button[data-profile-theme-toggle]:focus-visible .nav-action-content::after,
+    .nav-account button:hover .nav-action-content::after,
+    .nav-account button:focus-visible .nav-action-content::after,
     .nav-login-btn:hover .nav-action-content::after,
     .nav-login-btn:focus-visible .nav-action-content::after { transform: scaleX(1); }
 
@@ -1564,7 +1576,7 @@ select.lf-input {
     .nav-more-label::after { display: none; }
     .main-nav > a:hover,
     .nav-account a:hover,
-    .nav-account button[data-profile-theme-toggle]:hover,
+    .nav-account button:hover,
     .nav-login-btn:hover,
     .nav-panel-item:hover,
     .nav-more-dropdown a:hover {
@@ -1584,7 +1596,7 @@ select.lf-input {
         text-decoration-color: var(--maroon);
     }
     .nav-account a:hover,
-    .nav-account button[data-profile-theme-toggle]:hover,
+    .nav-account button:hover,
     .nav-login-btn:hover { text-decoration: none; }
 
     /* No menu inside a menu on a phone. The Resources group is flattened into
@@ -1686,6 +1698,11 @@ select.lf-input {
     if (folded === '1') { document.documentElement.classList.add('sidebar-folded'); }
 })();
 </script>
+<?php /* Zen Mode, read in the same breath and for the same reason: a mode
+         restored after the first paint is a page that puts its own furniture
+         away in front of the reader. It also prints the switch the profile
+         menu and Settings share. */ ?>
+<?php require_once __DIR__ . '/zen_mode.php'; ?>
 <?php /* Palettes and light/dark. Included last so its :root wins over the
         literal token values above, without editing them. */ ?>
 <?php require_once __DIR__ . '/theme.php'; ?>

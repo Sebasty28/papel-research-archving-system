@@ -729,6 +729,10 @@ document.addEventListener('DOMContentLoaded', function () {
    whichever of the two runs first. */
 require_once ROOT_PATH.'/includes/action_dialogs.php';
 require ROOT_PATH.'/includes/theme_welcome.php';
+/* The view chooser a new account meets on its first page, and that Settings
+   reopens. It reads the session flag the password gate sets, so it has to be
+   on every page the gate can land on, which is every page with a footer. */
+require_once ROOT_PATH.'/includes/view_welcome.php';
 /* The busy bar wraps fetch and XMLHttpRequest, so only one copy of it may run:
    a second would wrap the wrappers and count every request twice, and the bar
    would never reach zero. require_once, like the dialogs above. */

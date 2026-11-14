@@ -499,6 +499,17 @@ $PAGE_SKELETON = 'repository';
    reads as that edge rather than the photo's. */
 .hero.collapsed img { clip-path: inset(0 0 calc(100% - var(--hero-nav)) 0); }
 
+/* The photo is put away while the loading skeleton is up (includes/skeleton.php).
+   It is the one part of this page that can show above that layer: the layer
+   starts at the maroon strip's bottom edge, and the navbar and the strip are
+   both tinted glass over this photo, which runs up behind them. What showed
+   was a slice of the real page in the top corner, cut off on a hard line at
+   the strip, with blank shapes under it. Hidden rather than covered, since
+   nothing may be drawn over the bars, and it comes back with everything else
+   as the layer lifts. visibility, not display: the box, and so the photo's
+   own size and the slideshow's first frame, stay exactly as they are. */
+html.papel-skel .hero img { visibility: hidden; }
+
 /* Slideshow: every photo is stacked in the same place by the rule above, and
    only the active one is opaque. The transition list is restated in full
    because it replaces the clip-path one rather than adding to it. A slide
@@ -817,7 +828,22 @@ $PAGE_SKELETON = 'repository';
         -webkit-overflow-scrolling: touch;
         margin: 0;
         padding: 3rem 1rem 2rem;
-        background: var(--cream);
+        /* **Opaque, whatever the palette.** --cream is rgba(255,255,255,.06)
+           under Old Night, and this is the one place the panel lies *over* the
+           page rather than beside it, so the results and the banner photo were
+           legible straight through the filters: a glass panel nobody asked
+           for, and no blur involved. The tint is painted as an image over an
+           opaque ground rather than swapped for another colour, so the light
+           palette is untouched (its cream is opaque and covers the ground
+           exactly as before) while the dark one gets that 6% white over the
+           surface colour, which lifts the drawer off the page behind its veil.
+
+           **Twin**: includes/browse_console.php carries the same rule for the
+           consoles that share this drawer, and this page keeps its own copy
+           because the drawer's styling is tangled with the banner's (see the
+           note by the drawer's script below). Change both or neither. */
+        background-color: var(--white);
+        background-image: linear-gradient(var(--cream), var(--cream));
         box-shadow: -4px 0 24px rgba(51, 0, 0, .18);
         transform: translateX(100%);
         transition: transform .3s cubic-bezier(.4, 0, .2, 1);
@@ -1376,6 +1402,28 @@ html.kw-locked { overflow: hidden; }
             <img class="hero-slide" data-src="../assests/images/<?= e($photo) ?>" alt="" aria-hidden="true" decoding="async">
         <?php endif; ?>
     <?php endforeach; ?>
+    <?php /* Zen Mode has no banner. The class is put on here, where the element
+             stands, rather than at DOMContentLoaded with the rest of the
+             banner's script: applied a frame later the photo paints at its full
+             height and folds away in front of the reader, which is the flash
+             every other pre-paint read in site_head.php exists to prevent. The
+             reader's own "Hide Banner" answer is not touched; the script below
+             restores it when Zen goes off.
+
+             **Inside the banner, not after it.** The search band is pulled up
+             into the photo by a negative margin that `.hero.collapsed +
+             .search-band` cancels, and a script element between the two is
+             still a sibling: standing there it broke that rule and the field
+             rode up 24px under the navbar, in Zen and in the page's own
+             banner-hidden state alike. The same `+` trap as the import
+             drawer's panels and the upload page's step bar. */ ?>
+    <script nonce="<?= csp_nonce() ?>">
+    (function () {
+        if (!document.documentElement.classList.contains('zen-on')) { return; }
+        var hero = document.getElementById('heroBanner');
+        if (hero) { hero.classList.add('collapsed'); }
+    })();
+    </script>
 </section>
 
 <!-- ===== 5. Search band (overlaps the hero) ===== -->
@@ -1923,6 +1971,14 @@ if (bannerToggle && heroBanner) {
     var stored = null;
     try { stored = localStorage.getItem('papel_banner_hidden'); } catch (err) {}
     if (stored === '1') applyBannerState(true);
+    /* In Zen the banner is folded whatever the stored answer is, and the eye
+       that would unfold it is in the strip, which Zen has hidden. Coming out
+       of Zen gives the reader their own answer back: Zen never wrote it, so
+       this is the only thing that remembers they did not fold it. */
+    if (document.documentElement.classList.contains('zen-on')) { applyBannerState(true); }
+    document.addEventListener('papel:zen', function (e) {
+        applyBannerState(e.detail && e.detail.on ? true : stored === '1');
+    });
 
     /* Pressed by hand: that answer is kept, and the scroll below stops
        managing the banner for the rest of this visit. Showing it again and
@@ -2057,6 +2113,9 @@ if (bannerToggle && heroBanner) {
     }
     fit();
     window.addEventListener('resize', fit);
+    /* The strip is one of the three things measured here, and Zen takes it
+       away without a resize or a reload. */
+    document.addEventListener('papel:zen', fit);
     /* The header grows when the web fonts land and when the nav wraps, and the
        field changes height at the narrow breakpoints: none of which is a
        window resize on its own. */

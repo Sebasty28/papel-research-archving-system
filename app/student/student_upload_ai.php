@@ -4400,7 +4400,15 @@ html.side-locked .main-tabs:not([data-on="form"]) + .step-row { display: none; }
     height: 16px;
     margin-top: .15rem;
     border: none;
-    background-color: #E2DCDC;
+    /* --control-empty and --control-rim (includes/site_head.php), not the old
+       hardcoded #E2DCDC: that was a light-mode colour, and the dark palette
+       repainted it the colour of the card anyway (see the note on
+       html[data-mode="dark"] input in theme.php). */
+    background-color: var(--control-empty);
+    /* The rim is what makes an empty box a box. Without it the fill alone is
+       1.45:1 on white and 1.67:1 on the dark surface, which is a smudge where
+       a control should be; a control has to clear 3:1. */
+    box-shadow: inset 0 0 0 1px var(--control-rim);
     background-image: none;
     background-repeat: no-repeat;
     background-position: center;
@@ -4411,7 +4419,9 @@ html.side-locked .main-tabs:not([data-on="form"]) + .step-row { display: none; }
 }
 .form-check-input[type="radio"] { border-radius: 50%; }
 .form-check-input[type="checkbox"] { border-radius: var(--r-control, 4px); }
-.form-check-input:checked { background-color: var(--maroon-surface); }
+/* Ticked, the fill and the white glyph are the state, so the rim stands down
+   rather than drawing a grey ring round a maroon box. */
+.form-check-input:checked { background-color: var(--maroon-surface); box-shadow: none; }
 /* Material Symbols "check" glyph, drawn in white once ticked. */
 .form-check-input[type="checkbox"]:checked {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 -960 960 960' fill='%23ffffff'%3E%3Cpath d='M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z'/%3E%3C/svg%3E");
@@ -4423,9 +4433,12 @@ html.side-locked .main-tabs:not([data-on="form"]) + .step-row { display: none; }
 .form-check-input:focus {
     outline: 2px solid var(--maroon);
     outline-offset: 2px;
-    box-shadow: none;
+    /* Bootstrap's own focus ring goes; the rim stays, or an empty box loses
+       its edge at the very moment the keyboard is on it. */
+    box-shadow: inset 0 0 0 1px var(--control-rim);
     border-color: transparent;
 }
+.form-check-input:checked:focus { box-shadow: none; }
 .form-check-label {
     font-family: var(--font-body);
     font-size: .8125rem;

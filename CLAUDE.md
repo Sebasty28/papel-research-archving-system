@@ -782,6 +782,8 @@ its own palette is a bug, not a style choice.
 | `scroll_jump.php` | Scroll to top/bottom button |
 | `skeleton.php` | The loading skeleton: pale blocks in the shape of the page, over the content area until the page has settled |
 | `manuscript_timer.php` | The countdown on a student's unlocked manuscripts, and the pop-ups that announce one starting and one ending |
+| `zen_mode.php` | Zen Mode: the switch in the profile menu and in Settings, and the rules that put the page's furniture away |
+| `view_welcome.php` | The first-run view chooser (Cards, Rows, Hardbounds, Bookshelf and Zen), with a screenshot of each, reopened from Settings |
 
 **Never use `alert()` or `confirm()`.** Put `data-confirm="..."` on the button
 and `action_dialogs.php` handles it.
@@ -895,6 +897,23 @@ on the same setting, so a choice made anywhere holds everywhere.
 - **Below 901px there is no side and nothing to fold**: the panel is a drawer,
   the two controls are not drawn and the rail is never painted, so the cards
   stay reachable on a phone however the setting was left on a desktop.
+- **That drawer's ground has to be opaque.** It is the one place the panel lies
+  *over* the page rather than beside it, and it was painted `var(--cream)`,
+  which is `rgba(255,255,255,.06)` under Old Night: on a phone in the dark
+  palette the results and the banner photo read straight through the filters,
+  which looks like a glass panel nobody asked for. No blur was involved; the
+  token alone did it. The tint is painted as an image over an opaque ground
+  (`background-color: var(--white)` plus a `linear-gradient` of `--cream`)
+  rather than swapped for another colour, so the light palette is byte for byte
+  what it was - measured, (251,246,244) before and after - and the dark one is
+  the surface colour with that 6% white over it, (57,59,62), the same at the
+  top of the drawer as at the bottom and while the page behind it scrolls.
+  **The rule is a twin**: `archive/index.php` keeps its own copy, its styling
+  being tangled with the banner's, and the shared one is in
+  `includes/browse_console.php`. The page's copy wins, being later, so changing
+  only the include changes nothing on the repository. Change both or neither.
+  Anything else that paints a panel over scrolling content wants the same
+  treatment: the accessibility panel's sticky header had this bug too.
 
 ### The accessibility tab is off by default on a phone
 
@@ -943,6 +962,224 @@ a real reload between steps: `Page.navigate` to a URL that differs only by its
 fragment is not a load, and a no-flash check then passes on a page that never
 reloaded.
 
+### The accessibility panel's own settings
+
+`includes/accessibility.php` again, this time what the buttons inside it do.
+Three rules worth knowing, all of them from 14 November 2026.
+
+**Colour & Contrast is one at a time.** The six were independent switches, so
+Dark Contrast, Monochrome and Vivid Colors could all be on together: three
+filters multiplied, a page nobody designed, and no way to tell which of the
+three had made it unreadable. They carry `data-group="color"` and the click
+handler treats a group as a radio set, turning off whatever else in it was on
+*through `setSetting()`*, which is what gives Dark Contrast its chance to hand
+the palette back. Pressing the one that is already on still clears it, so "none
+of them" is still reachable, and `loadPrefs()` enforces the same rule on a
+device that stored three under the old build: the first wins, the rest are
+dropped.
+
+**Dark Contrast is the site's own dark palette, not an inversion.** It used to
+be `filter: invert(1) hue-rotate(180deg)` on the body with every image inverted
+back, which gave teal maroon, photographs at the wrong brightness, and a fight
+with anything else carrying a filter. It now sets `data-color="old-night"` and
+`data-mode="dark"` and writes `papel_color`, which is to say it does exactly
+what the profile menu's Dark mode does.
+
+- **It writes the stored key on purpose.** The palette has a pre-paint script
+  (`theme.php`); a dark page restored a frame later is the white flash that
+  script exists to prevent.
+- **The reader's own palette is remembered** in the panel's preferences as
+  `prevColor` and given back when Dark Contrast goes off, by Reset, or by
+  another colour in the group being chosen. It is read from storage before the
+  classes are restored, so the way out survives a reload.
+- **The palette can also change from outside the panel**: the profile menu,
+  Quick Settings and Settings all set it. A MutationObserver on `<html>`'s
+  `data-mode` clears the button when the page is no longer dark, or it went on
+  claiming a dark page that had gone and had to be pressed twice.
+- The class `a11y-dark-contrast` has **no CSS of its own** any more. It is the
+  mark of the setting being on, which is what the panel and the stored
+  preferences read.
+
+**Large Cursor is three cursors, each with a keyword behind it.** `cursor: url(...)`
+takes a fallback after the comma and that is what the browser uses when it
+will not take the picture; without one the declaration is dropped and the
+setting silently does nothing. The three are the *uses*: a large hand falling
+back to `pointer` on links and buttons, a large beam falling back to `text` in
+anything you type in, and the arrow falling back to `auto` everywhere else. One
+arrow forced onto `*` with `!important`, which is what this was, is not merely
+bigger: it takes the hand and the I-beam away from the readers who most need a
+pointer to say what a thing is.
+
+- The SVGs are **percent-encoded**. A raw `<` in a data URI is invalid, and an
+  invalid declaration takes its own fallback keyword down with it.
+- **The panel is not in `<body>`**, being moved onto `<html>` so that a filter
+  on the body cannot become the containing block for its fixed position, so
+  none of the `body.a11y-big-cursor` rules reach it and the one place the
+  reader is certainly looking kept the small arrow. It is matched with
+  `html:has(body.a11y-big-cursor) #a11y-widget`.
+
+**The panel is drawn in the site's tokens.** It carried its own light palette
+in hex (`#fff`, `#e5e7eb`, `#4b5563`) and a green "on" state, so it hung as a
+white card with a green tick on a dark page, which is precisely what Dark
+Contrast could not put right about itself. Two things that came out of fixing
+it, both measured rather than judged by eye:
+
+- **A sticky header has to be opaque.** `--cream` is `rgba(255,255,255,.06)`
+  under Old Night, and the settings scrolled straight through the word
+  "Accessibility". It is `color-mix(in srgb, var(--ink) 6%, var(--white))`,
+  alpha 1 in both palettes.
+- **The "on" state fills from `--maroon-surface` and letters in `--maroon`**,
+  the rule written under Styling, from the other direction: lettered in the
+  fill colour as well, the label sat at 1.7:1 on its own tint in the light
+  palette and 2.1:1 in the dark one. It is 9.8:1 and about 12.5:1 now.
+
+Driven against the running site at 1280px in both palettes: each colour button
+pressed in turn (one filter on the body, never two), Dark Contrast on, through
+a reload, and off again with the palette handed back, the palette changed from
+outside the panel, Reset, and the computed `cursor` of the page, a link, a
+panel button and a search field.
+
+### The view chooser a new account meets
+
+`includes/view_welcome.php`: a dialog offering the four ways a list of papers
+is drawn - Cards, Rows, Hardbounds and Bookshelf - with Zen Mode beside them,
+each shown as a **screenshot of the real thing**. "Bookshelf" is not a word
+anybody can picture; a shelf of spines is. Added 14 November 2026.
+
+**When.** Once, on the first page after the password gate.
+`pages/change_password.php` sets `$_SESSION['papel_view_tour']` beside
+`password_gate_clear()`, and this file, printed with the footer, reads that
+flag and clears it, so it opens on the page the gate redirects to and on no
+other. That moment is chosen because it is the one time we know the account is
+new to the person holding it: they have just replaced the password that was
+emailed to them. It is an offer and not a gate - Done and Escape both close it
+- and **Settings > Appearance reopens it** (`[data-view-tour]`, which anything
+may carry), which is where somebody who closed it without choosing goes.
+
+**The pictures are real.** `assests/images/views/view-<view>-<light|dark>.png`,
+ten of them, captured from the running repository in both palettes and swapped
+by CSS on `data-mode` so the picture is of the site the reader is looking at.
+560px wide, quantised to 256 colours: 35KB each where the full-colour PNGs were
+90, 348KB for the set. They are `loading="lazy"`, and the palette that is not
+on show is `display: none`, so **five are fetched and five are not** - measured.
+Recapture them when a view is redesigned rather than touching them up: load
+`archive/index.php` with `papel_view` set to each of `cards`, `rows`, `shelf`
+and `bookshelf` (and `papel_zen` for the fifth), crop to `#mainCol` - or to the
+top of the page for Zen, whose point is the chrome that is gone - scale to
+560px and quantise. The crop is deliberate: it keeps the account name and the
+navbar out of a picture that every account will see.
+
+**The choice is written the way Quick Settings writes it** - `papel_view`,
+`data-view` on `<html>`, every copy of the `qs_view` radio re-ticked,
+`papelSyncQuickSettings()` called - but **not through that handler**, which
+clamps a shelf to Cards on a page that cannot draw one (`asView()` in
+`browse_console_js.php`). The gate lands on whatever `role_home()` says and a
+review desk draws no shelf, so going through the clamp would quietly store
+"cards" for somebody who had just asked for Bookshelf. The key is written here
+and the attribute set only where the page offers a shelf, so the page behind
+the dialog changes as you choose where it can, and the answer stands either
+way. The stored value for Hardbounds is still `shelf`: renaming it would put
+every device that had chosen it back on Cards.
+
+**Zen Mode is `zen_switch()` itself**, the one control, so this dialog cannot
+drift from the profile menu's copy.
+
+Driven against the running site with a session minted in the state the gate
+leaves behind: it opens by itself on the dashboard, marks the view in force,
+stores Bookshelf and changes the page behind it, turns Zen on and off, closes
+on Done, does not ask again on the next page, reopens from Settings on the view
+then in force, and at 390px in Old Night it is one column, shows the dark
+pictures and fits the screen. Two things the harness taught, worth keeping: the
+site scrolls smoothly, so a rect read in the same breath as `scrollIntoView` is
+where the element is *leaving* and a press aimed there lands 70px short; and
+Settings shows one card at a time, so its Appearance tab has to be opened
+before anything in it can be pressed.
+
+**Not exercised end to end**: the one line in `pages/change_password.php`. Doing
+that for real means changing an account's password, which writes
+`password_changes` and emails whoever created it, and mail sends from this
+machine.
+
+### Zen Mode
+
+A switch in the profile menu that puts the page's furniture away:
+`includes/zen_mode.php`, required from `site_head.php`, which is the whole of
+it bar the five hooks listed below. Added 14 November 2026.
+
+| | |
+|---|---|
+| Key | `papel_zen`, `'1'` means on; off is the default, so that is the only answer worth storing |
+| Class | `html.zen-on`, plus `sidebar-folded` |
+| Switch | `zen_switch()`, printed in **both** profile menus and in Settings > Appearance |
+
+**What goes**: the breadcrumb strip, the photo strip behind the navbar
+(`.nav-photo`), the footer, the accessibility tab, the scroll-to-top button,
+Corpus's floating button and his greeting, the "Make it yours" card, the
+repository's banner, and the console side panel, which folds to its rail rather
+than going, so the filters are still a press away. **What stays**: the navbar,
+because the switch that turns this off is in it and a mode with no way out is a
+trap; the bell, the manuscript countdown, the flash messages and the loading
+bar, because a grant running out and a paper being returned are news rather
+than furniture. Nothing is widened and no type is changed: this is a quieting,
+not a reading mode.
+
+- **Read before the first paint**, beside the sidebar's own pre-paint block.
+  Measured: the class lands while `document.readyState` is still `loading` with
+  no `<body>` at all, 286ms before the first paint, so there is no frame in
+  which the furniture exists.
+- **It borrows `sidebar-folded` and never writes `papel_sidebar_folded`.**
+  Folding is a picture the site already draws, with a rail, its own buttons and
+  its own shape in the loading skeleton, and borrowing the class means all
+  three follow with no second set of rules. The reader's own answer is waiting
+  for them when Zen goes off; the same goes for `papel_banner_hidden`.
+- **Switching raises `papel:zen` on the document**, because nothing reloads and
+  four things measure a bar that has just gone: `--crumb-h` (the script at the
+  foot of `site_header.php`), the repository's `--hero-nav` and its banner
+  state, and the side panel's rail (`addRail()` in `browse_console_js.php`). A
+  ResizeObserver does see an element go to `display: none`, but these are asked
+  in so many words rather than left to a side effect.
+- **The switch is delegated in the capture phase.** The avatar dropdown stops
+  every click inside itself from bubbling, which is how pressing the menu does
+  not close the menu, so a listener on the document in the ordinary phase never
+  hears the switch at all and the control does nothing. Found by pressing it.
+- **The track is `--maroon-surface`, never `--maroon`**, which is white under
+  Old Night: see the note under Styling. `pages/settings.php`'s own `.switch`
+  still fills from `--maroon` and so turns white there; that is older than this
+  and is not fixed.
+- **The script that folds the banner lives *inside* `<section class="hero">`.**
+  The search band is pulled up into the photo by a negative margin that
+  `.hero.collapsed + .search-band` cancels, and a `<script>` between the two is
+  still a sibling: standing there it broke that rule and the field rode 24px up
+  under the navbar, in Zen **and** in the page's own banner-hidden state. The
+  same `+` trap as the import drawer's panels and the step bar.
+- **The loading skeleton knows about it**: no banner block, the field 1.25rem
+  down and the results a rem under it (`.hero.collapsed`'s own two rules), and
+  the layer's first-frame top is the navbar alone rather than navbar plus
+  strip. While fixing that: `place()` measured `.main-nav`, the row of links
+  *inside* the header, which ends 2px above the bar's own bottom edge. With the
+  strip below it that never showed; with no strip those 2px were a line of the
+  settling page above the blocks. It measures `.site-header` too now.
+- The upload page's side pane is not folded by Zen: it is `papel.sideCollapsed`
+  and holds the Contents, the PDF and Corpus, which are the work rather than
+  the furniture. A paper page's Table of Contents rail stays for the same
+  reason.
+- Signed out there is no profile menu and so no way to turn it on, but the
+  stylesheet and the pre-paint read are printed for everyone, so a setting made
+  while signed in still holds on the public pages afterwards.
+
+Checked against the running site at 1280px and 390px, in both palettes, signed
+in: both menus, Settings, the repository, the dashboard, My Library, the
+notification centre, a paper page and the upload page (whose two panes, tab
+strips and step bar are untouched), the switch surviving a reload, the
+measured `--crumb-h` and `--pdf-dock-top`, nothing laid out under the navbar in
+any of them, and the skeleton's blocks landing on the real field and heading to
+the pixel. Two things to know when driving it: a page the signed-in account may
+**not** open destroys the session (`require_role` empties it and regenerates
+the id), so one wrong URL makes every later check run on the repository page
+and pass for the wrong reason - assert the address as well as the page; and the
+fresh-profile "Make it yours" card lies over the foot of the page and will
+answer a press meant for the menu sheet.
+
 ### Styling
 
 Use the CSS custom properties — `--maroon`, `--dark-maroon`, `--soft-maroon`,
@@ -973,7 +1210,61 @@ and the thing it describes cannot drift. The repository's View All Keywords
 overlay is the first reader of it.
 
 Chart.js colours must be **read from the tokens at draw time** and rebuilt when
-the theme changes — see `analytics/analytics_dashboard.php` for the pattern.
+the theme changes - see `analytics/analytics_dashboard.php` for the pattern.
+
+### Dark mode: the controls that paint themselves, and Bootstrap's black
+
+Two faults that between them accounted for every "I cannot see it" in the dark
+palette, found by sweeping the computed colours rather than by looking. Both
+fixed 14 November 2026.
+
+**A control drawn by its background is not a box you type in.**
+`html[data-mode="dark"] input { background: var(--white) }` in `theme.php`
+exists so a literal white field does not glare, and it was hitting checkboxes
+and radios, whose whole appearance *is* that background: the upload form's tick
+boxes came out at **1.00:1** against their own card, which is not a faint box,
+it is no box at all. The selector now excludes `checkbox`, `radio`, `range` and
+`color`. It has to be excluded there rather than fought off in each stylesheet,
+because `html[data-mode="dark"] input` outranks the plain class rules that style
+them (`.form-check-input` is one class against an attribute and two types).
+
+**The empty state is two tokens now**, `--control-empty` and `--control-rim` in
+`includes/site_head.php`, mixed off `--ink` and `--white` so one pair serves
+both palettes. They replace a hardcoded `#E2DCDC` that was repeated in four
+files and was a light-mode chip wherever it survived. The rim is the part that
+matters: the fill alone measures 1.45:1 on white and 1.67:1 on the dark
+surface, which is a smudge where a control should be, and a control has to
+clear 3:1. Read off the pixels of a 2x screenshot, the rim is **3.26:1** in Old
+Classic and **3.99:1** in Old Night, and a ticked box reads at 9.84 and 8.23
+(the white glyph on the maroon fill), the fill in the light palette being
+unchanged from what it always was.
+
+**Bootstrap keeps its own near-black, and `.card` paints it.**
+`--bs-body-color` is `#212529`, and Bootstrap's `.card` sets `color` from it,
+so **everything inside any card inherited Bootstrap's black** however dark the
+page was: 1.09:1 on the dark surface. On the upload form that was "No PDF
+selected", the four "No file selected" rows on Step 3 and the question above
+Extract with AI - all of them in steps that are `display: none` until the
+student walks to them, which is why it reads as text going missing rather than
+as a page being wrong. The dark block now points `--bs-body-color`,
+`--bs-body-color-rgb`, `--bs-emphasis-color`, `--bs-heading-color` and
+`--bs-secondary-color` at the palette's own tokens. Only in the dark palette:
+in the light one Bootstrap's black and `--ink` are near enough that
+re-pointing them would restyle every Bootstrap component for nothing.
+`--bs-body-color-rgb` is a bare triple by Bootstrap's design, so it is the one
+place Old Night's `--ink` is written twice; both carry a note.
+
+Before this there was one rule per symptom (`#uploadForm h4`, still in the
+upload page with its own note), which is a fix that the next card undoes.
+
+**How to look for the rest of it.** Walk every element that holds its own text,
+compute its colour against the first opaque background behind it, and report
+anything under 4.5:1 - **including the elements that are not on screen**, since
+the worst of these only appear two steps into a form. Two things will come back
+that are not faults: the phone menu sheet's rows and the Bookshelf spines
+compute Bootstrap's link blue while they are hidden, because the rules that
+colour them live in the media query and the view that shows them; measured
+where they are actually shown they are 10.96:1 and 8.99:1.
 
 ---
 

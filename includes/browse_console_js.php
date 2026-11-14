@@ -826,6 +826,12 @@
     }
 
     build();
+    /* Zen Mode folds the panel by putting the same class on <html>, without
+       writing the reader's own answer. The class alone is not a mutation of
+       this aside, so the rail would not be drawn (or, going the other way,
+       not taken away): addRail does both, and leaves at once when there is
+       nothing to do. */
+    document.addEventListener('papel:zen', addRail);
     new MutationObserver(build).observe(aside, { childList: true, subtree: true });
 })();
 

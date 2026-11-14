@@ -305,6 +305,11 @@ $login_notif_popup_items = $show_login_notif_popup
                     <button type="button" data-profile-theme-toggle>
                         <span class="nav-action-content"><span class="material-symbols-outlined mi-20" data-theme-icon aria-hidden="true">dark_mode</span><span class="nav-action-text" data-theme-label>Dark mode</span></span>
                     </button>
+                    <?php /* Zen Mode. Printed by includes/zen_mode.php, which is
+                             also where the dropdown's copy comes from: one
+                             control, two menus, as the dark-mode button above is.
+                             Change both or neither. */ ?>
+                    <?php zen_switch('sheet'); ?>
                     <a href="<?= e(BASE_URL.'/app/auth/logout.php') ?>">
                         <span class="nav-action-content"><span class="material-symbols-outlined mi-20" aria-hidden="true">logout</span><span class="nav-action-text">Logout</span></span>
                     </a>
@@ -420,6 +425,7 @@ $login_notif_popup_items = $show_login_notif_popup
                         <button type="button" data-profile-theme-toggle>
                             <span class="material-symbols-outlined mi-20" data-theme-icon aria-hidden="true">dark_mode</span><span data-theme-label>Dark mode</span>
                         </button>
+                        <?php zen_switch('dropdown'); ?>
                         <a href="<?= e(BASE_URL.'/app/auth/logout.php') ?>">
                             <span class="material-symbols-outlined mi-20">logout</span> Logout
                         </a>
@@ -470,6 +476,13 @@ $login_notif_popup_items = $show_login_notif_popup
 
     measure();
     document.addEventListener('DOMContentLoaded', measure);
+    /* Zen Mode hides the strip, so --crumb-h has to come back as 0 and go back
+       to its height when Zen goes off. The observer below does see an element
+       go to display: none, but everything that reads these two figures (the
+       PDF panel, the manuscript pill, the loading skeleton, the repository's
+       banner) depends on this happening, so it is asked for in so many
+       words rather than left to a side effect. */
+    document.addEventListener('papel:zen', measure);
     if (watch) { watch.observe(bar); }
     else { window.addEventListener('resize', measure); }
 })();

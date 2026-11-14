@@ -225,7 +225,11 @@ body {
     bottom: calc(100% + 12px);
     right: 0;
     width: 300px;
-    background: #fff;
+    /* The panel's own colours come off the tokens, like everything else on
+       the site: it is moved onto <html>, so the theme's :root is still in
+       reach, and a light card hanging on a dark page was the one thing Dark
+       Contrast could not put right about itself. */
+    background: var(--white);
     border-radius: var(--r-card, 8px);
     box-shadow: 0 8px 32px rgba(0,0,0,.18), 0 0 0 1px rgba(0,0,0,.06);
     overflow: hidden;
@@ -248,67 +252,85 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 14px 16px 12px;
-    border-bottom: 1px solid #f0f0f0;
-    background: #f9fafb;
+    border-bottom: 1px solid var(--border);
+    /* Opaque, and mixed rather than taken from --cream: this header is sticky
+       and the settings scroll under it, and --cream is a 6% white under Old
+       Night, so the list showed straight through the word "Accessibility".
+       Measured: alpha 0.06 there against 1 in the light palette. */
+    background: color-mix(in srgb, var(--ink) 6%, var(--white));
     position: sticky;
     top: 0;
     z-index: 1;
 }
-.a11y-header h3 { margin: 0; font-size: 13px; font-weight: 700; color: #111827; letter-spacing: -.1px; }
+.a11y-header h3 { margin: 0; font-size: 13px; font-weight: 700; color: var(--ink); letter-spacing: -.1px; }
 .a11y-header-actions { display: flex; align-items: center; gap: 8px; }
 #a11y-reset {
     background: none; border: none; cursor: pointer;
-    font-size: 11px; color: #6b7280; font-family: inherit;
+    font-size: 11px; color: var(--grey); font-family: inherit;
     padding: 3px 7px; border-radius: var(--r-control, 4px); transition: background .15s, color .15s;
 }
-#a11y-reset:hover { background: #fee2e2; color: #991b1b; }
+#a11y-reset:hover { background: var(--bad-bg, var(--cream)); color: var(--bad-text, var(--maroon-surface)); }
 #a11y-close {
     background: none; border: none; cursor: pointer;
     width: 24px; height: 24px; border-radius: var(--r-control, 4px);
     display: flex; align-items: center; justify-content: center;
-    font-size: 1rem; color: #9ca3af; transition: background .15s, color .15s;
+    font-size: 1rem; color: var(--grey); transition: background .15s, color .15s;
     padding: 0; line-height: 1;
 }
-#a11y-close:hover { background: #f3f4f6; color: #374151; }
+#a11y-close:hover { background: var(--cream); color: var(--ink); }
 
 /* Panel sections */
-.a11y-section { padding: 12px 14px; border-bottom: 1px solid #f3f4f6; }
+.a11y-section { padding: 12px 14px; border-bottom: 1px solid var(--border); }
 .a11y-section:last-child { border-bottom: none; }
 .a11y-section-title {
     font-size: 10px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .7px; color: #9ca3af; margin-bottom: 10px;
+    letter-spacing: .7px; color: var(--grey); margin-bottom: 10px;
 }
 
 /* Font size control */
 .a11y-font-control {
     display: flex; align-items: center; justify-content: space-between;
-    background: #f3f4f6; border-radius: var(--r-card, 8px); padding: 4px;
+    background: var(--cream); border-radius: var(--r-card, 8px); padding: 4px;
     margin-bottom: 10px;
 }
 .a11y-font-btn {
-    width: 36px; height: 36px; border: none; background: #fff;
+    width: 36px; height: 36px; border: none; background: var(--white);
     border-radius: var(--r-control, 4px); cursor: pointer; font-size: 1.125rem;
-    font-weight: 700; color: #374151;
+    font-weight: 700; color: var(--ink);
     box-shadow: 0 1px 3px rgba(0,0,0,.1);
     display: flex; align-items: center; justify-content: center;
     transition: background .15s;
 }
-.a11y-font-btn:hover { background: #f9fafb; }
-#a11y-font-val { font-size: 13px; font-weight: 600; color: #374151; min-width: 44px; text-align: center; }
+.a11y-font-btn:hover { background: var(--cream); }
+#a11y-font-val { font-size: 13px; font-weight: 600; color: var(--ink); min-width: 44px; text-align: center; }
 
 /* Option grid */
 .a11y-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .a11y-btn {
     display: flex; flex-direction: column; align-items: center;
     justify-content: center; gap: 5px; padding: 10px 6px;
-    border: 1.5px solid #e5e7eb; background: #fff;
+    border: 1.5px solid var(--border); background: var(--white);
     border-radius: var(--r-control, 4px); cursor: pointer; font-family: inherit;
-    font-size: 11px; font-weight: 500; color: #4b5563;
+    font-size: 11px; font-weight: 500; color: var(--ink);
     line-height: 1.3; text-align: center;
     transition: border-color .15s, background .15s, color .15s;
 }
-.a11y-btn:hover { border-color: #d1d5db; background: #f9fafb; }
-.a11y-btn.active { border-color: #10b981; background: #ecfdf5; color: #065f46; }
+.a11y-btn:hover { border-color: var(--soft-maroon); background: var(--cream); }
+/* On is the site's accent, not the green it used to be: a green tick in a
+   maroon site reads as another product's control, and the colour group below
+   is now a radio set, where "which one is on" is the whole of what the colour
+   has to say. --maroon-surface and not --maroon for the fill, which is white
+   under Old Night (see CLAUDE.md under Styling). */
+.a11y-btn.active {
+    border-color: var(--maroon-surface);
+    background: color-mix(in srgb, var(--maroon-surface) 12%, var(--white));
+    /* The label is a mark, so --maroon, which is the accent light (plain
+       white) under Old Night and the deep maroon in the light palette. Filled
+       from --maroon-surface and lettered in it as well, the word sat at 1.7:1
+       on its own tint in the light palette and 2.1:1 in the dark one, which is
+       a button whose "on" state you cannot read. Measured both ways. */
+    color: var(--maroon);
+}
 .a11y-btn .a11y-icon { font-size: 1.125rem; line-height: 1; }
 
 /* Reading guide */
@@ -345,8 +367,15 @@ body.a11y-font-weight * { font-weight: 700 !important; }
 
 /* Filters on body: widget is moved outside body in JS so these
    won't break its position:fixed containing block */
-body.a11y-dark-contrast { filter: invert(1) hue-rotate(180deg); background: #000; }
-body.a11y-dark-contrast img, body.a11y-dark-contrast video { filter: invert(1) hue-rotate(180deg); }
+/* Dark Contrast has **no rules of its own**. It used to invert the whole page
+   and then invert every image back, which gave a site nobody designed: the
+   maroon came out teal, the photographs came back at the wrong brightness, and
+   anything with its own filter (High Contrast here, the dark theme's own
+   img rule) fought it. It now does what it says, which is dark mode: the
+   script below puts the site's own dark palette on (Old Night, the one the
+   profile menu and Quick Settings offer) and puts the reader's palette back
+   when it goes off. The class stays as the mark of the setting being on,
+   which is what the panel and the stored preferences read. */
 
 body.a11y-light-contrast { background: #fff !important; color: #333 !important; }
 body.a11y-light-contrast * { background: #fff !important; color: #333 !important; border-color: #ccc !important; }
@@ -358,8 +387,58 @@ body.a11y-monochrome      { filter: grayscale(100%); }
 
 body.a11y-stop-animations * { animation: none !important; transition: none !important; }
 
+/* ---- Large Cursor ----
+   Three cursors, not one, and a keyword after each: the picture is what makes
+   the pointer easy to follow, and the keyword is what the browser falls back
+   to when it will not take the picture (a data URI it refuses, an image over
+   the platform's size limit, a build with no cursor images at all). Without
+   one the declaration is simply dropped and the setting silently does nothing.
+
+   The three are the uses, because a single arrow forced onto `*` with
+   !important is not only larger, it is **wrong**: the hand over every link and
+   the I-beam in every box are how a pointer says what a thing is, and this
+   setting used to take both away from the readers who need them most. So a
+   link or a button gets a large hand falling back to `pointer`, a box you type
+   in gets a large beam falling back to `text`, and everything else the arrow
+   falling back to `auto`. The SVGs are percent-encoded: a raw `<` in a data
+   URI is invalid, and an invalid declaration takes its own fallback with it. */
 body.a11y-big-cursor,
-body.a11y-big-cursor * { cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='black' stroke='white' stroke-width='2'><path d='M5.5 3.21l10.8 15.66-5.2 1.1-2.8 6.03-3.6-1.6 2.8-6.03-5.5-2.4V3.21z'/></svg>"), auto !important; }
+body.a11y-big-cursor * { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='black' stroke='white' stroke-width='2'%3E%3Cpath d='M5.5 3.21l10.8 15.66-5.2 1.1-2.8 6.03-3.6-1.6 2.8-6.03-5.5-2.4V3.21z'/%3E%3C/svg%3E") 2 2, auto !important; }
+
+body.a11y-big-cursor a[href],
+body.a11y-big-cursor a[href] *,
+body.a11y-big-cursor button,
+body.a11y-big-cursor button *,
+body.a11y-big-cursor summary,
+body.a11y-big-cursor select,
+body.a11y-big-cursor label[for],
+body.a11y-big-cursor [role="button"],
+body.a11y-big-cursor [role="button"] *,
+body.a11y-big-cursor [role="switch"],
+body.a11y-big-cursor [role="tab"],
+body.a11y-big-cursor input[type="checkbox"],
+body.a11y-big-cursor input[type="radio"],
+body.a11y-big-cursor input[type="submit"],
+body.a11y-big-cursor input[type="button"] { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='black' stroke='white' stroke-width='1.4'%3E%3Cpath d='M9 11.5V4.8a1.6 1.6 0 013.2 0v5.6h.9V3.2a1.6 1.6 0 013.2 0v7.2h.9V5.6a1.6 1.6 0 013.2 0v9.3c0 3.9-2.4 6.9-6.3 6.9-2.3 0-4-.9-5.2-2.7L5 14.3a1.6 1.6 0 012.5-2l1.5 1.7z'/%3E%3C/svg%3E") 10 3, pointer !important; }
+
+body.a11y-big-cursor input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):not([type="file"]):not([type="range"]):not([type="color"]),
+body.a11y-big-cursor textarea,
+body.a11y-big-cursor [contenteditable="true"],
+body.a11y-big-cursor [contenteditable="true"] * { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='4.5' stroke-linecap='round'%3E%3Cpath d='M12 3v18M8.5 3h7M8.5 21h7'/%3E%3Cpath d='M12 3v18M8.5 3h7M8.5 21h7' stroke='black' stroke-width='2'/%3E%3C/svg%3E") 10 10, text !important; }
+
+/* The panel itself is not in <body>: it is moved onto <html> so that a filter
+   on the body (High Contrast, Monochrome) cannot become the containing block
+   for its fixed position, which is the note further up this file. So none of
+   the rules above reach it, and the one place the reader is certain to be
+   looking when they switch this on had the small arrow in it. Matched through
+   :has() on the root, which is the only way back to an element that is the
+   body's sibling, and the same selector the dashboards already use. */
+html:has(body.a11y-big-cursor) #a11y-widget,
+html:has(body.a11y-big-cursor) #a11y-widget *,
+html:has(body.a11y-big-cursor) #a11y-reading-guide { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='black' stroke='white' stroke-width='2'%3E%3Cpath d='M5.5 3.21l10.8 15.66-5.2 1.1-2.8 6.03-3.6-1.6 2.8-6.03-5.5-2.4V3.21z'/%3E%3C/svg%3E") 2 2, auto !important; }
+html:has(body.a11y-big-cursor) #a11y-widget button,
+html:has(body.a11y-big-cursor) #a11y-widget button * { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 24 24' fill='black' stroke='white' stroke-width='1.4'%3E%3Cpath d='M9 11.5V4.8a1.6 1.6 0 013.2 0v5.6h.9V3.2a1.6 1.6 0 013.2 0v7.2h.9V5.6a1.6 1.6 0 013.2 0v9.3c0 3.9-2.4 6.9-6.3 6.9-2.3 0-4-.9-5.2-2.7L5 14.3a1.6 1.6 0 012.5-2l1.5 1.7z'/%3E%3C/svg%3E") 10 3, pointer !important; }
+
 </style>
 
 <?php /* Read before the tab below is parsed, so a hidden tab is never drawn
@@ -433,22 +512,30 @@ try {
         <div class="a11y-section">
             <div class="a11y-section-title">Color &amp; Contrast</div>
             <div class="a11y-grid">
-                <button class="a11y-btn" data-cls="a11y-dark-contrast">
+                <?php /* One at a time. These six are six ways of repainting the same
+                         page and they were independent switches, so Dark Contrast and
+                         Monochrome and Vivid Colors could all be on at once: three
+                         filters multiplied together, a page nobody designed, and no way
+                         to tell which of the three was the one making it unreadable.
+                         data-group makes them a radio set in the handler below; pressing
+                         the one that is on still turns it off, so "none of them" is
+                         still reachable. */ ?>
+                <button class="a11y-btn" data-group="color" data-cls="a11y-dark-contrast">
                     <span class="a11y-icon">&#9899;</span>Dark Contrast
                 </button>
-                <button class="a11y-btn" data-cls="a11y-light-contrast">
+                <button class="a11y-btn" data-group="color" data-cls="a11y-light-contrast">
                     <span class="a11y-icon">&#9898;</span>Light Contrast
                 </button>
-                <button class="a11y-btn" data-cls="a11y-high-contrast">
+                <button class="a11y-btn" data-group="color" data-cls="a11y-high-contrast">
                     <span class="a11y-icon">&#9680;</span>High Contrast
                 </button>
-                <button class="a11y-btn" data-cls="a11y-high-saturation">
+                <button class="a11y-btn" data-group="color" data-cls="a11y-high-saturation">
                     <span class="a11y-icon">&#127752;</span>Vivid Colors
                 </button>
-                <button class="a11y-btn" data-cls="a11y-low-saturation">
+                <button class="a11y-btn" data-group="color" data-cls="a11y-low-saturation">
                     <span class="a11y-icon">&#127787;</span>Muted Colors
                 </button>
-                <button class="a11y-btn" data-cls="a11y-monochrome">
+                <button class="a11y-btn" data-group="color" data-cls="a11y-monochrome">
                     <span class="a11y-icon">&#9636;</span>Monochrome
                 </button>
             </div>
@@ -534,6 +621,61 @@ try {
 
         var fontSize = 100;
         var guideOn  = false;
+        /* The palette the reader had before Dark Contrast was switched on, so
+           it can be given back. Kept with the other preferences rather than in
+           a variable alone: the setting survives a reload and so must the way
+           out of it. */
+        var prevColor = null;
+
+        /* ---- Dark Contrast is the site's own dark palette ----
+           Not a filter over the page: the same two attributes the profile
+           menu, Quick Settings and Settings all set, and the same stored key,
+           so every one of those controls shows the truth while this is on, and
+           the pre-paint script in theme.php draws the next page dark with no
+           flash. Writing the key is the point: a dark page restored a frame
+           late is the white flash that block exists to prevent. */
+        var PALETTE_KEY  = 'papel_color';
+        var DARK_PALETTE = 'old-night';
+
+        function palette() {
+            var now = document.documentElement.getAttribute('data-color');
+            if (now) { return now; }
+            try { return localStorage.getItem(PALETTE_KEY) || 'classic'; } catch (e) { return 'classic'; }
+        }
+        function isDark() { return document.documentElement.getAttribute('data-mode') === 'dark'; }
+
+        function setPalette(name) {
+            var el = document.documentElement;
+            el.setAttribute('data-color', name);
+            el.setAttribute('data-mode', name === DARK_PALETTE ? 'dark' : 'light');
+            try { localStorage.setItem(PALETTE_KEY, name); } catch (e) {}
+            /* The other places the palette is shown. Asked for rather than
+               assumed: a page without Quick Settings has neither. */
+            if (window.papelSyncQuickSettings) { window.papelSyncQuickSettings(); }
+            document.querySelectorAll('input[name="qs_color"]').forEach(function (i) {
+                i.checked = i.value === name;
+            });
+        }
+
+        function applyDarkContrast(on) {
+            if (on) {
+                /* Already dark because the reader chose it: remember that, so
+                   switching this off does not take their own palette away. */
+                if (prevColor === null) { prevColor = palette(); }
+                if (!isDark()) { setPalette(DARK_PALETTE); }
+            } else if (prevColor !== null) {
+                var back = prevColor;
+                prevColor = null;
+                if (palette() !== back) { setPalette(back); }
+            }
+        }
+
+        /* One switch per class, so the group rule, the restore and Reset all
+           turn a setting off the same way. */
+        function setSetting(cls, on) {
+            document.body.classList.toggle(cls, on);
+            if (cls === 'a11y-dark-contrast') { applyDarkContrast(on); }
+        }
 
         /* ---- Load persisted prefs ---- */
         function loadPrefs() {
@@ -548,11 +690,30 @@ try {
                     applyFont();
                 }
 
+                /* What the palette was before Dark Contrast, read before the
+                   classes below so switching it off has somewhere to go back
+                   to. A device that stored the class under the old build has
+                   no such answer, and falls back to the light palette rather
+                   than to a dark site with no way out. */
+                prevColor = (typeof prefs.prevColor === 'string') ? prefs.prevColor : null;
+
                 // Active body classes
                 if (Array.isArray(prefs.classes)) {
+                    /* One of a group, even where an older build stored three:
+                       the first wins and the rest are dropped here rather than
+                       left to pile their filters on one another. */
+                    var seen = {};
                     prefs.classes.forEach(function (cls) {
-                        document.body.classList.add(cls);
                         var btn = document.querySelector('.a11y-btn[data-cls="' + cls + '"]');
+                        var group = btn && btn.dataset.group;
+                        if (group) {
+                            if (seen[group]) { return; }
+                            seen[group] = cls;
+                        }
+                        if (cls === 'a11y-dark-contrast' && prevColor === null) {
+                            prevColor = isDark() ? 'classic' : palette();
+                        }
+                        setSetting(cls, true);
                         if (btn) btn.classList.add('active');
                     });
                 }
@@ -573,9 +734,10 @@ try {
                     classes.push(b.dataset.cls);
                 });
                 localStorage.setItem(STORAGE_KEY, JSON.stringify({
-                    fontSize: fontSize,
-                    classes:  classes,
-                    guide:    guideOn
+                    fontSize:  fontSize,
+                    classes:   classes,
+                    guide:     guideOn,
+                    prevColor: prevColor
                 }));
             } catch (e) {}
         }
@@ -1159,8 +1321,20 @@ try {
         document.querySelectorAll('.a11y-btn[data-cls]').forEach(function (btn) {
             btn.addEventListener('click', function () {
                 var cls = this.dataset.cls;
-                document.body.classList.toggle(cls);
-                this.classList.toggle('active');
+                var on  = !this.classList.contains('active');
+                var group = this.dataset.group;
+                /* A group is a radio set: whatever else in it was on goes off
+                   first, and goes off properly, through setSetting, so Dark
+                   Contrast hands the palette back on its way out. */
+                if (group && on) {
+                    document.querySelectorAll('.a11y-btn[data-group="' + group + '"].active')
+                        .forEach(function (other) {
+                            other.classList.remove('active');
+                            if (other.dataset.cls) { setSetting(other.dataset.cls, false); }
+                        });
+                }
+                setSetting(cls, on);
+                this.classList.toggle('active', on);
                 savePrefs();
             });
         });
@@ -1186,7 +1360,9 @@ try {
                 fontSize = 100;
                 applyFont();
                 document.querySelectorAll('.a11y-btn.active').forEach(function (b) {
-                    if (b.dataset.cls) document.body.classList.remove(b.dataset.cls);
+                    /* Through setSetting, or Reset would leave the page dark
+                       with nothing on the panel saying why. */
+                    if (b.dataset.cls) { setSetting(b.dataset.cls, false); }
                     b.classList.remove('active');
                 });
                 guideOn = false;
@@ -1206,6 +1382,24 @@ try {
             if (e.target.closest && e.target.closest('a[href]')) { return; }
             e.preventDefault();
         });
+
+        /* ---- The palette can also be changed from outside this panel ----
+           The profile menu, Quick Settings and Settings all set it, and a
+           reader who turns the site light again from one of those has turned
+           Dark Contrast off whether or not they were looking at this panel.
+           Left alone, the button went on claiming a dark page that was no
+           longer there, and pressing it twice was the only way to clear it.
+           Watched on <html>, which is where every one of those writes. */
+        new MutationObserver(function () {
+            var btn = document.querySelector('.a11y-btn[data-cls="a11y-dark-contrast"]');
+            if (!btn || !btn.classList.contains('active') || isDark()) { return; }
+            btn.classList.remove('active');
+            document.body.classList.remove('a11y-dark-contrast');
+            /* The reader's own choice is the one on the page now, so there is
+               nothing left to put back. */
+            prevColor = null;
+            savePrefs();
+        }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-mode', 'data-color'] });
 
         /* ---- Restore saved preferences ---- */
         loadPrefs();

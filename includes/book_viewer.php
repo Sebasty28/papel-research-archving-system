@@ -387,6 +387,28 @@ html.bv-locked { overflow: hidden; }
 .bv-title { margin: 0; font-family: var(--font-head); font-size: 1.125rem; font-weight: 600; line-height: 1.3; color: var(--maroon); }
 .bv-authors { margin: .375rem 0 0; font-size: .8125rem; color: var(--ink); }
 .bv-abstract { margin: .875rem 0 0; font-size: .8125rem; line-height: 1.6; color: var(--ink); }
+/* The card's prose is justified, as a bound paper's own page is: the three
+   blocks that run to more than a line, and not the title or the kicker above
+   them, which are headings and would only have their words pulled apart. The
+   last line of each stays ranged left, which is what text-align does on its
+   own and what text-align-last would undo.
+
+   Measured on the abstract, the card being 326px wide on a phone and 424 on a
+   desktop: the right edge goes from 58.6px of rag to 0 at 390px (38 to 0 at
+   1280), and the price is the word space, which is 3.7px throughout a ranged
+   edge and runs to 13.2px on the worst line here (10 at 1280). That is the
+   bargain justification always is; at three and a half spaces on one line of
+   eleven it is worth it, and anything wider would not be.
+
+   `hyphens: auto` is asked for because it is what keeps those gaps down in a
+   column this narrow, and it needs the document's language, which every page
+   carrying this declares on <html> itself. It changed nothing in the figures
+   above: headless Chrome has no hyphenation dictionary, so this is the
+   unhyphenated case measured, and a browser that has one can only do better. */
+.bv-authors, .bv-abstract, .bv-note {
+    text-align: justify;
+    hyphens: auto;
+}
 .bv-abstract:empty, .bv-note:empty, .bv-authors:empty, .bv-kicker:empty { display: none; }
 .bv-note { margin: .875rem 0 0; font-size: .75rem; color: var(--grey); }
 .bv-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .625rem; margin-top: 1rem; }

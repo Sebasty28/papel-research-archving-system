@@ -274,6 +274,35 @@ html[data-mode="dark"] {
     --header-frost-shadow: rgba(0, 0, 0, .45);
 
     color-scheme: dark;                    /* native controls follow */
+
+    /* ---- Bootstrap's own text colours, pointed at the palette ----
+       Bootstrap is loaded on every page and keeps its own near-black
+       (#212529) in --bs-body-color, which it does not merely use on <body>:
+       `.card` sets `color: var(--bs-card-color)` off it, so **everything
+       inside any card inherits Bootstrap's black**, whatever the site's --ink
+       says. On a dark surface that measures 1.09:1, which is text that is
+       simply not there: the upload form's "No PDF selected", its "No file
+       selected" rows on Step 3 and the question above Extract with AI were
+       all drawn in it, and showed only once the reader had walked to the step
+       that holds them, which is why it reads as text going missing rather
+       than as a page being wrong.
+
+       Fixed here, once, rather than by naming each element: a rule per
+       symptom is how `#uploadForm h4` came to exist further down the upload
+       page, and the next card to be added would need another one. Only in the
+       dark palette, because in the light one Bootstrap's black and the site's
+       ink are near enough that re-pointing them would restyle every Bootstrap
+       component for no gain.
+
+       --bs-body-color-rgb is a bare triple by Bootstrap's design (it goes
+       inside rgba()), so it cannot be written as var(--ink) and is the one
+       place the palette's literal has to be repeated. It is the value of
+       --ink in the block below; change one and change the other. */
+    --bs-body-color: var(--ink);
+    --bs-body-color-rgb: 232, 232, 233;
+    --bs-emphasis-color: var(--ink);
+    --bs-heading-color: var(--ink);
+    --bs-secondary-color: var(--grey);
 }
 html[data-mode="dark"] { --page-bg: #14171E; }
 html[data-mode="dark"] body { background: var(--page-bg); }
@@ -289,7 +318,7 @@ html[data-mode="dark"] body { background: var(--page-bg); }
 html[data-mode="dark"][data-color="old-night"] {
     --white:        #2D2F32;
     --cream:        rgba(255, 255, 255, .06);
-    --ink:          #E8E8E9;
+    --ink:          #E8E8E9;   /* twin: --bs-body-color-rgb above */
     --grey:         #C7C9CC;
     --border:       #44464A;
     --border-soft:  rgba(255, 255, 255, .13);
@@ -300,12 +329,23 @@ html[data-mode="dark"][data-color="old-night"] {
 html[data-mode="dark"][data-color="old-night"] { --page-bg: #292B2E; }
 html[data-mode="dark"][data-color="old-night"] body { background: var(--page-bg); }
 
-/* A few places paint a literal white that would glare on a dark page. */
+/* A few places paint a literal white that would glare on a dark page.
+
+   **Not the controls that paint themselves.** This is for a box you type in;
+   a checkbox, a radio, a range or a colour well is drawn *by* its background,
+   and handing it the surface colour made it exactly the colour of the card
+   behind it: the tick boxes on the upload form measured 1.00:1 against their
+   own card and simply were not there. The four are excluded by type rather
+   than by class, so a control anywhere on the site is safe without having to
+   know this rule exists; and the exclusion has to be here rather than fought
+   off in each stylesheet, because this selector outranks the plain class
+   rules that style them (.form-check-input is one class, this is an
+   attribute and two types). */
 html[data-mode="dark"] .doc-surface,
 html[data-mode="dark"] .pd-prose td,
 html[data-mode="dark"] .pd-prose th,
 html[data-mode="dark"] .search-form,
-html[data-mode="dark"] input,
+html[data-mode="dark"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
 html[data-mode="dark"] select,
 html[data-mode="dark"] textarea {
     background: var(--white);
@@ -329,7 +369,8 @@ html[data-mode="dark"] img:not([src*=".svg"]) { filter: brightness(.92); }
     appearance: none; -webkit-appearance: none;
     width: 12px; height: 12px;
     border-radius: 50%;
-    background: #E2DCDC;
+    background: var(--control-empty);
+    box-shadow: inset 0 0 0 1px var(--control-rim);
     margin: 0; flex: 0 0 auto; cursor: pointer;
 }
 /* **--maroon-surface, the fill, and not --maroon.** This is the same control
