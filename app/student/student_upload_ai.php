@@ -13031,8 +13031,24 @@ window.papelSide = (function () {
         }
         if (mainBody) mainBody.addEventListener('scroll', function () { if (whereOnView('toc')) soon('spy', spy); }, { passive: true });
         render();
-        // The panes are up: the skeleton may lift onto the finished layout.
-        if (window.papelSkeleton) window.papelSkeleton.done();
+        /* The panes are up, but "up" is not the same moment as "painted", and
+           the skeleton must not start lifting until the form has actually
+           moved. Measured on this page: render() sets --room-l to 365px at
+           531ms, and the paint that carries the form 263px sideways does not
+           land until 717ms, because a long task sits between the two. done()
+           called straight after render() fired at 704ms, so the cover began
+           fading 13ms before the jump it exists to hide, and the browser
+           charged the whole 0.15 to CLS.
+
+           Two frames, for the reason skeleton.php's own DOMContentLoaded
+           handler uses two: a rAF callback runs *before* that frame's paint,
+           so the first is the frame that lays the new room out and the second
+           is the first moment after it has been painted. */
+        if (window.papelSkeleton) {
+            requestAnimationFrame(function () {
+                requestAnimationFrame(function () { window.papelSkeleton.done(); });
+            });
+        }
     });
 
     return {

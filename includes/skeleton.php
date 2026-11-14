@@ -242,6 +242,16 @@ html.papel-skel .papel-skel-layer {
 html.zen-on .skel-hero { display: none; }
 html.zen-on .skel-band { margin-top: 1.25rem; }
 html.zen-on .skel-band + .skel-wrap { padding-top: 1rem; }
+/* The repository draws no banner at 425px and under (archive/index.php), so
+   neither does this: a block drawn here that the page is not about to paint
+   is the jump this layer exists to cover, upside down. The same three rules
+   as Zen's above, for the same reason and in the same order, and they must
+   stay after the narrow widths' own .75rem to beat it at equal specificity. */
+@media (max-width: 425px) {
+    .skel-hero { display: none; }
+    .skel-band { margin-top: 1.25rem; }
+    .skel-band + .skel-wrap { padding-top: 1rem; }
+}
 /* Full width: below the breakpoint the repository is one column and the real
    field runs the whole of it. Narrowed to the results column above, in the
    query with the swap. A flat 73% was 40px short of the real field at 1280px

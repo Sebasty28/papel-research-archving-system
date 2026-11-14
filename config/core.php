@@ -1398,11 +1398,20 @@ function nav_photo_order(): array {
  * 1920 is 316KB and at 1280 is 160KB. The JPEG stays as the <img> src, so a
  * browser that cannot read WebP, or a copy of the site deployed before the
  * .webp files were, shows exactly what it showed before.
+ *
+ * **768 is the step the phones actually take.** Worked out from the candidate
+ * each device picks against `sizes="100vw"`: a 360px screen at 2x needs 720px
+ * and a 390px screen at 3x needs 1170px, so *every* phone, cheap or not, was
+ * landing on the 1280w file and downloading four times the pixels a 360px
+ * screen can show. 768w is 14KB against that file's 40KB. The 3840w file is
+ * only ever chosen by a retina laptop (1534px at 2x needs 3068px), which is
+ * why it is still here: it is the one candidate that costs a low-end device
+ * nothing, since nothing low-end asks for it.
  */
 function nav_photo_srcset(string $photo): string {
     $stem = preg_replace('/\.jpg$/i', '', $photo);
     $out  = [];
-    foreach ([1280, 1920, 3840] as $w) {
+    foreach ([768, 1280, 1920, 3840] as $w) {
         $rel = '/assests/images/' . $stem . '-' . $w . '.webp';
         if (is_file(ROOT_PATH . $rel)) { $out[] = BASE_URL . $rel . ' ' . $w . 'w'; }
     }

@@ -903,7 +903,21 @@ returns early when `papel-splash` is already on `<html>`.
   skeleton that appears and vanishes inside one is a blink of its own. A page
   that rebuilds its own layout calls `papelSkeleton.hold()` while it parses and
   `papelSkeleton.done()` once the real layout is up (the upload page does this
-  around `papelSide`), so it never lifts onto a half-built page. Two failsafes:
+  around `papelSide`), so it never lifts onto a half-built page.
+  **`done()` goes two frames after the rebuild, not straight after it.** The
+  layout being *decided* is not the same moment as its being *painted*:
+  measured on the upload page, `render()` sets `--room-l` to 365px at 531ms
+  and the paint that carries the form 263px sideways does not land until
+  717ms, because a long task sits between the two. Called straight after
+  `render()`, `done()` fired at 704ms and the cover began fading 13ms before
+  the jump it exists to hide. A `requestAnimationFrame` callback runs *before*
+  that frame's paint, so it takes two: the first is the frame that lays the
+  new room out, the second is the first moment after it has been painted.
+  Note what this does and does not buy: the jump is now invisible, and CLS is
+  **unchanged at about 0.15**, because the browser charges a shift whether or
+  not something is covering it. Only laying the form out in its final place
+  before the first paint would move that number.
+  Two failsafes:
   the script gives up 1.5s after `load`, and the CSS fades the layer out at 6s
   in case the script is itself what failed. With no script at all nothing is
   ever shown.
@@ -1281,18 +1295,47 @@ for itself.
   JPEG every browser can read. The preload carries `type="image/webp"` for the
   same reason. This was written the wrong way first and caught before it
   shipped.
-- **Three widths, WebP, generated beside the JPEGs**
-  (`navbar-photo<n>-{1280,1920,3840}.webp`). The strip is full width and 339px
+- **Four widths, WebP, generated beside the JPEGs**
+  (`navbar-photo<n>-{768,1280,1920,3840}.webp`). The strip is full width and 339px
   tall, so the 3840px original is the 2x image for a 1920px screen and four
   times the pixels a 1366px laptop can show. Measured: the whole set was
   **1,114KB of JPEG on every page**; at 1920 it is **319KB** and at 1280
   **160KB**, and a 1536px window loads 82KB for the one photo that paints.
   Regenerate with the same widths if a photo is added, or `nav_photo_srcset()`
   finds nothing for it and quietly serves the JPEG, which still works.
+- **768 is the step the phones take, and it was missing until 15 November
+  2026.** Work out which candidate a device really picks against
+  `sizes="100vw"` rather than reasoning about screen sizes: a 360px screen at
+  2x needs 720px and a 390px screen at 3x needs 1170px, so *every* phone,
+  cheap or not, was landing on the 1280w file and fetching four times the
+  pixels a 360px screen can show. 768w is **14KB against 40KB**, confirmed by
+  driving a real 360px@2x load and reading which file the browser chose. The
+  quality (78) was picked to match the existing set's **0.138 bytes per
+  pixel**, not by eye, so the new step sits beside the others without looking
+  different; `scratchpad/bin/make_768.py` is how it was generated and PIL is
+  what there is on this machine (GD is not in the CLI build).
+  **The 3840w file stays.** Only a retina laptop ever asks for it (1534px at
+  2x needs 3068px), so it costs a low-end device nothing, and capping the top
+  of the ladder would save bandwidth for the people who have the most of it
+  while softening the banner on the only screens that can show the detail.
 - The four waiting slides keep `data-src` until `load`, as before, and their
   `<source>` keeps `data-srcset`. **The source is promoted before the img**: a
   picture resolves from its sources, so a `src` set first is fetched and then
   dropped for the WebP.
+  - **The repository's own copy of that loop had it wrong, and nothing showed
+    it for a release.** `archive/index.php` read `img.dataset.srcset`, and
+    there has never been a `data-srcset` on the `<img>`: it is on the
+    `<source>` beside it. So nothing was promoted, the `<source>` stayed
+    empty, the picture resolved from the `<img>` src, and all four waiting
+    slides fetched the full 3840px **JPEG**, about **1.1MB per visit** to the
+    one page where this banner *is* the photo. Fixed 15 November 2026 by
+    making it what `site_header.php` already did.
+    The lesson is how it was found: not by reading either copy, which both
+    look right, but by **printing the request list and looking at the file
+    extensions** (`who_fetches.py`, which reads `Network.requestWillBeSent`
+    and its initiator and priority). Four `.jpg` at Low priority 0.59s after
+    `load` and not one `.webp` among them. A byte count would have caught it
+    too; a glance at the code did not, twice.
 
 **Measured, before against after.** Eleven cold loads of the student dashboard
 each way at 1536px with the cache off, the pre-change code served from a
@@ -1486,6 +1529,27 @@ Three things that are easy to get wrong here:
   widget is reset after every refusal and the gate locked again by hand
   (`papelRecaptchaExpired`); without it the second attempt failed as a robot
   however right the password was.
+- **Google's script is fetched on the first touch of a sign-in field, never on
+  page load.** `recaptcha_scripts()` prints no `<script src>` of its own;
+  `loadRecaptcha()` injects `api.js` on the first `focusin` or `pointerdown`
+  in the form, and immediately if the form already holds the focus, which is
+  the case when the panel opens itself after a refused sign-in. Profiled on
+  the public repository at 4x CPU throttle: `recaptcha__en.js` was **1,607ms
+  of main-thread self time against 133ms for the page's own code**, on every
+  page a signed-out visitor opened, for a panel most of them never touch.
+  Deferring it took the worst long task from **344ms to 128ms** and left the
+  main thread idle for 6,765ms of a 9s window where it had been idle for 67ms.
+  It costs nothing, because the tick box is hidden until both fields have
+  something in them anyway.
+  - **A long task's `attribution` will not tell you this.** All four tasks
+    reported `name=self, attr=window|`, because Google's script is injected
+    into our own document rather than running in its frame, so it reads as our
+    code. Blocking the host and comparing was inconclusive at 4x throttle,
+    where the variance swamps the signal. A CPU profile with self time by file
+    is what answered it; reach for that rather than `longtask` attribution.
+  - If it cannot be fetched at all the gate is handed back (`s.onerror`), the
+    server still refusing a sign-in that carries no token. That is the same
+    bargain the file already struck for this script not running at all.
 - **The order of the checks is the security.** reCAPTCHA and the lockout are
   tested before the password is looked at, so the JSON endpoint cannot be used
   to try credentials either.
@@ -2882,6 +2946,58 @@ of it are two different acts, and this desk only ever needed the first.
   with the corner rather than near it (measured: 0px from it). The heading
   carries their width as padding, so a long one wraps instead of running
   underneath them.
+- **There is no banner at all at 425px and under**, at the owner's
+  instruction on 15 November 2026: hidden outright rather than folded, since
+  `.collapsed` deliberately keeps the strip of photo behind the navbar and the
+  crumb bar and this is meant to be not seen. The navbar strip is suppressed
+  on this page anyway (`$hero_under_nav`), so a phone sees no campus photo
+  here at all, which is the state Zen Mode already produces and so is already
+  drawn. Every other page keeps its strip: that was asked for and checked.
+  Five things hang together, and a change to any one of them needs the rest:
+  - **The query pair is `(max-width: 425px)` and `not all and (max-width:
+    425px)`, never `min-width: 426px`.** A window 425.5px wide (fractional
+    zoom, which this site meets from 110% up) matches neither integer and the
+    banner would come back in the gap. The same rule as the accessibility
+    tab's two queries.
+  - **Both sibling pull-ups go with it, and not in `.collapsed`'s form.** With
+    the hero `display: none`, `.search-band` still carried
+    `margin-top: calc(-1 * var(--hero-overlap))` and the field rode up under
+    the crumb strip: an element that draws nothing is still a sibling, which
+    is the `+`/`~` trap already written down for Zen's banner script and the
+    import drawer's panels, met here from the other side. `.layout`'s 1rem is
+    restated to beat the .75rem the narrow widths give it, exactly as
+    `.collapsed`'s rule does.
+  - **The preload carries the matching `media`** (`includes/site_head.php`),
+    keyed on `$PAGE_SKELETON === 'repository'` because that is set before
+    `site_head.php` is required and `$hero_under_nav` is not. Without it a
+    phone still fetched the one file it has no use for, at high priority.
+  - **The first slide is `loading="lazy"`, which on an LCP image reads like a
+    mistake and is deliberate.** `display: none` does not stop a fetch, and a
+    lazy image in a box that has no box never intersects the viewport, so it
+    is never fetched: that is what takes a phone from 40KB to **nothing**.
+    Above the breakpoint nothing is lost, because the preload has already
+    asked for the same file at high priority and the element consumes it;
+    measured, the file still arrives `parser`/`High` at t=0 and LCP is
+    unmoved (672ms median against 648ms before). The lazy attribute and the
+    preload's `media` are two halves of one fix, as the preload and
+    `fetchpriority` are.
+  - **The skeleton draws no banner block there either**, the same three rules
+    as Zen's and in the same place (`includes/skeleton.php`), or the layer
+    would cover the page with a shape the page is not about to paint, which is
+    the jump it exists to cover, upside down.
+  - The scroll fold does not run below the breakpoint (`matchMedia` with the
+    stylesheet's own query string, never `innerWidth`), and the eye in the
+    crumb strip is hidden, a control for a banner that cannot appear being a
+    dead control. **That rule had to name its parent**:
+    `.btn-banner-toggle` alone is one class, the same as the `display:
+    inline-flex` further down the file, and a media query adds no specificity,
+    so the later rule won and the eye stayed. Judge a rule by where it sits as
+    well as by what it says.
+
+  Driven against the running site at 390, 425, 426 and 1280px: the hero
+  `display` either way round, the crumb strip's bottom against the search
+  band's top, the eye, CLS, and the request list (**no photo fetched at all**
+  at 390 and 425; five WebP at 426 and 1280).
 - **Scrolling down folds the hero banner away**, and coming back to the very
   top brings it back. Never written to `localStorage`: this is what the page
   does while it is being read, not an answer the reader has given. Pressing

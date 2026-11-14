@@ -31,15 +31,28 @@
 $lcp_photo = function_exists('nav_photo_order') ? (nav_photo_order()[0] ?? '') : '';
 if ($lcp_photo !== ''):
     $lcp_set = function_exists('nav_photo_srcset') ? nav_photo_srcset($lcp_photo) : '';
+    /* On the repository the photo's only consumer is that page's own banner
+       ($hero_under_nav suppresses the navbar strip there), and the banner is
+       not drawn at 425px and under. Preloading it anyway would fetch the one
+       file a phone has no use for, at high priority, which is the opposite of
+       what this block is for. Keyed on $PAGE_SKELETON because it is set before
+       this file is required and $hero_under_nav is not: the repository is the
+       page that draws .skel-hero, which is the same condition.
+
+       `not all and (max-width: 425px)` and never `min-width: 426px`, matching
+       the stylesheet: a window 425.5px wide matches neither integer and the
+       preload would go out for a banner that is not there. */
+    $lcp_media = (($PAGE_SKELETON ?? '') === 'repository')
+        ? ' media="not all and (max-width: 425px)"' : '';
 ?>
 <?php if ($lcp_set !== ''): ?>
 <?php /* type="image/webp" so a browser that cannot decode WebP skips this
          line rather than preloading a file it will not use. That browser
          takes the <img> src, which is still the JPEG. */ ?>
-<link rel="preload" as="image" type="image/webp" fetchpriority="high"
+<link rel="preload" as="image" type="image/webp" fetchpriority="high"<?= $lcp_media ?>
       imagesrcset="<?= e($lcp_set) ?>" imagesizes="100vw">
 <?php else: ?>
-<link rel="preload" as="image" fetchpriority="high"
+<link rel="preload" as="image" fetchpriority="high"<?= $lcp_media ?>
       href="<?= e(BASE_URL) ?>/assests/images/<?= e($lcp_photo) ?>">
 <?php endif; ?>
 <?php endif; ?>

@@ -589,6 +589,44 @@ html.papel-skel .hero img { visibility: hidden; }
 /* Same reasoning for the layout below it: no photo to tuck under, so
    drop its pull-up too or it rides over the search bar/sidebar. */
 .hero.collapsed ~ .layout { margin-top: 1rem; }
+
+/* ---- No banner at all on a phone ----------------------------------------
+   240px of photo above the thing the reader came for, on a screen where the
+   first result already starts below the fold. Gone outright at 425px and
+   under, at the owner's instruction on 15 November 2026, and gone rather
+   than folded: `.collapsed` deliberately keeps the strip of photo behind the
+   navbar and the crumb bar, and this is meant to be not seen.
+
+   Written as `(max-width: 425px)` with a `not all and (...)` inverse wherever
+   the other half is needed, never as `min-width: 426px`. A window 425.5px
+   wide (fractional zoom, which this site meets from 110% up) matches neither
+   integer, and the banner would come back in the gap. Same rule as the
+   accessibility tab's two queries.
+
+   **Both sibling pull-ups have to go, and not in `.collapsed`'s form.** With
+   the hero `display: none` and `.search-band` still carrying
+   `margin-top: calc(-1 * var(--hero-overlap))`, the field rides up under the
+   crumb strip: an element that draws nothing is still a sibling, which is the
+   trap already written down for Zen's banner script and the import drawer's
+   panels, met here from the other side. `.layout`'s 1rem is restated for the
+   reason `.collapsed`'s is, to beat the .75rem the narrow widths give it.
+
+   The preload in includes/site_head.php carries the matching `media`, or a
+   phone would still fetch the one file it has no use for; on this page the
+   banner is the photo's only consumer, the navbar strip being suppressed by
+   $hero_under_nav. */
+@media (max-width: 425px) {
+    .hero { display: none; }
+    .hero + .search-band { margin-top: 1.25rem; }
+    .hero ~ .layout { margin-top: 1rem; }
+    /* An eye that shows and hides a banner which cannot appear is a dead
+       control, and it sits in the crumb strip where there is least room.
+       Named with its parent on purpose: `.btn-banner-toggle` alone is one
+       class, the same as the `display: inline-flex` further down this file,
+       and a media query adds no specificity, so the later rule won and the
+       eye stayed. Judge a rule by where it sits as well as by what it says. */
+    .crumb-inner .btn-banner-toggle { display: none; }
+}
 /* Search field and banner toggle share one row: hiding the banner must not
    leave an empty full-width band between the search bar and the results. */
 .search-row {
@@ -1401,10 +1439,23 @@ html.kw-locked { overflow: hidden; }
         <?php $set = nav_photo_srcset($photo); ?>
         <?php if ($i === 0): ?>
             <?php /* The LCP element on this page. site_head.php preloads the very
-                     same file; imagesrcset there and srcset here must agree. */ ?>
+                     same file; imagesrcset there and srcset here must agree.
+
+                     `loading="lazy"` on the LCP image reads like a mistake and
+                     is here on purpose, measured both ways. At 425px and under
+                     the banner is `display: none`, and a lazy image in a box
+                     that has no box never intersects the viewport, so it is
+                     never fetched: eager, a phone downloaded 40KB for a photo
+                     it does not draw, because `display: none` does not stop a
+                     fetch. Above the breakpoint nothing is lost, because the
+                     preload in site_head.php has already asked for the very
+                     same file at high priority and this element consumes it
+                     rather than starting a request of its own. The two are one
+                     fix, as the preload and fetchpriority are: change the
+                     `media` on that link and change this. */ ?>
             <picture>
                 <?php if ($set !== ''): ?><source type="image/webp" srcset="<?= e($set) ?>" sizes="100vw"><?php endif; ?>
-            <img class="hero-slide is-active" src="../assests/images/<?= e($photo) ?>"
+            <img class="hero-slide is-active" loading="lazy" src="../assests/images/<?= e($photo) ?>"
                  alt="PUP Biñan Campus" fetchpriority="high">
             </picture>
         <?php else: ?>
@@ -2044,8 +2095,15 @@ if (bannerToggle && heroBanner) {
         return win + (well ? well.scrollTop : 0);
     }
 
+    /* Below the breakpoint there is no banner to fold, so none of this runs:
+       a phone is not asked to read two scroll positions and compare them on
+       every notch for a photo that is display: none. matchMedia with the
+       stylesheet's own query string, never innerWidth, which disagrees with
+       it by a scrollbar at the boundary. */
+    var noBanner = window.matchMedia('(max-width: 425px)');
+
     document.addEventListener('scroll', function () {
-        if (bannerManual) { return; }
+        if (bannerManual || noBanner.matches) { return; }
         var now  = Date.now();
         var at   = scrollPos();
         var down = at - lastPos;
@@ -2082,10 +2140,23 @@ if (bannerToggle && heroBanner) {
        first, and the other four are only needed five seconds from now. */
     window.addEventListener('load', function () {
         slides.forEach(function (img) {
-            /* srcset before src: the other way round the browser picks a
-               candidate from src alone and then re-picks, fetching twice. */
-            if (img.dataset.srcset) { img.srcset = img.dataset.srcset; delete img.dataset.srcset; }
-            if (img.dataset.src)    { img.src    = img.dataset.src;    delete img.dataset.src; }
+            /* The <source> first and the <img> after, which is what
+               site_header.php does for the same slideshow.
+
+               This read `img.dataset.srcset`, and there has never been a
+               `data-srcset` on the <img>: it is on the <source> beside it.
+               So nothing was ever promoted, the <source> stayed empty, the
+               picture resolved from the <img> src, and all four waiting
+               slides fetched the full 3840px **JPEG** - about 1.1MB per visit
+               to this page, which is precisely the weight the WebP ladder was
+               added to remove, on the one page where this banner is the photo.
+               Measured by reading the request list: four `.jpg` at Low
+               priority 0.59s after load, and no `.webp` among them. */
+            var webp = img.previousElementSibling;
+            if (webp && webp.tagName === 'SOURCE' && webp.dataset.srcset) {
+                webp.srcset = webp.dataset.srcset; delete webp.dataset.srcset;
+            }
+            if (img.dataset.src) { img.src = img.dataset.src; delete img.dataset.src; }
         });
     });
 
