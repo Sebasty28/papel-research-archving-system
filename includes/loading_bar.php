@@ -209,7 +209,16 @@ body.a11y-stop-animations .papel-loader-veil { display: none; }
 </div>
 <div class="papel-loader-veil" id="papelWorkVeil" aria-hidden="true"></div>
 <div class="papel-loader-badge" id="papelWorkBadge" aria-hidden="true">
-    <img src="<?= htmlspecialchars($loader_badge_gif, ENT_QUOTES, 'UTF-8') ?>" alt="" width="300" height="99">
+    <?php /* **`data-src`, not `src`.** This file is included from
+             site_footer.php, so it is on every page, and the badge only ever
+             appears for a long workflow (papelLoading.work.*). With a real
+             `src` the browser fetched the GIF on every page whether or not
+             anything slow ever happened: **193KB**, at Medium priority, and
+             measured arriving on the public repository, which never shows it.
+             It is promoted the first time the pill is painted (workShow
+             below), so the one visit that needs it still gets it. The width
+             and height stay here, so the box keeps its size either way. */ ?>
+    <img data-src="<?= htmlspecialchars($loader_badge_gif, ENT_QUOTES, 'UTF-8') ?>" alt="" width="300" height="99">
 </div>
 
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
@@ -281,6 +290,11 @@ body.a11y-stop-animations .papel-loader-veil { display: none; }
     }
     function workShow() {
         if (!badge) { return; }
+        /* The GIF is held in data-src so it is not fetched on every page of
+           the site for a pill most visits never see; this is the moment it is
+           actually wanted. Promoted once, then the attribute is gone. */
+        var gif = badge.querySelector('img[data-src]');
+        if (gif) { gif.src = gif.getAttribute('data-src'); gif.removeAttribute('data-src'); }
         clearTimeout(workHideTimer);
         workHideTimer = null;
         if (!badge.classList.contains('is-working')) {

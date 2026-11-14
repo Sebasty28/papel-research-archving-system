@@ -1,5 +1,5 @@
 {
- "built": "2026-11-15 01:21",
+ "built": "2026-11-15 01:46",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -161,7 +161,7 @@
    "lines": 954
   },
   "archive/index.php": {
-   "lines": 2835
+   "lines": 2845
   },
   "archive/login.php": {
    "lines": 1093
@@ -248,7 +248,7 @@
    "lines": 232
   },
   "includes/loading_bar.php": {
-   "lines": 470
+   "lines": 484
   },
   "includes/mail_config.php": {
    "lines": 1
@@ -335,7 +335,7 @@
    "lines": 766
   },
   "includes/site_head.php": {
-   "lines": 1762
+   "lines": 1781
   },
   "includes/site_header.php": {
    "lines": 734

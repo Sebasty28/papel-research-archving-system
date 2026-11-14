@@ -1440,6 +1440,63 @@ so the trace's "upgrade to HTTP/2 or HTTP/3" advice is already true where it
 matters and a trace taken on staging overstates protocol and latency problems
 for production. The JPEG fallback is the standard `<picture>` pattern and was
 not exercised in a browser without WebP.
+### What a page actually weighs, and the two things that dominated it
+
+A Lighthouse run on staging scored 72 with **LCP 4,863ms** against FCP 982ms,
+TBT 0ms and CLS 0.03. Reading the request list rather than the score found two
+assets that between them were four fifths of the page.
+
+**The Material Symbols icon font was 3.84MB.** `site_head.php` asked for
+`opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200`, every axis at its full
+range, and Google answers that with the complete variable font: 4,025,760
+bytes, at **VeryHigh** priority, on every page of the site. For comparison,
+everything else on the repository page came to about 1MB.
+
+Exactly four axis values are ever used, which a grep of the stylesheets
+settles: `FILL` 0 and 1 (`.mi-fill`, nine places), `wght` 400 and 700 (one
+place, the breadcrumb chevron), `GRAD` always 0, `opsz` always 24. Asking for
+that and no more is **1,144,228 bytes**, the same glyphs, nothing different on
+screen. Pinning `wght` to 400 as well would be 464,940 bytes, another 650KB,
+and costs the one bolder chevron; that is a design change and was left.
+
+- **Check the stylesheets before narrowing it further.** An axis value nobody
+  asked Google for renders at the nearest one that was sent, silently, so a
+  new `--mi-wght` somewhere would simply look wrong rather than fail.
+- **Measure it by reading `Content-Length` off the woff2 Google serves**, not
+  by guessing from the axis list: fetch the CSS2 URL with a browser
+  User-Agent, pull the `.woff2` out of it, and HEAD that.
+
+**The loading pill's GIF was 193KB on every page.** `includes/loading_bar.php`
+comes in from `site_footer.php`, so it is on every page, and the badge is only
+ever painted for a long workflow (`papelLoading.work.*`). The `<img>` carried a
+real `src`, so the GIF was fetched whether or not anything slow happened: it
+was measured arriving on the public repository, which never shows it. It is
+`data-src` now, promoted the first time the pill is painted. The `width` and
+`height` stay on the element so the box keeps its size either way.
+
+**What this does not fix, and is worth knowing.** On the repository the LCP
+element is the banner photo, and `html.papel-skel .hero img { visibility:
+hidden }` hides it for as long as the loading skeleton is up. Measured on
+staging, cold: the photo's bytes are **finished at 751ms** and it paints at
+1,572 to 2,152ms, which is when the skeleton lifts. So the skeleton sets a
+floor under this page's LCP. The photo is hidden on purpose (a slice of the
+real page showing above the layer reads worse), so this is a trade rather than
+a bug, and changing it means deciding which of the two matters more here.
+
+**Two measuring notes, both of which cost time:**
+
+- **A throttle that saturates the link cannot answer a question about
+  priority.** At 600kbps a 670KB page starves everything and every variant
+  measures the same; `loading="lazy"` on the LCP image looked catastrophic
+  (15,060ms) under that profile and measured identical to eager (2,472ms
+  against 2,684ms median) once the bandwidth was ample and only the latency
+  realistic. Use plenty of bandwidth and a real RTT when the question is
+  "what order do things happen in".
+- **Lighthouse's number is simulated.** Its throttling models a slow 4G link
+  rather than measuring one, so its LCP is several times what the same build
+  reports under a real cold load from here (4,863ms against 1,572 to 2,152ms).
+  Use it to rank problems, and the request list to prove them.
+
 ### Styling
 
 Use the CSS custom properties — `--maroon`, `--dark-maroon`, `--soft-maroon`,

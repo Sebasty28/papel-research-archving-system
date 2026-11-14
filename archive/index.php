@@ -1441,21 +1441,31 @@ html.kw-locked { overflow: hidden; }
             <?php /* The LCP element on this page. site_head.php preloads the very
                      same file; imagesrcset there and srcset here must agree.
 
-                     `loading="lazy"` on the LCP image reads like a mistake and
-                     is here on purpose, measured both ways. At 425px and under
-                     the banner is `display: none`, and a lazy image in a box
-                     that has no box never intersects the viewport, so it is
-                     never fetched: eager, a phone downloaded 40KB for a photo
-                     it does not draw, because `display: none` does not stop a
-                     fetch. Above the breakpoint nothing is lost, because the
-                     preload in site_head.php has already asked for the very
-                     same file at high priority and this element consumes it
-                     rather than starting a request of its own. The two are one
-                     fix, as the preload and fetchpriority are: change the
-                     `media` on that link and change this. */ ?>
+                     **Never `loading="lazy"` on this element.** It was, for one
+                     release, to stop a phone fetching a photo it does not draw
+                     (`display: none` does not stop a fetch). It cost the thing
+                     this whole block exists to protect: measured locally with
+                     the body throttled, the banner painted at **15,060ms**
+                     against about 1,100ms before it, and on staging at 3,256ms
+                     with the page's text already done at 1,256ms. A lazy image
+                     is not considered until layout has run and is then fetched
+                     at a low priority, so the preload's head start is thrown
+                     away. Locally with no latency it measured clean, which is
+                     exactly why it shipped.
+
+                     The gate is a `<source>` instead, and it has to come
+                     first: sources are resolved in order and the first whose
+                     `media` matches wins, so below the breakpoint the browser
+                     resolves this picture to a 1x1 transparent GIF carried
+                     inline as a data URI, which is no request at all, and the
+                     real candidates below are never considered. Above it this
+                     source does not match, the WebP source is used, and the
+                     image stays eager and `fetchpriority="high"`, consuming
+                     the preload as it always did. */ ?>
             <picture>
+                <source media="(max-width: 425px)" srcset="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7">
                 <?php if ($set !== ''): ?><source type="image/webp" srcset="<?= e($set) ?>" sizes="100vw"><?php endif; ?>
-            <img class="hero-slide is-active" loading="lazy" src="../assests/images/<?= e($photo) ?>"
+            <img class="hero-slide is-active" src="../assests/images/<?= e($photo) ?>"
                  alt="PUP Biñan Campus" fetchpriority="high">
             </picture>
         <?php else: ?>

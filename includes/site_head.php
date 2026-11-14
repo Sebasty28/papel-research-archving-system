@@ -59,7 +59,26 @@ if ($lcp_photo !== ''):
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
+<?php /* **Ask for the axis values the site actually uses, not the whole
+         variable font.** `opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200`
+         is every axis at its full range, and Google answers it with the
+         complete variable font: **4,025,760 bytes, 3.84MB**, at VeryHigh
+         priority on every page, measured by reading Content-Length off the
+         woff2 it serves. It was the largest thing on the site by a wide
+         margin - the whole of the rest of the repository page is about 1MB.
+
+         Grepped out of the stylesheets, exactly four values are ever asked
+         for: FILL 0 and 1 (`.mi-fill`, nine places), wght 400 and 700 (one,
+         the breadcrumb chevron), GRAD always 0 and opsz always 24. Requesting
+         that and no more is **1,144,228 bytes, 1.09MB**: the same glyphs and
+         not one pixel different on screen.
+
+         Pinning wght to 400 as well would be 464,940 bytes, another 650KB
+         off, and costs the one slightly bolder chevron; that is a design
+         change and has not been made here. Check this against the stylesheets
+         before narrowing it further, since an axis value nobody requested
+         renders at the nearest one Google sent, silently. */ ?>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Material+Symbols+Outlined:FILL,GRAD,opsz,wght@0..1,0,24,400..700&display=swap" rel="stylesheet">
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 /* =========================================================
    PAPEL: universal design tokens + site header/footer/modal
