@@ -20,7 +20,7 @@ is not maintained). A record is not stale; a record that claims to be current is
 | [DEPLOYING_PRODUCTION.md](DEPLOYING_PRODUCTION.md) | Setting up a copy of the site from nothing: hosting, secrets, database, Drive connection, storage folder. Production was built from it on 12 November 2026, so it is now also the record of that. |
 | [GIT_GUIDE.md](GIT_GUIDE.md) | Git and GitHub for someone who has not used version control before. Explains what the commands do, not only what to type. |
 | [field_guide.html](field_guide.html) | The architecture field guide: what each part of the code is and how the parts reach each other. **Generated** by `scripts/build_field_guide.py`, which measures everything countable on every run and fails loudly if it names a file that has gone. Do not edit the HTML; edit `scripts/field_guide_content.py` and rebuild. |
-| [diagrams/](diagrams/) | The entity-relationship and use case diagrams as Figma-importable SVGs, each with the PHP script that generates it from `database/schema.sql`. Regenerate rather than edit. |
+| [diagrams/](diagrams/) | The four diagrams: entity relationship, use case, class and sequence. Each is a **draw.io-editable SVG** beside a **markdown specification** of what it is a drawing of, and [diagrams/README.md](diagrams/README.md) says how to open one for editing. Built 15 November 2026 from `database/schema.sql`, `app/models/` and the page handlers. The two older Figma-shaped SVGs in that folder are superseded and stale; the folder index says so. |
 
 ## Records
 
