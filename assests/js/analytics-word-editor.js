@@ -20,7 +20,7 @@
         }
         toolbar.innerHTML = '<div class="an-word-tool-group">' + tool('undo', 'undo', 'Undo') + tool('redo', 'redo', 'Redo') + '</div>' +
             '<div class="an-word-tool-group">' + tool('bold', 'format_bold', 'Bold') + tool('italic', 'format_italic', 'Italic') +
-            tool('underline', 'format_underlined', 'Underline') + '<select data-word-size aria-label="Font size" disabled><option>12</option></select></div>' +
+            tool('underline', 'format_underlined', 'Underline') + '<select data-word-size aria-label="Font size" disabled><option>11</option></select></div>' +
             '<div class="an-word-tool-group">' + tool('left', 'format_align_left', 'Align left') + tool('center', 'format_align_center', 'Centre') +
             tool('right', 'format_align_right', 'Align right') + tool('justify', 'format_align_justify', 'Justify text') + '</div>' +
             '<div class="an-word-tool-group">' + tool('paragraph', 'add', 'Insert paragraph') + tool('page-break', 'insert_page_break', 'Insert page break') +
@@ -28,7 +28,7 @@
             '<div class="an-word-tool-group" data-word-figure-controls hidden>' + tool('earlier', 'arrow_upward', 'Move figure earlier') +
             tool('later', 'arrow_downward', 'Move figure later') + '<label>Figure width <input type="range" min="20" max="100" value="100" data-word-width></label></div>' +
             '<span class="an-word-status" aria-live="polite"></span>';
-        toolbar.querySelector('[data-word-size]').value = '12';
+        toolbar.querySelector('[data-word-size]').value = '11';
         container.before(toolbar);
         root.classList.add('an-word-document');
         root.dataset.orientation = 'portrait';

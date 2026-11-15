@@ -50,7 +50,7 @@ class PdfWriter
     // ---- public drawing API ------------------------------------------------
 
     /** A section heading, kept with at least a little of what follows it. */
-    public function heading(string $text, float $size = 12.0): void
+    public function heading(string $text, float $size = 11.0): void
     {
         $this->need($size + 26);
         $this->y -= 10;
@@ -62,7 +62,7 @@ class PdfWriter
         $this->y -= 12;
     }
 
-    public function paragraph(string $text, float $size = 12.0): void
+    public function paragraph(string $text, float $size = 11.0): void
     {
         $lines = $this->wrap($text, self::W - self::MARGIN * 2, $size, false);
         foreach ($lines as $i => $line) {
@@ -81,7 +81,7 @@ class PdfWriter
      * The header repeats when the table runs onto another page, because a
      * column of numbers with no headings on page two is unreadable.
      */
-    public function table(array $columns, array $rows, float $size = 12.0): void
+    public function table(array $columns, array $rows, float $size = 11.0): void
     {
         $rowH = $size + 9;
         $this->need($rowH * 3);
@@ -159,7 +159,7 @@ class PdfWriter
         $this->rectStroke($x, $this->y, $w, $h, 0.5, [0.88, 0.84, 0.84]);
         $this->y -= 12;
         if ($caption !== '') {
-            $this->text($caption, $x, $this->y, 12, true, [0.36, 0.02, 0.02]);
+            $this->text($caption, $x, $this->y, 11, true, [0.36, 0.02, 0.02]);
             $this->y -= 17;
         }
         $this->y -= 6;
@@ -263,11 +263,11 @@ class PdfWriter
     {
         // Running footer: the page number and where it came from.
         $num = count($this->pages) + 1;
-        $this->text('PAPEL Analytics', self::MARGIN, self::MARGIN - 18, 12, false,
+        $this->text('PAPEL Analytics', self::MARGIN, self::MARGIN - 18, 11, false,
                     [0.55, 0.55, 0.55]);
         $label = 'Page ' . $num;
-        $w = $this->widthOf($label, 12, false);
-        $this->text($label, self::W - self::MARGIN - $w, self::MARGIN - 18, 12, false,
+        $w = $this->widthOf($label, 11, false);
+        $this->text($label, self::W - self::MARGIN - $w, self::MARGIN - 18, 11, false,
                     [0.55, 0.55, 0.55]);
         $this->pages[] = ['content' => $this->buf, 'images' => $this->imagesOnPage];
         $this->buf = '';
@@ -278,9 +278,9 @@ class PdfWriter
     private function coverBlock(): void
     {
         $this->rect(0, self::H - 96, self::W, 96, [0.51, 0.03, 0.03]);
-        $this->text($this->title, self::MARGIN, self::H - 52, 12, true, [1, 1, 1]);
+        $this->text($this->title, self::MARGIN, self::H - 52, 11, true, [1, 1, 1]);
         if ($this->subtitle !== '') {
-            $this->text($this->subtitle, self::MARGIN, self::H - 72, 12, false,
+            $this->text($this->subtitle, self::MARGIN, self::H - 72, 11, false,
                         [0.93, 0.85, 0.85]);
         }
         $this->y = self::H - 96 - 28;

@@ -653,20 +653,20 @@ html.an-export-preview-open { overflow: hidden; }
 .an-doc-ruler { height: 1.25rem; margin-bottom: .5rem; border: 1px solid #ddd;
     background: repeating-linear-gradient(to right, #f8f9fa 0, #f8f9fa 15px, #c7ccce 16px, #f8f9fa 17px, #f8f9fa 32px); }
 .an-preview-document { box-sizing: border-box; width: 51rem; max-width: 100%; min-height: 78rem; margin: 0 auto; padding: 4.5rem 4rem; background: #fff;
-    color: #302626; box-shadow: 0 3px 18px rgba(50, 20, 20, .16); font: 400 12pt/1.6 Arial, sans-serif; }
-.an-preview-document h3 { margin: 0; color: #820707; font: 700 12pt/1.3 Arial, sans-serif; }
-.an-preview-document h4 { margin: 0 0 .5rem; color: #630000; font: 700 12pt/1.3 Arial, sans-serif; }
+    color: #302626; box-shadow: 0 3px 18px rgba(50, 20, 20, .16); font: 400 11pt/1.6 Arial, sans-serif; }
+.an-preview-document h3 { margin: 0; color: #820707; font: 700 11pt/1.3 Arial, sans-serif; }
+.an-preview-document h4 { margin: 0 0 .5rem; color: #630000; font: 700 11pt/1.3 Arial, sans-serif; }
 .an-preview-document section { margin-top: 1.5rem; }
 .an-preview-document .an-preview-subtitle { color: #6e6a6e; margin: .25rem 0 1.25rem; }
 .an-preview-document p { text-align: justify; }
 .an-preview-table-wrap { max-width: 100%; overflow-x: auto; }
-.an-preview-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12pt; }
+.an-preview-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 11pt; }
 .an-preview-table th, .an-preview-table td { padding: .45rem .55rem; text-align: left; vertical-align: top; border-bottom: 1px solid #e6d4d4; }
 .an-preview-table th { position: relative; background: #820707; color: #fff; white-space: nowrap; }
 .an-preview-figure { margin: 1rem auto; max-width: 45rem; text-align: center; }
 .an-preview-figure img { display: block; width: 100%; background: #fff; }
 html[data-mode="dark"] .an-export-preview img { filter: none !important; }
-.an-preview-figure figcaption { margin-top: .4rem; color: #820707; font: 700 12pt Arial, sans-serif; }
+.an-preview-figure figcaption { margin-top: .4rem; color: #820707; font: 700 11pt Arial, sans-serif; }
 
 /* Interactive layout for CSV, Excel and Word export previews. */
 .an-sheet-preview { display: flex; flex-direction: column; height: 100%; min-height: 0;
@@ -952,7 +952,7 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
     .an-table-glide::before, .an-table-glide::after { transition: none; }
 }
 </style>
-<link rel="stylesheet" href="<?= BASE_URL ?>/assests/css/analytics-word-editor.css?v=2">
+<link rel="stylesheet" href="<?= BASE_URL ?>/assests/css/analytics-word-editor.css?v=3">
 </head>
 <body>
 <?php require ROOT_PATH.'/includes/site_header.php'; ?>
@@ -1727,7 +1727,8 @@ document.addEventListener('DOMContentLoaded', function () {
             if (!data.length) return;
             var ctx = chart.ctx, type = chart.config.type;
             ctx.save();
-            ctx.font = '600 12px Arial, sans-serif';
+            var labelSize = chart.options.plugins && chart.options.plugins.papelValueLabels && chart.options.plugins.papelValueLabels.fontSize || 12;
+            ctx.font = '600 ' + labelSize + 'px Arial, sans-serif';
             ctx.fillStyle = '#630000';
             if (type === 'doughnut') {
                 var sum = data.reduce(function (total, value) { return total + Number(value || 0); }, 0);
@@ -1872,6 +1873,8 @@ document.addEventListener('DOMContentLoaded', function () {
             var config = exportConfigs[key]();
             config.options.responsive = false;
             config.options.animation = false;
+            config.options.font = { family: 'Arial, sans-serif', size: 15 };
+            config.options.plugins.papelValueLabels = { fontSize: 15 };
             config.plugins = [{
                 id: 'exportWhiteBackground',
                 beforeDraw: function (chart) {
@@ -1957,7 +1960,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 <?php require ROOT_PATH.'/includes/scroll_jump.php'; ?>
-<script nonce="<?= csp_nonce() ?>" src="<?= BASE_URL ?>/assests/js/analytics-word-editor.js?v=2"></script>
+<script nonce="<?= csp_nonce() ?>" src="<?= BASE_URL ?>/assests/js/analytics-word-editor.js?v=3"></script>
 <script nonce="<?= csp_nonce() ?>">
 /* ---- Export -------------------------------------------------------------
    The charts live on canvases, so the server cannot draw them: there is no GD
