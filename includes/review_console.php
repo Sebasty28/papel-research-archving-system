@@ -528,24 +528,24 @@ if (!isset($PAGE_SKELETON)) { $PAGE_SKELETON = 'console'; }
 <?php require_once ROOT_PATH.'/includes/site_head.php'; ?>
 <?php require_once ROOT_PATH.'/includes/browse_console.php'; ?>
 <?php require_once ROOT_PATH.'/includes/console_shell.php'; ?>
-<script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
-/* Whether the filter strip is folded, applied before the first paint:
-   read afterwards, a folded desk would draw the strip and then take it
-   away, and the whole list under it would jump. */
-(function () {
-    var v;
-    try { v = localStorage.getItem('papel_desk_tools'); } catch (e) {}
-    if (v === 'folded') document.documentElement.classList.add('rc-tools-folded');
-})();
-</script>
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 /* ---- What this desk is, said once at the top ---- */
 .rc-intro { margin-bottom: 1.25rem; }
+.rc-intro-heading { display: flex; align-items: center; gap: .35rem; }
 .rc-intro h1 {
     font-family: var(--font-head); font-size: 1.25rem; font-weight: 600;
-    color: var(--maroon); margin: 0 0 .2rem;
+    color: var(--maroon); margin: 0;
 }
-.rc-intro p { font-size: .8125rem; color: var(--grey); margin: 0; line-height: 1.6; }
+.rc-intro p { font-size: .8125rem; color: var(--grey); margin: .4rem 0 0; line-height: 1.6; }
+.rc-intro-info {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; flex: 0 0 auto;
+    border: 0; border-radius: 50%; background: transparent;
+    color: var(--maroon); cursor: pointer;
+}
+.rc-intro-info:hover, .rc-intro-info[aria-expanded="true"] { background: var(--cream); }
+.rc-intro-info:focus-visible { outline: 2px solid var(--maroon); outline-offset: 2px; }
+.rc-intro-info .material-symbols-outlined { font-size: 20px; }
 
 /* ---- Filter bar, above the search field ----
    Styled after analytics/analytics_dashboard.php's own .an-filters (same
@@ -559,40 +559,6 @@ if (!isset($PAGE_SKELETON)) { $PAGE_SKELETON = 'console'; }
    an AJAX swap of #mainCol and #sidebarCol, not a full reload). */
 .rc-filters { position: relative; background: var(--cream); border-radius: var(--r-card, 8px); padding: .75rem .875rem; margin-bottom: 1.25rem; }
 
-/* ---- Folding the top of the desk away ----
-   One chevron for the whole preamble: who the desk belongs to, what it is
-   for, and the four filters with the Export button. A reviewer who already
-   knows all three reads none of them again, and on a laptop they are the
-   difference between seeing four papers and seeing eight.
-
-   It sits in a row of its own above them rather than inside either, because
-   what it hides includes the thing it would otherwise sit in. The row is
-   26px whichever way it is set, so opening and closing moves the list and
-   nothing else. */
-.rc-fold-bar { display: flex; justify-content: flex-end; min-height: 26px; }
-.rc-fold {
-    display: inline-flex; align-items: center; gap: .3rem;
-    padding: .15rem .25rem; border: none; border-radius: var(--r-control, 4px);
-    background: none; color: var(--maroon); cursor: pointer;
-    transition: background .15s;
-}
-.rc-fold:hover { background: var(--cream); }
-.rc-fold:focus-visible { outline: 2px solid var(--maroon); outline-offset: 1px; }
-.rc-fold .material-symbols-outlined { transition: transform .18s ease; }
-/* Folded, the chevron is the only thing left saying what it does, so it
-   says it. Open, the heading beside it says it already. */
-.rc-fold-word { display: none; font-size: .75rem; font-weight: 500; }
-
-html.rc-tools-folded .rc-intro,
-html.rc-tools-folded .rc-filter-row { display: none; }
-html.rc-tools-folded .rc-fold .material-symbols-outlined { transform: rotate(180deg); }
-html.rc-tools-folded .rc-fold-word { display: inline; }
-/* The strip stays only to carry the chips: a filtered desk that looks
-   unfiltered is worse than one control too many. With the row gone it is a
-   line of chips, so it is padded as one rather than as a panel. */
-html.rc-tools-folded .rc-filters { padding: .3rem .5rem; margin-bottom: .75rem; }
-html.rc-tools-folded .rc-filters:not(:has(.rc-active)) { display: none; }
-html.rc-tools-folded .rc-active { margin-top: 0; padding-top: 0; border-top: 0; }
 .rc-filter-row { display: flex; flex-wrap: wrap; gap: .625rem; align-items: flex-end; }
 /* Un-boxes the <form> so its .rc-filter fields sit directly in the flex row
    above, as though the form were never there: form-ness (submission, field
@@ -835,29 +801,18 @@ html[data-view="rows"] .paper-list .card-status .paper-action { display: none; }
                  opened next. */ ?>
         <?php require_once ROOT_PATH.'/includes/flash_banner.php'; flash_banner(); ?>
 
-        <?php /* Folds the heading, the blurb and the filter strip away
-                 together, and the answer is kept per device beside the view
-                 and the density: a desk somebody reads rather than filters
-                 should not have to be folded again on every visit. The state
-                 lives on <html> (set before the first paint, at the head of
-                 this file), so it also survives the AJAX swaps that replace
-                 this column whole on every tab and filter change. */ ?>
-        <div class="rc-fold-bar">
-            <button type="button" class="rc-fold" id="rcFoldTools"
-                    aria-controls="rcIntro rcFilterRow" aria-expanded="true">
-                <?php /* The desk's own name is not repeated here: the crumb bar
-                         above already carries it, and a heading somebody has just
-                         hidden should not come back in miniature. What the word
-                         says is what the chevron will do. */ ?>
-                <span class="rc-fold-word" aria-hidden="true">Show heading and filters</span>
-                <span class="material-symbols-outlined mi-18">expand_less</span>
-            </button>
-        </div>
-
         <?php if ($RC['role'] || $RC['blurb']): ?>
         <div class="rc-intro" id="rcIntro">
-            <?php if ($RC['role']): ?><h1><?= e($RC['role']) ?></h1><?php endif; ?>
-            <?php if ($RC['blurb']): ?><p><?= e($RC['blurb']) ?></p><?php endif; ?>
+            <div class="rc-intro-heading">
+                <?php if ($RC['role']): ?><h1><?= e($RC['role']) ?></h1><?php endif; ?>
+                <?php if ($RC['blurb']): ?>
+                    <button type="button" class="rc-intro-info" aria-label="About <?= e($RC['role'] ?: 'this dashboard') ?>"
+                            aria-controls="rcIntroDetail" aria-expanded="false" title="About this dashboard">
+                        <span class="material-symbols-outlined" aria-hidden="true">info</span>
+                    </button>
+                <?php endif; ?>
+            </div>
+            <?php if ($RC['blurb']): ?><p id="rcIntroDetail" hidden><?= e($RC['blurb']) ?></p><?php endif; ?>
         </div>
         <?php endif; ?>
 
@@ -1477,30 +1432,16 @@ function setLoading(on) {
     else mainCol.classList.remove('is-loading');
 }
 
-/* The chevron over the filter strip. Delegated, because the column it
-   sits in is replaced wholesale by every AJAX swap, and what it toggles
-   is a class on <html>, which those swaps never touch. */
-function rcSyncFold() {
-    var folded = document.documentElement.classList.contains('rc-tools-folded');
-    var btn = document.getElementById('rcFoldTools');
-    if (!btn) return;
-    btn.setAttribute('aria-expanded', folded ? 'false' : 'true');
-    var say = folded ? 'Show the heading and filters'
-                     : 'Hide the heading and filters';
-    btn.title = say;
-    btn.setAttribute('aria-label', say);
-}
+/* The title explanation is a button so it works by touch and keyboard too.
+   Delegation keeps it working after the dashboard swaps its results by AJAX. */
 document.addEventListener('click', function (e) {
-    if (!e.target.closest || !e.target.closest('#rcFoldTools')) return;
-    var folded = document.documentElement.classList.toggle('rc-tools-folded');
-    try { localStorage.setItem('papel_desk_tools', folded ? 'folded' : 'open'); } catch (err) {}
-    rcSyncFold();
+    var btn = e.target.closest && e.target.closest('.rc-intro-info');
+    if (!btn) return;
+    var detail = document.getElementById(btn.getAttribute('aria-controls'));
+    if (!detail) return;
+    detail.hidden = !detail.hidden;
+    btn.setAttribute('aria-expanded', detail.hidden ? 'false' : 'true');
 });
-/* Straight away when the page is already parsed, which it is: this block sits
-   at the end of the body, and waiting for DOMContentLoaded there meant a desk
-   that opened folded announced itself as expanded. */
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', rcSyncFold);
-else rcSyncFold();
 
 function loadResults(url, push) {
     if (!mainCol) { window.location.href = url; return; }
@@ -1518,7 +1459,6 @@ function loadResults(url, push) {
                between cards and rows included: the panel holding it lives
                inside the column this swap replaces. */
             if (window.papelSyncQuickSettings) window.papelSyncQuickSettings();
-            rcSyncFold();          // the strip came back with the column
             if (data.crumb) {
                 var crumb = document.querySelector('.crumb-current');
                 if (crumb) crumb.textContent = data.crumb;

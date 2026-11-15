@@ -56,6 +56,15 @@ body { font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif; background: var(--i
 }
 .hero-title { font-family: 'Crimson Pro', Georgia, serif; color: #fff; font-size: 2.25rem; font-weight: 700; }
 .hero-sub { color: rgba(255,255,255,0.75); font-size: 1rem; }
+.hero-heading { display: flex; align-items: center; gap: .4rem; }
+.hero-info {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; flex: 0 0 auto;
+  border: 0; border-radius: 50%; background: transparent;
+  color: #fff; cursor: pointer;
+}
+.hero-info:hover, .hero-info[aria-expanded="true"] { background: rgba(255,255,255,.16); }
+.hero-info:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 .gold-accent { display: inline-block; width: 40px; height: 4px; background: var(--gold); border-radius: var(--r-control, 4px); margin-bottom: 1rem; }
 
 .stat-card {
@@ -113,8 +122,14 @@ body { font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif; background: var(--i
 <div class="page-hero">
   <div class="container">
     <div class="gold-accent"></div>
-    <div class="hero-title">Welcome back, <?= e(explode(' ', $u['full_name'])[0]) ?>!</div>
-    <div class="hero-sub">Faculty Dashboard · <?= e(APP_NAME) ?></div>
+    <div class="hero-heading">
+      <div class="hero-title">Welcome back, <?= e(explode(' ', $u['full_name'])[0]) ?>!</div>
+      <button type="button" class="hero-info" aria-label="About this dashboard"
+              aria-controls="facultyDashboardSubtitle" aria-expanded="false" title="About this dashboard">
+        <span class="material-symbols-outlined" aria-hidden="true">info</span>
+      </button>
+    </div>
+    <div class="hero-sub" id="facultyDashboardSubtitle" hidden>Faculty Dashboard · <?= e(APP_NAME) ?></div>
   </div>
 </div>
 
@@ -209,5 +224,12 @@ body { font-family: 'IBM Plex Sans', 'Segoe UI', sans-serif; background: var(--i
 </div>
 
 <?php require ROOT_PATH.'/includes/site_footer.php'; ?>
+<script nonce="<?= csp_nonce() ?>">
+document.querySelector('.hero-info').addEventListener('click', function () {
+  var detail = document.getElementById(this.getAttribute('aria-controls'));
+  detail.hidden = !detail.hidden;
+  this.setAttribute('aria-expanded', detail.hidden ? 'false' : 'true');
+});
+</script>
 </body>
 </html>
