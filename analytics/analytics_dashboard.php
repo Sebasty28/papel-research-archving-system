@@ -688,7 +688,14 @@ html[data-mode="dark"] .an-export-preview img { filter: none !important; }
 .an-sheet-grid .an-sheet-corner { position: sticky; left: 0; z-index: 4; width: 3rem; }
 .an-sheet-grid .an-sheet-row-number { position: sticky; left: 0; z-index: 1;
     width: 3rem; background: #f8f9fa; color: #5f6368; text-align: center; font-weight: 400; }
-.an-sheet-grid td { width: 10.5rem; cursor: cell; }
+.an-sheet-grid td { width: 10.5rem; cursor: cell; position: relative; }
+/* The right edge of every body cell is a column grip, not just the letter
+   heading. One painted edge per cell avoids thousands of extra DOM buttons. */
+.an-sheet-grid tbody td:not([colspan])::after {
+    content: ''; position: absolute; top: 0; right: 0; bottom: 0;
+    width: 9px; cursor: col-resize;
+}
+.an-sheet-grid tbody td.is-dragging { cursor: col-resize; }
 .an-sheet-grid td.is-selected { box-shadow: inset 0 0 0 2px #1a73e8; }
 .an-resize-handle { position: absolute; z-index: 5; display: block; border: 0; border-radius: 0;
     padding: 0; background: transparent; touch-action: none; }
@@ -2146,11 +2153,24 @@ document.addEventListener('DOMContentLoaded', function () {
             row.style.height = Math.max(26, Math.min(400, parseFloat(row.dataset.startSize) + difference)) + 'px';
         }
     }
+    function bodyColumnEdge(event) {
+        var cell = event.target.closest('.an-sheet-grid tbody td');
+        if (!cell || cell.colSpan !== 1) return null;
+        var rect = cell.getBoundingClientRect();
+        var edge = Math.max(7, 9 * previewZoom / 100);
+        return event.clientX >= rect.right - edge && event.clientX <= rect.right ? cell : null;
+    }
     previewBody.addEventListener('pointerdown', function (event) {
         var handle = event.target.closest('.an-resize-handle');
-        if (!handle || event.button !== 0) return;
+        var bodyCell = handle ? null : bodyColumnEdge(event);
+        if ((!handle && !bodyCell) || event.button !== 0) return;
         event.preventDefault();
         event.stopPropagation();
+        if (bodyCell) {
+            handle = bodyCell;
+            handle.dataset.resizeDirection = 'column';
+            handle.dataset.resizeIndex = bodyCell.cellIndex;
+        }
         var table = handle.closest('table');
         var direction = handle.dataset.resizeDirection;
         var index = Number(handle.dataset.resizeIndex);
@@ -2172,6 +2192,10 @@ document.addEventListener('DOMContentLoaded', function () {
             handle.removeEventListener('pointerup', finish);
             handle.removeEventListener('pointercancel', finish);
             handle.classList.remove('is-dragging');
+            if (bodyCell) {
+                delete handle.dataset.resizeDirection;
+                delete handle.dataset.resizeIndex;
+            }
             document.body.classList.remove('an-preview-resizing', 'is-row');
         }
         handle.addEventListener('pointermove', move);
@@ -2180,10 +2204,11 @@ document.addEventListener('DOMContentLoaded', function () {
     });
     previewBody.addEventListener('dblclick', function (event) {
         var handle = event.target.closest('.an-resize-handle.is-column');
-        if (!handle) return;
+        var bodyCell = handle ? null : bodyColumnEdge(event);
+        if (!handle && !bodyCell) return;
         event.preventDefault();
-        var table = handle.closest('table');
-        var index = Number(handle.dataset.resizeIndex);
+        var table = (handle || bodyCell).closest('table');
+        var index = handle ? Number(handle.dataset.resizeIndex) : bodyCell.cellIndex;
         var cells = Array.from(table.rows).map(function (row) { return row.cells[index]; })
             .filter(function (cell) { return cell && cell.colSpan === 1; });
         var width = Math.max(80, Math.min(800, cells.reduce(function (max, cell) {
