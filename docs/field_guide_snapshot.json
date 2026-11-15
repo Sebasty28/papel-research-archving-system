@@ -1,5 +1,5 @@
 {
- "built": "2026-11-15 22:29",
+ "built": "2026-11-15 22:41",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -395,7 +395,7 @@
    "lines": 220
   },
   "pages/change_password.php": {
-   "lines": 172
+   "lines": 178
   },
   "pages/contact_support.php": {
    "lines": 849

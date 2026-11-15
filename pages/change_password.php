@@ -86,6 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'chang
 .gate-bar {
     display: flex; align-items: center; justify-content: space-between;
     gap: 1rem;
+    width: 100%;
     padding: .55rem 1.25rem;
     background: var(--white);
     border-bottom: 1px solid var(--border);
@@ -100,7 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'chang
 .gate-bar .btn-sm-outline .material-symbols-outlined { font-size: 17px; vertical-align: -3px; }
 /* The card is the page: nothing else is offered, so it sits in the middle
    rather than at the top of an otherwise empty shell. */
-.gate-body { max-width: 34rem; margin: 2.5rem auto; padding: 0 1rem; }
+.gate-body { width: 100%; max-width: 34rem; margin: 2.5rem auto; padding: 0 1rem; }
 .gate-lede { margin: 0 0 1rem; font-size: .875rem; line-height: 1.6; color: var(--ink); }
 .gate-who {
     margin: 0 0 1.25rem; padding: .625rem .75rem;
@@ -109,7 +110,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'chang
 }
 .gate-who strong { font-weight: 600; }
 @media (max-width: 600px) {
-    .gate-body { margin: 1.25rem auto; }
+    .gate-bar { padding: .75rem 1rem; }
+    .gate-body { margin: 1rem auto; padding: 0 .75rem; }
+    .gate-body .page-card-header { padding: .875rem 1rem; }
+    .gate-body .page-card-body { padding: 1rem; }
+    .gate-body .pw-wrap input { min-height: 44px; }
+    .gate-body .btn-page { width: 100%; min-height: 44px; }
 }
 </style>
 </head>
