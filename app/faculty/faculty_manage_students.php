@@ -656,8 +656,8 @@ $PAGE_SKELETON = 'table';
 
                     <div class="mgmt-field">
                         <label for="student_id">Student ID <span class="req">*</span></label>
-                        <input type="text" name="student_id" id="student_id" data-id-mask="student"
-                               placeholder="20__-_____-BN-_" inputmode="numeric" maxlength="15" required>
+                        <input type="text" name="student_id" id="student_id"
+                               placeholder="e.g. 2026-00001-BN-0" required>
                         <small class="mgmt-hint">Numbers and dashes, as the registrar writes it. This is what they sign in with.</small>
                     </div>
 
@@ -1219,7 +1219,6 @@ require_once ROOT_PATH.'/includes/action_dialogs.php';
    form's submit, and listeners fire in the order they were added, so a
    refused form has to stop the event before the dialog asks whether to
    save it. */
-?><script nonce="<?= csp_nonce() ?>" src="<?= e(BASE_URL) ?>/includes/account_id_mask.js"></script><?php
 require ROOT_PATH.'/includes/manage_validate.php';
 require ROOT_PATH.'/includes/manage_save_confirm.php';
 require ROOT_PATH.'/includes/site_footer.php'; ?>

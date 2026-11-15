@@ -345,8 +345,8 @@ $PAGE_SKELETON = 'table';
                         <label for="faculty_id">
                             <span id="idLabel">Faculty ID</span> <span class="req">*</span>
                         </label>
-                        <input type="text" name="faculty_id" id="faculty_id" data-id-mask="faculty"
-                               placeholder="FA____BN20__" inputmode="numeric" maxlength="12" required>
+                        <input type="text" name="faculty_id" id="faculty_id"
+                               placeholder="e.g. <?= e(STAFF_ID_EXAMPLE) ?>" maxlength="12" required>
                         <small class="mgmt-hint">FA, a four-digit number, BN and the year, like <?= e(STAFF_ID_EXAMPLE) ?>. This is what they sign in with.</small>
                     </div>
 
@@ -562,7 +562,6 @@ require_once ROOT_PATH.'/includes/action_dialogs.php';
    form's submit, and listeners fire in the order they were added, so a
    refused form has to stop the event before the dialog asks whether to
    save it. */
-?><script nonce="<?= csp_nonce() ?>" src="<?= e(BASE_URL) ?>/includes/account_id_mask.js"></script><?php
 require ROOT_PATH.'/includes/manage_validate.php';
 require ROOT_PATH.'/includes/manage_save_confirm.php';
 require ROOT_PATH.'/includes/scroll_jump.php';

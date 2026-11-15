@@ -1,5 +1,5 @@
 {
- "built": "2026-11-15 22:17",
+ "built": "2026-11-15 22:29",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -38,7 +38,7 @@
    "lines": 151
   },
   "app/admin/admin_manage_faculty.php": {
-   "lines": 600
+   "lines": 599
   },
   "app/admin/admin_review_dashboard.php": {
    "lines": 139
@@ -47,7 +47,7 @@
    "lines": 380
   },
   "app/admin/super_admin_manage_admins.php": {
-   "lines": 572
+   "lines": 571
   },
   "app/admin/super_admin_review_dashboard.php": {
    "lines": 135
@@ -62,7 +62,7 @@
    "lines": 214
   },
   "app/faculty/faculty_manage_students.php": {
-   "lines": 1235
+   "lines": 1234
   },
   "app/faculty/faculty_review_dashboard.php": {
    "lines": 166
@@ -416,7 +416,7 @@
    "lines": 219
   },
   "pages/settings.php": {
-   "lines": 759
+   "lines": 758
   },
   "pages/terms_and_conditions.php": {
    "lines": 164

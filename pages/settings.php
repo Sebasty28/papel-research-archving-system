@@ -328,9 +328,9 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
                 <div class="profile-field">
                     <dt><?php if ($can_edit_own_id): ?><label for="pf_faculty_id">Faculty ID</label><?php else: ?><?= e($id_label) ?><?php endif; ?></dt>
                     <dd class="<?= $can_edit_own_id ? 'page-field' : '' ?>"><?php if ($can_edit_own_id): ?>
-                        <input type="text" id="pf_faculty_id" name="faculty_id" form="profileForm" data-id-mask="faculty"
+                        <input type="text" id="pf_faculty_id" name="faculty_id" form="profileForm"
                                value="<?= e((string)($profile['faculty_id'] ?? '')) ?>"
-                               maxlength="20" inputmode="numeric" autocomplete="off" required aria-describedby="pf_id_hint">
+                               maxlength="20" autocomplete="off" required aria-describedby="pf_id_hint">
                         <span class="profile-hint" id="pf_id_hint">New IDs use FA, four digits, BN and the year, like <?= e(STAFF_ID_EXAMPLE) ?>. This is an ID you can sign in with.</span>
                     <?php else: ?><?= e((string)$id_value) ?><?php endif; ?></dd>
                 </div>
@@ -751,7 +751,6 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 <?php /* The typed confirmation on the password form comes from here. Without
          it the data-confirm attributes are just markup nobody reads. */ ?>
-<script nonce="<?= csp_nonce() ?>" src="<?= e(BASE_URL) ?>/includes/account_id_mask.js"></script>
 <?php require_once ROOT_PATH.'/includes/action_dialogs.php'; ?>
 <?php require ROOT_PATH.'/includes/site_footer.php'; ?>
 </body>
