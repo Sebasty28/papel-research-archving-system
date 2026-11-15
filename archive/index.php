@@ -1333,8 +1333,7 @@ html.kw-locked { overflow: hidden; }
     .section-heading { font-size: 1.375rem; }
     .paper-foot { grid-template-columns: 1fr; gap: .25rem; }
     /* Cards give the title and metadata the whole line. The action and
-       programme share a footer without squeezing the date. Rows use the
-       aligned, sideways scrolling columns in browse_console.php. */
+       programme share a footer without squeezing the date. */
     .paper-item .paper-side {
         display: flex; align-items: baseline; justify-content: space-between;
         flex-wrap: wrap; gap: .125rem .5rem;
@@ -1348,13 +1347,63 @@ html.kw-locked { overflow: hidden; }
     .crumb-inner .btn-banner-toggle,
     .crumb-inner .btn-banner-toggle.is-guest { right: calc(1rem + 11px); }
 }
-@media (max-width: 900px) {
-    /* The card footer above has a different job in Rows: each part returns
-       to the same column as the corresponding part in the next result. */
-    html[data-view="rows"] .paper-list .paper-foot { display: contents; }
-    html[data-view="rows"] .paper-list .paper-item .paper-side { display: block; flex-wrap: nowrap; }
-    html[data-view="rows"] .paper-list .paper-item .paper-program {
-        order: 0; flex: none; overflow-wrap: normal;
+/* Keep scan-friendly columns where the results area has room for them. */
+html[data-view="rows"] .paper-list.is-scrollable { overflow-x: auto; }
+html[data-view="rows"] .paper-list .paper-item {
+    display: grid; min-width: 700px;
+    grid-template-columns: minmax(12rem, 1fr) 9rem 10.5rem 7rem;
+    align-items: center; column-gap: .75rem;
+}
+html[data-view="rows"] .paper-list .paper-foot,
+html[data-view="rows"] .paper-list .paper-item .paper-info { display: contents; }
+html[data-view="rows"] .paper-list .paper-item .paper-title {
+    grid-column: 1; min-width: 0; margin: 0; padding-right: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    overflow-wrap: normal;
+}
+html[data-view="rows"] .paper-list .paper-item .paper-authors {
+    display: block; grid-column: 2; min-width: 0; margin: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+html[data-view="rows"] .paper-list .paper-item .paper-meta {
+    display: flex; grid-column: 3; min-width: 0; flex-wrap: nowrap;
+    white-space: nowrap; overflow: hidden;
+}
+html[data-view="rows"] .paper-list .paper-item .paper-side {
+    display: block; grid-column: 4; min-width: 0; overflow: hidden;
+    white-space: nowrap; line-height: 1.4;
+}
+html[data-view="rows"] .paper-list .paper-item .paper-action {
+    display: block; overflow: hidden; text-overflow: ellipsis;
+}
+html[data-view="rows"] .paper-list .paper-item .paper-program {
+    display: block; order: 0; flex: none;
+    overflow: hidden; text-overflow: ellipsis;
+}
+@media (max-width: 600px) {
+    /* Two short lines fit every field on a phone: title and author above,
+       date/type and the action below. The bookmark keeps its own corner. */
+    html[data-view="rows"] .paper-list.is-scrollable { overflow-x: hidden; }
+    html[data-view="rows"] .paper-list .paper-item {
+        min-width: 0; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+        grid-template-rows: auto auto; align-items: start;
+        gap: .125rem .5rem; padding-right: 1.5rem;
+    }
+    html[data-view="rows"] .paper-list .paper-item .paper-title {
+        grid-column: 1; grid-row: 1; font-size: .6875rem;
+    }
+    html[data-view="rows"] .paper-list .paper-item .paper-authors {
+        grid-column: 2; grid-row: 1; font-size: .625rem;
+        padding-right: 1.1rem;
+    }
+    html[data-view="rows"] .paper-list .paper-item .paper-meta {
+        grid-column: 1; grid-row: 2; font-size: .625rem;
+    }
+    html[data-view="rows"] .paper-list .paper-item .paper-side {
+        grid-column: 2; grid-row: 2; font-size: .625rem; line-height: 1.2;
+    }
+    html[data-view="rows"] .paper-list .paper-item .paper-action {
+        font-size: inherit;
     }
 }
 /* The narrowest phones: .75rem of gutter, and the menu button's own padding

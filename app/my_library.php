@@ -1,6 +1,7 @@
 <?php
 /**
- * My Library: the papers a reader has saved, kept on a shelf.
+ * My Library: saved papers and manuscript requests in Rows, Hardbounds
+ * or Bookshelf.
  *
  * Every account has one (config/core.php, library_roles()). A paper is put on
  * it with the Save button on the paper's own page or on a repository row
@@ -46,12 +47,29 @@ function library_paper_row(int $paperId): ?array {
     return $row ?: null;
 }
 
-/* ---- Request again, from the History tab ---- */
+/* ---- History actions ---- */
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify('my_library.php?tab=history');
     $back = 'history';
 
-    if (($_POST['action'] ?? '') === 'request_again' && $isStudent) {
+    if (($_POST['action'] ?? '') === 'clear_request_history' && $isStudent) {
+        if (!manuscript_request_history_hidden_ready()) {
+            flash('error', 'Clearing request history is not available on this site yet.');
+        } else {
+            /* Hide only rows that belong in the student's History. Keep the
+               record for the librarian and for access decisions. */
+            $clear = $conn->prepare(
+                "UPDATE manuscript_requests SET student_hidden_at = NOW()
+                  WHERE student_user_id = ? AND student_hidden_at IS NULL AND status <> 'pending'
+                    AND (status <> 'granted' OR expires_at IS NULL OR expires_at <= NOW())"
+            );
+            $clear->bind_param('i', $uid);
+            $clear->execute();
+            $removed = $clear->affected_rows;
+            $clear->close();
+            flash('success', $removed === 1 ? 'One past request was cleared from My Library.' : "$removed past requests were cleared from My Library.");
+        }
+    } elseif (($_POST['action'] ?? '') === 'request_again' && $isStudent) {
         $paperId = (int)($_POST['paper_id'] ?? 0);
         $paper   = $paperId > 0 ? library_paper_row($paperId) : null;
 
@@ -85,6 +103,9 @@ if ($isStudent && manuscript_requests_ready()) {
     $stmt = $conn->prepare(
         "SELECT r.*, COALESCE(p.title, pa.title) AS paper_title,
                 COALESCE(p.author_names, pa.author_names) AS author_names,
+                COALESCE(p.program_category, pa.program_category) AS paper_program,
+                COALESCE(p.year, pa.year) AS paper_year,
+                COALESCE(p.paper_type, pa.paper_type) AS paper_type_name,
                 (p.paper_id IS NOT NULL OR pa.paper_id IS NOT NULL) AS readable
            FROM manuscript_requests r
            LEFT JOIN research_papers p ON p.paper_id = r.paper_id AND p.current_status = 'approved'
@@ -100,6 +121,8 @@ if ($isStudent && manuscript_requests_ready()) {
        Asking again is offered only on that one, and only once it is settled:
        an older denial under a request that is waiting has nothing to ask. */
     $seen = [];
+    $latestRequest = [];
+    $canHideHistory = manuscript_request_history_hidden_ready();
     foreach ($rows as $r) {
         $pid      = (int)$r['paper_id'];
         $isLatest = !isset($seen[$pid]);
@@ -107,12 +130,20 @@ if ($isStudent && manuscript_requests_ready()) {
 
         $active = $r['status'] === 'granted' && !empty($r['expires_at'])
                && strtotime((string)$r['expires_at']) > time();
+        if ($isLatest) {
+            $latestRequest[$pid] = [
+                'id' => (int)$r['request_id'],
+                'tab' => ($r['status'] === 'pending' || $active) ? 'requests' : 'history',
+            ];
+        }
         if ($r['status'] === 'pending' || $active) {
             $r['is_active'] = $active;
             $requests[] = $r;
         } else {
+            if ($canHideHistory && !empty($r['student_hidden_at'])) continue;
             $r['can_again'] = $isLatest && (int)$r['readable'] === 1;
             $r['superseded'] = !$isLatest;
+            $r['latest_request'] = $latestRequest[$pid];
             $history[] = $r;
         }
     }
@@ -159,6 +190,42 @@ function library_cover_byline(?string $authors): string {
 function library_excerpt(?string $html): string {
     return book_excerpt($html);     // includes/book_covers.php, shared with the repository
 }
+
+/** A request's paper, shown as a hardbound in the two shelf views. */
+function library_request_book(array $r): void {
+    $pid = (int)$r['paper_id'];
+    $title = (string)($r['paper_title'] ?? 'A paper no longer in the repository');
+    $program = (string)($r['paper_program'] ?? '');
+    $code = program_code($program);
+    $year = (string)($r['paper_year'] ?? '');
+    $type = !empty($r['paper_type_name']) ? paper_type_label($r['paper_type_name']) : '';
+    $mark = implode(' · ', array_filter([$code, $year], 'strlen')) ?: APP_NAME;
+    $tag = (int)$r['readable'] === 1 ? 'a' : 'span';
+    $href = $tag === 'a' ? ' href="' . e(BASE_URL) . '/archive/view_paper.php?id=' . $pid . '"' : '';
+    echo '<' . $tag . ' class="book lib-request-book"' . $href
+       . ' data-cover="' . e(library_cover_index($program)) . '"'
+       . ' data-tall="' . ($pid % 3) . '" data-thick="' . (intdiv($pid, 3) % 4) . '"'
+       . ' aria-label="' . e($title . ($tag === 'a' ? '. Open paper.' : '. No longer available.')) . '">';
+    echo '<span class="book-cover bk-face">' . book_cover_face([
+        'title' => $title, 'kind' => $type,
+        'by' => library_cover_byline($r['author_names'] ?? ''),
+        'by_label' => 'Presented by', 'mark' => $mark,
+    ]) . '</span>';
+    echo '<span class="book-spine" aria-hidden="true">';
+    if ($code !== '') { echo '<span class="sp-end">' . e($code) . '</span><span class="sp-bars"></span>'; }
+    echo '<span class="sp-title">' . e($title) . '</span>';
+    if ($year !== '') { echo '<span class="sp-bars"></span><span class="sp-end">' . e($year) . '</span>'; }
+    echo '</span></' . $tag . '>';
+}
+
+function library_request_view_prepaint(bool $defaultRows = false): void {
+    if ($defaultRows) return;
+    echo '<script nonce="' . e(csp_nonce()) . '">(function (root) {'
+       . 'try { var view = localStorage.getItem("papel_view") || localStorage.getItem("papel.libraryView") || "rows";'
+       . 'if (view === "list" || view === "cards") view = "rows";'
+       . 'if (["rows","shelf","bookshelf"].indexOf(view) !== -1) root.setAttribute("data-view", view);'
+       . '} catch (err) {} })(document.currentScript.parentElement);</script>';
+}
 ?>
 <!doctype html>
 <html lang="en">
@@ -170,7 +237,7 @@ function library_excerpt(?string $html): string {
 <?php /* The dashboard's own search box, cream frame and tab strip, so this
          reads as another desk of the same site rather than a page with a look
          of its own. */ ?>
-<?php require_once ROOT_PATH.'/includes/browse_console.php'; ?>
+<?php $VIEW_SHELF = true; require_once ROOT_PATH.'/includes/browse_console.php'; ?>
 <?php require_once ROOT_PATH.'/includes/console_shell.php'; ?>
 <?php require_once ROOT_PATH.'/includes/save_paper.php'; ?>
 <?php require_once ROOT_PATH.'/includes/flash_banner.php'; ?>
@@ -182,13 +249,16 @@ function library_excerpt(?string $html): string {
     margin: 0; font-family: var(--font-head); font-size: 1.5rem; font-weight: 600;
     color: var(--maroon); line-height: 1.2;
 }
-.lib-lede { margin: .25rem 0 0; font-size: .875rem; color: var(--grey); }
+.lib-lede { margin: .25rem 0 0; font-size: .875rem; color: var(--grey); text-align: justify; }
 
 /* The bar under the search: tabs at the left, the shelf's tools at the right.
    It wraps on a narrow screen, where the two do not fit one line and
    .dash-bar's own nowrap would push the tools off the edge. */
 .lib-bar { flex-wrap: wrap; row-gap: .375rem; }
 .lib-tools { margin-left: auto; display: flex; align-items: center; gap: .125rem; }
+.lib-tool-pop { position: relative; display: flex; align-items: center; }
+.lib-tool-trigger { display: none; }
+.lib-tool-group { display: flex; align-items: center; gap: .125rem; min-width: 0; }
 .lib-tools .lib-tools-label {
     font-size: .6875rem; letter-spacing: .06em; text-transform: uppercase;
     color: var(--grey); margin: 0 .25rem 0 .5rem;
@@ -201,7 +271,10 @@ function library_excerpt(?string $html): string {
     background: var(--white); border-radius: var(--r-card, 8px);
     padding: .75rem; box-shadow: 0 1px 2px rgba(51, 0, 0, .06);
 }
-.lib-note { margin: 0 0 .625rem; font-size: .75rem; color: var(--grey); }
+.lib-note { margin: 0 0 .625rem; font-size: .75rem; color: var(--grey); text-align: justify; }
+.lib-history-head { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; margin-bottom: .625rem; }
+.lib-history-head .lib-note { margin: .4rem 0 0; }
+.lib-history-head form { flex: 0 0 auto; margin: 0; }
 
 /* ===== The shelf =====
    One grid. Every row is --row tall, and the background below is one board
@@ -212,8 +285,9 @@ function library_excerpt(?string $html): string {
    mixed from --ink and --white, never a grey of their own, so they follow the
    palette and the dark page. */
 .shelf-room {
-    --bw: 108px;                 /* a book's width  */
-    --bh: 156px;                 /* its height      */
+    --shelf-scale: 1;
+    --bw: calc(108px * var(--shelf-scale));
+    --bh: calc(156px * var(--shelf-scale));
     --bd: 20px;                  /* its thickness   */
     --board: 20px;               /* the shelf board */
     --row: calc(var(--bh) + 38px + var(--board));
@@ -222,6 +296,8 @@ function library_excerpt(?string $html): string {
     --board-edge: color-mix(in srgb, var(--ink) 15%, var(--white));
     --board-lip:  color-mix(in srgb, var(--ink) 30%, var(--white));
 }
+html[data-density="compact"] .shelf-room { --shelf-scale: .88; }
+html[data-density="comfortable"] .shelf-room { --shelf-scale: 1.12; }
 /* The measurements are on the room rather than the shelf so the note on an
    empty shelf, which is the shelf's sibling, is sized from the same row. */
 .shelf {
@@ -323,11 +399,46 @@ function library_excerpt(?string $html): string {
     color: #fff; text-shadow: none;
 }
 
-/* ===== Shelf or list =====
-   The same papers twice in the markup, and the attribute says which is shown:
-   a shelf is for looking along, a list for finding one of forty. */
-.lib-saved[data-view="shelf"] .lib-list,
-.lib-saved[data-view="list"] .shelf { display: none; }
+/* Three views from the same two copies of each saved paper. */
+.lib-saved:is([data-view="shelf"], [data-view="bookshelf"]) .lib-list,
+.lib-saved[data-view="rows"] .shelf-room { display: none; }
+
+/* Both the wall and the book use the width of the same query container. */
+.lib-saved[data-view="bookshelf"] { container-type: inline-size; }
+.lib-saved[data-view="bookshelf"] .shelf-room {
+    --bd: clamp(calc(26px * var(--shelf-scale)), calc(4cqw * var(--shelf-scale)), calc(72px * var(--shelf-scale)));
+    --bh: clamp(calc(190px * var(--shelf-scale)), calc(29cqw * var(--shelf-scale)), calc(330px * var(--shelf-scale)));
+}
+.lib-saved[data-view="bookshelf"] .shelf {
+    display: flex; flex-wrap: wrap; align-items: flex-end; align-content: flex-start; gap: 0;
+}
+.lib-saved[data-view="bookshelf"] .book-slot {
+    --book-h: var(--bh); position: relative; display: block;
+    flex: 1 1 var(--bd); min-width: var(--bd); max-width: calc(var(--bd) + 7px);
+    height: var(--row); padding: 0; perspective: 1100px;
+}
+.lib-saved[data-view="bookshelf"] .book-slot:has(.book[data-thick="1"]) { --bd: clamp(calc(29px * var(--shelf-scale)), calc(4.4cqw * var(--shelf-scale)), calc(79px * var(--shelf-scale))); }
+.lib-saved[data-view="bookshelf"] .book-slot:has(.book[data-thick="2"]) { --bd: clamp(calc(33px * var(--shelf-scale)), calc(5cqw * var(--shelf-scale)), calc(90px * var(--shelf-scale))); }
+.lib-saved[data-view="bookshelf"] .book-slot:has(.book[data-thick="3"]) { --bd: clamp(calc(37px * var(--shelf-scale)), calc(5.6cqw * var(--shelf-scale)), calc(101px * var(--shelf-scale))); }
+.lib-saved[data-view="bookshelf"] .book { position: absolute; left: 50%; bottom: var(--board); margin-left: calc(var(--bw) / -2); transform: translateZ(calc(var(--bw) / -2)) rotateY(90deg); }
+.lib-saved[data-view="bookshelf"] .book:hover,
+.lib-saved[data-view="bookshelf"] .book:focus-visible { transform: translateZ(calc(var(--bw) / -2 + 26px)) translateY(-11px) rotateY(90deg); }
+.lib-saved[data-view="bookshelf"] .book:active { transform: translateZ(calc(var(--bw) / -2 + 14px)) translateY(-5px) rotateY(90deg); }
+.book-spine { display: none; }
+.lib-saved[data-view="bookshelf"] .book-spine {
+    position: absolute; left: 0; top: 0; width: var(--bd); height: 100%;
+    transform: translateX(calc(var(--bd) / -2)) rotateY(-90deg);
+    display: flex; flex-direction: column; align-items: center; gap: 7px;
+    padding: 13px 0 11px; overflow: hidden; border-radius: 2px;
+    background: linear-gradient(90deg, rgba(0,0,0,.34), rgba(255,255,255,.12) 46%, rgba(0,0,0,.34)), var(--cover-spine, var(--cover));
+    color: var(--cover-spine-foil, var(--cover-foil)); font-family: var(--font-body);
+    font-weight: 800; text-transform: uppercase; text-shadow: 0 1px 0 rgba(0,0,0,.35);
+}
+.book-spine .sp-end, .book-spine .sp-title { writing-mode: vertical-rl; overflow: hidden; }
+.book-spine .sp-end { flex: 0 0 auto; max-height: 32%; font-size: clamp(6px, calc(var(--bd) * .185), 11px); letter-spacing: .06em; }
+.book-spine .sp-title { flex: 1 1 auto; min-height: 0; text-align: center; font-size: clamp(7px, calc(var(--bd) * .2), 12px); line-height: 1.05; overflow-wrap: anywhere; }
+.book-spine .sp-bars { flex: 0 0 auto; width: 62%; height: 3px; border-top: 1px solid currentColor; border-bottom: 1px solid currentColor; }
+.lib-saved[data-view="bookshelf"] .book:focus-visible .book-spine { box-shadow: 0 0 0 2px var(--white), 0 0 0 4px var(--maroon); }
 
 .lib-list, .lib-reqs { list-style: none; margin: 0; padding: 0; }
 .lib-row, .lib-req {
@@ -335,9 +446,11 @@ function library_excerpt(?string $html): string {
     padding: .75rem .5rem; border-bottom: 1px solid var(--border-soft);
     transition: opacity .25s;
 }
+html[data-density="compact"] .lib-saved[data-view="rows"] .lib-row { padding: .5rem .4rem; }
+html[data-density="comfortable"] .lib-saved[data-view="rows"] .lib-row { padding: 1rem .75rem; }
 .lib-row[hidden] { display: none; }
 .lib-row:last-child, .lib-req:last-child { border-bottom: 0; }
-.lib-row-main, .lib-req-main { flex: 1 1 auto; min-width: 0; }
+.lib-row-main, .lib-req-main { flex: 1 1 auto; min-width: 0; text-align: justify; }
 .lib-row-title, .lib-req-title {
     font-family: var(--font-head); font-size: .9375rem; font-weight: 600; line-height: 1.35;
     color: var(--ink); text-decoration: none;
@@ -352,9 +465,88 @@ function library_excerpt(?string $html): string {
 .lib-req-act { flex: 0 0 auto; align-self: center; }
 .lib-req-act:empty { display: none; }
 .lib-req-act form { margin: 0; }
+.lib-req-state .lib-latest-link { color: var(--maroon); font-weight: 600; }
+.lib-req[id] { scroll-margin-top: calc(var(--pdf-dock-top, 70px) + 12px); }
+
+/* Requests and History keep one live row per request, including the timer's
+   hooks and the action form, while the same row can be displayed three ways. */
+.lib-request-view .lib-request-book { display: none; text-decoration: none; }
+.lib-request-view .lib-request-book:not(a) { cursor: default; }
+.lib-request-view .lib-reqs:empty { display: none !important; }
+.lib-request-view .lib-req[hidden] { display: none !important; }
+html[data-density="compact"] .lib-request-view[data-view="rows"] .lib-req { padding: .5rem .4rem; }
+html[data-density="comfortable"] .lib-request-view[data-view="rows"] .lib-req { padding: 1rem .75rem; }
+.lib-request-view:is([data-view="shelf"], [data-view="bookshelf"]) .lib-reqs {
+    --shelf-scale: 1; --bw: calc(108px * var(--shelf-scale)); --bh: calc(156px * var(--shelf-scale));
+    --bd: 20px; --board: 20px; --row: calc(var(--bh) + 112px + var(--board));
+    --wall: color-mix(in srgb, var(--ink) 4%, var(--white));
+    --board-top: var(--white); --board-edge: color-mix(in srgb, var(--ink) 15%, var(--white));
+    --board-lip: color-mix(in srgb, var(--ink) 30%, var(--white));
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(var(--bw) + 42px), 1fr));
+    grid-auto-rows: var(--row); min-height: var(--row); padding: 0 .75rem;
+    border-radius: var(--r-control, 4px); background-color: var(--wall);
+    background-image: linear-gradient(to bottom,
+        transparent calc(100% - var(--board)), var(--board-top) calc(100% - var(--board)),
+        var(--board-top) calc(100% - 9px), var(--board-edge) calc(100% - 9px),
+        var(--board-edge) calc(100% - 2px), var(--board-lip) calc(100% - 2px));
+    background-size: 100% var(--row); background-repeat: repeat-y;
+}
+html[data-density="compact"] .lib-request-view:is([data-view="shelf"], [data-view="bookshelf"]) .lib-reqs { --shelf-scale: .88; }
+html[data-density="comfortable"] .lib-request-view:is([data-view="shelf"], [data-view="bookshelf"]) .lib-reqs { --shelf-scale: 1.12; }
+.lib-request-view:is([data-view="shelf"], [data-view="bookshelf"]) .lib-req {
+    position: relative; display: flex; flex-direction: column; align-items: center;
+    height: var(--row); min-width: 0; padding: .5rem 0 0; border: 0; gap: .2rem;
+    perspective: 900px;
+}
+.lib-request-view:is([data-view="shelf"], [data-view="bookshelf"]) .lib-request-book {
+    position: absolute; left: 50%; bottom: var(--board); margin-left: calc(var(--bw) / -2); display: block;
+}
+.lib-request-view:is([data-view="shelf"], [data-view="bookshelf"]) .lib-req-ico { margin: 0; font-size: 18px; }
+.lib-request-view:is([data-view="shelf"], [data-view="bookshelf"]) .lib-req-main {
+    flex: 0 0 auto; width: 100%; text-align: center; font-size: .7rem;
+}
+.lib-request-view:is([data-view="shelf"], [data-view="bookshelf"]) .lib-req-title,
+.lib-request-view:is([data-view="shelf"], [data-view="bookshelf"]) .lib-row-sub { display: none; }
+.lib-request-view:is([data-view="shelf"], [data-view="bookshelf"]) .lib-req-state {
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden; margin: 0; font-size: .65rem;
+}
+.lib-request-view:is([data-view="shelf"], [data-view="bookshelf"]) .lib-req-act {
+    flex: 0 0 auto; width: auto; padding: 0; align-self: center;
+}
+.lib-request-view:is([data-view="shelf"], [data-view="bookshelf"]) .lib-req-act :is(a,button) {
+    min-height: 24px; padding: .125rem .3rem; font-size: .65rem;
+}
+.lib-request-view[data-view="bookshelf"] { container-type: inline-size; }
+.lib-request-view[data-view="bookshelf"] .lib-reqs {
+    --bd: clamp(calc(26px * var(--shelf-scale)), calc(4cqw * var(--shelf-scale)), calc(72px * var(--shelf-scale)));
+    --bh: clamp(calc(190px * var(--shelf-scale)), calc(29cqw * var(--shelf-scale)), calc(330px * var(--shelf-scale)));
+    display: flex; flex-wrap: wrap; align-items: flex-start; align-content: flex-start; gap: 0;
+}
+.lib-request-view[data-view="bookshelf"] .lib-req {
+    flex: 1 1 var(--bd); min-width: var(--bd); max-width: calc(var(--bd) + 7px);
+}
+.lib-request-view[data-view="bookshelf"] .lib-req:has(.book[data-thick="1"]) { --bd: clamp(calc(29px * var(--shelf-scale)), calc(4.4cqw * var(--shelf-scale)), calc(79px * var(--shelf-scale))); }
+.lib-request-view[data-view="bookshelf"] .lib-req:has(.book[data-thick="2"]) { --bd: clamp(calc(33px * var(--shelf-scale)), calc(5cqw * var(--shelf-scale)), calc(90px * var(--shelf-scale))); }
+.lib-request-view[data-view="bookshelf"] .lib-req:has(.book[data-thick="3"]) { --bd: clamp(calc(37px * var(--shelf-scale)), calc(5.6cqw * var(--shelf-scale)), calc(101px * var(--shelf-scale))); }
+.lib-request-view[data-view="bookshelf"] .book { transform: translateZ(calc(var(--bw) / -2)) rotateY(90deg); }
+.lib-request-view[data-view="bookshelf"] .book:hover,
+.lib-request-view[data-view="bookshelf"] .book:focus-visible { transform: translateZ(calc(var(--bw) / -2 + 26px)) translateY(-11px) rotateY(90deg); }
+.lib-request-view[data-view="bookshelf"] .book-spine {
+    position: absolute; left: 0; top: 0; width: var(--bd); height: 100%;
+    transform: translateX(calc(var(--bd) / -2)) rotateY(-90deg);
+    display: flex; flex-direction: column; align-items: center; gap: 7px;
+    padding: 13px 0 11px; overflow: hidden; border-radius: 2px;
+    background: linear-gradient(90deg, rgba(0,0,0,.34), rgba(255,255,255,.12) 46%, rgba(0,0,0,.34)), var(--cover-spine, var(--cover));
+    color: var(--cover-spine-foil, var(--cover-foil)); font-family: var(--font-body);
+    font-weight: 800; text-transform: uppercase; text-shadow: 0 1px 0 rgba(0,0,0,.35);
+}
+.lib-request-view[data-view="bookshelf"] .lib-req-state { display: none; }
+.lib-request-view[data-view="bookshelf"] .lib-req-act :is(a,button) { font-size: 0; }
+.lib-request-view[data-view="bookshelf"] .lib-req-act .material-symbols-outlined { font-size: 18px; }
 
 /* Nothing here yet, or nothing matching the search. */
-.lib-empty { padding: 2.25rem 1rem; text-align: center; color: var(--grey); font-size: .875rem; }
+.lib-empty { padding: 2.25rem 1rem; text-align: justify; color: var(--grey); font-size: .875rem; }
 .lib-empty .material-symbols-outlined { display: block; font-size: 32px; color: var(--soft-maroon); margin: 0 auto .5rem; }
 .lib-empty a { color: var(--maroon); }
 .lib-empty[hidden] { display: none; }
@@ -376,13 +568,51 @@ function library_excerpt(?string $html): string {
    repository's Shelf view opens the same one. */
 
 @media (max-width: 700px) {
-    .lib-tools { margin-left: 0; width: 100%; }
-    .lib-tools .lib-tools-label { margin-left: .25rem; }
+    .lib-history-head { flex-wrap: wrap; }
+    .lib-history-head form { margin-left: auto; }
+    .lib-history-head .btn-sm-maroon { min-height: 36px; padding: .35rem .6rem; font-size: .6875rem; }
+    .lib-history-head .btn-sm-maroon .material-symbols-outlined { font-size: 16px; }
+    .lib-bar { position: relative; z-index: 5; row-gap: .25rem; }
+    .lib-bar .dash-tabs-glide { width: 100%; }
+    .lib-bar .dash-tabs { width: 100%; gap: 0; }
+    .lib-bar .dash-tabs > .dash-tab {
+        flex: 1 1 0; justify-content: center;
+        min-height: 34px; padding: .35rem .45rem; font-size: .72rem;
+    }
+    .lib-bar .dash-tab .count { font-size: .66rem; }
+    .lib-tools { margin-left: 0; width: 100%; gap: .4rem; }
+    .lib-tool-pop { flex: 1 1 0; min-width: 0; }
+    .lib-tool-trigger {
+        display: flex; align-items: center; justify-content: center; width: 100%; min-height: 38px;
+        border: 1px solid var(--border); border-radius: var(--r-control, 4px);
+        background: var(--white); color: var(--maroon); cursor: pointer;
+    }
+    .lib-tool-trigger .material-symbols-outlined { font-size: 20px; }
+    .lib-tool-trigger[aria-expanded="true"] { background: var(--maroon-surface); color: #fff; border-color: var(--maroon-surface); }
+    .lib-tool-group {
+        display: none; position: absolute; top: calc(100% + .25rem); left: 0; z-index: 6;
+        width: min(200px, calc(100vw - 2rem)); padding: .45rem;
+        flex-direction: column; align-items: stretch; gap: .125rem;
+        border: 1px solid var(--border); border-radius: var(--r-card, 8px);
+        background: var(--white); box-shadow: 0 12px 24px rgba(0,0,0,.16);
+    }
+    .lib-tool-pop:last-child .lib-tool-group { left: auto; right: 0; }
+    .lib-tool-pop.is-open .lib-tool-group { display: flex; }
+    .lib-tools .lib-tools-label { margin: 0; padding: .3rem .45rem; font-size: .65rem; }
+    .lib-tools .dash-tab { width: 100%; min-height: 36px; padding: .4rem .55rem; font-size: .75rem; }
+    .lib-tools .dash-tab.active { background: var(--cream); }
+    .lib-tools .lib-rule { display: none; }
     .shelf { padding: 0 .5rem; grid-template-columns: repeat(auto-fill, minmax(calc(var(--bw) + 18px), 1fr)); }
     .lib-req { flex-wrap: wrap; }
     .lib-req-act { width: 100%; padding-left: 2rem; }
+    .lib-request-view[data-reset-view="rows"][data-view="rows"] .lib-req-act {
+        display: flex; justify-content: flex-end; padding-left: 0;
+    }
     .dash-top { flex-wrap: wrap; }
     .dash-top .btn-upload { width: 100%; justify-content: center; }
+}
+@media (max-width: 360px) {
+    .lib-bar .dash-tabs > .dash-tab { padding-inline: .35rem; }
 }
 @media (prefers-reduced-motion: reduce) {
     .book, .book-slot, .lib-row { transition: none; }
@@ -424,8 +654,9 @@ function library_excerpt(?string $html): string {
                         <span class="material-symbols-outlined">search</span>
                     </span>
                     <input class="search-input" type="search" id="libSearch" autocomplete="off"
-                           placeholder="Search your saved papers" aria-label="Search your saved papers"
-                           <?= $tab === 'saved' && $saved ? '' : 'disabled' ?>>
+                           placeholder="Search your <?= $tab === 'saved' ? 'saved papers' : ($tab === 'requests' ? 'requests' : 'history') ?>"
+                           aria-label="Search your <?= $tab === 'saved' ? 'saved papers' : ($tab === 'requests' ? 'requests' : 'history') ?>"
+                           <?= $counts[$tab] ? '' : 'disabled' ?>>
                 </div>
             </div>
             <a href="<?= e(BASE_URL) ?>/archive/index.php?browse=1" class="btn-upload">
@@ -444,21 +675,33 @@ function library_excerpt(?string $html): string {
                     <?php endforeach; ?>
                 </div>
             </div>
-            <?php if ($tab === 'saved' && $saved): ?>
+            <?php if (($tab === 'saved' && $saved) || ($tab === 'requests' && manuscript_requests_ready()) || $tab === 'history'): ?>
                 <div class="lib-tools">
-                    <span class="lib-tools-label">Sort</span>
-                    <button type="button" class="dash-tab active" data-sort="recent" aria-pressed="true">Recently saved</button>
-                    <button type="button" class="dash-tab" data-sort="title" aria-pressed="false">Title</button>
-                    <button type="button" class="dash-tab" data-sort="year" aria-pressed="false">Year</button>
+                    <div class="lib-tool-pop">
+                        <button type="button" class="lib-tool-trigger" aria-label="Sort papers" title="Sort papers"
+                                aria-controls="libSortOptions" aria-expanded="false">
+                            <span class="material-symbols-outlined" aria-hidden="true">sort</span>
+                        </button>
+                        <div class="lib-tool-group" id="libSortOptions" role="group" aria-label="Sort order">
+                            <span class="lib-tools-label">Sort</span>
+                            <button type="button" class="dash-tab active" data-sort="recent" aria-pressed="true"><?= $tab === 'saved' ? 'Recently saved' : 'Newest first' ?></button>
+                            <button type="button" class="dash-tab" data-sort="title" aria-pressed="false">Title</button>
+                            <button type="button" class="dash-tab" data-sort="year" aria-pressed="false">Year</button>
+                        </div>
+                    </div>
                     <span class="lib-rule" aria-hidden="true"></span>
-                    <button type="button" class="dash-tab active" data-view-as="shelf" aria-pressed="true"
-                            title="Hardbounds" aria-label="Show as hardbound books on a shelf">
-                        <span class="material-symbols-outlined" aria-hidden="true">shelves</span>
-                    </button>
-                    <button type="button" class="dash-tab" data-view-as="list" aria-pressed="false"
-                            title="List" aria-label="Show as a list">
-                        <span class="material-symbols-outlined" aria-hidden="true">view_list</span>
-                    </button>
+                    <div class="lib-tool-pop">
+                        <button type="button" class="lib-tool-trigger" aria-label="Change result view" title="Change result view"
+                                aria-controls="libViewOptions" aria-expanded="false">
+                            <span class="material-symbols-outlined" aria-hidden="true">grid_view</span>
+                        </button>
+                        <div class="lib-tool-group" id="libViewOptions" role="group" aria-label="Result view">
+                            <span class="lib-tools-label">View</span>
+                            <button type="button" class="dash-tab" data-view-as="rows" aria-pressed="false">Rows</button>
+                            <button type="button" class="dash-tab active" data-view-as="shelf" aria-pressed="true">Hardbounds</button>
+                            <button type="button" class="dash-tab" data-view-as="bookshelf" aria-pressed="false">Bookshelf</button>
+                        </div>
+                    </div>
                 </div>
             <?php endif; ?>
         </div>
@@ -466,15 +709,16 @@ function library_excerpt(?string $html): string {
         <div class="lib-card">
         <?php if ($tab === 'saved'): ?>
 
-            <div class="lib-saved" id="libSaved" data-view="shelf">
+            <div class="lib-saved" id="libSaved" data-view="shelf" data-view-console="shelf">
                 <?php /* Before the shelf is painted, so a reader who keeps the
                          list never sees the shelf first. */ ?>
                 <script nonce="<?= csp_nonce() ?>">
                 (function () {
                     try {
-                        if (localStorage.getItem('papel.libraryView') === 'list') {
-                            document.getElementById('libSaved').setAttribute('data-view', 'list');
-                        }
+                        var view = localStorage.getItem('papel_view') || localStorage.getItem('papel.libraryView') || 'shelf';
+                        if (view === 'list' || view === 'cards') view = 'rows';
+                        if (['rows', 'shelf', 'bookshelf'].indexOf(view) !== -1)
+                            document.getElementById('libSaved').setAttribute('data-view', view);
                     } catch (err) {}
                 })();
                 </script>
@@ -497,7 +741,7 @@ function library_excerpt(?string $html): string {
                                 data-year="<?= (int)($p['year'] ?? 0) ?>"
                                 data-saved="<?= (int)strtotime((string)$p['saved_at']) ?>">
                                 <button type="button" class="book" data-cover="<?= e(library_cover_index($p['program_category'] ?? '')) ?>"
-                                        data-tall="<?= $pid % 3 ?>"
+                                        data-tall="<?= $pid % 3 ?>" data-thick="<?= intdiv($pid, 3) % 4 ?>"
                                         data-paper="<?= $pid ?>"
                                         data-title="<?= e($p['title']) ?>"
                                         data-program="<?= e($p['program_category'] ?? '') ?>"
@@ -524,6 +768,11 @@ function library_excerpt(?string $html): string {
                                         <?php if ((int)$p['is_archived'] === 1): ?>
                                             <span class="book-archived">Archived</span>
                                         <?php endif; ?>
+                                    </span>
+                                    <span class="book-spine" aria-hidden="true">
+                                        <?php if ($code !== ''): ?><span class="sp-end"><?= e($code) ?></span><span class="sp-bars"></span><?php endif; ?>
+                                        <span class="sp-title"><?= e($p['title']) ?></span>
+                                        <?php if (!empty($p['year'])): ?><span class="sp-bars"></span><span class="sp-end"><?= e((string)$p['year']) ?></span><?php endif; ?>
                                     </span>
                                 </button>
                             </li>
@@ -580,20 +829,30 @@ function library_excerpt(?string $html): string {
                     Requests for manuscript access are not open on this site yet. Please ask a librarian in person.
                 </div>
             <?php elseif (!$requests): ?>
+                <div class="lib-request-view" id="libRequestView" data-view="rows" data-view-console="shelf">
+                <?php library_request_view_prepaint(); ?>
+                <ul class="lib-reqs" id="libRequestList"></ul>
                 <div class="lib-empty">
                     <span class="material-symbols-outlined" aria-hidden="true">lock_open</span>
                     Nothing waiting and nothing unlocked. Ask for a manuscript from its paper's page, under Manuscript.
                 </div>
+                </div>
             <?php else: ?>
-                <ul class="lib-reqs">
-                    <?php foreach ($requests as $r): $pid = (int)$r['paper_id']; ?>
+                <div class="lib-request-view" id="libRequestView" data-view="rows" data-view-console="shelf">
+                <?php library_request_view_prepaint(); ?>
+                <ul class="lib-reqs" id="libRequestList">
+                    <?php foreach ($requests as $r): $pid = (int)$r['paper_id']; $title = (string)($r['paper_title'] ?? 'A paper no longer in the repository'); ?>
                         <?php /* data-ms-row and the three hooks inside it are how
                                  includes/manuscript_timer.php rewrites this row where it
                                  stands when a librarian grants the request, or when the grant
                                  runs out, instead of the reader having to refresh the page to
                                  find out. */ ?>
-                        <li class="lib-req" data-ms-row="<?= $pid ?>" data-ms-req="<?= (int)$r['request_id'] ?>"
+                        <li class="lib-req" id="request-<?= (int)$r['request_id'] ?>" data-ms-row="<?= $pid ?>" data-ms-req="<?= (int)$r['request_id'] ?>"
+                            data-name="<?= e(mb_strtolower($title)) ?>" data-year="<?= (int)($r['paper_year'] ?? 0) ?>"
+                            data-recent="<?= (int)strtotime((string)$r['created_at']) ?>" data-request-id="<?= (int)$r['request_id'] ?>"
+                            data-search="<?= e(mb_strtolower($title . ' ' . ($r['author_names'] ?? '') . ' ' . ($r['paper_program'] ?? ''))) ?>"
                             data-ms-href="<?= e(BASE_URL) ?>/archive/view_paper.php?id=<?= $pid ?>#pd-sec-manuscript">
+                            <?php library_request_book($r); ?>
                             <span class="material-symbols-outlined lib-req-ico" data-ms-ico aria-hidden="true"><?= $r['is_active'] ? 'lock_open' : 'hourglass_top' ?></span>
                             <div class="lib-req-main">
                                 <a class="lib-req-title" href="<?= e(BASE_URL) ?>/archive/view_paper.php?id=<?= $pid ?>"><?= e($r['paper_title'] ?? 'A paper no longer in the repository') ?></a>
@@ -631,18 +890,38 @@ function library_excerpt(?string $html): string {
                         </li>
                     <?php endforeach; ?>
                 </ul>
+                <div class="lib-empty" id="libRequestNoMatch" hidden><span class="material-symbols-outlined" aria-hidden="true">search_off</span>No request matches that search.</div>
+                </div>
             <?php endif; ?>
 
         <?php else: /* history */ ?>
 
-            <p class="lib-note">Requests that were turned down, and access that has run out.</p>
+            <div class="lib-history-head">
+                <p class="lib-note">Requests that were turned down, and access that has run out. For each paper, only its latest request can be made again.</p>
+                <?php if ($history && manuscript_request_history_hidden_ready()): ?>
+                    <form method="post" action="my_library.php?tab=history">
+                        <?= csrf_field(); ?>
+                        <input type="hidden" name="action" value="clear_request_history">
+                        <button type="submit" class="btn-sm-maroon"
+                                data-confirm="Clear <?= count($history) ?> past request<?= count($history) === 1 ? '' : 's' ?> from My Library? Waiting requests and active access will stay. Librarians will retain their records.">
+                            <span class="material-symbols-outlined mi-18" aria-hidden="true">delete_sweep</span> Clear request history
+                        </button>
+                    </form>
+                <?php endif; ?>
+            </div>
             <?php if (!$history): ?>
+                <div class="lib-request-view" id="libRequestView" data-view="rows" data-reset-view="rows" data-view-console="shelf">
+                <?php library_request_view_prepaint(true); ?>
+                <ul class="lib-reqs" id="libRequestList"></ul>
                 <div class="lib-empty">
                     <span class="material-symbols-outlined" aria-hidden="true">history</span>
                     No past requests.
                 </div>
+                </div>
             <?php else: ?>
-                <ul class="lib-reqs">
+                <div class="lib-request-view" id="libRequestView" data-view="rows" data-reset-view="rows" data-view-console="shelf">
+                <?php library_request_view_prepaint(true); ?>
+                <ul class="lib-reqs" id="libRequestList">
                     <?php foreach ($history as $r):
                         $pid   = (int)$r['paper_id'];
                         /* 'denied', 'revoked' or 'expired'. A grant a librarian took
@@ -654,7 +933,11 @@ function library_excerpt(?string $html): string {
                         $title = $r['paper_title'] ?? 'A paper no longer in the repository';
                         $ico   = $state === 'denied' ? 'block' : ($state === 'revoked' ? 'lock' : 'lock_clock');
                     ?>
-                        <li class="lib-req">
+                        <li class="lib-req" id="request-<?= (int)$r['request_id'] ?>"
+                            data-name="<?= e(mb_strtolower($title)) ?>" data-year="<?= (int)($r['paper_year'] ?? 0) ?>"
+                            data-recent="<?= (int)strtotime((string)$r['created_at']) ?>" data-request-id="<?= (int)$r['request_id'] ?>"
+                            data-search="<?= e(mb_strtolower($title . ' ' . ($r['author_names'] ?? '') . ' ' . ($r['paper_program'] ?? ''))) ?>">
+                            <?php library_request_book($r); ?>
                             <span class="material-symbols-outlined lib-req-ico" aria-hidden="true"><?= $ico ?></span>
                             <div class="lib-req-main">
                                 <?php if ((int)$r['readable'] === 1): ?>
@@ -675,7 +958,11 @@ function library_excerpt(?string $html): string {
                                         <strong>Ended</strong> on <?= e(date('F j, Y g:i A', strtotime((string)$r['expires_at']))) ?>,
                                         after <?= (int)$r['duration_hours'] ?> hour<?= (int)$r['duration_hours'] === 1 ? '' : 's' ?> of access.
                                     <?php endif; ?>
-                                    <?php if ($r['superseded']): ?>You have asked again since.<?php endif; ?>
+                                    <?php if ($r['superseded']): ?>
+                                        This is an earlier request. <a class="lib-latest-link" href="my_library.php?tab=<?= e($r['latest_request']['tab']) ?>#request-<?= (int)$r['latest_request']['id'] ?>">View the latest request</a>.
+                                    <?php elseif (!(int)$r['readable']): ?>
+                                        This paper is no longer in the repository, so a new request cannot be made.
+                                    <?php endif; ?>
                                 </p>
                             </div>
                             <?php if ($r['can_again']): ?>
@@ -694,12 +981,47 @@ function library_excerpt(?string $html): string {
                         </li>
                     <?php endforeach; ?>
                 </ul>
+                <div class="lib-empty" id="libRequestNoMatch" hidden><span class="material-symbols-outlined" aria-hidden="true">search_off</span>No past request matches that search.</div>
+                </div>
             <?php endif; ?>
 
         <?php endif; ?>
         </div>
     </div>
 </main>
+
+<script nonce="<?= csp_nonce() ?>">
+document.addEventListener('DOMContentLoaded', function () {
+    var tools = document.querySelector('.lib-tools');
+    if (!tools) return;
+    var pops = Array.prototype.slice.call(tools.querySelectorAll('.lib-tool-pop'));
+    function closeAll(except) {
+        pops.forEach(function (pop) {
+            var open = pop === except;
+            pop.classList.toggle('is-open', open);
+            pop.querySelector('.lib-tool-trigger').setAttribute('aria-expanded', open ? 'true' : 'false');
+        });
+    }
+    document.addEventListener('click', function (event) {
+        var trigger = event.target.closest ? event.target.closest('.lib-tool-trigger') : null;
+        if (trigger && tools.contains(trigger)) {
+            var pop = trigger.closest('.lib-tool-pop');
+            closeAll(pop.classList.contains('is-open') ? null : pop);
+            return;
+        }
+        if (!event.target.closest || !event.target.closest('.lib-tool-group')) closeAll(null);
+        else if (event.target.closest('[data-sort], [data-view-as]')) closeAll(null);
+    });
+    document.addEventListener('keydown', function (event) {
+        if (event.key !== 'Escape') return;
+        var open = tools.querySelector('.lib-tool-pop.is-open');
+        if (open) { closeAll(null); open.querySelector('.lib-tool-trigger').focus(); }
+    });
+    window.addEventListener('resize', function () {
+        if (window.innerWidth > 700) closeAll(null);
+    });
+});
+</script>
 
 <?php if ($tab === 'saved'): ?>
 <?php /* The book viewer: a pressed book is taken off the shelf, turned, and
@@ -726,15 +1048,23 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    /* ---- Shelf or list ---- */
-    function showAs(view) {
+    /* ---- Three library views, shared with the profile menu ---- */
+    function showAs(view, persist) {
+        if (['rows', 'shelf', 'bookshelf'].indexOf(view) === -1) { view = 'rows'; }
         root.setAttribute('data-view', view);
+        document.documentElement.setAttribute('data-view', view);
         each(document.querySelectorAll('[data-view-as]'), function (b) {
             var on = b.getAttribute('data-view-as') === view;
             b.classList.toggle('active', on);
             b.setAttribute('aria-pressed', on ? 'true' : 'false');
         });
-        try { localStorage.setItem('papel.libraryView', view); } catch (err) {}
+        if (persist !== false) {
+            try { localStorage.setItem('papel_view', view); } catch (err) {}
+        }
+        each(document.querySelectorAll('input[name="qs_view"]'), function (input) {
+            input.checked = input.value === view;
+        });
+        if (window.papelSyncQuickSettings) { window.papelSyncQuickSettings(); }
         tally();
     }
 
@@ -764,7 +1094,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         /* An empty library says how to fill it, on the shelf itself; a search
            that finds nothing says so underneath, in either view. */
-        var listView = root.getAttribute('data-view') === 'list';
+        var listView = root.getAttribute('data-view') === 'rows';
         shelfNone.hidden = all > 0;
         noMatch.hidden   = !(all > 0 && showing === 0);
         if (all === 0 && listView) { shelfNone.hidden = false; root.setAttribute('data-view', 'shelf'); }
@@ -876,7 +1206,82 @@ document.addEventListener('DOMContentLoaded', function () {
         else { showAs(t.getAttribute('data-view-as')); }
     });
 
-    showAs(root.getAttribute('data-view') === 'list' ? 'list' : 'shelf');
+    document.addEventListener('change', function (e) {
+        if (e.target && e.target.name === 'qs_view' && e.target.closest('[data-vs-form]')) {
+            showAs(e.target.value);
+        }
+    });
+
+    showAs(root.getAttribute('data-view'), false);
+});
+</script>
+<?php endif; ?>
+
+<?php if ($tab !== 'saved'): ?>
+<script nonce="<?= csp_nonce() ?>">
+document.addEventListener('DOMContentLoaded', function () {
+    var root = document.getElementById('libRequestView');
+    var list = document.getElementById('libRequestList');
+    var search = document.getElementById('libSearch');
+    var noMatch = document.getElementById('libRequestNoMatch');
+    if (!root || !list) { return; }
+    function each(nodes, fn) { Array.prototype.forEach.call(nodes, fn); }
+    function showAs(view, persist) {
+        if (['rows', 'shelf', 'bookshelf'].indexOf(view) === -1) { view = 'rows'; }
+        root.setAttribute('data-view', view);
+        document.documentElement.setAttribute('data-view', view);
+        each(document.querySelectorAll('[data-view-as]'), function (b) {
+            var on = b.getAttribute('data-view-as') === view;
+            b.classList.toggle('active', on);
+            b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+        each(document.querySelectorAll('input[name="qs_view"]'), function (input) {
+            input.checked = input.value === view;
+        });
+        if (persist !== false && !root.hasAttribute('data-reset-view')) {
+            try { localStorage.setItem('papel_view', view); } catch (err) {}
+            if (window.papelSyncQuickSettings) { window.papelSyncQuickSettings(); }
+        }
+    }
+    function sortBy(key) {
+        var order = {
+            recent: function (a, b) { return (+b.dataset.recent) - (+a.dataset.recent) || (+b.dataset.requestId) - (+a.dataset.requestId); },
+            title: function (a, b) { return a.dataset.name.localeCompare(b.dataset.name); },
+            year: function (a, b) { return (+b.dataset.year) - (+a.dataset.year) || a.dataset.name.localeCompare(b.dataset.name); }
+        };
+        if (!order[key]) { return; }
+        Array.prototype.slice.call(list.children).sort(order[key]).forEach(function (row) { list.appendChild(row); });
+        each(document.querySelectorAll('[data-sort]'), function (b) {
+            var on = b.getAttribute('data-sort') === key;
+            b.classList.toggle('active', on);
+            b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+    }
+    function filter() {
+        var q = search ? search.value.trim().toLowerCase() : '';
+        var visible = 0;
+        each(list.children, function (row) {
+            row.hidden = q !== '' && row.getAttribute('data-search').indexOf(q) === -1;
+            if (!row.hidden) { visible++; }
+        });
+        if (noMatch) { noMatch.hidden = visible !== 0; }
+    }
+    document.addEventListener('click', function (e) {
+        var button = e.target.closest ? e.target.closest('[data-sort], [data-view-as]') : null;
+        if (!button) { return; }
+        if (button.hasAttribute('data-sort')) { sortBy(button.getAttribute('data-sort')); }
+        else { showAs(button.getAttribute('data-view-as')); }
+    });
+    document.addEventListener('change', function (e) {
+        if (e.target && e.target.name === 'qs_view' && e.target.closest('[data-vs-form]')) { showAs(e.target.value); }
+    });
+    if (search) { search.addEventListener('input', filter); }
+    var initial = 'rows';
+    if (!root.hasAttribute('data-reset-view')) {
+        try { initial = localStorage.getItem('papel_view') || localStorage.getItem('papel.libraryView') || 'rows'; } catch (err) {}
+    }
+    if (initial === 'list') { initial = 'rows'; }
+    showAs(initial, false);
 });
 </script>
 <?php endif; ?>

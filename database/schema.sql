@@ -130,6 +130,7 @@ CREATE TABLE IF NOT EXISTS `manuscript_requests` (
   `denied_by` int(11) DEFAULT NULL,
   `denied_at` datetime DEFAULT NULL,
   `created_at` datetime NOT NULL,
+  `student_hidden_at` datetime DEFAULT NULL,
   PRIMARY KEY (`request_id`),
   KEY `idx_student` (`student_user_id`),
   KEY `idx_paper` (`paper_id`),

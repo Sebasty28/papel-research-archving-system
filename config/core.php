@@ -2320,6 +2320,18 @@ function manuscript_requests_ready(): bool
     return $ready;
 }
 
+/** Whether requests can be hidden from My Library without erasing the record. */
+function manuscript_request_history_hidden_ready(): bool
+{
+    static $ready = null;
+    if ($ready === null) {
+        if (!manuscript_requests_ready()) return false;
+        $r = db()->query("SHOW COLUMNS FROM manuscript_requests LIKE 'student_hidden_at'");
+        $ready = $r && $r->num_rows > 0;
+    }
+    return $ready;
+}
+
 /**
  * Whether a student currently holds an open grant on one paper's manuscript.
  *
@@ -5776,12 +5788,22 @@ function schema_gaps(): array
                       . "  denied_by       INT(11)      NULL,\n"
                       . "  denied_at       DATETIME     NULL,\n"
                       . "  created_at      DATETIME     NOT NULL,\n"
+                      . "  student_hidden_at DATETIME  NULL,\n"
                       . "  PRIMARY KEY (request_id),\n"
                       . "  KEY idx_student (student_user_id),\n"
                       . "  KEY idx_paper (paper_id),\n"
                       . "  KEY idx_status_expires (status, expires_at),\n"
                       . "  KEY idx_created (created_at)\n"
                       . ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
+        ];
+    }
+
+    if (manuscript_requests_ready() && !manuscript_request_history_hidden_ready()) {
+        $gaps[] = [
+            'key' => 'manuscript_request_history_hidden',
+            'what' => 'manuscript_requests.student_hidden_at is missing',
+            'effect' => 'Students cannot clear their request history without erasing the librarian\'s record.',
+            'sql' => 'ALTER TABLE manuscript_requests ADD COLUMN student_hidden_at DATETIME NULL DEFAULT NULL AFTER created_at;',
         ];
     }
 

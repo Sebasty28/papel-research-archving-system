@@ -187,8 +187,9 @@ define('PAPEL_SHELF_VIEW_PRINTED', true);
    The tones are mixed from --ink and --white rather than being greys of their
    own. The same construction and the same figures as My Library's shelf. */
 html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list {
-    --bw: 108px;                 /* a book's width  */
-    --bh: 156px;                 /* its height      */
+    --shelf-scale: 1;
+    --bw: calc(108px * var(--shelf-scale)); /* a book's width */
+    --bh: calc(156px * var(--shelf-scale)); /* its height */
     --bd: 20px;                  /* its thickness   */
     --board: 20px;               /* the shelf board */
     --row: calc(var(--bh) + 38px + var(--board));
@@ -235,7 +236,11 @@ html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list.is-scrollable,
 html:is([data-view="shelf"], [data-view="bookshelf"]) .dash-shell .paper-list.is-scrollable {
     height: auto; max-height: none; min-height: 0; flex: none; overflow: visible;
 }
-/* A book is sized by the shelf, not by how roomy the reader likes a card. */
+/* Density changes the books themselves, so it also changes how many fit on a
+   board. The row and board positions use --bh and follow the new height. */
+html:is([data-view="shelf"], [data-view="bookshelf"])[data-density="compact"] .paper-list { --shelf-scale: .88; }
+html:is([data-view="shelf"], [data-view="bookshelf"])[data-density="comfortable"] .paper-list { --shelf-scale: 1.12; }
+/* Card padding rules also apply to .paper-item; shelves keep their own edges. */
 html:is([data-view="shelf"], [data-view="bookshelf"])[data-density="compact"] .paper-list,
 html:is([data-view="shelf"], [data-view="bookshelf"])[data-density="comfortable"] .paper-list { padding: 0 1.25rem; }
 
@@ -538,12 +543,17 @@ html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list .sp-title {
    It is the Hardbounds book turned a quarter round, not a second book: the
    spine is a face it always had. So the cover, the ribbon and everything the
    viewer copies are the same, and only the turn and the room it takes differ. */
+/* Both the wall's repeated boards and the books must resolve cqw against the
+   same container. When the list itself was the container, its own --row used
+   the viewport width while its children used the list width; at Comfortable
+   density the boards landed far below the books. */
+html[data-view="bookshelf"] #mainCol[data-view-console="shelf"] { container-type: inline-size; }
 html[data-view="bookshelf"] .paper-list {
     /* **The shelf measures its own books.** A thickness in pixels made a page
        of twenty stand in the left-hand half of a desktop shelf with the rest
        of the board bare, which reads as a shelf somebody has taken books off.
        They are a share of the shelf's own width instead (container query
-       units: the well is the container, so this follows the sidebar being
+       units: the result column is the container, so this follows the sidebar being
        folded, the window, and the view, none of which a number can). The four
        thicknesses average about 4.75cqw, so a full page of twenty comes to
        about 95% of the board and the slots below share out the rest.
@@ -552,11 +562,14 @@ html[data-view="bookshelf"] .paper-list {
        a sliver with no room for a title, and on a very wide screen a book
        would grow into a brick. The height is clamped the same way, so a thin
        phone book is not also a tall one. */
-    container-type: inline-size;
-    --bd: clamp(26px, 4.0cqw, 72px);
+    /* browse_console.php makes .paper-list a named query container for Cards
+       and Rows. Bookshelf uses the column instead, so the wall and the book
+       resolve cqw against the same width. */
+    container: normal;
+    --bd: clamp(calc(26px * var(--shelf-scale)), calc(4.0cqw * var(--shelf-scale)), calc(72px * var(--shelf-scale)));
     /* About six times the thickness of a middling book, which is the
        proportion of a bound A4 paper seen on its spine. */
-    --bh: clamp(190px, 29cqw, 330px);
+    --bh: clamp(calc(190px * var(--shelf-scale)), calc(29cqw * var(--shelf-scale)), calc(330px * var(--shelf-scale)));
     display: flex; flex-wrap: wrap;
     align-items: flex-end; align-content: flex-start;
     gap: 0;
@@ -584,9 +597,9 @@ html[data-view="bookshelf"] .paper-list .paper-card {
     perspective-origin: 50% 62%;
 }
 /* Four thicknesses and three heights, by the paper's own number. */
-html[data-view="bookshelf"] .paper-list :is(.paper-item, .paper-card):has(> .shelf-book[data-thick="1"]) { --bd: clamp(29px, 4.4cqw, 79px); }
-html[data-view="bookshelf"] .paper-list :is(.paper-item, .paper-card):has(> .shelf-book[data-thick="2"]) { --bd: clamp(33px, 5.0cqw, 90px); }
-html[data-view="bookshelf"] .paper-list :is(.paper-item, .paper-card):has(> .shelf-book[data-thick="3"]) { --bd: clamp(37px, 5.6cqw, 101px); }
+html[data-view="bookshelf"] .paper-list :is(.paper-item, .paper-card):has(> .shelf-book[data-thick="1"]) { --bd: clamp(calc(29px * var(--shelf-scale)), calc(4.4cqw * var(--shelf-scale)), calc(79px * var(--shelf-scale))); }
+html[data-view="bookshelf"] .paper-list :is(.paper-item, .paper-card):has(> .shelf-book[data-thick="2"]) { --bd: clamp(calc(33px * var(--shelf-scale)), calc(5.0cqw * var(--shelf-scale)), calc(90px * var(--shelf-scale))); }
+html[data-view="bookshelf"] .paper-list :is(.paper-item, .paper-card):has(> .shelf-book[data-thick="3"]) { --bd: clamp(calc(37px * var(--shelf-scale)), calc(5.6cqw * var(--shelf-scale)), calc(101px * var(--shelf-scale))); }
 html[data-view="bookshelf"] .paper-list :is(.paper-item, .paper-card):has(> .shelf-book[data-tall="1"]) { --book-h: calc(var(--bh) - 9px); }
 html[data-view="bookshelf"] .paper-list :is(.paper-item, .paper-card):has(> .shelf-book[data-tall="2"]) { --book-h: calc(var(--bh) - 17px); }
 

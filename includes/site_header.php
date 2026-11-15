@@ -336,6 +336,9 @@ $login_notif_popup_items = $show_login_notif_popup
                              control, two menus, as the dark-mode button above is.
                              Change both or neither. */ ?>
                     <?php zen_switch('sheet'); ?>
+                    <?php /* And the same two view controls the avatar menu
+                             carries, from includes/view_switcher.php. */ ?>
+                    <?php view_switcher('sheet'); ?>
                     <a href="<?= e(BASE_URL.'/app/auth/logout.php') ?>">
                         <span class="nav-action-content"><span class="material-symbols-outlined mi-20" aria-hidden="true">logout</span><span class="nav-action-text">Logout</span></span>
                     </a>
@@ -452,6 +455,13 @@ $login_notif_popup_items = $show_login_notif_popup
                             <span class="material-symbols-outlined mi-20" data-theme-icon aria-hidden="true">dark_mode</span><span data-theme-label>Dark mode</span>
                         </button>
                         <?php zen_switch('dropdown'); ?>
+                        <?php /* Result view and density, printed by includes/view_switcher.php
+                                 into both profile menus the way the switch
+                                 above is. The same keys and the same radio
+                                 names Quick Settings and Settings > Appearance
+                                 use, so a choice made here is the same act.
+                                 Change both menus or neither. */ ?>
+                        <?php view_switcher('dropdown'); ?>
                         <a href="<?= e(BASE_URL.'/app/auth/logout.php') ?>">
                             <span class="material-symbols-outlined mi-20">logout</span> Logout
                         </a>

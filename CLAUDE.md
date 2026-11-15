@@ -1254,6 +1254,80 @@ that for real means changing an account's password, which writes
 `password_changes` and emails whoever created it, and mail sends from this
 machine.
 
+### How papers are shown, in the profile menu
+
+`includes/view_switcher.php`, required from `site_head.php` beside
+`zen_mode.php`: the three controls Settings > Appearance already carried, put
+where somebody reading a list of papers wants them. `view_switcher($where)`
+prints them into **both** profile menus, the avatar dropdown and the phone
+sheet, the way `zen_switch()` prints one control into both. Added 15 November
+2026 at the owner's request.
+
+| | |
+|---|---|
+| How papers are shown | the chooser dialog, `[data-view-tour]`, `includes/view_welcome.php` |
+| Result view | `papel_view` -> `html[data-view]`: cards, rows, shelf, bookshelf |
+| Result density | `papel_density` -> `html[data-density]`: default, comfortable, compact |
+
+**It is not a second source of truth.** The radios carry the names Quick
+Settings gives them (`qs_view`, `qs_density`), so `syncQuickSettings()` in
+`browse_console_js.php` re-ticks these copies with no change at all, and the
+handler here writes the same keys and then calls that function so every other
+copy follows. A choice made in the menu, in Quick Settings, in the context
+menu or on the Appearance tab is one act.
+
+Five things that are not guessable from the code:
+
+- **The avatar dropdown stops every click inside itself from bubbling**
+  (`site_footer.php`), which is how pressing the menu does not close the menu.
+  So a document listener in the ordinary phase never hears a button in there.
+  Zen Mode's switch was already delegated in the **capture** phase for this
+  reason, and `view_welcome.php`'s `[data-view-tour]` listener was moved to
+  capture when this was added, which is what lets the chooser open from a
+  menu at all. A `change` event is a different event and is not stopped, which
+  is why the radios need no such care.
+- **The radios live in a `<form>` of their own.** Radios with the same name
+  belong to one group per form owner, so outside a form this menu's "Compact"
+  and the Quick Settings panel's "Compact" are the same radio, and choosing
+  here leaves that panel showing nothing selected. The context menu in
+  `browse_console_js.php` is a form for exactly this reason.
+- **The chosen segment is lettered `#fff`, not `--white`.** This is the one
+  place the file does not read a token, for the reason `.btn-sm-maroon` and
+  the accessibility tab do the same: `--maroon-surface` is a real maroon in
+  both palettes and does not lift, while `--white` under Old Night is the dark
+  surface `#2D2F32`. Lettered `--white` the chosen segment measured **1.5:1**
+  on its own fill in the dark palette; it is **10.03:1** now, read off the
+  computed colours rather than judged by eye.
+- **Hardbounds and Bookshelf appear only where a shelf can be drawn**, which a
+  console says with `data-view-console="shelf"` on `#mainCol`. That rule is now
+  in **three** places: `shelfOffered()` here, the same in
+  `browse_console_js.php`, and the pre-paint script in `browse_console.php`.
+  Change all three or none. A page with no console offers Cards and Rows and
+  reads a stored shelf as Cards, **without writing the clamp back**, so the
+  reader's real answer is waiting on the page that can draw it.
+- **The options are built in script.** Whether a shelf is on offer is a fact
+  about the page's own column, and this file is required from `site_head.php`,
+  which runs long before that column exists.
+
+`browse_console_js.php`'s `qs_density` branch now re-ticks every copy, as its
+`qs_view` branch already did: three copies of that switch can be on one page,
+and the two that were not pressed went on showing the density just changed
+away from.
+
+Driven against the running site for a student with papers, in both palettes, at
+1400px and 390px: the options built, each press changing `<html>` and storage
+and re-ticking every other copy, the chooser opening from inside the menu and
+marking the view in force, the setting surviving a reload, My Library offering
+only Cards and Rows while leaving a stored `shelf` alone, the Appearance tab
+following a press made in the menu, and the sheet's segments at 390px with no
+overflow. Two things the harness taught, both of which made a check pass for
+the wrong reason first: **the splash and the loading skeleton are full-window
+layers**, so until they lift `elementFromPoint` at any control answers `<html>`
+and a press lands on the cover (the phone sheet never opened, and "no segment
+overflows" was true because every segment was 0px wide); and a bare coordinate
+on a shelf lands on a book, so "a click outside the menu" aimed there opens the
+book viewer instead of closing the menu.
+
 ### Zen Mode
 
 A switch in the profile menu that puts the page's furniture away:
@@ -3448,8 +3522,8 @@ out, of different thicknesses and heights, on the boards Hardbounds stands its b
 - Hovered, the book is drawn 18px out of the row and 8px up. The bookmark sits above the spine;
   saved, the ribbon stands out of the top of the book behind the spine, turned to face the reader
   as the spine is.
-- **My Library has no Bookshelf.** The tooltip on its own shelf toggle now says Hardbounds, and
-  nothing else changed there.
+- **My Library originally had no Bookshelf.** It now offers Rows, Hardbounds and
+  Bookshelf for Saved and Requests; History opens in Rows by default.
 
 Checked against the running site at 1280px and 390px, in Old Night, and on the dashboard: the
 options in Quick Settings, no sideways scroll, the ribbons on saved papers, the hover, the flight

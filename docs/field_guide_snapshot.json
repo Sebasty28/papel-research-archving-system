@@ -1,5 +1,5 @@
 {
- "built": "2026-11-15 13:00",
+ "built": "2026-11-15 16:09",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -101,7 +101,7 @@
    "lines": 179
   },
   "app/my_library.php": {
-   "lines": 887
+   "lines": 1292
   },
   "app/paper_file.php": {
    "lines": 182
@@ -161,7 +161,7 @@
    "lines": 954
   },
   "archive/index.php": {
-   "lines": 2845
+   "lines": 2894
   },
   "archive/login.php": {
    "lines": 1093
@@ -176,7 +176,7 @@
    "lines": 265
   },
   "config/core.php": {
-   "lines": 5859
+   "lines": 5881
   },
   "config/error_handler.php": {
    "lines": 228
@@ -218,10 +218,10 @@
    "lines": 205
   },
   "includes/browse_console.php": {
-   "lines": 1339
+   "lines": 1340
   },
   "includes/browse_console_js.php": {
-   "lines": 1633
+   "lines": 1644
   },
   "includes/card_collapse.php": {
    "lines": 94
@@ -329,16 +329,16 @@
    "lines": 384
   },
   "includes/shelf_view.php": {
-   "lines": 680
+   "lines": 693
   },
   "includes/site_footer.php": {
    "lines": 766
   },
   "includes/site_head.php": {
-   "lines": 1781
+   "lines": 1786
   },
   "includes/site_header.php": {
-   "lines": 734
+   "lines": 744
   },
   "includes/skeleton.php": {
    "lines": 742
@@ -355,8 +355,11 @@
   "includes/validation.php": {
    "lines": 50
   },
+  "includes/view_switcher.php": {
+   "lines": 291
+  },
   "includes/view_welcome.php": {
-   "lines": 306
+   "lines": 325
   },
   "includes/xlsx_writer.php": {
    "lines": 334

@@ -205,19 +205,22 @@
        set rows there is handed cards back. */
     var VIEW_KEY = 'papel_view';
 
-    /* Shelf only where the console can draw one, which it says by marking its
-       column data-view-console="shelf" (the repository and the student
-       dashboard; see includes/shelf_view.php). The stored setting is one per
+    /* Shelf only where the console or My Library can draw one, marked by
+       data-view-console="shelf". The stored setting is one per
        device and shared by every console, so everything that reads it has to
        cope with a value this page does not offer: currentView() hands back
-       cards, exactly as the pre-paint script in browse_console.php does, and
-       the two must keep agreeing. */
+       Cards on consoles without a shelf, and Rows in My Library when Cards
+       was saved elsewhere. */
     function shelfOffered() {
         var col = document.querySelector('#mainCol[data-view-console]');
-        return !!col && col.getAttribute('data-view-console') === 'shelf';
+        return (!!col && col.getAttribute('data-view-console') === 'shelf')
+            || !!document.querySelector('#libSaved[data-view-console="shelf"], #libRequestView[data-view-console="shelf"]');
+    }
+    function libraryView() {
+        return !!document.querySelector('#libSaved, #libRequestView');
     }
     function viewOptions() {
-        var o = [['cards', 'Cards'], ['rows', 'Rows']];
+        var o = libraryView() ? [['rows', 'Rows']] : [['cards', 'Cards'], ['rows', 'Rows']];
         /* "shelf" is the value Hardbounds has always been stored under; it was
            called Shelf until Bookshelf, the same books stood spine out, came
            beside it. The value stays so a saved choice still means the same. */
@@ -228,7 +231,7 @@
     function asView(v) {
         if (v === 'rows') { return 'rows'; }
         if ((v === 'shelf' || v === 'bookshelf') && shelfOffered()) { return v; }
-        return 'cards';
+        return libraryView() ? 'rows' : 'cards';
     }
 
     function currentView() {
@@ -531,6 +534,14 @@
         } else if (e.target.name === 'qs_density') {
             document.documentElement.setAttribute('data-density', e.target.value);
             try { localStorage.setItem('papel_density', e.target.value); } catch (err) {}
+            /* Every copy of the switch, as the view branch above does: the
+               panel, the context menu and the profile menu's segmented row
+               (includes/view_switcher.php) can all be on one page, and until
+               this was here the two that were not pressed went on showing the
+               density that had just been changed away from. */
+            document.querySelectorAll('input[name="qs_density"]').forEach(function (i) {
+                i.checked = (i.value === e.target.value);
+            });
         } else if (e.target.name === 'qs_color') {
             document.documentElement.setAttribute('data-color', e.target.value);
             // Dark is a property of the palette, so it changes with it.

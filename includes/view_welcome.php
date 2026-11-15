@@ -233,16 +233,24 @@ html:not([data-mode="dark"]) .vw-shot-dark { display: none; }
 
     var VIEW_KEY = 'papel_view';
     var SEEN_KEY = 'papel_view_tour_seen';
+    var libraryRoot = document.querySelector('#libSaved, #libRequestView');
+    if (libraryRoot) {
+        var cardsOption = dlg.querySelector('[data-vw-view="cards"]');
+        if (cardsOption) { cardsOption.remove(); }
+    }
 
     function stored() {
-        try { return localStorage.getItem(VIEW_KEY) || 'cards'; } catch (e) { return 'cards'; }
+        try {
+            var view = localStorage.getItem(VIEW_KEY) || 'cards';
+            return libraryRoot && view === 'cards' ? 'rows' : view;
+        } catch (e) { return libraryRoot ? 'rows' : 'cards'; }
     }
-    /* Only the repository and the student dashboard can draw a shelf, and they
-       say so on their results column. The same question browse_console_js.php
-       asks, asked the same way. */
+    /* The repository, student dashboard and My Library mark the view root when
+       they can draw a shelf. The same question browse_console_js.php asks. */
     function shelfOffered() {
         var col = document.querySelector('#mainCol[data-view-console]');
-        return !!col && col.getAttribute('data-view-console') === 'shelf';
+        return (!!col && col.getAttribute('data-view-console') === 'shelf')
+            || !!document.querySelector('#libSaved[data-view-console="shelf"], #libRequestView[data-view-console="shelf"]');
     }
 
     function mark(view) {
@@ -252,6 +260,7 @@ html:not([data-mode="dark"]) .vw-shot-dark { display: none; }
     }
 
     function choose(view) {
+        if (libraryRoot && view === 'cards') { view = 'rows'; }
         try { localStorage.setItem(VIEW_KEY, view); } catch (e) {}
         /* The attribute only where the page can honour it: a desk that draws
            no shelf would show nothing for Hardbounds, and the reader would be
@@ -260,6 +269,8 @@ html:not([data-mode="dark"]) .vw-shot-dark { display: none; }
         if (view === 'cards' || view === 'rows' || shelfOffered()) {
             document.documentElement.setAttribute('data-view', view);
         }
+        var libraryButton = document.querySelector('[data-view-as="' + view + '"]');
+        if (libraryButton && document.querySelector('#libSaved, #libRequestView')) { libraryButton.click(); }
         document.querySelectorAll('input[name="qs_view"]').forEach(function (i) {
             i.checked = (i.value === view);
         });
@@ -278,13 +289,21 @@ html:not([data-mode="dark"]) .vw-shot-dark { display: none; }
         if (!dlg.open) { dlg.showModal(); }
     }
 
-    /* Settings, and anything else that wants to offer another look. */
+    /* Settings, the two profile menus, and anything else that wants to offer
+       another look.
+
+       In the **capture** phase, which is what lets the profile menus carry
+       this at all: the avatar dropdown stops every click inside itself from
+       bubbling (includes/site_footer.php), which is how pressing the menu does
+       not close the menu, so a listener here in the ordinary phase never heard
+       the button and it did nothing. Zen Mode's switch is delegated the same
+       way for the same reason. */
     document.addEventListener('click', function (e) {
         var btn = e.target.closest ? e.target.closest('[data-view-tour]') : null;
         if (!btn) { return; }
         e.preventDefault();
         open();
-    });
+    }, true);
 
     dlg.addEventListener('close', function () {
         try { localStorage.setItem(SEEN_KEY, '1'); } catch (e) {}

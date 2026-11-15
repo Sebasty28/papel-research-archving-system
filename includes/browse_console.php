@@ -22,7 +22,7 @@
     var v;
     try { v = localStorage.getItem('papel_view') || localStorage.getItem('papel_desk_view'); }
     catch (e) {}
-    /* Shelf is offered by the repository and the student dashboard, not by
+    /* Shelf is offered by the repository, the student dashboard and My Library, not by
        the review desks: a desk is a queue worked through by status, not a
        shelf browsed. The setting is one per device and shared by every
        console, so a page that cannot draw a shelf falls back to cards rather
@@ -285,8 +285,8 @@ html[data-view="rows"] .paper-list .paper-item .paper-program {
 
     /* The stacked fallback needs the full author and date again. Retaining
        the grid's ellipsis and mask clips words even though there is room to
-       wrap them. Below 900px neither is shown at all: see the phone rows at
-       the foot of this file. */
+       wrap them. The shared phone rule below hides them; the public repository
+       overrides it with compact two-line rows on phones. */
     html[data-view="rows"] .paper-list .paper-item .paper-authors {
         grid-column: auto;
         white-space: normal;
@@ -1288,14 +1288,15 @@ html.sidebar-left .js-side-hide .side-icon-right { display: inline-flex; }
     .count-words { display: none; }
 }
 
-/* Rows stay rows on a phone, and a phone row is two columns: the title, which
+/* Shared rows stay rows on a phone, and a phone row is two columns: the title, which
    is what a result is read by and reads perfectly well cut short, and the one
    thing there is to do with it. The authors, the date line and the programme
    go: four columns at a legible type size need about 35rem, and the only ways
    to find that on a 390px screen are type too small to read or a well that
    scrolls sideways, which hides half of every row behind a gesture nothing on
    the page suggests. Cards is the view that shows the rest, one result at a
-   time, and it is a tap away on the same toolbar. */
+   time, and it is a tap away on the same toolbar. The public repository shows
+   the author and date in a second compact line instead. */
 @media (max-width: 900px) {
     html[data-view="rows"] .paper-list .paper-item {
         display: grid;

@@ -475,7 +475,7 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
                              each view: the words "Hardbounds" and "Bookshelf" are
                              not ones anybody can picture, which is the whole
                              reason that dialog has screenshots in it. */ ?>
-                    <span>Cards, Rows, Hardbounds or Bookshelf, with a picture of each. The same choice as the View list in Quick Settings.</span>
+                    <span>Cards, Rows, Hardbounds or Bookshelf, with a picture of each. The same choice as the View list in Quick Settings, and these three rows are in the profile menu too.</span>
                 </div>
                 <div class="option-actions">
                     <button type="button" class="btn-page-outline" data-view-tour>Choose&hellip;</button>

@@ -1769,6 +1769,11 @@ select.lf-input {
          away in front of the reader. It also prints the switch the profile
          menu and Settings share. */ ?>
 <?php require_once __DIR__ . '/zen_mode.php'; ?>
+<?php /* Result view and density, for
+         the two profile menus. Here rather than with the footer because
+         site_header.php prints those menus and has to be able to call
+         view_switcher(). */ ?>
+<?php require_once __DIR__ . '/view_switcher.php'; ?>
 <?php /* Palettes and light/dark. Included last so its :root wins over the
         literal token values above, without editing them. */ ?>
 <?php require_once __DIR__ . '/theme.php'; ?>
