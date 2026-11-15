@@ -649,24 +649,24 @@ html.an-export-preview-open { overflow: hidden; }
 .an-export-preview-body.is-sheet { overflow: hidden; padding: 0; }
 .an-export-preview-status { margin: .75rem; color: #6e6262; font-size: .8125rem; }
 .an-export-preview-frame { display: block; width: 100%; height: 100%; min-height: 20rem; border: 0; background: #fff; }
-.an-doc-preview { max-width: 50rem; margin: 0 auto; }
+.an-doc-preview { max-width: 51rem; margin: 0 auto; }
 .an-doc-ruler { height: 1.25rem; margin-bottom: .5rem; border: 1px solid #ddd;
     background: repeating-linear-gradient(to right, #f8f9fa 0, #f8f9fa 15px, #c7ccce 16px, #f8f9fa 17px, #f8f9fa 32px); }
-.an-preview-document { min-height: 66rem; margin: 0 auto; padding: 4.5rem 4rem; background: #fff;
-    color: #302626; box-shadow: 0 3px 18px rgba(50, 20, 20, .16); font: 400 .8125rem/1.6 Arial, sans-serif; }
-.an-preview-document h3 { margin: 0; color: #820707; font: 600 1.5rem/1.3 var(--font-head); }
-.an-preview-document h4 { margin: 0 0 .5rem; color: #630000; font: 600 1rem/1.3 var(--font-head); }
+.an-preview-document { box-sizing: border-box; width: 51rem; max-width: 100%; min-height: 78rem; margin: 0 auto; padding: 4.5rem 4rem; background: #fff;
+    color: #302626; box-shadow: 0 3px 18px rgba(50, 20, 20, .16); font: 400 12pt/1.6 Arial, sans-serif; }
+.an-preview-document h3 { margin: 0; color: #820707; font: 700 12pt/1.3 Arial, sans-serif; }
+.an-preview-document h4 { margin: 0 0 .5rem; color: #630000; font: 700 12pt/1.3 Arial, sans-serif; }
 .an-preview-document section { margin-top: 1.5rem; }
 .an-preview-document .an-preview-subtitle { color: #6e6a6e; margin: .25rem 0 1.25rem; }
-.an-preview-document .an-preview-insight { text-align: justify; }
+.an-preview-document p { text-align: justify; }
 .an-preview-table-wrap { max-width: 100%; overflow-x: auto; }
-.an-preview-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: .75rem; }
+.an-preview-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12pt; }
 .an-preview-table th, .an-preview-table td { padding: .45rem .55rem; text-align: left; vertical-align: top; border-bottom: 1px solid #e6d4d4; }
 .an-preview-table th { position: relative; background: #820707; color: #fff; white-space: nowrap; }
 .an-preview-figure { margin: 1rem auto; max-width: 45rem; text-align: center; }
 .an-preview-figure img { display: block; width: 100%; background: #fff; }
 html[data-mode="dark"] .an-export-preview img { filter: none !important; }
-.an-preview-figure figcaption { margin-top: .25rem; color: #6e6a6e; font-size: .75rem; }
+.an-preview-figure figcaption { margin-top: .4rem; color: #820707; font: 700 12pt Arial, sans-serif; }
 
 /* Interactive layout for CSV, Excel and Word export previews. */
 .an-sheet-preview { display: flex; flex-direction: column; height: 100%; min-height: 0;
@@ -812,6 +812,12 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
 /* ---- Charts ---- */
 .an-grid { display: grid; gap: 1.125rem; align-items: start; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); }
 .an-chart { position: relative; height: 15rem; }
+.an-chart-card { border-top: 3px solid var(--maroon); box-shadow: 0 3px 12px rgba(51, 0, 0, .05); }
+.an-figure-number { display: inline-flex; align-items: center; justify-content: center;
+    min-width: 1.7rem; height: 1.7rem; padding: 0 .35rem; border-radius: .4rem;
+    background: var(--cream); color: var(--maroon); font: 700 .75rem/1 Arial, sans-serif; }
+.an-figure-caption { margin: .65rem 0 0; padding-top: .65rem; border-top: 1px solid var(--border);
+    color: var(--grey); font-size: .75rem; line-height: 1.45; }
 .an-expandable { cursor: zoom-in; }
 .an-empty { padding: 2.5rem 1rem; text-align: center; color: var(--grey); font-size: .8125rem; }
 .an-empty .material-symbols-outlined { font-size: 32px; display: block; margin: 0 auto .5rem; opacity: .5; }
@@ -946,7 +952,7 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
     .an-table-glide::before, .an-table-glide::after { transition: none; }
 }
 </style>
-<link rel="stylesheet" href="<?= BASE_URL ?>/assests/css/analytics-word-editor.css?v=1">
+<link rel="stylesheet" href="<?= BASE_URL ?>/assests/css/analytics-word-editor.css?v=2">
 </head>
 <body>
 <?php require ROOT_PATH.'/includes/site_header.php'; ?>
@@ -1149,9 +1155,9 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
 
     <!-- ---- Charts ---- -->
     <div class="an-grid">
-        <div class="an-card" data-an-card="timeline">
+        <div class="an-card an-chart-card" data-an-card="timeline">
             <div class="an-card-head">
-                <span class="material-symbols-outlined">show_chart</span>
+                <span class="an-figure-number" aria-label="Figure 1">01</span>
                 Submissions <?= $byMonth ? 'by month' : 'by year' ?>
                 <span class="an-hint"><?= $byMonth ? e($fYear) : 'pick a year for months' ?></span>
             </div>
@@ -1163,20 +1169,22 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
                 <?php else: ?>
                     <div class="an-empty"><span class="material-symbols-outlined">show_chart</span>Nothing to plot.</div>
                 <?php endif; ?>
+                <p class="an-figure-caption">Figure 1. Submissions over time</p>
             </div>
         </div>
 
-        <div class="an-card" data-an-card="monthly">
-            <div class="an-card-head"><span class="material-symbols-outlined">calendar_month</span> This month against last</div>
+        <div class="an-card an-chart-card" data-an-card="monthly">
+            <div class="an-card-head"><span class="an-figure-number" aria-label="Figure 2">02</span> This month against last</div>
             <div class="an-card-body">
                 <div class="an-chart an-expandable" data-chart="monthly" title="Click to enlarge">
                     <canvas id="monthlyChart"></canvas>
                 </div>
+                <p class="an-figure-caption">Figure 2. Submissions this month and last month</p>
             </div>
         </div>
 
-        <div class="an-card" data-an-card="approval">
-            <div class="an-card-head"><span class="material-symbols-outlined">check_circle</span> Approval rate by paper type</div>
+        <div class="an-card an-chart-card" data-an-card="approval">
+            <div class="an-card-head"><span class="an-figure-number" aria-label="Figure 3">03</span> Approval rate by paper type</div>
             <div class="an-card-body">
                 <?php if ($approvalByType): ?>
                     <div class="an-chart an-expandable" data-chart="approval" title="Click to enlarge">
@@ -1185,11 +1193,12 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
                 <?php else: ?>
                     <div class="an-empty"><span class="material-symbols-outlined">check_circle</span>Nothing to compare.</div>
                 <?php endif; ?>
+                <p class="an-figure-caption">Figure 3. Percentage approved by paper type</p>
             </div>
         </div>
 
-        <div class="an-card" data-an-card="types">
-            <div class="an-card-head"><span class="material-symbols-outlined">donut_small</span> Paper types</div>
+        <div class="an-card an-chart-card" data-an-card="types">
+            <div class="an-card-head"><span class="an-figure-number" aria-label="Figure 4">04</span> Paper types</div>
             <div class="an-card-body">
                 <?php if ($paperTypeStats): ?>
                     <div class="an-chart an-expandable" data-chart="types" title="Click to enlarge">
@@ -1198,6 +1207,7 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
                 <?php else: ?>
                     <div class="an-empty"><span class="material-symbols-outlined">donut_small</span>Nothing to plot.</div>
                 <?php endif; ?>
+                <p class="an-figure-caption">Figure 4. Share of submissions by paper type</p>
             </div>
         </div>
     </div>
@@ -1710,6 +1720,38 @@ document.addEventListener('DOMContentLoaded', function () {
 
     if (typeof Chart === 'undefined') { return; }
 
+    Chart.register({
+        id: 'papelValueLabels',
+        afterDatasetsDraw: function (chart) {
+            var data = chart.data.datasets[0] && chart.data.datasets[0].data || [];
+            if (!data.length) return;
+            var ctx = chart.ctx, type = chart.config.type;
+            ctx.save();
+            ctx.font = '600 12px Arial, sans-serif';
+            ctx.fillStyle = '#630000';
+            if (type === 'doughnut') {
+                var sum = data.reduce(function (total, value) { return total + Number(value || 0); }, 0);
+                var area = chart.chartArea;
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.font = '700 20px Arial, sans-serif';
+                ctx.fillText(String(sum), (area.left + area.right) / 2, (area.top + area.bottom) / 2);
+            } else if (data.length <= 12) {
+                var horizontal = chart.options.indexAxis === 'y';
+                chart.getDatasetMeta(0).data.forEach(function (item, index) {
+                    var value = Number(data[index] || 0);
+                    if (horizontal) {
+                        ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+                        ctx.fillText(value + '%', Math.min(item.x + 6, chart.chartArea.right - 35), item.y);
+                    } else {
+                        ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+                        ctx.fillText(String(value), item.x, Math.max(item.y - 5, chart.chartArea.top + 12));
+                    }
+                });
+            }
+            ctx.restore();
+        }
+    });
+
     /* Colours come from the theme, read fresh each time so a change of palette
        or of light/dark is followed rather than baked in at first paint. */
     var token = function (name, fallback) {
@@ -1792,8 +1834,8 @@ document.addEventListener('DOMContentLoaded', function () {
         };
     }
 
-    var titles = { timeline: 'Submissions over time', monthly: 'This month against last',
-                   approval: 'Approval rate by paper type', types: 'Paper types' };
+    var titles = { timeline: 'Figure 1. Submissions over time', monthly: 'Figure 2. This month against last',
+                   approval: 'Figure 3. Approval rate by paper type', types: 'Figure 4. Paper types' };
     var canvases = { timeline: 'timelineChart', monthly: 'monthlyChart',
                      approval: 'approvalRateChart', types: 'paperTypeChart' };
 
@@ -1819,8 +1861,8 @@ document.addEventListener('DOMContentLoaded', function () {
         };
         var exportConfigs = build(light);
         var captions = {
-            timeline: 'Submissions over time', monthly: 'Submissions by month',
-            approval: 'Approval rate', types: 'Papers by type'
+            timeline: 'Figure 1. Submissions over time', monthly: 'Figure 2. Submissions this month and last month',
+            approval: 'Figure 3. Percentage approved by paper type', types: 'Figure 4. Share of submissions by paper type'
         };
         return Object.keys(canvases).map(function (key) {
             if (!document.getElementById(canvases[key])) return null;
@@ -1915,7 +1957,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 <?php require ROOT_PATH.'/includes/scroll_jump.php'; ?>
-<script nonce="<?= csp_nonce() ?>" src="<?= BASE_URL ?>/assests/js/analytics-word-editor.js?v=1"></script>
+<script nonce="<?= csp_nonce() ?>" src="<?= BASE_URL ?>/assests/js/analytics-word-editor.js?v=2"></script>
 <script nonce="<?= csp_nonce() ?>">
 /* ---- Export -------------------------------------------------------------
    The charts live on canvases, so the server cannot draw them: there is no GD

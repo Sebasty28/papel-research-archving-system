@@ -1,5 +1,5 @@
 {
- "built": "2026-11-15 23:09",
+ "built": "2026-11-15 23:22",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -17,7 +17,7 @@
    "lines": 133
   },
   "analytics/analytics_dashboard.php": {
-   "lines": 2383
+   "lines": 2425
   },
   "analytics/dashboard.php": {
    "lines": 19
@@ -239,7 +239,7 @@
    "lines": 793
   },
   "includes/docx_writer.php": {
-   "lines": 355
+   "lines": 356
   },
   "includes/favicon.php": {
    "lines": 46
@@ -311,7 +311,7 @@
    "lines": 1510
   },
   "includes/pdf_writer.php": {
-   "lines": 416
+   "lines": 429
   },
   "includes/progress_tracker.php": {
    "lines": 163

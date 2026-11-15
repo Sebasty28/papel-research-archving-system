@@ -6,9 +6,9 @@
  * so this writes the file itself. It is deliberately narrow: it does what the
  * analytics export needs and nothing more:
  *
- *   - A4 pages with automatic breaks and a running footer.
- *   - Helvetica and Helvetica-Bold, which are two of the fourteen fonts every
- *     reader has built in, so nothing has to be embedded.
+ *   - Folio pages with automatic breaks and a running footer.
+ *   - Arial and Arial-Bold are requested from the PDF reader. Readers without
+ *     Arial use their configured sans-serif substitute.
  *   - Tables with a tinted header row, hairline rules and right-aligned
  *     numbers.
  *   - JPEG figures, embedded with DCTDecode.
@@ -25,9 +25,9 @@
 
 class PdfWriter
 {
-    /* A4 in points, and a margin wide enough that a bound copy still reads. */
-    private const W = 595.28;
-    private const H = 841.89;
+    /* Folio (8.5 x 13 inches) in points. */
+    private const W = 612.0;
+    private const H = 936.0;
     private const MARGIN = 48.0;
 
     private array $pages = [];        // each: ['content' => string, 'images' => [name => ref]]
@@ -50,7 +50,7 @@ class PdfWriter
     // ---- public drawing API ------------------------------------------------
 
     /** A section heading, kept with at least a little of what follows it. */
-    public function heading(string $text, float $size = 13.0): void
+    public function heading(string $text, float $size = 12.0): void
     {
         $this->need($size + 26);
         $this->y -= 10;
@@ -62,11 +62,15 @@ class PdfWriter
         $this->y -= 12;
     }
 
-    public function paragraph(string $text, float $size = 9.5): void
+    public function paragraph(string $text, float $size = 12.0): void
     {
-        foreach ($this->wrap($text, self::W - self::MARGIN * 2, $size, false) as $line) {
+        $lines = $this->wrap($text, self::W - self::MARGIN * 2, $size, false);
+        foreach ($lines as $i => $line) {
             $this->need($size + 4);
-            $this->text($line, self::MARGIN, $this->y, $size, false, [0.2, 0.2, 0.2]);
+            $spaces = substr_count($line, ' ');
+            $justify = $i < count($lines) - 1 && $spaces > 0 && $line !== '';
+            $wordSpace = $justify ? max(0, (self::W - self::MARGIN * 2 - $this->widthOf($line, $size, false)) / $spaces) : 0;
+            $this->text($line, self::MARGIN, $this->y, $size, false, [0.2, 0.2, 0.2], $wordSpace);
             $this->y -= $size + 3.5;
         }
         $this->y -= 4;
@@ -77,7 +81,7 @@ class PdfWriter
      * The header repeats when the table runs onto another page, because a
      * column of numbers with no headings on page two is unreadable.
      */
-    public function table(array $columns, array $rows, float $size = 8.5): void
+    public function table(array $columns, array $rows, float $size = 12.0): void
     {
         $rowH = $size + 9;
         $this->need($rowH * 3);
@@ -99,22 +103,31 @@ class PdfWriter
 
         $stripe = false;
         foreach ($rows as $r) {
-            if ($this->y - $rowH < self::MARGIN + 30) {
+            $cells = [];
+            $lines = 1;
+            foreach ($columns as $i => $c) {
+                $cells[$i] = $this->wrap((string)($r[$i] ?? ''), $c[1] - 10, $size, false);
+                $lines = max($lines, count($cells[$i]));
+            }
+            $dataH = max($rowH, $lines * ($size + 3) + 6);
+            if ($this->y - $dataH < self::MARGIN + 30) {
                 $this->newPage();
                 $drawHead();
                 $stripe = false;
             }
             if ($stripe) {
-                $this->rect(self::MARGIN, $this->y - $rowH + 3, self::W - self::MARGIN * 2,
-                            $rowH, [0.985, 0.975, 0.975]);
+                $this->rect(self::MARGIN, $this->y - $dataH + 3, self::W - self::MARGIN * 2,
+                            $dataH, [0.985, 0.975, 0.975]);
             }
             $x = self::MARGIN;
             foreach ($columns as $i => $c) {
-                $this->cell((string)($r[$i] ?? ''), $x, $this->y, $c[1], $size, false,
-                            $c[2] ?? 'l', [0.15, 0.15, 0.15]);
+                foreach ($cells[$i] as $lineIndex => $lineText) {
+                    $this->cell($lineText, $x, $this->y - $lineIndex * ($size + 3), $c[1], $size, false,
+                                $c[2] ?? 'l', [0.15, 0.15, 0.15]);
+                }
                 $x += $c[1];
             }
-            $this->y -= $rowH;
+            $this->y -= $dataH;
             $this->line(self::MARGIN, $this->y + 3, self::W - self::MARGIN, $this->y + 3,
                         0.35, [0.90, 0.86, 0.86]);
             $stripe = !$stripe;
@@ -134,7 +147,7 @@ class PdfWriter
         $h = $w * ($ih / $iw);
         if ($h > 260) { $h = 260.0; $w = $h * ($iw / $ih); }
 
-        $this->need($h + 26);
+        $this->need($h + 38);
         $name = 'Im' . (++$this->imageSeq);
         $this->images[$name] = ['data' => $jpeg, 'w' => $iw, 'h' => $ih];
         $this->imagesOnPage[$name] = true;
@@ -146,8 +159,8 @@ class PdfWriter
         $this->rectStroke($x, $this->y, $w, $h, 0.5, [0.88, 0.84, 0.84]);
         $this->y -= 12;
         if ($caption !== '') {
-            $this->text($caption, $x, $this->y, 8, false, [0.42, 0.42, 0.42]);
-            $this->y -= 12;
+            $this->text($caption, $x, $this->y, 12, true, [0.36, 0.02, 0.02]);
+            $this->y -= 17;
         }
         $this->y -= 6;
     return true;
@@ -190,9 +203,9 @@ class PdfWriter
         $objects[$pagesObj] = "<< /Type /Pages /Count " . count($pageObj)
             . " /Kids [" . implode(' ', $kids) . "] >>";
 
-        $objects[$fontRegular] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica "
+        $objects[$fontRegular] = "<< /Type /Font /Subtype /Type1 /BaseFont /Arial "
             . "/Encoding /WinAnsiEncoding >>";
-        $objects[$fontBold] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold "
+        $objects[$fontBold] = "<< /Type /Font /Subtype /Type1 /BaseFont /Arial-Bold "
             . "/Encoding /WinAnsiEncoding >>";
 
         foreach ($this->images as $name => $img) {
@@ -250,11 +263,11 @@ class PdfWriter
     {
         // Running footer: the page number and where it came from.
         $num = count($this->pages) + 1;
-        $this->text('PAPEL Analytics', self::MARGIN, self::MARGIN - 18, 7.5, false,
+        $this->text('PAPEL Analytics', self::MARGIN, self::MARGIN - 18, 12, false,
                     [0.55, 0.55, 0.55]);
         $label = 'Page ' . $num;
-        $w = $this->widthOf($label, 7.5, false);
-        $this->text($label, self::W - self::MARGIN - $w, self::MARGIN - 18, 7.5, false,
+        $w = $this->widthOf($label, 12, false);
+        $this->text($label, self::W - self::MARGIN - $w, self::MARGIN - 18, 12, false,
                     [0.55, 0.55, 0.55]);
         $this->pages[] = ['content' => $this->buf, 'images' => $this->imagesOnPage];
         $this->buf = '';
@@ -265,9 +278,9 @@ class PdfWriter
     private function coverBlock(): void
     {
         $this->rect(0, self::H - 96, self::W, 96, [0.51, 0.03, 0.03]);
-        $this->text($this->title, self::MARGIN, self::H - 52, 19, true, [1, 1, 1]);
+        $this->text($this->title, self::MARGIN, self::H - 52, 12, true, [1, 1, 1]);
         if ($this->subtitle !== '') {
-            $this->text($this->subtitle, self::MARGIN, self::H - 72, 9.5, false,
+            $this->text($this->subtitle, self::MARGIN, self::H - 72, 12, false,
                         [0.93, 0.85, 0.85]);
         }
         $this->y = self::H - 96 - 28;
@@ -279,10 +292,10 @@ class PdfWriter
     }
 
     private function text(string $s, float $x, float $y, float $size, bool $bold,
-                          array $rgb): void
+                          array $rgb, float $wordSpace = 0): void
     {
-        $this->buf .= sprintf("BT /%s %.2F Tf %.3F %.3F %.3F rg %.2F %.2F Td (%s) Tj ET\n",
-            $bold ? 'F2' : 'F1', $size, $rgb[0], $rgb[1], $rgb[2], $x, $y, $this->esc($s));
+        $this->buf .= sprintf("BT /%s %.2F Tf %.3F %.3F %.3F rg %.2F Tw %.2F %.2F Td (%s) Tj ET\n",
+            $bold ? 'F2' : 'F1', $size, $rgb[0], $rgb[1], $rgb[2], $wordSpace, $x, $y, $this->esc($s));
     }
 
     private function cell(string $s, float $x, float $y, float $w, float $size,
@@ -329,7 +342,7 @@ class PdfWriter
         return str_replace(['\\', '(', ')', "\r", "\n"], ['\\\\', '\\(', '\\)', ' ', ' '], $s);
     }
 
-    /** Helvetica advance widths, per 1000 units, for ASCII 32-126. */
+    /** Approximate sans-serif advance widths, per 1000 units, for ASCII 32-126. */
     private function widthOf(string $s, float $size, bool $bold): float
     {
         static $reg = null, $bld = null;

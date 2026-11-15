@@ -9,13 +9,13 @@
  *
  * Word measures in half-points for type, twentieths of a point (twips) for
  * layout, and EMUs for pictures, which is why the numbers below look arbitrary.
- * A4 minus 2cm margins leaves 9638 twips of usable width, and the tables are
+ * Folio minus 2cm margins leaves 9972 twips of usable width, and the tables are
  * laid out against that.
  */
 
 class DocxWriter
 {
-    private const USABLE_TWIPS = 9638;
+    private const USABLE_TWIPS = 9972;
 
     private string $body = '';
     private array $images = [];        // ['data' => png, 'w' => px, 'h' => px]
@@ -29,7 +29,7 @@ class DocxWriter
             throw new InvalidArgumentException('The edited document has an invalid page count.');
         }
         $this->landscape = ($document['orientation'] ?? '') === 'landscape';
-        $usable = $this->landscape ? 14570 : self::USABLE_TWIPS;
+        $usable = $this->landscape ? 16452 : self::USABLE_TWIPS;
         $blocks = 0;
         foreach ($pages as $pageIndex => $page) {
             if (!is_array($page) || !is_array($page['blocks'] ?? null)) {
@@ -70,14 +70,14 @@ class DocxWriter
                 'justify' => 'both'][$value] ?? 'left';
     }
 
-    private function editorRuns(array $runs, int $defaultSize = 20, string $color = '333333', bool $bold = false): string
+    private function editorRuns(array $runs, int $defaultSize = 24, string $color = '333333', bool $bold = false): string
     {
         if (count($runs) > 20000) throw new InvalidArgumentException('Too many text runs.');
         $xml = '';
         foreach ($runs as $run) {
             if (!is_array($run) || !is_string($run['text'] ?? null)) continue;
             $text = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F]/', '', $run['text']);
-            $size = isset($run['size']) ? (int)round(max(8, min(36, (float)$run['size'])) * 2) : $defaultSize;
+            $size = 24;
             $xml .= '<w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/>'
                 . '<w:sz w:val="' . $size . '"/><w:color w:val="' . $color . '"/>'
                 . ((array_key_exists('bold', $run) ? !empty($run['bold']) : $bold) ? '<w:b/>' : '')
@@ -96,14 +96,14 @@ class DocxWriter
     private function editorParagraph(array $block): string
     {
         $kind = $block['kind'] ?? 'text';
-        $size = $kind === 'title' ? 36 : ($kind === 'heading' ? 26 : ($kind === 'caption' ? 16 : 20));
-        $color = in_array($kind, ['title', 'heading'], true) ? '820707' : ($kind === 'caption' ? '6E6A6E' : '333333');
+        $size = 24;
+        $color = in_array($kind, ['title', 'heading', 'caption'], true) ? '820707' : '333333';
         $runs = is_array($block['runs'] ?? null) ? $block['runs'] : [];
         $line = $kind === 'title' ? 312 : ($kind === 'heading' ? 336 : 384);
         return '<w:p><w:pPr><w:jc w:val="' . $this->editorAlignment($block['align'] ?? 'left') . '"/>'
             . '<w:spacing w:after="180" w:line="' . $line . '" w:lineRule="auto"/>'
             . (in_array($kind, ['title', 'heading'], true) ? '<w:keepNext/>' : '')
-            . '</w:pPr>' . $this->editorRuns($runs, $size, $color, in_array($kind, ['title', 'heading'], true)) . '</w:p>';
+            . '</w:pPr>' . $this->editorRuns($runs, $size, $color, in_array($kind, ['title', 'heading', 'caption'], true)) . '</w:p>';
     }
 
     private function editorTable(array $block, int $usable): string
@@ -134,7 +134,7 @@ class DocxWriter
                     . ($header ? '<w:shd w:fill="820707"/>' : '') . '</w:tcPr><w:p><w:pPr>'
                     . '<w:jc w:val="' . $this->editorAlignment($cell['align'] ?? 'left') . '"/>'
                     . '<w:spacing w:line="384" w:lineRule="auto"/>'
-                    . '</w:pPr>' . $this->editorRuns($runs, 18, $header ? 'FFFFFF' : '333333', $header)
+                    . '</w:pPr>' . $this->editorRuns($runs, 24, $header ? 'FFFFFF' : '333333', $header)
                     . '</w:p></w:tc>';
             }
             $xml .= '</w:tr>';
@@ -144,10 +144,10 @@ class DocxWriter
 
     public function title(string $text, string $subtitle = ''): void
     {
-        $this->body .= $this->p($text, ['size' => 36, 'bold' => true, 'color' => '820707',
+        $this->body .= $this->p($text, ['size' => 24, 'bold' => true, 'color' => '820707',
                                         'after' => 60]);
         if ($subtitle !== '') {
-            $this->body .= $this->p($subtitle, ['size' => 19, 'color' => '6E6A6E',
+            $this->body .= $this->p($subtitle, ['size' => 24, 'color' => '6E6A6E',
                                                 'after' => 240]);
         }
         // A maroon rule under the title block.
@@ -158,13 +158,13 @@ class DocxWriter
 
     public function heading(string $text): void
     {
-        $this->body .= $this->p($text, ['size' => 26, 'bold' => true, 'color' => '630000',
+        $this->body .= $this->p($text, ['size' => 24, 'bold' => true, 'color' => '630000',
                                         'before' => 280, 'after' => 120]);
     }
 
     public function paragraph(string $text, bool $muted = false): void
     {
-        $this->body .= $this->p($text, ['size' => 20, 'after' => 140,
+        $this->body .= $this->p($text, ['size' => 24, 'after' => 140, 'align' => 'both',
                                         'color' => $muted ? '6E6A6E' : '333333']);
     }
 
@@ -204,7 +204,7 @@ class DocxWriter
         foreach ($columns as $i => $c) {
             $x .= $this->cell($c[0], $widths[$i], [
                 'bold' => true, 'color' => 'FFFFFF', 'shade' => '820707',
-                'align' => $c[2] ?? 'left', 'size' => 18,
+                'align' => $c[2] ?? 'left', 'size' => 24,
             ]);
         }
         $x .= '</w:tr>';
@@ -214,7 +214,7 @@ class DocxWriter
             $x .= '<w:tr>';
             foreach ($columns as $i => $c) {
                 $x .= $this->cell((string)($row[$i] ?? ''), $widths[$i], [
-                    'align' => $c[2] ?? 'left', 'size' => 18, 'color' => '333333',
+                    'align' => $c[2] ?? 'left', 'size' => 24, 'color' => '333333',
                     'shade' => $stripe ? 'FDF8F8' : null,
                 ]);
             }
@@ -255,7 +255,7 @@ class DocxWriter
 
         if ($caption !== '') {
             $this->body .= '<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="200"/></w:pPr>'
-                . '<w:r><w:rPr><w:sz w:val="16"/><w:i/><w:color w:val="6E6A6E"/></w:rPr>'
+                . '<w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="24"/><w:b/><w:color w:val="820707"/></w:rPr>'
                 . '<w:t xml:space="preserve">' . $this->x($caption) . '</w:t></w:r></w:p>';
         }
     }
@@ -304,8 +304,8 @@ class DocxWriter
              . 'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">'
              . '<w:body>' . $this->body
              . '<w:sectPr>' . ($this->landscape
-                 ? '<w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/>'
-                 : '<w:pgSz w:w="11906" w:h="16838"/>')
+                 ? '<w:pgSz w:w="18720" w:h="12240" w:orient="landscape"/>'
+                 : '<w:pgSz w:w="12240" w:h="18720"/>')
              . '<w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" '
              . 'w:header="708" w:footer="708" w:gutter="0"/></w:sectPr>'
              . '</w:body></w:document>';
@@ -321,13 +321,14 @@ class DocxWriter
 
     private function p(string $text, array $o = []): string
     {
-        $rpr = '<w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/>'
-             . '<w:sz w:val="' . ($o['size'] ?? 20) . '"/>'
+        $rpr = '<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/>'
+             . '<w:sz w:val="' . ($o['size'] ?? 24) . '"/>'
              . (!empty($o['bold']) ? '<w:b/>' : '')
              . (!empty($o['color']) ? '<w:color w:val="' . $o['color'] . '"/>' : '')
              . '</w:rPr>';
         $ppr = '<w:pPr><w:spacing w:before="' . ($o['before'] ?? 0)
-             . '" w:after="' . ($o['after'] ?? 0) . '"/></w:pPr>';
+             . '" w:after="' . ($o['after'] ?? 0) . '"/>'
+             . (!empty($o['align']) ? '<w:jc w:val="' . $o['align'] . '"/>' : '') . '</w:pPr>';
         return '<w:p>' . $ppr . '<w:r>' . $rpr
              . '<w:t xml:space="preserve">' . $this->x($text) . '</w:t></w:r></w:p>';
     }
@@ -340,8 +341,8 @@ class DocxWriter
         return '<w:tc><w:tcPr><w:tcW w:w="' . $width . '" w:type="dxa"/>' . $shade
              . '<w:vAlign w:val="center"/></w:tcPr>'
              . '<w:p><w:pPr>' . $align . '<w:spacing w:before="20" w:after="20"/></w:pPr>'
-             . '<w:r><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/>'
-             . '<w:sz w:val="' . ($o['size'] ?? 18) . '"/>'
+             . '<w:r><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/>'
+             . '<w:sz w:val="' . ($o['size'] ?? 24) . '"/>'
              . (!empty($o['bold']) ? '<w:b/>' : '')
              . (!empty($o['color']) ? '<w:color w:val="' . $o['color'] . '"/>' : '')
              . '</w:rPr><w:t xml:space="preserve">' . $this->x($text) . '</w:t></w:r></w:p></w:tc>';

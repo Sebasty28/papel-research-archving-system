@@ -15,20 +15,20 @@
 .an-word-toolbar input[type="range"] { width: 5.5rem; accent-color: #820707; }
 .an-word-status { margin-left: auto; color: #666; white-space: nowrap; }
 .an-doc-preview.an-word-document { width: max-content; max-width: none; margin: 0 auto; }
-.an-word-page.an-preview-document { position: relative; box-sizing: border-box; width: 794px; height: 1123px;
-    min-height: 0; padding: 76px; margin: 0 0 24px; overflow: visible; font: 400 13px/1.6 Arial, sans-serif; }
-.an-word-document[data-orientation="landscape"] .an-word-page { width: 1123px; height: 794px; }
+.an-word-page.an-preview-document { position: relative; box-sizing: border-box; width: 816px; height: 1248px;
+    min-height: 0; padding: 76px; margin: 0 0 24px; overflow: visible; font: 400 12pt/1.6 Arial, sans-serif; }
+.an-word-document[data-orientation="landscape"] .an-word-page { width: 1248px; height: 816px; }
 .an-word-content { height: 100%; display: flow-root; }
 .an-word-page-number { position: absolute; bottom: 27px; left: 0; right: 0; text-align: center; color: #777;
     font: 400 11px Arial, sans-serif; user-select: none; }
 .an-word-content .an-word-block { margin: 0 0 12px; }
-.an-word-content h3.an-word-block { font: 700 24px/1.3 Arial, sans-serif; color: #820707; }
-.an-word-content h4.an-word-block { font: 700 16px/1.4 Arial, sans-serif; color: #630000; margin-top: 8px; }
-.an-word-content p.an-word-block { white-space: pre-wrap; overflow-wrap: anywhere; }
+.an-word-content h3.an-word-block { font: 700 12pt/1.3 Arial, sans-serif; color: #820707; }
+.an-word-content h4.an-word-block { font: 700 12pt/1.4 Arial, sans-serif; color: #630000; margin-top: 8px; }
+.an-word-content p.an-word-block { white-space: pre-wrap; overflow-wrap: anywhere; text-align: justify; }
 .an-word-content [contenteditable="true"] { cursor: text; outline: none; min-height: 1em; }
 .an-word-content [contenteditable="true"]:focus { box-shadow: 0 0 0 1px #d5dff1; }
 .an-word-content .an-preview-table-wrap { overflow: visible; }
-.an-word-content .an-preview-table { font: 400 12px/1.6 Arial, sans-serif; }
+.an-word-content .an-preview-table { font: 400 12pt/1.6 Arial, sans-serif; }
 .an-word-content .an-preview-table th, .an-word-content .an-preview-table td { white-space: normal;
     overflow-wrap: anywhere; padding: 6px 8px; }
 .an-word-content .an-preview-figure { position: relative; width: 100%; max-width: none; margin: 12px auto;
