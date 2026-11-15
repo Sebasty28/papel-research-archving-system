@@ -113,8 +113,10 @@
     function open() { dlg.classList.add('open'); document.body.style.overflow = 'hidden'; }
     function close() { dlg.classList.remove('open'); document.body.style.overflow = ''; pending = null; }
 
+    var approved = false;
     document.querySelectorAll('form.js-manage-form').forEach(function (form) {
         form.addEventListener('submit', function (e) {
+            if (approved) { return; }
             var action = form.querySelector('#formAction');
             if (!action || action.value !== 'update_user') { return; }   // creating: nothing to ask
 
@@ -156,7 +158,11 @@
     yes.addEventListener('click', function () {
         var form = pending;
         close();
-        if (form) { snapshot = null; form.submit(); }
+        if (form) {
+            approved = true;
+            form.requestSubmit();
+            approved = false;
+        }
     });
     no.addEventListener('click', close);
     dlg.addEventListener('click', function (e) { if (e.target === dlg) { close(); } });

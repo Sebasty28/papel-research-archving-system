@@ -179,7 +179,7 @@ function admin_table(array $rows, string $position): void {
                                             <h5 class="modal-title">Reset password for <?= e($r['full_name']) ?></h5>
                                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                                         </div>
-                                        <form method="post">
+                                        <form method="post" data-account-preflight="admin_reset">
                                             <?= csrf_field() ?>
                                             <input type="hidden" name="action" value="reset_password">
                                             <input type="hidden" name="user_id" value="<?= (int)$r['user_id'] ?>">
@@ -284,7 +284,7 @@ $PAGE_SKELETON = 'table';
                  names who is being edited. */ ?>
         <section class="mgmt-panel" id="formPanel" aria-label="Staff account form">
             <div class="mgmt-panel-body">
-                <form method="post" class="js-manage-form" id="adminForm">
+                <form method="post" class="js-manage-form" id="adminForm" data-account-preflight="admin">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" id="formAction" value="create_user">
                     <input type="hidden" name="user_id" id="formUserId" value="">

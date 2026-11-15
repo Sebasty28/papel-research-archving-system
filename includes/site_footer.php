@@ -737,6 +737,7 @@ require_once ROOT_PATH.'/includes/view_welcome.php';
    a second would wrap the wrappers and count every request twice, and the bar
    would never reach zero. require_once, like the dialogs above. */
 require_once ROOT_PATH.'/includes/loading_bar.php';
+require_once ROOT_PATH.'/includes/account_preflight_js.php';
 /* Arrow-key movement between links and boxes. Last on purpose: the skinned
    dropdown, the search suggestions and the PDF panel all listen for arrows on
    the document too, and listeners fire in the order they were added. Going in

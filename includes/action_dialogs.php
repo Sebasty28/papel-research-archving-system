@@ -205,7 +205,6 @@
         var el = pending;
         close();
         if (!el) return;
-        el.dataset.adDone = '1';
 
         /* Submit the form directly rather than re-clicking: a second click
            would reach the page's handler and its confirm() after all. A submit
@@ -221,7 +220,8 @@
             carry.value = el.value || '';
             form.appendChild(carry);
         }
-        form.submit();
+        if (form.hasAttribute('data-account-preflight')) form.requestSubmit();
+        else { el.dataset.adDone = '1'; form.submit(); }
     });
 
     no.addEventListener('click', close);

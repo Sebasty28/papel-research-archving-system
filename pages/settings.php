@@ -382,7 +382,7 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
                 <?php /* The boxes are in the <dl> above, tied to this form by their
                          form= attribute: a <form> cannot wrap half a definition list
                          without putting a block element where the grid expects a row. */ ?>
-                <form class="profile-form" id="profileForm" method="post" action="settings.php">
+                <form class="profile-form" id="profileForm" method="post" action="settings.php" data-account-preflight="profile">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="update_profile">
                     <p class="page-note settings-note">
@@ -421,7 +421,7 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
                             . ' you changed it. They are not shown the password itself.';
             }
             ?>
-            <form class="pw-form" method="post" action="settings.php">
+            <form class="pw-form" method="post" action="settings.php" data-account-preflight="password">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="change_password">
                 <?php password_form_fields(); ?>

@@ -145,7 +145,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'chang
                 Signed in as <strong><?= e((string)($u['full_name'] ?? '')) ?></strong>
                 (<?= e(account_position($u)) ?>).
             </p>
-            <form class="pw-form" method="post" action="change_password.php">
+            <form class="pw-form" method="post" action="change_password.php" data-account-preflight="password">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="change_password">
                 <?php password_form_fields('At least 8 characters, and not the one you were sent.'); ?>
@@ -166,6 +166,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'chang
          own links, and this page has nowhere to send anybody. The three it
          does want are asked for by name. */ ?>
 <?php require_once ROOT_PATH.'/includes/loading_bar.php'; ?>
+<?php require_once ROOT_PATH.'/includes/account_preflight_js.php'; ?>
 <?php require_once ROOT_PATH.'/includes/flash_dismiss.php'; ?>
 <?php require_once ROOT_PATH.'/includes/focus_ring.php'; ?>
 </body>
