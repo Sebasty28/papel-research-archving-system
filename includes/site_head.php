@@ -9,6 +9,7 @@
 <?php require_once __DIR__ . '/favicon.php'; ?>
 <?php require_once __DIR__ . '/splash.php'; ?>
 <?php require_once __DIR__ . '/skeleton.php'; ?>
+<?php require_once __DIR__ . '/browser_interference.php'; ?>
 <?php /* Bootstrap's stylesheet is the first thing in this head and the first
          request on a new origin, so the DNS lookup and the TLS handshake for it
          sit in front of the page's own first paint. Google Fonts already had

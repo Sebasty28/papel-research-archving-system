@@ -150,6 +150,7 @@ $loader_badge_gif = (defined('BASE_URL') ? BASE_URL : '/capstone')
     transition: opacity .2s ease, transform .2s ease, visibility .2s;
 }
 .papel-loader-badge img { display: block; width: 130px; height: auto; }
+.papel-loader-badge.is-media-broken { display: none; }
 /* The dark theme dims every picture by 8% (theme.php), but the pill around this
    one is not dimmed, so in dark mode the GIF came out a shade darker than its
    own plate, as a grey rectangle inside a white pill. The id is for the
@@ -282,6 +283,15 @@ body.a11y-stop-animations .papel-loader-veil { display: none; }
     var workShownAt = 0;
     var workHideTimer = null;
     var leaving = false;
+    var badgeImage = badge && badge.querySelector('img');
+    if (badgeImage) {
+        badgeImage.addEventListener('error', function () {
+            /* A blank badge over a dimmed page is the failure shown to the
+               visitor. Only report after the image actually fails. */
+            badge.classList.add('is-media-broken');
+            if (window.papelBrowserInterference) { window.papelBrowserInterference.report(); }
+        });
+    }
 
     // The pill and the veil behind it come and go together.
     function paintWork(on) {
