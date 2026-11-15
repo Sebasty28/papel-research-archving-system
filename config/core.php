@@ -2052,6 +2052,11 @@ function profile_self_editable(?array $u): bool {
     return in_array((string)($u['user_role'] ?? ''), profile_self_edit_roles(), true);
 }
 
+/** The Director may also correct the Faculty ID on their own account. */
+function profile_self_id_editable(?array $u): bool {
+    return profile_self_editable($u) && (string)($u['user_role'] ?? '') === 'super_admin';
+}
+
 /**
  * A rule's complaint, worded for somebody reading it about their own account.
  *
@@ -2067,17 +2072,19 @@ function profile_rule_message(string $msg): string {
         'Enter their full name.'          => 'Enter your full name.',
         'Please write their name out'     => 'Please write your name out',
         'Enter their email address.'      => 'Enter your email address.',
+        'Enter their Faculty ID.'          => 'Enter your Faculty ID.',
     ]);
 }
 
 /**
- * Apply a correction somebody has made to their own name and email.
+ * Apply a correction somebody has made to their own name and email, and to
+ * their Faculty ID when the account's primary role is Director.
  *
  * The checking, the write and the notice, in one place, so the page is only
  * the form: the same bargain password_change_apply() above strikes with
  * pages/change_password.php.
  */
-function profile_self_update(array $u, string $name, string $email): array {
+function profile_self_update(array $u, string $name, string $email, ?string $facultyId = null): array {
     $userId = (int)($u['user_id'] ?? 0);
     if ($userId <= 0) {
         return ['ok' => false, 'message' => 'There is nobody signed in to change.'];
@@ -2089,17 +2096,25 @@ function profile_self_update(array $u, string $name, string $email): array {
             'Your details are kept by the desk that set up your account. '
           . 'Contact support to have them corrected.'];
     }
+    if ($facultyId !== null && !profile_self_id_editable($u)) {
+        return ['ok' => false, 'message' => 'Your Faculty ID is kept by the desk that set up your account. Contact support to have it corrected.'];
+    }
 
     /* The same turn-round and re-casing the consoles apply, so "REYES, RAYVER S."
        is filed as "Rayver S. Reyes" here exactly as it would be there. */
     $name  = normalize_person_name($name);
     $email = trim($email);
+    $before = account_snapshot($userId);
+    $id = $facultyId === null ? null : staff_id_clean($facultyId);
 
     if ($why = person_name_problem($name)) {
         return ['ok' => false, 'message' => profile_rule_message($why), 'field' => 'full_name'];
     }
     if ($why = account_email_problem($email)) {
         return ['ok' => false, 'message' => profile_rule_message($why), 'field' => 'email'];
+    }
+    if ($id !== null && ($why = staff_id_problem($id, 'Faculty ID', (string)($before['faculty_id'] ?? '')))) {
+        return ['ok' => false, 'message' => profile_rule_message($why), 'field' => 'faculty_id'];
     }
 
     /* Somebody else may already hold that inbox. email_account_owner() reads it
@@ -2112,16 +2127,34 @@ function profile_self_update(array $u, string $name, string $email): array {
           . 'If it is yours, contact support rather than enrolling twice.'];
     }
 
-    $before = account_snapshot($userId);
+    if ($id !== null && strcasecmp(trim((string)($before['faculty_id'] ?? '')), $id) !== 0) {
+        /* Sign-in accepts an ID, email or username. Refuse an ID already used
+           in any of those ID columns so it cannot name two accounts. */
+        $check = db()->prepare("SELECT user_id FROM users WHERE user_id <> ? AND (faculty_id = ? OR student_id = ? OR username = ?) LIMIT 1");
+        $check->bind_param('isss', $userId, $id, $id, $id);
+        $check->execute();
+        $idOwner = $check->get_result()->fetch_assoc();
+        $check->close();
+        if ($idOwner) {
+            return ['ok' => false, 'field' => 'faculty_id', 'message' => 'That Faculty ID is already used by another account.'];
+        }
+    }
+
     if (trim((string)($before['full_name'] ?? '')) === $name
-        && strcasecmp(trim((string)($before['email'] ?? '')), $email) === 0) {
+        && strcasecmp(trim((string)($before['email'] ?? '')), $email) === 0
+        && ($id === null || strcasecmp(trim((string)($before['faculty_id'] ?? '')), $id) === 0)) {
         return ['ok' => true, 'changed' => false,
                 'message' => 'Your details are already written that way.'];
     }
 
     $conn = db();
-    $up = $conn->prepare("UPDATE users SET full_name = ?, email = ? WHERE user_id = ?");
-    $up->bind_param('ssi', $name, $email, $userId);
+    if ($id !== null) {
+        $up = $conn->prepare("UPDATE users SET full_name = ?, email = ?, faculty_id = ? WHERE user_id = ? AND user_role = 'super_admin'");
+        $up->bind_param('sssi', $name, $email, $id, $userId);
+    } else {
+        $up = $conn->prepare("UPDATE users SET full_name = ?, email = ? WHERE user_id = ?");
+        $up->bind_param('ssi', $name, $email, $userId);
+    }
     $up->execute();
     $up->close();
 
@@ -2130,6 +2163,9 @@ function profile_self_update(array $u, string $name, string $email): array {
        only warning that an account has moved goes to the address it moved to.
        No "by" name, since the person reading it is the person who did it. */
     $after = account_snapshot($userId);
+    if ($id !== null && strcasecmp(trim((string)($after['faculty_id'] ?? '')), $id) !== 0) {
+        return ['ok' => false, 'message' => 'Your Faculty ID could not be updated. Please reload and try again.'];
+    }
     account_change_notice($userId, $before, $after);
 
     /* The desk that set the account up is told when the **address** changes, and
@@ -2173,6 +2209,7 @@ function profile_self_update(array $u, string $name, string $email): array {
     if (!empty($_SESSION['user']) && (int)($_SESSION['user']['user_id'] ?? 0) === $userId) {
         $_SESSION['user']['full_name'] = $name;
         $_SESSION['user']['email']     = $email;
+        if ($id !== null) { $_SESSION['user']['faculty_id'] = $id; }
     }
 
     $said = 'Your details have been updated. A confirmation has been sent to your email.';

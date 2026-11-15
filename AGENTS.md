@@ -1959,7 +1959,7 @@ and approving it will email that student.
 
 ## Business rules worth knowing
 
-### Correcting your own name and email
+### Correcting your own name, email and Director Faculty ID
 
 Settings showed the whole of Personal Information as read-only under "Managed
 by your administrator" and sent everybody to support. That is right for a
@@ -1971,10 +1971,16 @@ Director has no such desk at all. Added 14 November 2026.
 |---|---|
 | Who | `profile_self_edit_roles()`: `faculty`, `admin`, `head_academic`, `super_admin`, `librarian` |
 | Who not | A student, and a Library Pass, which has no `users` row to correct |
-| What | The full name and the email, and nothing else |
+| What | The full name and email for staff; the Director may also correct their own Faculty ID |
 | Where | `pages/settings.php`, Personal Information; the rules are `profile_self_update()` in `config/core.php` |
 
-- **Only the name and the email.** The role, the staff or student number and the
+- **The Director may correct their own Faculty ID.** Settings gives the primary
+  `super_admin` account an ID box. `profile_self_update()` applies the shared
+  `staff_id_problem()` rule, preserves an unchanged legacy ID, refuses a number
+  already used by another account, and writes the new ID to the session. An ID
+  change is included in `account_change_notice()`. Other staff IDs remain
+  read-only here and are corrected through the desk that manages those accounts.
+- **Only the name and the email for other staff.** The role, the staff or student number and the
   programme are not personal details but what the account *is*: a role somebody
   could set on themselves is the escalation the management consoles are careful
   to prevent, a number is issued by the campus, and a programme decides a

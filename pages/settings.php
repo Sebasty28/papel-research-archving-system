@@ -31,18 +31,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'chang
     exit;
 }
 
-/* ---- Correct your own name and email ----
+/* ---- Correct your own details ----
    Staff keep their own record; a student is sent to support. The rules, the
    write and the notice are profile_self_update() in config/core.php, which
    re-checks who is allowed: this page hides the form from a student, and
    hiding a form is not the same as refusing the post it would have made. */
 $can_edit_profile = profile_self_editable($u);
+$can_edit_own_id = profile_self_id_editable($u);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update_profile') {
     csrf_verify();
     $done = profile_self_update($u,
         (string)($_POST['full_name'] ?? ''),
-        (string)($_POST['email'] ?? ''));
+        (string)($_POST['email'] ?? ''),
+        array_key_exists('faculty_id', $_POST) ? (string)$_POST['faculty_id'] : null);
     flash($done['ok'] ? 'success' : 'error', $done['message']);
     /* Back to the section the result is about. The redirect also means the
        page below re-reads the row, so it prints what was just written. */
@@ -293,7 +295,8 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
         <div class="page-card-header">
             <h2>Personal Information</h2>
             <span class="hint"><?= $can_edit_profile
-                ? 'Your name and email are yours to keep right'
+                ? ($can_edit_own_id ? 'Keep your name, email and Faculty ID up to date'
+                                    : 'Your name and email are yours to keep right')
                 : 'Managed by your administrator' ?></span>
         </div>
         <div class="page-card-body">
@@ -325,8 +328,13 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
                     <dd><span class="page-chip"><?= e(role_label($u)) ?></span></dd>
                 </div>
                 <div class="profile-field">
-                    <dt><?= e($id_label) ?></dt>
-                    <dd><?= e((string)$id_value) ?></dd>
+                    <dt><?php if ($can_edit_own_id): ?><label for="pf_faculty_id">Faculty ID</label><?php else: ?><?= e($id_label) ?><?php endif; ?></dt>
+                    <dd class="<?= $can_edit_own_id ? 'page-field' : '' ?>"><?php if ($can_edit_own_id): ?>
+                        <input type="text" id="pf_faculty_id" name="faculty_id" form="profileForm"
+                               value="<?= e((string)($profile['faculty_id'] ?? '')) ?>"
+                               maxlength="20" autocomplete="off" required aria-describedby="pf_id_hint">
+                        <span class="profile-hint" id="pf_id_hint">New IDs use FA, four digits, BN and the year, like <?= e(STAFF_ID_EXAMPLE) ?>. This is an ID you can sign in with.</span>
+                    <?php else: ?><?= e((string)$id_value) ?><?php endif; ?></dd>
                 </div>
                 <?php if (!empty($profile['program'])): ?>
                 <div class="profile-field">
@@ -376,13 +384,14 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="update_profile">
                     <p class="page-note settings-note">
-                        Your role, <?= e($id_label) ?> and the dates are the campus's record of
-                        the account and are not yours to change.
+                        <?php if ($can_edit_own_id): ?>Your role and the dates are the campus's record of
+                        the account and are not yours to change.<?php else: ?>Your role, <?= e($id_label) ?> and the dates are the campus's record of
+                        the account and are not yours to change.<?php endif; ?>
                         <a href="<?= e(BASE_URL) ?>/pages/contact_support.php?subject=Profile%20Correction">Contact support</a>
                         for a correction to one of those.
                     </p>
                     <button type="submit" class="btn-page btn-confirm"
-                            data-confirm="Save these details? Your name and email are what the rest of the site prints and writes to, and the old address is told of a change.">Save changes</button>
+                            data-confirm="Save these details? Your name, email<?= $can_edit_own_id ? ' and Faculty ID' : '' ?> are used across the site. The old email address is told if it changes.">Save changes</button>
                 </form>
             <?php else: ?>
                 <p class="page-note settings-note">
