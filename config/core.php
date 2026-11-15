@@ -816,25 +816,13 @@ function login_user(array $u): void {
 }
 
 /* ---------------------------------------------------------------------------
-   The first sign-in, and the password gate that follows it.
+   A password set by somebody else must be replaced by its owner.
 
-   An account is created by somebody else: a Subject Adviser enrols a student,
-   the Coordinator an adviser, and the password is generated for them and
-   emailed (includes/password_generator.php). Until they choose one of their
-   own, the password that opens their account has been written down, sent over
-   mail and seen by whoever created it. So the first time they sign in they are
-   sent to pages/change_password.php and the rest of the site is closed to them
-   until they have set one.
-
-   **The test is the first sign-in, not "has never changed it".** The owner
-   chose that on 13 November 2026: it catches every new account and nobody who
-   is already using the site. It follows that the gate lives in the session and
-   not in a column - last_login is stamped as they come in, so by the time any
-   page runs the database can no longer tell - and that closing the tab is a way
-   past it. That is the price of not interrupting accounts already in use; if
-   that is ever to change, the rule to ask for instead is "the password in force
-   was set by somebody else", which `password_changes` already answers (no row,
-   or a latest row whose changed_by is not the user).
+   First sign-in still opens the gate. Later resets by an account manager are
+   recorded in password_changes; the latest row tells whether the current
+   password was set by its owner. Checking that record on protected requests
+   also catches sessions that were already open when a manager reset a password.
+   A self-change writes a new row and releases the gate.
    --------------------------------------------------------------------------- */
 
 /**
@@ -870,21 +858,41 @@ function login_mark_sign_in(int $userId): bool {
 /** Hold this session at the gate. Called after login_user(), which regenerates
  *  the session id; the data carries over either way, but the order is the one
  *  that reads correctly. */
-function password_gate_open(): void {
+function password_gate_open(bool $firstVisit = true): void {
     start_session_once();
     $_SESSION['force_password'] = true;
+    $_SESSION['password_gate_first_visit'] = $firstVisit;
 }
 function password_gate_clear(): void {
     start_session_once();
-    unset($_SESSION['force_password']);
+    unset($_SESSION['force_password'], $_SESSION['password_gate_first_visit']);
+}
+/** Null means no audit row; false means the owner last changed it. */
+function password_gate_record_state(int $userId): ?bool {
+    if ($userId <= 0) return null;
+    $stmt = db()->prepare(
+        'SELECT changed_by FROM password_changes WHERE user_id=? ORDER BY change_id DESC LIMIT 1');
+    $stmt->bind_param('i', $userId);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$row) return null;
+    /* Old rows without changed_by describe self-changes, not a reset to force. */
+    return $row['changed_by'] !== null && (int)$row['changed_by'] !== $userId;
+}
+/** A later manager reset stays pending across sign-outs and open sessions. */
+function password_gate_required_by_record(int $userId): bool {
+    return password_gate_record_state($userId) === true;
 }
 /** Is this session held at the gate? A guest pass has no users row and no
  *  password of its own to change, so it is never held. */
 function password_gate_held(): bool {
     start_session_once();
-    return !empty($_SESSION['force_password'])
-        && !empty($_SESSION['user'])
-        && empty($_SESSION['guest_login']);
+    if (empty($_SESSION['user']) || !empty($_SESSION['guest_login'])) return false;
+    $state = password_gate_record_state((int)($_SESSION['user']['user_id'] ?? 0));
+    /* An owner change in another session releases this one's stale first-visit
+       flag too. A legacy account with no audit row still honours that flag. */
+    return $state === true || ($state === null && !empty($_SESSION['force_password']));
 }
 function password_gate_url(): string {
     return BASE_URL . '/pages/change_password.php';
@@ -1808,6 +1816,28 @@ function account_snapshot(int $userId): array {
     return $row;
 }
 
+/** Previous and new values in an account email. Only those values are bold. */
+function account_change_email_details(array $changes): string {
+    $out = '<table role="presentation" cellpadding="0" cellspacing="0" border="0" '
+         . 'style="margin:0 0 16px;font-size:14px;">';
+    foreach ($changes as $label => $values) {
+        $old = (string)$values['old'];
+        $new = (string)$values['new'];
+        $face = $label === 'Password'
+            ? 'font-family:Consolas,&quot;Courier New&quot;,monospace;'
+            : '';
+        $out .= '<tr><td style="padding:6px 18px 6px 0;color:#6E6663;vertical-align:top;white-space:nowrap;">'
+              . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</td>'
+              . '<td style="padding:6px 0;color:#2B2422;">'
+              . 'Previous: <strong style="font-weight:700;' . $face . '">'
+              . htmlspecialchars($old !== '' ? $old : 'Not previously set', ENT_QUOTES, 'UTF-8') . '</strong><br>'
+              . 'New: <strong style="font-weight:700;' . $face . '">'
+              . htmlspecialchars($new, ENT_QUOTES, 'UTF-8') . '</strong>'
+              . '</td></tr>';
+    }
+    return $out . '</table>';
+}
+
 /**
  * Tell somebody what was just changed on their account.
  *
@@ -1829,15 +1859,19 @@ function account_change_notice(int $userId, array $before, array $after,
                                string $newPassword = '', string $byName = ''): bool {
     $labels  = account_notice_fields();
     $changes = [];
+    $emailChanges = [];
 
     foreach ($labels as $col => $label) {
         $was = trim((string)($before[$col] ?? ''));
         $now = trim((string)($after[$col]  ?? ''));
         if ($was === $now || $now === '') continue;
         $changes[$label] = $now;
+        $emailChanges[$label] = ['old' => $was, 'new' => $now];
     }
     if ($newPassword !== '') {
         $changes['Password'] = $newPassword;
+        /* The old password is a hash. Never try to reconstruct or reveal it. */
+        $emailChanges['Password'] = ['old' => 'Not shown', 'new' => $newPassword];
         /* On the same roll as a self-change in Settings, so a desk reading it
            sees every new password this account has had, whoever issued it. */
         $actor = current_user();
@@ -1862,8 +1896,8 @@ function account_change_notice(int $userId, array $before, array $after,
     if ($to === '' || !filter_var($to, FILTER_VALIDATE_EMAIL)) return true;
 
     $body  = email_para('Good day ' . ($after['full_name'] ?? '') . ',');
-    $body .= email_para($line . ' Here is what it now says.');
-    $body .= email_details($changes, isset($changes['Password']) ? ['Password'] : []);
+    $body .= email_para($line . ' Here is what changed.');
+    $body .= account_change_email_details($emailChanges);
     if (isset($changes['Password'])) {
         $body .= email_para('Sign in with that password, then change it to one of your own '
             . 'from Settings. Anyone who can read this message can read the password in it.');
@@ -1872,13 +1906,26 @@ function account_change_notice(int $userId, array $before, array $after,
         . 'as soon as you can.');
     $body .= email_action('Sign in to ' . APP_NAME, BASE_URL . '/archive/index.php');
 
-    send_email($to, 'Your ' . APP_NAME . ' account was updated', $body);
+    send_email($to, 'Your ' . APP_NAME . ' account was updated', $body, true);
 
     /* When the address itself changed, the old one is told too: otherwise the
        only warning that an account has moved goes to the address it moved to. */
     $old = trim((string)($before['email'] ?? ''));
     if ($old !== '' && $old !== $to && filter_var($old, FILTER_VALIDATE_EMAIL)) {
-        send_email($old, 'Your ' . APP_NAME . ' account was updated', $body);
+        /* The old mailbox is warned about the move, but a newly issued
+           password must only go to the address now on the account. */
+        $oldBody = $body;
+        if (isset($emailChanges['Password'])) {
+            $safeChanges = $emailChanges;
+            unset($safeChanges['Password']);
+            $oldBody  = email_para('Good day ' . ($after['full_name'] ?? '') . ',');
+            $oldBody .= email_para($line . ' Here is what changed.');
+            $oldBody .= account_change_email_details($safeChanges);
+            $oldBody .= email_para('The password was also changed. It is not included in this message.');
+            $oldBody .= email_para('If you did not ask for this, say so to whoever set up your account, as soon as you can.');
+            $oldBody .= email_action('Sign in to ' . APP_NAME, BASE_URL . '/archive/index.php');
+        }
+        send_email($old, 'Your ' . APP_NAME . ' account was updated', $oldBody, true);
     }
     return true;
 }
@@ -3267,7 +3314,7 @@ function email_action(string $label, string $url): string {
          . htmlspecialchars($url) . '</a></p>';
 }
 
-function email_layout(string $bodyHtml, string $heading = ''): string {
+function email_layout(string $bodyHtml, string $heading = '', bool $regularHeadings = false): string {
   $appName = defined('APP_NAME') ? APP_NAME : 'PAPEL';
   $year    = date('Y');
   $base    = defined('BASE_URL') ? BASE_URL : '';
@@ -3294,7 +3341,7 @@ function email_layout(string $bodyHtml, string $heading = ''): string {
 
   $headingHtml = $heading !== ''
     ? '<tr><td style="padding:34px 44px 0;font-family:' . $head . ';">
-         <h1 style="margin:0;color:' . $maroon . ';font-size:21px;font-weight:700;line-height:1.4;letter-spacing:-.2px;">'
+         <h1 style="margin:0;color:' . $maroon . ';font-size:21px;font-weight:' . ($regularHeadings ? '400' : '700') . ';line-height:1.4;letter-spacing:-.2px;">'
            . htmlspecialchars($heading) . '</h1>
          <div style="border-top:2px solid ' . $maroon . ';width:38px;margin-top:14px;font-size:0;line-height:0;">&nbsp;</div>
        </td></tr>'
@@ -3335,7 +3382,7 @@ function email_layout(string $bodyHtml, string $heading = ''): string {
 
         <!-- Letterhead. The institution is named first, the system second. -->
         <tr><td style="background-color:' . $maroon . ';padding:26px 44px 22px;" bgcolor="' . $maroon . '">
-          <div style="font-family:' . $head . ';font-size:17px;font-weight:700;color:#ffffff;line-height:1.4;letter-spacing:-.2px;">
+          <div style="font-family:' . $head . ';font-size:17px;font-weight:' . ($regularHeadings ? '400' : '700') . ';color:#ffffff;line-height:1.4;letter-spacing:-.2px;">
             Polytechnic University of the Philippines
           </div>
           <div style="font-family:' . $sans . ';font-size:11px;font-weight:500;letter-spacing:1.5px;text-transform:uppercase;color:#E8C9C9;line-height:1.4;margin-top:4px;">
@@ -3349,7 +3396,7 @@ function email_layout(string $bodyHtml, string $heading = ''): string {
              message from it. -->
         <tr><td style="background-color:' . $maroonDk . ';padding:11px 44px;" bgcolor="' . $maroonDk . '">
           <div style="font-family:' . $sans . ';font-size:12px;color:#ffffff;line-height:1.45;">
-            <span style="font-weight:600;letter-spacing:2.5px;text-transform:uppercase;">' . htmlspecialchars($appName) . '</span><span style="color:#C98C8C;">:</span>
+            <span style="font-weight:' . ($regularHeadings ? '400' : '600') . ';letter-spacing:2.5px;text-transform:uppercase;">' . htmlspecialchars($appName) . '</span><span style="color:#C98C8C;">:</span>
             <span style="color:#E8C9C9;">&nbsp;The Research Repository and Archiving System</span>
           </div>
         </td></tr>
@@ -3392,7 +3439,7 @@ function email_layout(string $bodyHtml, string $heading = ''): string {
  * A failed send still writes the message to the notifications log, so the
  * content is recoverable; false means "assume they did not receive it".
  */
-function send_email(string $to, string $subject, string $body): bool {
+function send_email(string $to, string $subject, string $body, bool $regularHeadings = false): bool {
   /* A message with no Subject is one of the oldest things a filter scores
      against, and it reads as machine noise to the person as well. Every
      caller does pass one; this is the floor under them, so a new one that
@@ -3446,7 +3493,7 @@ function send_email(string $to, string $subject, string $body): bool {
       $mail->CharSet  = 'UTF-8';
       $mail->Encoding = 'base64';
       $mail->Subject = $subject;
-      $mail->Body    = email_layout(nl2br($body), $subject);
+      $mail->Body    = email_layout(nl2br($body), $subject, $regularHeadings);
       $mail->AltBody = email_plain($body);
 
       $mail->send();

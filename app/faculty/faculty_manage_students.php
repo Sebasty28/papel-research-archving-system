@@ -265,6 +265,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $academic_year, $section, $expires, $sid, $u['user_id']);
 
   if($stmt->execute()){ 
+    password_change_record((int)$conn->insert_id, (int)$u['user_id']);
     // Send credentials via email
     $emailBody  = email_para('Dear ' . $full . ',');
     $emailBody .= email_para('A student account has been created for you on ' . APP_NAME

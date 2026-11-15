@@ -760,6 +760,7 @@ function account_import_create_one(array $row, string $kind, array $ctx, mysqli 
         if (!$stmt->execute()) {
             throw new RuntimeException('The database refused the row.');
         }
+        password_change_record((int)$conn->insert_id, (int)$ctx['created_by']);
 
         if ($notify) {
             $body  = email_para('Dear ' . $row['name'] . ',');

@@ -1,13 +1,13 @@
 <?php
 /**
- * The gate a first sign-in is held at.
+ * The gate for a password set by somebody else.
  *
  * An account is created by somebody else and its first password is generated
  * and emailed (includes/password_generator.php), so until the person sets one
  * of their own, the password that opens their account has been written down,
- * sent over mail and seen by whoever created it. The first time they sign in
- * they land here and nothing else on the site will open until they are done:
- * see "The first sign-in, and the password gate" in config/core.php for the
+ * sent over mail and seen by whoever created it. First sign-in and later
+ * manager resets land here until the owner sets their own password:
+ * see the password gate in config/core.php for the
  * rule, and password_gate() for how every other page is closed.
  *
  * PAPEL_PASSWORD_GATE is defined before require_login(), or this page would
@@ -44,6 +44,8 @@ $notify_role   = $notify_upline ? account_position($notify_upline) : '';
    a different password from the one that page would accept. */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'change_password') {
     csrf_verify();
+    $firstVisit = !empty($_SESSION['force_password'])
+        && ($_SESSION['password_gate_first_visit'] ?? true);
     $done = password_change_apply($u,
         (string)($_POST['current_password'] ?? ''),
         (string)($_POST['new_password'] ?? ''),
@@ -53,13 +55,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'chang
         /* The gate comes down first: role_home() is a page this would
            otherwise bounce straight back here. */
         password_gate_clear();
-        /* And the next page offers the view chooser (includes/view_welcome.php,
-           printed with the footer, which reads this and clears it). Here rather
-           than at sign-in, because this is the one moment we know the account is
-           new to the person using it: they have just set the password that was
-           emailed to them. Anybody who closes it without choosing finds it again
-           in Settings > Appearance. */
-        $_SESSION['papel_view_tour'] = 1;
+        /* A first visit gets the view chooser; a later reset returns directly
+           to the account's desk without replaying onboarding. */
+        if ($firstVisit) $_SESSION['papel_view_tour'] = 1;
         flash('success', $done['message']);
         header('Location: ' . role_home((string)($u['user_role'] ?? '')));
         exit;
@@ -137,9 +135,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'chang
         </div>
         <div class="page-card-body">
             <p class="gate-lede">
-                Welcome to <?= e(APP_NAME) ?>, <?= e((string)($u['full_name'] ?? '')) ?>.
-                The password you have just signed in with was generated for you and sent by
-                email, so it is not yours alone. Choose one only you know to carry on.
+                Hello <?= e((string)($u['full_name'] ?? '')) ?>.
+                The password you signed in with was set by someone who manages your account
+                and may have been shared with you. Choose one only you know to carry on.
             </p>
             <p class="gate-who">
                 Signed in as <strong><?= e((string)($u['full_name'] ?? '')) ?></strong>
@@ -148,7 +146,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'chang
             <form class="pw-form" method="post" action="change_password.php" data-account-preflight="password">
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="change_password">
-                <?php password_form_fields('At least 8 characters, and not the one you were sent.'); ?>
+                <?php password_form_fields('At least 8 characters, and different from the one you used to sign in.'); ?>
                 <?php if ($notify_upline): ?>
                     <p class="pw-hint pw-notify">
                         <span class="material-symbols-outlined">info</span>

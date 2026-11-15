@@ -91,6 +91,7 @@ class AdminManagementService {
         }
         
         if ($stmt->execute()) {
+            password_change_record((int)$this->conn->insert_id, (int)$createdBy);
             if (!$notify) { return $title_val . ' account created. No email was sent.'; }
             $emailBody  = email_para('Dear ' . $data['full_name'] . ',');
             $emailBody .= email_para('An account has been created for you on ' . APP_NAME

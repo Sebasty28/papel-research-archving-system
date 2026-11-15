@@ -1,5 +1,5 @@
 {
- "built": "2026-11-15 21:41",
+ "built": "2026-11-15 21:56",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -53,7 +53,7 @@
    "lines": 135
   },
   "app/auth/login.php": {
-   "lines": 1182
+   "lines": 1181
   },
   "app/auth/logout.php": {
    "lines": 36
@@ -62,7 +62,7 @@
    "lines": 214
   },
   "app/faculty/faculty_manage_students.php": {
-   "lines": 1233
+   "lines": 1234
   },
   "app/faculty/faculty_review_dashboard.php": {
    "lines": 166
@@ -83,7 +83,7 @@
    "lines": 60
   },
   "app/models/AdminManagementService.php": {
-   "lines": 229
+   "lines": 231
   },
   "app/models/ArchiveRepository.php": {
    "lines": 140
@@ -92,7 +92,7 @@
    "lines": 56
   },
   "app/models/FacultyManagementService.php": {
-   "lines": 180
+   "lines": 184
   },
   "app/models/PaperRepository.php": {
    "lines": 99
@@ -173,13 +173,13 @@
    "lines": 1114
   },
   "config/account_import.php": {
-   "lines": 853
+   "lines": 854
   },
   "config/config.php": {
    "lines": 265
   },
   "config/core.php": {
-   "lines": 5918
+   "lines": 5965
   },
   "config/error_handler.php": {
    "lines": 228
@@ -392,7 +392,7 @@
    "lines": 220
   },
   "pages/change_password.php": {
-   "lines": 174
+   "lines": 172
   },
   "pages/contact_support.php": {
    "lines": 849

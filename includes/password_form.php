@@ -4,8 +4,8 @@
  * shows one.
  *
  * Two pages ask for it: pages/settings.php, where it is one section of an
- * account's own page, and pages/change_password.php, the gate a first sign-in
- * is held at (see "The first sign-in, and the password gate" in
+ * account's own page, and pages/change_password.php, the gate for passwords
+ * set by somebody else (see the password gate in
  * config/core.php). It is one include rather than a twin of the markup in each
  * because the twins on this site are the things that drift: the generated
  * password has one (includes/password_generator.php and

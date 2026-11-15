@@ -243,11 +243,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           'secondary_position' => $secondary_position,
       ]);
 
-      /* After login_user(), which regenerates the session id. Nothing else is
-         offered until a password of their own is set, so where they asked to
-         go does not come into it; the gate sends them on when they are done. */
-      if ($first_sign_in) {
-          password_gate_open();
+      /* First sign-in and a later manager reset both require the owner to
+         choose a password. The audit row persists across sign-outs. */
+      if ($first_sign_in || password_gate_required_by_record((int)$user_id)) {
+          password_gate_open($first_sign_in);
           $login_done(password_gate_url());
       }
 

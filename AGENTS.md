@@ -1829,25 +1829,27 @@ page noticing by itself, Escape refusing to close the expiry, the endpoint
 answering `signed_in: false`, and nothing printed at all for a signed-out visitor.
 The expiry was shot again at the real 1800 so the sentence reads as it will.
 
-### The first sign-in is held at a password gate
+### A password set by somebody else is held at a password gate
 
 An account is created by somebody else and its first password is generated and
 emailed (`includes/password_generator.php`), so until the person chooses one,
 the password that opens their account has been written down, sent over mail and
-seen by whoever created it. The **first** time they sign in they land on
+seen by whoever created it. On first sign-in they land on
 `pages/change_password.php` and nothing else on the site opens until they are
-done. Added 13 November 2026.
+done. A later password set by a manager holds them there again, even if they
+already had the site open. Expanded 15 November 2026.
 
-- **The test is the first sign-in, not "has never changed it".** The owner chose
-  that: it catches every new account and interrupts nobody already using the
-  site. Two things follow. The gate lives in the **session**, not in a column,
-  because `last_login` is stamped as they come in and by the time any page runs
-  the database can no longer tell; and closing the tab is a way past it, which
-  is the price of not interrupting accounts already in use. If that is ever to
-  change, the rule to ask for instead is "the password in force was set by
-  somebody else", which `password_changes` already answers (no row, or a latest
-  row whose `changed_by` is not the user). **No column and no migration either
-  way.**
+- **The gate has two reasons.** First sign-in is remembered in the session,
+  since `last_login` is stamped as they come in. Later manager resets are read
+  from the latest `password_changes` row: `changed_by` names somebody other
+  than the account owner. A missing row or an old row with a null `changed_by`
+  does not interrupt an existing account. The record is checked on protected
+  requests too, so an already open session cannot bypass a reset; the owner's
+  own password change writes the next row and releases it. No new column is
+  needed. New accounts write an initial audit row naming their creator, so
+  signing out before choosing a password cannot skip the gate. All three
+  management consoles and spreadsheet imports record it. The view chooser runs
+  only after a first sign-in.
 - `login_mark_sign_in()` stamps the sign-in and says whether it was the first.
   **Both sign-in surfaces call it**: `app/auth/login.php` and
   `archive/login.php`, the page a Library Pass email links to, which signs real
@@ -1892,6 +1894,13 @@ Bodies are built from `email_para()`, `email_details()` (the label/value table,
 with IDs and passwords in monospace) and `email_action()` (the link). Never
 concatenate raw HTML; `email_plain()` derives the plain-text copy from the same
 markup and only understands those blocks.
+
+Account update mail uses `account_change_email_details()` to show the previous
+and new values, with only those values bold. Its letterhead and heading use
+regular weight through `send_email(..., true)`. A previous password cannot be
+read from its hash, so the mail says "Not shown". If the email and password
+change together, the old mailbox receives the change notice without the new
+password.
 
 `create_notification()` posts the in-app notice **and** emails it. Its subject
 comes from a map keyed on the notification type; pass the fifth argument when

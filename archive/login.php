@@ -115,8 +115,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           'user_role'   => $row['user_role'],
           'admin_level' => (int)($row['admin_level'] ?? 1),
         ]);
-        if ($first_sign_in) {
-          password_gate_open();
+        if ($first_sign_in || password_gate_required_by_record((int)$row['user_id'])) {
+          password_gate_open($first_sign_in);
           header('Location: ' . password_gate_url());
           exit;
         }

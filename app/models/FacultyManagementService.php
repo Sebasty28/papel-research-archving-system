@@ -3,8 +3,10 @@ require_once __DIR__ . '/../models/UserRepository.php';
 
 class FacultyManagementService {
     private $userRepo;
+    private $conn;
 
     public function __construct($dbConnection) {
+        $this->conn = $dbConnection;
         $this->userRepo = new UserRepository($dbConnection);
     }
 
@@ -142,6 +144,7 @@ class FacultyManagementService {
         }
 
         if ($this->userRepo->createUser($data)) {
+            password_change_record((int)$this->conn->insert_id, (int)$createdBy);
             return $notify
                 ? $this->sendWelcomeEmail($data)
                 : $data['title'] . ' account created. No email was sent.';
