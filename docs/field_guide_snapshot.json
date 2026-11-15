@@ -1,5 +1,5 @@
 {
- "built": "2026-11-15 21:16",
+ "built": "2026-11-15 21:24",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -407,7 +407,7 @@
    "lines": 219
   },
   "pages/settings.php": {
-   "lines": 757
+   "lines": 758
   },
   "pages/terms_and_conditions.php": {
    "lines": 164

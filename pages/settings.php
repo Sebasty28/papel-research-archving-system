@@ -88,6 +88,10 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
 <style nonce="<?= $nonce ?>">
 /* Profile grid */
 .profile-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 1rem 2rem; }
+/* The Director has three editable answers. Keep them together above the account facts. */
+@media (min-width: 1000px) {
+    .profile-grid--director { grid-template-columns: repeat(3, minmax(0,1fr)); }
+}
 .profile-field { display: flex; flex-direction: column; gap: .2rem; min-width: 0; }
 .profile-field dt { font-size: .6875rem; font-weight: 400; text-transform: uppercase; letter-spacing: .5px; color: var(--grey); }
 .profile-field dd { font-size: .875rem; color: var(--ink); word-break: break-word; }
@@ -95,7 +99,7 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
 .profile-hint { display: block; font-size: .6875rem; color: var(--grey); margin-top: .15rem; line-height: 1.5; }
 .profile-field dd.profile-warn { color: var(--dark-maroon); font-weight: 500; }
 
-/* ---- The two boxes staff correct themselves ----
+/* ---- The boxes staff correct themselves ----
    The <dd> carries .page-field, so the box is drawn by the shared rule in
    includes/page_theme.php that every other field on the site uses, and the
    focus edge by includes/focus_ring.php.
@@ -125,13 +129,11 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
 .profile-field dd.page-field input { padding: .4rem .6rem; }
 /* A hint belongs to the box above it, so it sits outside that centred band. */
 .profile-field dd .profile-hint { margin-top: .3rem; }
-/* Justified micro-copy opens rivers between the words: the .settings-note rule
-   below reaches .profile-hint, and two lines of hint is the worst measure to
-   justify. The paragraph keeps it; these do not. */
+/* Justified micro-copy opens rivers between words. Hints stay left-aligned. */
 .profile-hint { text-align: left !important; }
 /* The button belongs to the card, not to the note above it. */
 .profile-form { margin-top: 1rem; }
-.profile-form .settings-note { margin-top: 0; }
+.profile-form .settings-note { margin-top: 0; text-align: left; }
 /* The student's line leads with the info mark, as the password notice does. */
 .settings-note .material-symbols-outlined {
     font-size: 1rem;
@@ -300,7 +302,7 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
                 : 'Managed by your administrator' ?></span>
         </div>
         <div class="page-card-body">
-            <dl class="profile-grid">
+            <dl class="profile-grid<?= $can_edit_own_id ? ' profile-grid--director' : '' ?>">
                 <div class="profile-field">
                     <dt><label for="pf_full_name">Full name</label></dt>
                     <dd class="<?= $can_edit_profile ? 'page-field' : '' ?>"><?php if ($can_edit_profile): ?>
@@ -324,10 +326,6 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
                     <?php else: ?><?= e($profile['email'] ?? '') ?><?php endif; ?></dd>
                 </div>
                 <div class="profile-field">
-                    <dt>Role</dt>
-                    <dd><span class="page-chip"><?= e(role_label($u)) ?></span></dd>
-                </div>
-                <div class="profile-field">
                     <dt><?php if ($can_edit_own_id): ?><label for="pf_faculty_id">Faculty ID</label><?php else: ?><?= e($id_label) ?><?php endif; ?></dt>
                     <dd class="<?= $can_edit_own_id ? 'page-field' : '' ?>"><?php if ($can_edit_own_id): ?>
                         <input type="text" id="pf_faculty_id" name="faculty_id" form="profileForm"
@@ -335,6 +333,10 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
                                maxlength="20" autocomplete="off" required aria-describedby="pf_id_hint">
                         <span class="profile-hint" id="pf_id_hint">New IDs use FA, four digits, BN and the year, like <?= e(STAFF_ID_EXAMPLE) ?>. This is an ID you can sign in with.</span>
                     <?php else: ?><?= e((string)$id_value) ?><?php endif; ?></dd>
+                </div>
+                <div class="profile-field">
+                    <dt>Role</dt>
+                    <dd><span class="page-chip"><?= e(role_label($u)) ?></span></dd>
                 </div>
                 <?php if (!empty($profile['program'])): ?>
                 <div class="profile-field">
@@ -384,11 +386,10 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="update_profile">
                     <p class="page-note settings-note">
-                        <?php if ($can_edit_own_id): ?>Your role and the dates are the campus's record of
-                        the account and are not yours to change.<?php else: ?>Your role, <?= e($id_label) ?> and the dates are the campus's record of
+                        <?php if ($can_edit_own_id): ?>Your role and account dates are managed by the campus.<?php else: ?>Your role, <?= e($id_label) ?> and the dates are the campus's record of
                         the account and are not yours to change.<?php endif; ?>
                         <a href="<?= e(BASE_URL) ?>/pages/contact_support.php?subject=Profile%20Correction">Contact support</a>
-                        for a correction to one of those.
+                        to correct them.
                     </p>
                     <button type="submit" class="btn-page btn-confirm"
                             data-confirm="Save these details? Your name, email<?= $can_edit_own_id ? ' and Faculty ID' : '' ?> are used across the site. The old email address is told if it changes.">Save changes</button>

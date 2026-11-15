@@ -2056,26 +2056,27 @@ Director has no such desk at all. Added 14 November 2026.
   screen reader and still moves the cursor when clicked.
 
 **The card's layout, and the three things that put it out of true.** The grid is
-two columns of label-over-value, and mixing a one-line fact with a 37px box in
-one row is what breaks it.
+two columns of label-over-value for most accounts. The Director has three
+editable boxes, so at 1000px and wider those fill one three-column row and the
+account facts fill the next. Mixing a one-line fact with a 37px box and its hint
+in one row leaves a large empty band under the fact.
 
-- **Email sits beside Full name**, not beside the Faculty ID where it was. The
-  two editable boxes then share a row and the facts have rows of their own, so
-  no row pairs a tall cell with a short one and there is no dead band under the
-  shorter column. Keep like with like if a field is ever added: that ordering is
-  the fix, not a preference.
+- **Editable fields sit together.** Email follows Full name, then the Director's
+  Faculty ID. At wide widths those three boxes share a row; the role and dates
+  follow as facts. At narrower widths the grid uses two columns, then one on a
+  phone. Keep like with like if a field is added.
 - **Every value slot is one height** (`--value-h`, built from the box's own
   padding, line and border so the two cannot drift), and its first line is
   placed with `padding-top` rather than the cell being centred. Centring the
   cell looked right until a value carried a hint under it: the student's expiry
   says what it is counted from, and the pair was centred together, so its date
   rode 3px above the one beside it.
-- **Hints are ranged left.** The `text-align: justify` rule a few lines up
+- **Hints and the profile form's note are ranged left.** The `text-align: justify` rule a few lines up
   reaches `.profile-hint`, and two lines of micro-copy is the worst measure to
   justify: the words in "Letters, spaces, full stops, hyphens and apostrophes"
-  were pushed apart into rivers. The same rule is turned off for the intro and
-  the notes **on a phone only**, where every justified line holds six or seven
-  words; the desktop paragraph keeps it.
+  were pushed apart into rivers. The Director's note under the grid had the
+  same problem on a desktop. The remaining intro and notes are ranged left on
+  a phone, where every justified line holds six or seven words.
 - **On a phone** the band is dropped (one column has nothing to line up
   against, so it only adds height), the boxes go to **16px**, which is the floor
   below which iOS zooms the page in on focus and leaves the form wider than the
