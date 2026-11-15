@@ -584,8 +584,7 @@ if (!isset($PAGE_SKELETON)) { $PAGE_SKELETON = 'console'; }
 .rc-fold-word { display: none; font-size: .75rem; font-weight: 500; }
 
 html.rc-tools-folded .rc-intro,
-html.rc-tools-folded .rc-filter-row,
-html.rc-tools-folded #rcExportForm { display: none; }
+html.rc-tools-folded .rc-filter-row { display: none; }
 html.rc-tools-folded .rc-fold .material-symbols-outlined { transform: rotate(180deg); }
 html.rc-tools-folded .rc-fold-word { display: inline; }
 /* The strip stays only to carry the chips: a filtered desk that looks
@@ -613,7 +612,7 @@ html.rc-tools-folded .rc-active { margin-top: 0; padding-top: 0; border-top: 0; 
 }
 /* One fixed height for every control in the bar (field or button) so nothing
    reads as slightly taller or shorter than its neighbours. */
-.rc-filter select, .rc-filter input, .rc-filter-action button {
+.rc-filter select, .rc-filter input, .rc-filter-action.btn-sm-outline {
     height: 2.375rem; box-sizing: border-box;
 }
 .rc-filter select, .rc-filter input {
@@ -640,32 +639,6 @@ html.rc-tools-folded .rc-active { margin-top: 0; padding-top: 0; border-top: 0; 
 }
 .rc-chip a { color: var(--maroon); text-decoration: none; font-weight: 600; line-height: 1; }
 .rc-clear { margin-left: auto; color: var(--maroon); font-size: .6875rem; }
-
-/* ---- Export dropdown ----
-   Styled after analytics/analytics_dashboard.php's own .an-export, so the
-   two controls behave and look like one feature rather than two that
-   happen to share a name. */
-.rc-export { position: relative; }
-.rc-export-menu {
-    position: absolute; top: calc(100% + 6px); right: 0; z-index: 1100;
-    width: 15rem; padding: .35rem;
-    background: var(--white); border: 1px solid var(--border); border-radius: var(--r-card, 8px);
-    box-shadow: var(--shadow-md, 0 6px 18px rgba(51,0,0,.14));
-}
-.rc-export-menu[hidden] { display: none; }
-.rc-export-menu > a,
-.rc-export-menu > button {
-    display: flex; align-items: center; gap: .5rem; width: 100%;
-    padding: .5rem .6rem; border: none; border-radius: var(--r-control, 4px);
-    background: none; font-family: inherit; text-align: left; text-decoration: none;
-    color: var(--ink); cursor: pointer;
-}
-.rc-export-menu > a:hover,
-.rc-export-menu > button:hover { background: var(--cream); }
-.rc-export-menu .material-symbols-outlined { color: var(--maroon); flex: 0 0 auto; }
-.rc-export-menu strong { display: block; font-weight: 600; }
-.rc-export-menu small { display: block; font-size: .6875rem; color: var(--grey); margin-top: .05rem; }
-.rc-export.is-busy #rcExportBtn { opacity: .65; pointer-events: none; }
 
 /* ---- Review controls on a card ---- */
 .rc-actions { margin-top: .875rem; display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
@@ -909,10 +882,7 @@ html[data-view="rows"] .paper-list .card-status .paper-action { display: none; }
             <div class="rc-filter-row" id="rcFilterRow">
             <?php /* display:contents on the form itself (see .rc-filter-form
                      below) puts its fields directly into this flex row, so
-                     the export control (its own <form>, since Excel/Word/PDF
-                     post) can sit beside them as an ordinary sibling. Forms
-                     cannot nest, which ruled out the simpler option of just
-                     dropping that markup inside this one. */ ?>
+                     the Analytics link can sit beside them. */ ?>
             <form class="rc-filter-form js-rc-filter-form" id="rcFiltersForm" action="<?= e($rc_self) ?>" method="get">
                 <input type="hidden" name="tab" value="<?= e($tab) ?>">
                 <?php if ($filter_year): ?><input type="hidden" name="year" value="<?= e($filter_year) ?>"><?php endif; ?>
@@ -956,41 +926,11 @@ html[data-view="rows"] .paper-list .card-status .paper-action { display: none; }
                     </select>
                 </div>
             </form>
-            <?php /* CSV is a plain link (see the export block above for why)
-                     so it needs nothing from JS. The other three are posted by
-                     the click handler further down, onto the hidden form that
-                     follows this widget. */ ?>
-            <div class="rc-export rc-filter-action" id="rcExport">
-                <button type="button" class="btn-sm-outline" id="rcExportBtn"
-                        aria-haspopup="menu" aria-expanded="false">
-                    <span class="material-symbols-outlined mi-18">download</span>
-                    Export
-                    <span class="material-symbols-outlined mi-18">expand_more</span>
-                </button>
-                <div class="rc-export-menu" id="rcExportMenu" role="menu" hidden>
-                    <a role="menuitem" href="<?= e($rc_self) ?>?<?= rc_qs(['export' => 'csv']) ?>">
-                        <span class="material-symbols-outlined mi-18">table_view</span>
-                        <span><strong>CSV</strong><small>Plain table, opens anywhere</small></span>
-                    </a>
-                    <button type="button" role="menuitem" data-export="xlsx">
-                        <span class="material-symbols-outlined mi-18">grid_on</span>
-                        <span><strong>Excel</strong><small>Styled sheet, ready to filter</small></span>
-                    </button>
-                    <button type="button" role="menuitem" data-export="docx">
-                        <span class="material-symbols-outlined mi-18">description</span>
-                        <span><strong>Word</strong><small>A written report</small></span>
-                    </button>
-                    <button type="button" role="menuitem" data-export="pdf">
-                        <span class="material-symbols-outlined mi-18">picture_as_pdf</span>
-                        <span><strong>PDF</strong><small>Ready to print or hand in</small></span>
-                    </button>
-                </div>
+            <a class="btn-sm-outline rc-filter-action" href="<?= e(BASE_URL) ?>/analytics/analytics_dashboard.php">
+                <span class="material-symbols-outlined mi-18" aria-hidden="true">insights</span>
+                Analytics
+            </a>
             </div>
-            </div>
-            <form method="post" id="rcExportForm" data-no-pill action="<?= e($rc_self) ?>?<?= rc_qs() ?>" hidden>
-                <?= csrf_field() ?>
-                <input type="hidden" name="export" id="rcExportFormat" value="">
-            </form>
 
             <?php
             $rcChips = [];
@@ -1545,8 +1485,8 @@ function rcSyncFold() {
     var btn = document.getElementById('rcFoldTools');
     if (!btn) return;
     btn.setAttribute('aria-expanded', folded ? 'false' : 'true');
-    var say = folded ? 'Show the heading, filters and export'
-                     : 'Hide the heading, filters and export';
+    var say = folded ? 'Show the heading and filters'
+                     : 'Hide the heading and filters';
     btn.title = say;
     btn.setAttribute('aria-label', say);
 }
@@ -1616,64 +1556,6 @@ document.addEventListener('change', function (e) {
     }
 });
 window.addEventListener('popstate', function () { loadResults(window.location.href, false); });
-
-// ===== Export dropdown =====
-// Same open/close/outside-click behaviour as analytics_dashboard.php's own
-// #anExport: Excel/Word/PDF simply set the hidden form's format and submit
-// it, with none of that page's canvas-to-image work, since a review desk has
-// no charts to carry along.
-/* Every handler here is delegated off document and every element is looked up
-   at the moment of the click, because all of this markup lives inside #mainCol,
-   which loadResults() replaces wholesale on every tab, filter, page-size and
-   refresh click. Bound directly, as this was, the listeners went out with the
-   nodes they were attached to: the first AJAX refresh of the desk left an
-   Export button that opened nothing and could not be revived without reloading
-   the page. */
-(function () {
-    function el(id) { return document.getElementById(id); }
-
-    function shut() {
-        var menu = el('rcExportMenu'), btn = el('rcExportBtn');
-        if (menu) menu.hidden = true;
-        if (btn) btn.setAttribute('aria-expanded', 'false');
-    }
-
-    document.addEventListener('click', function (e) {
-        if (!e.target.closest) return;
-
-        var btn = e.target.closest('#rcExportBtn');
-        if (btn) {
-            e.stopPropagation();
-            var menu = el('rcExportMenu');
-            if (!menu) return;
-            menu.hidden = !menu.hidden;
-            btn.setAttribute('aria-expanded', menu.hidden ? 'false' : 'true');
-            return;
-        }
-
-        var item = e.target.closest('#rcExportMenu button[data-export]');
-        if (item) {
-            var wrap = el('rcExport'), form = el('rcExportForm'), fmt = el('rcExportFormat');
-            if (!wrap || !form || !fmt) return;
-            shut();
-            wrap.classList.add('is-busy');
-            fmt.value = item.getAttribute('data-export');
-            form.submit();
-            /* The page never navigates for a download, so nothing else would
-               bring the button back: the same reason includes/loading_bar.php
-               gives its own beforeunload counter a timed fallback. */
-            setTimeout(function () { wrap.classList.remove('is-busy'); }, 2500);
-            return;
-        }
-
-        var wrapNow = el('rcExport');
-        if (wrapNow && !wrapNow.contains(e.target)) shut();
-    });
-
-    document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') shut();
-    });
-})();
 
 // ===== Confirm-before-submit, for anything a role can do to a paper =====
 var cfg   = document.getElementById('rcConfirm');
