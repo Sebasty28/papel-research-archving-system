@@ -313,8 +313,10 @@ by default** (`papel.sideSide` keeps a move to the right).
   shown on hover), so a tab is one width either way and the close never appears under the pointer of a
   double click. The
   tab's close is `papelDoc.exitFull()`, which history hears as it hears Escape. Its list is headed
-  "Sections you are submitting". **On a phone** there are no panes: the full view covers the screen as
-  it always did, and the side pane covers the page while the PDF or Corpus is open.
+  "Sections you are submitting". **On a phone** there is one pane: all open tabs share the
+  form's strip, including Writing View, PDF, Preview, Contents and Corpus. The side pane
+  is not drawn. The PDF keeps its own close button as a second exit if Safari shifts the
+  strip above the visible area.
 - **The room** is worked out in script (`room()`, `--room-l` / `--room-r` on `<body>`, applied with
   `!important` under `body.panes`, and fed to `--chat-inset-*` and `--pdf-dock-room` so the bars still
   run full width). The side pane's width is measured, not read: `--pdf-dock-w` can be
@@ -577,10 +579,10 @@ One wash at a time: a second notice moves it.
 
 The page's dialog keeps its width and buttons until it has faded out (`plainBox()` runs on the
 next open, or 260ms after a close). Stripping them at the start of the fade showed the text
-reflowing into the narrow box over the page. A question with a third answer (the leave
-question) shows it as a labelled button ("Discard draft and leave"), and the X in the corner
-only closes. The X used to *be* the discard, and anyone pressing it to dismiss the question
-lost their draft and left.
+reflowing into the narrow box over the page. Long messages scroll inside the viewport-sized
+box, with its header, X and answer buttons kept in view on phones. The X only closes, including
+on a question with a third answer ("Discard draft and leave"); it used to *be* the discard,
+so anyone pressing it to dismiss the question lost their draft and left.
 
 ### One wheel event is not one notch
 

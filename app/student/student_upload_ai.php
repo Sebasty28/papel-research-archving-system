@@ -3861,9 +3861,13 @@ body.tab-dragging #pdfDockScroll, body.tab-dragging .doc-surface, body.tab-dragg
    so it shows whichever tab was on view. */
 body.doc-expanded .pdf-dock.side-hidden { visibility: visible !important; pointer-events: auto !important; }
 
-/* The tabs close the panels, and the side card is the only place either goes. */
+/* The tabs close the panels. A phone also keeps the PDF's own close control:
+   browser chrome can shift the tab strip above the visible area on iOS. */
 #pdfDock #pdfDockClose,
 #chatDockBtn, #chatSideBtn, #chatCloseBtn { display: none !important; }
+@media (max-width: 900px) {
+    #pdfDock #pdfDockClose { display: inline-flex !important; }
+}
 
 /* Corpus in the card: as wide as the PDF, so switching tabs keeps the card's size,
    and a column, the tabs over its window. */
@@ -3893,14 +3897,12 @@ body.doc-expanded .pdf-dock.side-hidden { visibility: visible !important; pointe
     html.side-locked .upload-steps { margin: .75rem 0 !important; }
     html.side-locked > body { overflow: visible !important; }
     html.side-locked .col-lg-11.upload-shell {
-        /* The frame as a border, not padding: padding scrolls away with the form,
-           which then ran up to the card's very edge; a border stays put, the same
-           cream all round as the side card's, with the scrollbar inside it. */
+        /* The frame never scrolls: the tab strip and its close controls must
+           remain in view. The main body is the scroll box below it. */
         padding: 0;
         border: var(--dock-gap) solid var(--cream);
-        overflow-y: auto;
+        overflow-y: hidden;
         overscroll-behavior: contain;
-        scrollbar-width: thin;
     }
 
 /* Too narrow to share the screen: overlay instead of squeezing the form. */
@@ -5121,12 +5123,16 @@ html.side-locked .main-tabs:not([data-on="form"]) + .step-row { display: none; }
 }
 .papel-dialog-backdrop.open { opacity: 1; pointer-events: auto; }
 .papel-dialog {
+    display: flex;
+    flex-direction: column;
     background: var(--white);
     border: 1px solid rgba(177,125,125,.22);
     border-radius: var(--r-card, 8px);
     box-shadow: var(--shadow-md);
     width: 100%;
     max-width: 440px;
+    max-height: calc(100vh - 3rem);
+    max-height: calc(100dvh - 3rem);
     overflow: hidden;
 }
 /* For dialogs that explain rather than announce. Wide enough for a comfortable
@@ -5136,6 +5142,7 @@ html.side-locked .main-tabs:not([data-on="form"]) + .step-row { display: none; }
 .papel-dialog.is-wide .papel-dialog-body { padding: 1.125rem 1.5rem; }
 .papel-dialog-head {
     display: flex;
+    flex: 0 0 auto;
     align-items: center;
     gap: .625rem;
     padding: .75rem 1.25rem;
@@ -5161,6 +5168,20 @@ html.side-locked .main-tabs:not([data-on="form"]) + .step-row { display: none; }
     font-size: .875rem;
     color: var(--ink);
     line-height: 1.6;
+}
+#papelDialogMessage {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+.papel-dialog-input { flex: 0 0 auto; }
+@media (max-width: 600px) {
+    .papel-dialog-backdrop { padding: .75rem; }
+    .papel-dialog {
+        max-height: calc(100vh - 1.5rem);
+        max-height: calc(100dvh - 1.5rem);
+    }
 }
 /* ===== PDF preview =====
    The panel is includes/pdf_dock.php, the one the paper pages, the review
@@ -5228,7 +5249,7 @@ body.pdf-docked > .site-footer {
    question on this page, so the head, the rule under it and the footer are the
    ones the rest already use; it is only a little wider than the narrow notices,
    so six rows and their hints sit on one line each. */
-.papel-dialog.is-choose { max-width: 640px; display: flex; flex-direction: column; max-height: calc(100vh - 3rem); }
+.papel-dialog.is-choose { max-width: 640px; display: flex; flex-direction: column; max-height: calc(100vh - 3rem); max-height: calc(100dvh - 3rem); }
 /* With sections of their own the question can run taller than a short screen: the
    head and the buttons stay put and the body between them scrolls. */
 .papel-dialog.is-choose .papel-dialog-head,
@@ -5415,6 +5436,7 @@ body.pdf-docked > .site-footer {
 }
 .papel-dialog-foot {
     display: flex;
+    flex: 0 0 auto;
     align-items: center;
     justify-content: flex-end;
     flex-wrap: wrap;          /* three actions still fit on a narrow phone */
@@ -11576,6 +11598,9 @@ const chatNudge = (function () {
 
     function canShow() {
         if (document.hidden) return false;
+        // The native iOS picker and keyboard need the phone's clear view.
+        if (window.innerWidth <= 900 && document.activeElement &&
+            document.activeElement.matches('input, select, textarea, [contenteditable="true"]')) return false;
         const btn = anchor();
         const r = btn ? btn.getBoundingClientRect() : null;
         if (!r || !r.width) return false;
@@ -11613,6 +11638,12 @@ const chatNudge = (function () {
     function start() {
         const n = bubble();
         if (!n) return;
+
+        document.addEventListener('focusin', function (e) {
+            if (window.innerWidth <= 900 && e.target.matches('input, select, textarea, [contenteditable="true"]')) {
+                n.classList.remove('is-on');
+            }
+        });
 
         /* The bubble opens the chat, as the button under it does. The cross sits
            inside it, so it is told apart here rather than given a listener that
@@ -13941,11 +13972,9 @@ document.addEventListener('DOMContentLoaded', () => {
     <div class="papel-dialog-head">
       <span class="material-symbols-outlined" id="papelDialogIcon">info</span>
       <h2 id="papelDialogTitle">Notice</h2>
-      <!-- Closes the question, the same as its safe answer. Only on a question
-           with a third answer, so every other dialog keeps a header with nothing in
-           the corner. It used to *be* that third answer ("Discard this draft and
-           leave"), and an X in a corner reads as "close" to everyone: pressed to
-           dismiss the leave question, it threw the draft away and left the page. -->
+      <!-- Closes the message or question with its safe answer. It used to *be*
+           the third answer ("Discard this draft and leave"), and an X in a
+           corner reads as "close": pressing it must never discard a draft. -->
       <button type="button" class="papel-dialog-x" id="papelDialogX" hidden
               aria-label="Close" title="Close">
         <span class="material-symbols-outlined">close</span>
@@ -14013,7 +14042,7 @@ document.addEventListener('DOMContentLoaded', () => {
         inputWrap.hidden = true;
         cancelBtn.hidden = true;
         altBtn.hidden = true;
-        xBtn.hidden = true;
+        xBtn.hidden = false;
         okBtn.textContent = 'OK';
         cancelBtn.textContent = 'Cancel';
     }

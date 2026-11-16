@@ -11,8 +11,10 @@ $surveyEmbedUrl = $surveyFormUrl . '?embedded=true';
     z-index: 930;
     display: inline-flex;
     align-items: center;
-    gap: .55rem;
-    padding: .75rem 1rem .75rem .8rem;
+    justify-content: center;
+    width: 46px;
+    height: 46px;
+    padding: 0;
     border: 1px solid color-mix(in srgb, var(--maroon-surface) 70%, #fff);
     border-right: 0;
     border-radius: .65rem 0 0 .65rem;
@@ -24,27 +26,97 @@ $surveyEmbedUrl = $surveyFormUrl . '?embedded=true';
 }
 .survey-ribbon:hover { background: var(--maroon-surface-hover); color: #fff; }
 .survey-ribbon:focus-visible,
+.survey-nudge button:focus-visible,
 .survey-dialog button:focus-visible,
 .survey-dialog a:focus-visible { outline: 3px solid #e9b85f; outline-offset: 3px; }
-.survey-ribbon .material-symbols-outlined { font-size: 1.25rem; }
-/* The menu and the document reader need the phone's full touch area. */
-@media (max-width: 900px) {
-    html.nav-open .survey-ribbon { display: none; }
-    body.pdf-docked .survey-ribbon,
-    body.pdf-docked-left .survey-ribbon { display: none; }
-    .survey-ribbon {
-        width: 46px;
-        height: 46px;
-        justify-content: center;
-        gap: 0;
-        padding: 0;
-    }
-    .survey-ribbon .survey-ribbon-label { display: none; }
-    .survey-ribbon .material-symbols-outlined { font-size: 1.5rem; }
+.survey-ribbon .material-symbols-outlined { font-size: 1.5rem; }
+/* The same small, white greeting card and notch as Corpus's chat nudge. The
+   invitation stays outside the button, so the whole icon remains a touch target. */
+.survey-nudge {
+    position: fixed;
+    right: .5rem;
+    bottom: calc(max(76px, calc(env(safe-area-inset-bottom) + 76px)) + 58px);
+    z-index: 931;
+    width: max-content;
+    max-width: min(17rem, calc(100vw - 3rem));
+    padding: .625rem .875rem;
+    background: var(--white);
+    color: var(--ink);
+    border: 1px solid var(--border);
+    border-radius: var(--r-card, 8px);
+    box-shadow: var(--shadow-md);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(6px);
+    transition: opacity .16s ease, transform .16s ease, visibility 0s linear .16s;
 }
-@media (max-width: 900px) {
-    body:has(.pdf-dock.is-open) .survey-ribbon { display: none; }
+.survey-nudge.is-on {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: none;
+    transition: opacity .2s ease, transform .2s ease, visibility 0s;
 }
+.survey-nudge::after {
+    content: '';
+    position: absolute;
+    right: 15px;
+    bottom: -6px;
+    width: 10px;
+    height: 10px;
+    background: var(--white);
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    transform: rotate(45deg);
+}
+.survey-nudge-link {
+    display: block;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--ink);
+    font: 400 .875rem/1.5 var(--font-body);
+    cursor: pointer;
+}
+.survey-nudge-link:hover { color: var(--maroon); }
+.survey-nudge-x {
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--r-control, 4px);
+    background: var(--white);
+    box-shadow: var(--shadow-sm);
+    color: var(--grey);
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity .15s ease;
+}
+.survey-nudge:hover .survey-nudge-x,
+.survey-nudge:focus-within .survey-nudge-x { opacity: 1; }
+@media (hover: none) { .survey-nudge-x { opacity: 1; width: 28px; height: 28px; top: -12px; right: -8px; } }
+.survey-nudge-x .material-symbols-outlined { font-size: 14px; }
+@media (prefers-reduced-motion: reduce) {
+    .survey-nudge, .survey-nudge.is-on { transform: none; }
+}
+/* The menu and document reader keep their controls clear of both invitation parts. */
+@media (max-width: 900px) {
+    html.nav-open .survey-ribbon,
+    html.nav-open .survey-nudge { display: none; }
+}
+body.pdf-docked .survey-ribbon,
+body.pdf-docked .survey-nudge,
+body.pdf-docked-left .survey-ribbon,
+body.pdf-docked-left .survey-nudge { display: none; }
+body:has(.pdf-dock.is-open) .survey-ribbon,
+body:has(.pdf-dock.is-open) .survey-nudge { display: none; }
 .survey-dialog {
     width: min(980px, calc(100vw - 2rem));
     max-width: none;
@@ -102,14 +174,27 @@ $surveyEmbedUrl = $surveyFormUrl . '?embedded=true';
 .survey-ad-probe { position: absolute; display: block; width: 1px; height: 1px; overflow: hidden; pointer-events: none; opacity: 0; }
 @media (max-width: 600px) {
     .survey-dialog { width: 100vw; height: 100dvh; border: 0; border-radius: 0; }
-    .survey-dialog-head { padding: .65rem .75rem; }
+    .survey-dialog-head {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: .35rem .5rem;
+        padding: .65rem .75rem;
+    }
     .survey-dialog-title { font-size: .9rem; }
+    .survey-dialog-close { grid-column: 2; grid-row: 1; justify-self: end; }
+    .survey-dialog-help { grid-column: 1; grid-row: 2; justify-self: start; display: flex; align-items: center; min-height: 32px; padding: 0; }
+    .survey-dialog-link { grid-column: 2; grid-row: 2; justify-self: end; display: flex; align-items: center; min-height: 32px; }
 }
 </style>
 <button class="survey-ribbon" id="surveyRibbon" type="button" aria-label="Answer our Survey" aria-haspopup="dialog" aria-controls="surveyDialog">
     <span class="material-symbols-outlined" aria-hidden="true">rate_review</span>
-    <span class="survey-ribbon-label">Answer our Survey</span>
 </button>
+<div class="survey-nudge" id="surveyNudge">
+    <button class="survey-nudge-link" id="surveyNudgeLink" type="button">Answer our Survey</button>
+    <button class="survey-nudge-x" id="surveyNudgeClose" type="button" aria-label="Dismiss survey invitation" title="Dismiss">
+        <span class="material-symbols-outlined" aria-hidden="true">close</span>
+    </button>
+</div>
 <dialog class="survey-dialog" id="surveyDialog" aria-labelledby="surveyDialogTitle">
     <div class="survey-dialog-head">
         <h2 class="survey-dialog-title" id="surveyDialogTitle">PAPEL Survey</h2>
@@ -139,6 +224,9 @@ $surveyEmbedUrl = $surveyFormUrl . '?embedded=true';
 <script nonce="<?= csp_nonce() ?>">
 (function () {
     var ribbon = document.getElementById('surveyRibbon');
+    var nudge = document.getElementById('surveyNudge');
+    var nudgeLink = document.getElementById('surveyNudgeLink');
+    var nudgeClose = document.getElementById('surveyNudgeClose');
     var dialog = document.getElementById('surveyDialog');
     var frame = document.getElementById('surveyFrame');
     var close = document.getElementById('surveyDialogClose');
@@ -149,14 +237,76 @@ $surveyEmbedUrl = $surveyFormUrl . '?embedded=true';
     var blockedMessage = document.getElementById('surveyBlockedMessage');
     var retry = document.getElementById('surveyRetry');
     var probe = document.getElementById('surveyAdProbe');
-    if (!ribbon || !dialog || !frame || !close || !help || !loading || !blocked || !retry) return;
+    if (!ribbon || !nudge || !nudgeLink || !nudgeClose || !dialog || !frame || !close || !help || !loading || !blocked || !retry) return;
 
     // The paper preview and other embedded PAPEL pages must not repeat the invite.
     if (window.self !== window.top) {
         ribbon.remove();
+        nudge.remove();
         dialog.remove();
         return;
     }
+
+    var nudgeTimer = 0;
+    var nudgeHideTimer = 0;
+    var hoverTimer = 0;
+    var nudgeAuto = false;
+    var nudgeHover = false;
+    var nudgeDismissed = false;
+    function canNudge() {
+        if (document.hidden || dialog.open || getComputedStyle(ribbon).display === 'none') return false;
+        if (window.innerWidth <= 900 && document.activeElement && document.activeElement.matches('input, select, textarea, [contenteditable="true"]')) return false;
+        var r = ribbon.getBoundingClientRect();
+        if (!r.width || !r.height) return false;
+        var top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        return !!top && ribbon.contains(top);
+    }
+    function syncNudge() {
+        nudge.classList.toggle('is-on', !nudgeDismissed && (nudgeAuto || nudgeHover) && canNudge());
+    }
+    function tryNudge() {
+        if (nudgeDismissed) return;
+        if (!canNudge()) { nudgeTimer = setTimeout(tryNudge, 1000); return; }
+        nudgeAuto = true;
+        syncNudge();
+        nudgeHideTimer = setTimeout(function () { nudgeAuto = false; syncNudge(); }, 6000);
+    }
+    function hoverNudge() {
+        clearTimeout(hoverTimer);
+        nudgeDismissed = false;
+        nudgeHover = true;
+        syncNudge();
+    }
+    function leaveNudge() {
+        clearTimeout(hoverTimer);
+        hoverTimer = setTimeout(function () { nudgeHover = false; syncNudge(); }, 250);
+    }
+    ribbon.addEventListener('mouseenter', hoverNudge);
+    ribbon.addEventListener('mouseleave', leaveNudge);
+    ribbon.addEventListener('focus', function () { if (!nudgeDismissed) hoverNudge(); });
+    ribbon.addEventListener('blur', leaveNudge);
+    nudge.addEventListener('mouseenter', function () { clearTimeout(hoverTimer); });
+    nudge.addEventListener('mouseleave', leaveNudge);
+    nudgeLink.addEventListener('click', function () { ribbon.click(); });
+    nudgeClose.addEventListener('click', function () {
+        nudgeDismissed = true;
+        nudgeAuto = false;
+        nudgeHover = false;
+        syncNudge();
+        try { ribbon.focus({ preventScroll: true }); } catch (ignore) { ribbon.focus(); }
+    });
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && nudge.classList.contains('is-on')) {
+            nudgeDismissed = true;
+            nudgeAuto = false;
+            nudgeHover = false;
+            syncNudge();
+        }
+    });
+    document.addEventListener('focusin', syncNudge);
+    document.addEventListener('focusout', function () { setTimeout(syncNudge, 0); });
+    window.addEventListener('resize', syncNudge);
+    nudgeTimer = setTimeout(tryNudge, 2800);
 
     var timer = 0;
     var loaded = false;
@@ -238,6 +388,12 @@ $surveyEmbedUrl = $surveyFormUrl . '?embedded=true';
         if (dialog.open) showBlockerMessage(adBlocked);
     });
     ribbon.addEventListener('click', function () {
+        clearTimeout(nudgeTimer);
+        clearTimeout(nudgeHideTimer);
+        nudgeDismissed = true;
+        nudgeAuto = false;
+        nudgeHover = false;
+        syncNudge();
         dialog.showModal();
         if (!frame.src || !loaded) beginLoad();
         else if (probeBlocked()) showBlockerMessage(true);

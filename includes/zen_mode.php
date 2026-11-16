@@ -79,6 +79,7 @@ html.zen-on #chat-button,
 html.zen-on #chat-nudge,
 html.zen-on .side-corpus,
 html.zen-on .survey-ribbon,
+html.zen-on .survey-nudge,
 html.zen-on #themeWelcome {
     display: none;
 }
