@@ -201,6 +201,7 @@ $description = $descriptions[$error_http_code] ?? 'An unexpected error occurred.
     color: #94a3b8;
     font-size: 0.8rem;
   }
+  .footer-text a { color: inherit; text-decoration: underline; }
 </style>
 <?php require_once __DIR__ . '/../includes/focus_ring.php'; ?>
 </head>
@@ -220,7 +221,7 @@ $description = $descriptions[$error_http_code] ?? 'An unexpected error occurred.
         <a href="javascript:history.back()" class="btn-back">← Go Back</a>
         <a href="<?= htmlspecialchars($base_url) ?>" class="btn-home">Home</a>
     </div>
-    <p class="footer-text">If this problem persists, please contact support with the reference code above.</p>
+    <p class="footer-text">If this problem persists, please <a href="<?= htmlspecialchars($base_url . '/pages/contact_support.php', ENT_QUOTES, 'UTF-8') ?>">contact support</a> with the reference code above.</p>
 </div>
 </body>
 </html>

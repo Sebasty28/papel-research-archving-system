@@ -75,7 +75,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
                 <section class="terms-section">
                     <h2><span class="num">1.</span> Who may use PAPEL</h2>
                     <p>Visitors may browse material made available in the public repository. Students, faculty, staff, and approved guests may use the features available to their assigned roles.</p>
-                    <p>PAPEL does not offer public account registration. Authorized university personnel create accounts and issue temporary Library Pass credentials. You must use only an account issued to you, keep your credentials confidential, and promptly report suspected unauthorized access through Contact Support.</p>
+                    <p>PAPEL does not offer public account registration. Authorized university personnel create accounts and issue temporary Library Pass credentials. You must use only an account issued to you, keep your credentials confidential, and promptly report suspected unauthorized access through <a href="<?= e(BASE_URL) ?>/pages/contact_support.php">Contact Support</a>.</p>
                 </section>
 
                 <section class="terms-section">

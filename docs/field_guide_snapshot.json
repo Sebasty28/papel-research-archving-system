@@ -1,5 +1,5 @@
 {
- "built": "2026-11-16 15:47",
+ "built": "2026-11-16 15:55",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -230,7 +230,7 @@
    "lines": 1644
   },
   "includes/browser_interference.php": {
-   "lines": 123
+   "lines": 127
   },
   "includes/card_collapse.php": {
    "lines": 94
@@ -404,7 +404,7 @@
    "lines": 849
   },
   "pages/error_page.php": {
-   "lines": 227
+   "lines": 228
   },
   "pages/gdrive_callback.php": {
    "lines": 41
@@ -419,7 +419,7 @@
    "lines": 219
   },
   "pages/settings.php": {
-   "lines": 758
+   "lines": 760
   },
   "pages/terms_and_conditions.php": {
    "lines": 164

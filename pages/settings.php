@@ -261,7 +261,9 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
     </div>
 
     <?php if ($m = flash('error')): ?>
-        <div class="alert error"><?= e($m) ?></div>
+        <div class="alert error"><?= preg_replace_callback('/contact support/i',
+            static fn($hit) => '<a href="' . e(BASE_URL . '/pages/contact_support.php') . '">' . $hit[0] . '</a>',
+            e($m)) ?></div>
     <?php endif; ?>
     <?php if ($m = flash('success')): ?>
         <div class="alert success"><?= e($m) ?></div>

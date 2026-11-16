@@ -24,6 +24,7 @@
 }
 .papel-browser-warning__box h2 { margin: 0 0 10px; font-size: 20px; line-height: 1.3; }
 .papel-browser-warning__box p { margin: 0 0 18px; }
+.papel-browser-warning__box a { color: #800000; text-decoration: underline; }
 .papel-browser-warning__actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .papel-browser-warning__actions button {
     min-height: 42px;
@@ -45,21 +46,24 @@
     var failed = false;
     function show() {
         if (!failed || !document.body || document.getElementById('papelBrowserWarning')) { return; }
+        /* The support form must remain reachable from this warning. */
+        if (/\/pages\/contact_support\.php$/.test(location.pathname)) { return; }
         var layer = document.createElement('div');
         layer.id = 'papelBrowserWarning';
         layer.className = 'papel-browser-warning';
         layer.innerHTML = '<div class="papel-browser-warning__box" role="alertdialog" aria-modal="true" aria-labelledby="papelBrowserWarningTitle" aria-describedby="papelBrowserWarningText">' +
             '<h2 id="papelBrowserWarningTitle">A browser extension may affect PAPEL</h2>' +
-            '<p id="papelBrowserWarningText">An ad blocker or another browser extension appears to be changing or blocking this page. Please turn it off for PAPEL, then reload. If the problem continues, check your connection or contact support.</p>' +
+            '<p id="papelBrowserWarningText">An ad blocker or another browser extension appears to be changing or blocking this page. Please turn it off for PAPEL, then reload. If the problem continues, check your connection or <a href="<?= e(BASE_URL) ?>/pages/contact_support.php">contact support</a>.</p>' +
             '<div class="papel-browser-warning__actions"><button type="button" data-action="reload">Reload page</button></div></div>';
         document.body.appendChild(layer);
+        var support = layer.querySelector('a');
         var reload = layer.querySelector('[data-action="reload"]');
         reload.addEventListener('click', function () { location.reload(); });
         layer.addEventListener('keydown', function (event) {
-            if (event.key === 'Escape' || event.key === 'Tab') {
-                event.preventDefault();
-                reload.focus();
-            }
+            if (event.key === 'Escape') { event.preventDefault(); reload.focus(); }
+            if (event.key !== 'Tab') { return; }
+            event.preventDefault();
+            (document.activeElement === reload ? support : reload).focus();
         });
         reload.focus();
     }
