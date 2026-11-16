@@ -299,17 +299,13 @@ body.a11y-stop-animations .papel-loader-veil { display: none; }
     }
     function checkBadgeMedia() {
         if (!badgeMediaBlocked()) { return; }
-        /* A cosmetic blocker may hide an image without firing its error event.
-           Never leave the visitor looking at an empty pill and a locked page. */
+        /* A failed image is not evidence of an ad blocker. Hide the empty
+           badge; the form's own response still explains any save failure. */
         badge.classList.add('is-media-broken');
-        if (window.papelBrowserInterference) { window.papelBrowserInterference.report(); }
     }
     if (badgeImage) {
         badgeImage.addEventListener('error', function () {
-            /* A blank badge over a dimmed page is the failure shown to the
-               visitor. Only report after the image actually fails. */
             badge.classList.add('is-media-broken');
-            if (window.papelBrowserInterference) { window.papelBrowserInterference.report(); }
         });
         badgeImage.addEventListener('load', checkBadgeMedia);
     }

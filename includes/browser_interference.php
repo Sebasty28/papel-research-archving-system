@@ -1,6 +1,6 @@
 <?php
 /* A browser does not expose its installed extensions to a website. Check for
-   blocked resources or hidden ad bait before showing a warning. */
+   ad-specific blocking evidence before showing a warning. */
 ?>
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 .papel-browser-warning {
@@ -45,6 +45,7 @@
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 (function () {
     var failed = false;
+    var reason = '';
     var dismissKey = 'papel_browser_warning_dismissed';
     function dismissed() {
         try { return sessionStorage.getItem(dismissKey) === '1'; }
@@ -58,9 +59,10 @@
         var layer = document.createElement('div');
         layer.id = 'papelBrowserWarning';
         layer.className = 'papel-browser-warning';
+        layer.dataset.trigger = reason;
         layer.innerHTML = '<div class="papel-browser-warning__box" role="alertdialog" aria-modal="true" aria-labelledby="papelBrowserWarningTitle" aria-describedby="papelBrowserWarningText">' +
-            '<h2 id="papelBrowserWarningTitle">Something may be affecting PAPEL</h2>' +
-            '<p id="papelBrowserWarningText">A browser extension or failed page resource may be interfering with PAPEL. If you use an ad blocker, turn it off for PAPEL and reload. Otherwise, you can dismiss this warning. If the problem continues, <a href="<?= e(BASE_URL) ?>/pages/contact_support.php">contact support</a>.</p>' +
+            '<h2 id="papelBrowserWarningTitle">A blocker may affect PAPEL</h2>' +
+            '<p id="papelBrowserWarningText">An ad blocker or another browser extension may be hiding part of PAPEL. If you use one, allow PAPEL and reload. If this warning appears unexpectedly, you can dismiss it. If the problem continues, <a href="<?= e(BASE_URL) ?>/pages/contact_support.php">contact support</a>.</p>' +
             '<div class="papel-browser-warning__actions"><button type="button" data-action="reload">Reload page</button><button type="button" data-action="close">Dismiss</button></div></div>';
         document.body.appendChild(layer);
         var support = layer.querySelector('a');
@@ -85,21 +87,52 @@
     }
 
     window.papelBrowserInterference = {
-        report: function () {
+        reason: '',
+        report: function (trigger) {
             if (failed) { return; }
             failed = true;
+            reason = trigger || 'unknown';
+            this.reason = reason;
             if (document.body) { show(); }
             else { document.addEventListener('DOMContentLoaded', show, { once: true }); }
         }
     };
 
-    function checkAdBlocker() {
-        /* Some extensions replace a blocked script with an empty response, so
-           its error event never fires. The local probe must have run before
-           DOMContentLoaded if the browser allowed it through. */
-        if (window.papelAdProbeLoaded !== true) {
-            window.papelBrowserInterference.report();
+    function verifyAdScript() {
+        /* A single failed request can be a brief network failure. Retry the
+           ad-like path beside an ordinary local script; only a selective
+           failure is evidence of filtering. Stop after three seconds so a
+           delayed request cannot interrupt a later login or edit. */
+        var control = document.createElement('script');
+        var retry = document.createElement('script');
+        var remaining = 2;
+        var controlLoaded = false;
+        var adLoaded = false;
+        var finished = false;
+        var timer = setTimeout(function () { finished = true; control.remove(); retry.remove(); }, 3000);
+        function settle(which, loaded) {
+            if (finished) { return; }
+            if (which === 'control') controlLoaded = loaded;
+            else adLoaded = loaded && window.papelAdProbeLoaded === true;
+            if (--remaining) { return; }
+            finished = true;
+            clearTimeout(timer);
+            control.remove();
+            retry.remove();
+            if (controlLoaded && !adLoaded) { window.papelBrowserInterference.report('ad-script'); }
         }
+        var suffix = '?check=' + Date.now();
+        control.src = <?= json_encode(BASE_URL . '/includes/browser_probe.js') ?> + suffix;
+        retry.src = <?= json_encode(BASE_URL . '/includes/ads.js') ?> + suffix;
+        control.onload = function () { settle('control', window.papelNeutralProbeLoaded === true); };
+        control.onerror = function () { settle('control', false); };
+        retry.onload = function () { settle('ad', true); };
+        retry.onerror = function () { settle('ad', false); };
+        document.head.appendChild(control);
+        document.head.appendChild(retry);
+    }
+
+    function checkAdBlocker() {
         var bait = document.createElement('div');
         bait.id = 'ad-banner';
         /* AdBlock's current generic rules hide ad_banner and adslot on the
@@ -110,9 +143,10 @@
         setTimeout(function () {
             var style = bait.isConnected ? getComputedStyle(bait) : null;
             var blocked = !style || style.display === 'none' || style.visibility === 'hidden'
-                || bait.offsetWidth === 0 || bait.offsetHeight === 0;
+                || parseFloat(style.width) === 0 || parseFloat(style.height) === 0;
             bait.remove();
-            if (blocked) { window.papelBrowserInterference.report(); }
+            if (blocked) { window.papelBrowserInterference.report('ad-element'); }
+            else if (window.papelAdProbeLoaded !== true) { verifyAdScript(); }
         }, 50);
     }
     if (document.readyState === 'loading') {
@@ -121,22 +155,6 @@
         checkAdBlocker();
     }
 
-    /* Resource errors identify a real failure; a slow resource is not evidence.
-       Fonts and optional images are excluded. */
-    window.addEventListener('error', function (event) {
-        var target = event.target;
-        if (!target || !target.tagName) { return; }
-        var tag = target.tagName.toLowerCase();
-        if (tag === 'link') {
-            if (target.rel !== 'stylesheet') { return; }
-            /* A font service outage changes typography but does not break the
-               controls. The site's own CSS and Bootstrap do. */
-            var href = target.href || '';
-            if (href.indexOf(location.origin + '/') !== 0 &&
-                href.indexOf('https://cdn.jsdelivr.net/npm/bootstrap') !== 0) { return; }
-        } else if (tag !== 'script') { return; }
-        window.papelBrowserInterference.report();
-    }, true);
 })();
 </script>
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>" src="<?= e(BASE_URL) ?>/includes/ads.js"></script>
