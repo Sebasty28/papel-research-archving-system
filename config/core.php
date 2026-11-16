@@ -76,7 +76,7 @@ function csp_nonce(): string {
                "style-src 'self' 'nonce-{$nonce}' https://cdn.jsdelivr.net https://fonts.googleapis.com; " .
                "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; " .
                "img-src 'self' data: blob: https://lh3.googleusercontent.com; " .
-               "connect-src 'self' https://api.groq.com https://www.googleapis.com{$proxyOrigin}; " .
+               "connect-src 'self' https://api.groq.com https://www.googleapis.com https://docs.google.com{$proxyOrigin}; " .
                "frame-src 'self' https://drive.google.com https://docs.google.com{$rcFrame}; " .
                "frame-ancestors 'self'; " .
                "form-action 'self'; " .
