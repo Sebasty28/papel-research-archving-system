@@ -763,4 +763,8 @@ require_once ROOT_PATH.'/includes/manuscript_timer.php';
    is no session to lose. After loading_bar.php for the same reason the
    manuscript countdown is, its polls carrying that file's papelQuiet flag. */
 require_once ROOT_PATH.'/includes/session_timer.php';
-require ROOT_PATH.'/includes/accessibility.php'; ?>
+require ROOT_PATH.'/includes/accessibility.php';
+if (!defined('PAPEL_PAPER_PREVIEW')) {
+    require_once ROOT_PATH.'/includes/survey_invite.php';
+}
+?>
