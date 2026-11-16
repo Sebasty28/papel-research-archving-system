@@ -5,7 +5,7 @@
  * One switch, in the profile menu, that quiets everything on the page which is
  * not the page: the breadcrumb strip, the footer, the photo strip behind the
  * navbar, the accessibility tab, the scroll-to-top button, Corpus's floating
- * button and his greeting, the "Make it yours" card, the repository's photo
+ * button, his greeting and pane shortcut, the survey invitation, the "Make it yours" card, the repository's photo
  * banner, and the console side panel, which folds to its rail rather than
  * going, so the filters are still a press away.
  *
@@ -38,9 +38,9 @@
  *   else in the tree; it was checked, for the reason `.modal-backdrop` is
  *   written down in CLAUDE.md.
  * - **Anything measured off a bar has to be told.** The strip is hidden, so
- *   `--crumb-h`, the repository's `--hero-nav` and the side panel's rail all
- *   have to be read again. Switching is instant and nothing reloads, so this
- *   raises `papel:zen` on the document and those three listen for it. A
+ *   `--crumb-h`, the repository's `--hero-nav`, the side panel's rail and the
+ *   upload panes all have to be read again. Switching is instant and nothing
+ *   reloads, so this raises `papel:zen` on the document for those listeners. A
  *   ResizeObserver does see an element go to `display: none`, but relying on
  *   that would leave the reason invisible at the places that depend on it.
  * - **The switch is printed twice**, by `zen_switch()`: once in the avatar
@@ -77,6 +77,8 @@ html.zen-on #a11y-toggle,
 html.zen-on #scrollJump,
 html.zen-on #chat-button,
 html.zen-on #chat-nudge,
+html.zen-on .side-corpus,
+html.zen-on .survey-ribbon,
 html.zen-on #themeWelcome {
     display: none;
 }

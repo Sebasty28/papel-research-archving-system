@@ -66,7 +66,10 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         card.appendChild(body);
 
-        var startClosed = card.getAttribute('data-collapse-default') === 'closed';
+        // A phone's contents card is pinned over the record. Start it folded
+        // so the title and paper remain readable until the reader opens it.
+        var startClosed = card.getAttribute('data-collapse-default') === 'closed'
+            || (card.classList.contains('pd-toc') && window.matchMedia('(max-width: 600px)').matches);
         var label = head.textContent.trim();
 
         var btn = document.createElement('button');

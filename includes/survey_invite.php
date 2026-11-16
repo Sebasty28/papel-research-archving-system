@@ -29,14 +29,21 @@ $surveyEmbedUrl = $surveyFormUrl . '?embedded=true';
 .survey-ribbon .material-symbols-outlined { font-size: 1.25rem; }
 /* The menu and the document reader need the phone's full touch area. */
 @media (max-width: 900px) {
-    html.nav-open .survey-ribbon,
-    body:has(.pdf-dock.is-open) .survey-ribbon { display: none; }
+    html.nav-open .survey-ribbon { display: none; }
+    body.pdf-docked .survey-ribbon,
+    body.pdf-docked-left .survey-ribbon { display: none; }
     .survey-ribbon {
-        max-width: min(16rem, calc(100vw - 1rem));
-        padding: .6rem .75rem;
-        font-size: .75rem;
-        line-height: 1.2;
+        width: 46px;
+        height: 46px;
+        justify-content: center;
+        gap: 0;
+        padding: 0;
     }
+    .survey-ribbon .survey-ribbon-label { display: none; }
+    .survey-ribbon .material-symbols-outlined { font-size: 1.5rem; }
+}
+@media (max-width: 900px) {
+    body:has(.pdf-dock.is-open) .survey-ribbon { display: none; }
 }
 .survey-dialog {
     width: min(980px, calc(100vw - 2rem));
@@ -99,9 +106,9 @@ $surveyEmbedUrl = $surveyFormUrl . '?embedded=true';
     .survey-dialog-title { font-size: .9rem; }
 }
 </style>
-<button class="survey-ribbon" id="surveyRibbon" type="button" aria-haspopup="dialog" aria-controls="surveyDialog">
+<button class="survey-ribbon" id="surveyRibbon" type="button" aria-label="Answer our Survey" aria-haspopup="dialog" aria-controls="surveyDialog">
     <span class="material-symbols-outlined" aria-hidden="true">rate_review</span>
-    <span>Answer our Survey</span>
+    <span class="survey-ribbon-label">Answer our Survey</span>
 </button>
 <dialog class="survey-dialog" id="surveyDialog" aria-labelledby="surveyDialogTitle">
     <div class="survey-dialog-head">

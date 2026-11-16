@@ -12825,7 +12825,12 @@ window.papelSide = (function () {
         if (!sh || !document.documentElement.classList.contains('side-locked')) return;
         const gap = dockGap();
         const top = Math.round(sh.getBoundingClientRect().top);
-        const h = Math.max(200, Math.round(window.innerHeight - top - gap)) + 'px';
+        /* Safari keeps innerHeight at the old layout size while its keyboard
+           shrinks the visible viewport. Size the pane to what remains above
+           the keyboard so the Writing View and its toolbar stay reachable. */
+        const view = window.visualViewport;
+        const bottom = view ? view.offsetTop + view.height : window.innerHeight;
+        const h = Math.max(120, Math.round(bottom - top - gap)) + 'px';
         if (sh.style.height !== h) sh.style.height = h;
         rail.style.top = top + 'px';
         rail.style.bottom = gap + 'px';
@@ -12990,6 +12995,13 @@ window.papelSide = (function () {
     }
 
     window.addEventListener('resize', function () { soon('render', render); });
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', function () { soon('visible-viewport', sizeForm); });
+        window.visualViewport.addEventListener('scroll', function () { soon('visible-viewport', sizeForm); });
+    }
+    /* Zen removes the breadcrumb without resizing the window. Its removal
+       changes the pane's top edge, so measure the pane again at that moment. */
+    document.addEventListener('papel:zen', function () { soon('render', render); });
     if (window.ResizeObserver) {
         const bar = document.querySelector('.site-header');
         if (bar) new ResizeObserver(function () { requestAnimationFrame(function () { sizeForm(); }); }).observe(bar);

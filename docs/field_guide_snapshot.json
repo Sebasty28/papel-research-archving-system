@@ -1,5 +1,5 @@
 {
- "built": "2026-11-16 18:03",
+ "built": "2026-11-16 18:52",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -146,7 +146,7 @@
    "lines": 435
   },
   "app/student/student_upload_ai.php": {
-   "lines": 14861
+   "lines": 14874
   },
   "app/student/upload_diagnostics.php": {
    "lines": 245
@@ -233,7 +233,7 @@
    "lines": 161
   },
   "includes/card_collapse.php": {
-   "lines": 94
+   "lines": 97
   },
   "includes/console_shell.php": {
    "lines": 793
@@ -344,7 +344,7 @@
    "lines": 771
   },
   "includes/site_head.php": {
-   "lines": 1794
+   "lines": 1803
   },
   "includes/site_header.php": {
    "lines": 744
@@ -356,7 +356,7 @@
    "lines": 167
   },
   "includes/survey_invite.php": {
-   "lines": 247
+   "lines": 254
   },
   "includes/theme.php": {
    "lines": 394
@@ -377,7 +377,7 @@
    "lines": 334
   },
   "includes/zen_mode.php": {
-   "lines": 266
+   "lines": 268
   },
   "index.php": {
    "lines": 12

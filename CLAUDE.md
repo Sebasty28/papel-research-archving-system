@@ -1332,7 +1332,7 @@ book viewer instead of closing the menu.
 
 A switch in the profile menu that puts the page's furniture away:
 `includes/zen_mode.php`, required from `site_head.php`, which is the whole of
-it bar the five hooks listed below. Added 14 November 2026.
+it bar the hooks listed below. Added 14 November 2026.
 
 | | |
 |---|---|
@@ -1342,7 +1342,8 @@ it bar the five hooks listed below. Added 14 November 2026.
 
 **What goes**: the breadcrumb strip, the photo strip behind the navbar
 (`.nav-photo`), the footer, the accessibility tab, the scroll-to-top button,
-Corpus's floating button and his greeting, the "Make it yours" card, the
+Corpus's floating button, his greeting and the upload pane shortcut, the survey
+invitation, the "Make it yours" card, the
 repository's banner, and the console side panel, which folds to its rail rather
 than going, so the filters are still a press away. **What stays**: the navbar,
 because the switch that turns this off is in it and a mode with no way out is a
@@ -1361,9 +1362,10 @@ not a reading mode.
   three follow with no second set of rules. The reader's own answer is waiting
   for them when Zen goes off; the same goes for `papel_banner_hidden`.
 - **Switching raises `papel:zen` on the document**, because nothing reloads and
-  four things measure a bar that has just gone: `--crumb-h` (the script at the
+  measured elements move when a bar has just gone: `--crumb-h` (the script at the
   foot of `site_header.php`), the repository's `--hero-nav` and its banner
-  state, and the side panel's rail (`addRail()` in `browse_console_js.php`). A
+  state, the side panel's rail (`addRail()` in `browse_console_js.php`), and
+  the upload page's panes (`papelSide`). A
   ResizeObserver does see an element go to `display: none`, but these are asked
   in so many words rather than left to a side effect.
 - **The switch is delegated in the capture phase.** The avatar dropdown stops

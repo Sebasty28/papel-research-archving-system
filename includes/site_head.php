@@ -1624,10 +1624,10 @@ select.lf-input {
         background: var(--white);
         border-bottom: 1px solid var(--border);
         box-shadow: 0 14px 28px rgba(51, 0, 0, .16);
-        height: calc(100vh - 61px);
-        height: calc(100dvh - 61px);
-        max-height: calc(100vh - 61px);
-        max-height: calc(100dvh - 61px);
+        height: calc(100vh - 60px);
+        height: calc(100dvh - 60px);
+        max-height: calc(100vh - 60px);
+        max-height: calc(100dvh - 60px);
         overflow-y: auto;
         overscroll-behavior: contain;
         z-index: 950;
@@ -1746,6 +1746,15 @@ select.lf-input {
     .header-right { gap: .375rem; }
     .nav-burger { width: 38px; height: 38px; padding: 5px; }
     .btn-login-nav { font-size: .8125rem; }
+}
+/* iOS Safari enlarges a page when a focused editor or input has text below
+   16px. Keep editable controls readable so opening the keyboard does not zoom
+   the whole page and cut off the pane beside them. */
+@media (max-width: 900px) {
+    input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="button"]):not([type="submit"]),
+    select,
+    textarea,
+    [contenteditable="true"] { font-size: max(16px, 1rem) !important; }
 }
 </style>
 <?php /* Which side the sidebar sits on, read before anything is painted: the
