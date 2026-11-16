@@ -7,7 +7,8 @@ $surveyEmbedUrl = $surveyFormUrl . '?embedded=true';
 .survey-ribbon {
     position: fixed;
     right: 0;
-    bottom: max(76px, calc(env(safe-area-inset-bottom) + 76px));
+    /* The page-end jump occupies the same corner (80-132px from the bottom). */
+    bottom: max(144px, calc(env(safe-area-inset-bottom) + 144px));
     z-index: 930;
     display: inline-flex;
     align-items: center;
@@ -35,7 +36,7 @@ $surveyEmbedUrl = $surveyFormUrl . '?embedded=true';
 .survey-nudge {
     position: fixed;
     right: .5rem;
-    bottom: calc(max(76px, calc(env(safe-area-inset-bottom) + 76px)) + 58px);
+    bottom: calc(max(144px, calc(env(safe-area-inset-bottom) + 144px)) + 58px);
     z-index: 931;
     width: max-content;
     max-width: min(17rem, calc(100vw - 3rem));

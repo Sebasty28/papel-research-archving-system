@@ -648,7 +648,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     workerSrc: ASSETS.worker,
                     failMessage: FAIL_SERVER,
                     intro: 'Press H to drag the page, T to select text. Ctrl + scroll zooms.',
-                    introTouch: 'Drag with one finger to move the page. Pinch with two fingers to zoom in or out.',
+                    introTouch: 'Drag to move. Pinch to zoom.',
                     loadingText: '',                  // the ring says it
                     onBusy: setBusy,
                     /* A file that reached the browser and would not draw is

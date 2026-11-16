@@ -575,7 +575,10 @@ function download_from_gdrive(string $fileId): ?string
 
         $service = new Google_Service_Drive($client);
         // alt=media asks for the file itself rather than its metadata.
-        $response = $service->files->get($fileId, ['alt' => 'media']);
+        $response = $service->files->get($fileId, [
+            'alt' => 'media',
+            'supportsAllDrives' => true,
+        ]);
         $bytes = $response->getBody()->getContents();
 
         return ($bytes === '' ? null : $bytes);
@@ -608,9 +611,12 @@ function stream_from_gdrive(string $fileId): array
         gdrive_note_problem('disconnected', 'no Drive file id on this record');
         return [null, null];
     }
-    if (!is_gdrive_connected()) return [null, null];   // which has said why
+    if (!get_system_gdrive_token()) {
+        gdrive_note_problem('disconnected', 'no system token stored');
+        return [null, null];
+    }
 
-    /* Two attempts, because the ways this fails are mostly momentary and the
+    /* Three attempts, because the ways this fails are mostly momentary and the
        reader pays for every one of them with a dead viewer. The expensive
        moment is the first read after the access token has lapsed: nothing
        refreshes it in the background, so whoever opens a paper after a quiet
@@ -618,20 +624,31 @@ function stream_from_gdrive(string $fileId): array
        blip there used to be the whole answer. A 401 is retried with the token
        forced open first, since the one we hold is evidently not the one Drive
        wants. A 403 or 404 is Drive's verdict on this file and is not retried:
-       asking twice cannot change it. */
-    $attempts = 2;
+       asking again cannot change it. */
+    $attempts = 3;
     for ($try = 1; $try <= $attempts; $try++) {
         $last = $try === $attempts;
         try {
             $client = get_gdrive_client();
-            if (!$client->getAccessToken()) {
-                gdrive_note_problem('disconnected', 'client holds no access token');
+            if (!$client->getAccessToken() || $client->isAccessTokenExpired()) {
+                /* is_gdrive_connected() caches its first answer for the whole
+                   request. A momentary failure while refreshing an expired
+                   token used to return before the retry loop even began. */
+                $note = gdrive_last_refresh();
+                $result = (string)($note['result'] ?? 'unknown');
+                if (in_array($result, ['invalid_grant', 'invalid_client', 'unauthorized_client'], true)) {
+                    gdrive_note_problem('disconnected', 'token refresh refused: ' . $result);
+                    return [null, null];
+                }
+                if (!$last) { usleep(400000); continue; }
+                gdrive_note_problem('transient', 'token refresh did not produce a usable access token: ' . $result);
                 return [null, null];
             }
 
             $response = $client->authorize()->request('GET',
                 'https://www.googleapis.com/drive/v3/files/' . rawurlencode($fileId),
-                ['query' => ['alt' => 'media'], 'stream' => true, 'http_errors' => false]);
+                ['query' => ['alt' => 'media', 'supportsAllDrives' => 'true'],
+                 'stream' => true, 'http_errors' => false]);
 
             $code = $response->getStatusCode();
             if ($code !== 200) {

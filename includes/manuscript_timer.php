@@ -683,7 +683,16 @@ a.ms-panel-title:focus-visible { outline: 2px solid var(--maroon); outline-offse
         aClock.hidden   = ended;
         aGo.textContent = ended ? 'Ask again' : 'Open manuscript';
         aGo.href        = g.url || LIB;
-        if (pageAbout(g)) { stale = true; }
+        if (pageAbout(g)) {
+            stale = true;
+            /* This link points back to the paper already under the dialog.
+               A fragment-only navigation leaves the old locked/unlocked card
+               in place, so the button appears to do nothing. Change the URL
+               to make the server rebuild the card with the current grant. */
+            var freshUrl = new URL(aGo.href, location.href);
+            freshUrl.searchParams.set('ms_notice', String(Date.now()));
+            aGo.href = freshUrl.href;
+        }
         tickAlarm();
         dlg.showModal();
         /* The pop-up is the one thing worth reading just then, so the panel

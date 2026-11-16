@@ -3509,6 +3509,15 @@ body.doc-expanded .side-toc { display: none !important; }   /* the full view has
 .side-toc-step.is-current .side-toc-num { background: var(--maroon-surface); border-color: var(--maroon-surface); color: #fff; }
 .side-toc-step.is-done .side-toc-num { background: var(--cream); color: var(--maroon); }
 .side-toc-link.is-here { background: var(--cream); color: var(--maroon); }
+@media (max-width: 600px) {
+    /* The phone's single pane is already full width. Most of the cramped look
+       came from nested links spending over 4rem on indentation alone. */
+    .side-toc-body { padding: .5rem .25rem .75rem; }
+    .side-toc-link { padding: .35rem .45rem; gap: .4rem; }
+    .side-toc-link[data-depth="1"] { padding-left: 1.35rem; }
+    .side-toc-link[data-depth="2"] { padding-left: 2rem; }
+    .side-toc-link[data-depth="3"] { padding-left: 2.65rem; }
+}
 .side-tab {
     display: flex;
     align-items: center;
@@ -3867,6 +3876,9 @@ body.doc-expanded .pdf-dock.side-hidden { visibility: visible !important; pointe
 #chatDockBtn, #chatSideBtn, #chatCloseBtn { display: none !important; }
 @media (max-width: 900px) {
     #pdfDock #pdfDockClose { display: inline-flex !important; }
+    /* The tab strip can move behind iOS browser chrome; Corpus needs its own
+       exit inside the conversation just as the PDF does. */
+    #chatCloseBtn { display: inline-flex !important; }
 }
 
 /* Corpus in the card: as wide as the PDF, so switching tabs keeps the card's size,

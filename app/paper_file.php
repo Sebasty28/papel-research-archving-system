@@ -109,6 +109,23 @@ if (!paper_file_viewable($u, $paper, $docId > 0)) {
 }
 $file = $file ?? $paper;
 
+/* Older imports can have a manuscript row with only the retired local path,
+   while the paper's primary columns hold the Drive copy. The list correctly
+   offers that row, but opening it used to end in a 404 after the local copy
+   was removed. Reuse the primary copy only when this is the paper's sole
+   manuscript; with two formats we cannot know which file it represents. */
+if ($msId > 0
+    && trim((string)($file['gdrive_file_id'] ?? '')) === ''
+    && paper_file_disk_path($file['file_path'] ?? null) === null
+    && trim((string)($paper['gdrive_file_id'] ?? '')) !== '') {
+    $count = $conn->prepare('SELECT COUNT(*) AS n FROM paper_manuscripts WHERE paper_id = ?');
+    $count->bind_param('i', $paperId);
+    $count->execute();
+    $sole = (int)($count->get_result()->fetch_assoc()['n'] ?? 0) === 1;
+    $count->close();
+    if ($sole) $file = $paper;
+}
+
 // The file's own bytes, however they are reached, go out with the same headers.
 function paper_file_headers(?int $size): void {
     while (ob_get_level() > 0) ob_end_clean();     // stream it, do not buffer it

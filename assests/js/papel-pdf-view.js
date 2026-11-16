@@ -858,7 +858,7 @@
                         global.matchMedia('(max-width: 600px), (pointer: coarse)').matches;
                     var intro = touchScreen
                         ? (options.introTouch !== undefined ? options.introTouch
-                            : 'Drag with one finger to move the page. Pinch with two fingers to zoom in or out.')
+                            : 'Drag to move. Pinch to zoom.')
                         : (options.intro !== undefined ? options.intro
                             : 'Press H to drag the page, T or Esc to select and copy text');
                     if (!introShown && intro) {

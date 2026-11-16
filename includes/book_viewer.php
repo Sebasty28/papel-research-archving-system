@@ -451,6 +451,19 @@ html.bv-locked { overflow: hidden; }
     .bv-card { flex-direction: column; align-items: center; gap: 1rem; padding: 1.25rem 1rem; }
     .bv-slot-book { width: 120px; height: 173px; }
     .bv-slot { width: calc(120px + 34px); }
+    /* Once the flight ends, keep the cover in the scrolling card itself. A
+       viewport-fixed 3D layer follows card scrolling a frame late on iOS and
+       can lie over the title or buttons while the browser moves the page. */
+    .bv.is-details.is-settled .bv-layer { display: none; }
+    .bv-slot-book:has(.bv-front) { cursor: zoom-in; }
+    .bv-slot-book .bv-front {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        transform: none;
+        --bk-scale: 1.1111;
+    }
+    .bv-slot-book:focus-visible { outline: 2px solid var(--maroon); outline-offset: 3px; }
     .bv-body { padding-right: 0; width: 100%; }
     .bv-hint { font-size: .75rem; }
     /* The book is 62% of a phone's width, which leaves the arrows the edges. */
@@ -595,9 +608,12 @@ html.bv-locked { overflow: hidden; }
        is where the mover's origin is. */
     function placeOf(el, width) {
         var r = el.getBoundingClientRect();
+        var d = dlg.open ? dlg.getBoundingClientRect() : null;
+        var cx = d && d.width ? d.left + d.width / 2 : window.innerWidth / 2;
+        var cy = d && d.height ? d.top + d.height / 2 : window.innerHeight / 2;
         return {
-            tx: r.left + r.width / 2 - window.innerWidth / 2,
-            ty: r.top + r.height / 2 - window.innerHeight / 2,
+            tx: r.left + r.width / 2 - cx,
+            ty: r.top + r.height / 2 - cy,
             s:  (width || r.width) / W
         };
     }
@@ -885,6 +901,10 @@ html.bv-locked { overflow: hidden; }
        says 90: the book stood spine out, and comes off the shelf edge on,
        turning to its cover as it is pulled out, which is what that view is. */
     function open(source, data, nav) {
+        dlg.classList.remove('is-settled');
+        slot.textContent = '';
+        slot.removeAttribute('role');
+        slot.removeAttribute('tabindex');
         shelf = (nav && nav.items && nav.items.length && typeof nav.infoFor === 'function')
               ? { items: nav.items, index: Math.max(0, nav.index | 0), infoFor: nav.infoFor }
               : null;
@@ -926,6 +946,25 @@ html.bv-locked { overflow: hidden; }
     }
 
     /* ---- Setting it down into the card, and picking it up again ---- */
+    function syncCardCover() {
+        if (mode === 'details' && window.innerWidth <= 700) {
+            if (!slot.firstChild) {
+                var cover = front.cloneNode(true);
+                cover.setAttribute('data-cover', book.getAttribute('data-cover') || 'other');
+                slot.replaceChildren(cover);
+            }
+            slot.setAttribute('role', 'button');
+            slot.setAttribute('tabindex', '0');
+            slot.setAttribute('aria-label', 'Pick up the book');
+            dlg.classList.add('is-settled');
+        } else {
+            dlg.classList.remove('is-settled');
+            slot.textContent = '';
+            slot.removeAttribute('role');
+            slot.removeAttribute('tabindex');
+            slot.removeAttribute('aria-label');
+        }
+    }
     function setDown() {
         mode = 'moving';
         dlg.classList.remove('is-inspect');
@@ -933,12 +972,14 @@ html.bv-locked { overflow: hidden; }
         var to = placeOf(slot);
         tween({ tx: to.tx, ty: to.ty, s: to.s, rx: 0, ry: SET_RY }, 640, function () {
             mode = 'details';
+            syncCardCover();
             var first = dlg.querySelector('.bv-actions a, .bv-actions button') || dlg.querySelector('.bv-close');
             if (first) { first.focus({ preventScroll: true }); }
         });
     }
     function pickUp() {
         mode = 'moving';
+        syncCardCover();
         dlg.classList.remove('is-details');
         dlg.classList.add('is-inspect');
         tween({ tx: 0, ty: LIFT, s: 1, rx: HELD.rx, ry: HELD.ry }, 560, function () {
@@ -956,12 +997,24 @@ html.bv-locked { overflow: hidden; }
         apply();
     }
     card.addEventListener('scroll', settle, { passive: true });
+    slot.addEventListener('click', function () { if (mode === 'details' && window.innerWidth <= 700) pickUp(); });
+    slot.addEventListener('keydown', function (e) {
+        if (mode !== 'details' || window.innerWidth > 700 || (e.key !== 'Enter' && e.key !== ' ')) return;
+        e.preventDefault();
+        pickUp();
+    });
     window.addEventListener('resize', function () {
         if (mode === 'closed') { return; }
         size();
         fitAll();
-        if (mode === 'details') { settle(); } else if (mode === 'inspect') { at.tx = 0; at.ty = LIFT; at.s = 1; apply(); }
+        if (mode === 'details') { settle(); syncCardCover(); }
+        else if (mode === 'inspect') { at.tx = 0; at.ty = LIFT; at.s = 1; apply(); }
     });
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', function () {
+            if (mode === 'details') settle();
+        });
+    }
 
     /* ---- Turning it by hand ---- */
     var drag = null;
@@ -1045,6 +1098,7 @@ html.bv-locked { overflow: hidden; }
        since taken away, which My Library does) the window simply closes. */
     function goHome() {
         if (mode === 'leaving' || mode === 'closed') { return; }
+        if (mode === 'details') { mode = 'leaving'; syncCardCover(); }
         var home = (taken && taken.isConnected && taken.getClientRects().length)
             ? placeOf(taken, Math.max(taken.offsetWidth || 0, (taken.offsetHeight || 0) / 1.444) || null)
             : null;
