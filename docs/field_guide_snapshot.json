@@ -1,5 +1,5 @@
 {
- "built": "2026-11-16 13:43",
+ "built": "2026-11-16 13:56",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -45,6 +45,9 @@
   },
   "app/admin/gdrive_settings.php": {
    "lines": 380
+  },
+  "app/admin/repair_2026_keywords.php": {
+   "lines": 80
   },
   "app/admin/super_admin_manage_admins.php": {
    "lines": 571
@@ -427,8 +430,14 @@
   "reset_system_data.php": {
    "lines": 161
   },
+  "scripts/build_2026_keywords.py": {
+   "lines": 51
+  },
   "scripts/build_field_guide.py": {
    "lines": 909
+  },
+  "scripts/extract_2026_keywords.py": {
+   "lines": 27
   },
   "scripts/field_guide_content.py": {
    "lines": 872
