@@ -40,11 +40,31 @@ $can_edit_profile = profile_self_editable($u);
 $can_edit_own_id = profile_self_id_editable($u);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'update_profile') {
-    csrf_verify();
+    $json_save = ($_POST['_async_profile'] ?? '') === '1';
+    if ($json_save) {
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-store');
+        if (!csrf_valid()) {
+            http_response_code(403);
+            echo json_encode(['ok' => false, 'message' => 'This form has expired. Refresh the page and try again.']);
+            exit;
+        }
+    } else {
+        csrf_verify();
+    }
     $done = profile_self_update($u,
         (string)($_POST['full_name'] ?? ''),
         (string)($_POST['email'] ?? ''),
         array_key_exists('faculty_id', $_POST) ? (string)$_POST['faculty_id'] : null);
+    if ($json_save) {
+        if ($done['ok']) {
+            flash('success', $done['message']);
+        } else {
+            http_response_code(422);
+        }
+        echo json_encode(['ok' => $done['ok'], 'message' => $done['message'], 'field' => $done['field'] ?? null]);
+        exit;
+    }
     flash($done['ok'] ? 'success' : 'error', $done['message']);
     /* Back to the section the result is about. The redirect also means the
        page below re-reads the row, so it prints what was just written. */
@@ -384,7 +404,7 @@ $id_value = $identity['value'] !== '' ? $identity['value'] : ($profile['username
                 <?php /* The boxes are in the <dl> above, tied to this form by their
                          form= attribute: a <form> cannot wrap half a definition list
                          without putting a block element where the grid expects a row. */ ?>
-                <form class="profile-form" id="profileForm" method="post" action="settings.php" data-account-preflight="profile">
+                <form class="profile-form" id="profileForm" method="post" action="settings.php" data-account-preflight="profile" data-profile-save-json>
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="update_profile">
                     <p class="page-note settings-note">

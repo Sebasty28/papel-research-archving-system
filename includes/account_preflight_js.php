@@ -9,6 +9,13 @@ form[data-account-preflight] [aria-invalid="true"] { border-color:var(--bad-bord
         var pending = false;
         var currentNote = null;
         var currentField = null;
+        var button = form.querySelector('[type="submit"]');
+        var buttonText = button ? button.textContent : '';
+        function busy(label) {
+            if (!button || !form.hasAttribute('data-profile-save-json')) return;
+            button.disabled = !!label;
+            button.textContent = label || buttonText;
+        }
         function clear() {
             if (currentNote) { currentNote.remove(); currentNote = null; }
             if (currentField) {
@@ -48,18 +55,36 @@ form[data-account-preflight] [aria-invalid="true"] { border-color:var(--bad-bord
             var data = new FormData(form);
             data.set('_preflight_kind', form.dataset.accountPreflight);
             pending = true;
+            var stage = 'check';
+            busy('Checking details...');
             fetch(<?= json_encode(BASE_URL . '/app/account_preflight.php') ?>, {
                 method: 'POST', credentials: 'same-origin', body: data,
                 headers: { 'Accept': 'application/json' }, papelQuiet: true
             }).then(function (response) { return response.json(); })
               .then(function (result) {
                   if (!result.ok) { report(result.message, result.field); return; }
-                  /* A direct submit starts the shared loading bar only after the
-                     server has accepted this read-only check. */
+                  if (form.hasAttribute('data-profile-save-json')) {
+                      stage = 'save';
+                      busy('Saving changes...');
+                      data.set('_async_profile', '1');
+                      return fetch(form.action, {
+                          method: 'POST', credentials: 'same-origin', body: data,
+                          headers: { 'Accept': 'application/json' }, papelQuiet: true
+                      }).then(function (response) { return response.json(); })
+                        .then(function (saved) {
+                            if (!saved.ok) { report(saved.message, saved.field); return; }
+                            /* The next page reads the saved row and its success flash.
+                               Only a completed save starts navigation and its loader. */
+                            location.hash = 'personal';
+                            location.reload();
+                        });
+                  }
+                  /* Other account forms retain their normal POST after validation. */
                   form.submit();
               }).catch(function () {
-                  report('Could not check these details. Please try again.');
-              }).finally(function () { pending = false; });
+                  report(stage === 'check' ? 'Could not check these details. Please try again.'
+                                           : 'Could not save these details. Please try again.');
+              }).finally(function () { pending = false; busy(''); });
         });
     });
 })();

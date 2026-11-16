@@ -197,6 +197,10 @@
 
         e.preventDefault();
         e.stopImmediatePropagation();
+        /* The profile's boxes sit outside its form with form= attributes.
+           Check their browser constraints before asking to save anything. */
+        var form = el.matches('form') ? el : el.closest('form');
+        if (form && form.hasAttribute('data-profile-save-json') && !form.reportValidity()) return;
         ask(el, el.getAttribute('data-confirm'));
     }, true);
 
