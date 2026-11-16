@@ -530,11 +530,22 @@ $login_notif_popup_items = $show_login_notif_popup
     var strip  = document.getElementById('navPhoto');
     var slides = strip ? strip.querySelectorAll('.nav-slide') : [];
     if (slides.length < 2) { return; }
-    /* Someone who has asked their system for less motion keeps the one random
-       photo the server dealt, and no crossfade every five seconds. */
-    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) { return; }
-
     var current = 0;
+    function ready(img) { return img.complete && img.naturalWidth > 0; }
+    slides.forEach(function (img) {
+        function failed() {
+            /* A broken WebP source counts as complete and <picture> will not
+               try the JPEG itself. Give it one explicit JPEG fallback. */
+            var webp = img.previousElementSibling;
+            if (!webp || webp.tagName !== 'SOURCE' || !webp.srcset || img.dataset.jpegRetried) return;
+            img.dataset.jpegRetried = '1';
+            webp.remove();
+            var jpeg = img.getAttribute('src');
+            if (jpeg) { img.src = jpeg + (jpeg.indexOf('?') < 0 ? '?' : '&') + 'jpeg-fallback=1'; }
+        }
+        img.addEventListener('error', failed);
+        if (img.getAttribute('src') && img.complete && !img.naturalWidth) { failed(); }
+    });
     /* After load, not straight away: the page comes first, and the others are
        not needed until five seconds from now. */
     window.addEventListener('load', function () {
@@ -550,6 +561,9 @@ $login_notif_popup_items = $show_login_notif_popup
         });
     });
 
+    /* Someone who has asked their system for less motion keeps one photo. */
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) { return; }
+
     setInterval(function () {
         /* Nothing to animate in a background tab, and advancing unseen would
            make the photo someone returns to a jump rather than a fade. */
@@ -557,7 +571,7 @@ $login_notif_popup_items = $show_login_notif_popup
         var next = (current + 1) % slides.length;
         /* Not loaded yet on a slow connection: hold rather than fade to
            nothing. */
-        if (!slides[next].complete || !slides[next].getAttribute('src')) { return; }
+        if (!slides[next].getAttribute('src') || !ready(slides[next])) { return; }
         slides[current].classList.remove('is-active');
         slides[next].classList.add('is-active');
         current = next;

@@ -458,7 +458,8 @@ $PAGE_SKELETON = 'repository';
     background: none;
     transition: height .35s ease;
 }
-.hero.collapsed { height: 0; }
+.hero.collapsed, .hero.image-unavailable { height: 0; }
+.hero.image-unavailable img { visibility: hidden; }
 .hero img {
     position: absolute;
     left: 0;
@@ -585,10 +586,12 @@ html.papel-skel .hero img { visibility: hidden; }
 }
 /* With the banner hidden there is no hero to overlap: drop the pull-up
    so the search bar can't ride over the breadcrumb strip. */
-.hero.collapsed + .search-band { margin-top: 1.25rem; }
+.hero.collapsed + .search-band,
+.hero.image-unavailable + .search-band { margin-top: 1.25rem; }
 /* Same reasoning for the layout below it: no photo to tuck under, so
    drop its pull-up too or it rides over the search bar/sidebar. */
-.hero.collapsed ~ .layout { margin-top: 1rem; }
+.hero.collapsed ~ .layout,
+.hero.image-unavailable ~ .layout { margin-top: 1rem; }
 
 /* ---- No banner at all on a phone ----------------------------------------
    240px of photo above the thing the reader came for, on a screen where the
@@ -2189,12 +2192,41 @@ if (bannerToggle && heroBanner) {
 (function () {
     var hero   = document.getElementById('heroBanner');
     var slides = hero ? hero.querySelectorAll('.hero-slide') : [];
-    if (slides.length < 2) return;
-    /* Someone who has asked their system for less motion gets the one random
-       photo and no crossfade every five seconds. */
-    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (!slides.length) return;
 
     var current = 0;
+    function ready(img) { return img.complete && img.naturalWidth > 0; }
+    function show(index) {
+        slides[current].classList.remove('is-active');
+        slides[index].classList.add('is-active');
+        current = index;
+        hero.classList.remove('image-unavailable');
+    }
+    function failed(img, index) {
+        /* A failed WebP source does not make <picture> try its JPEG <img>.
+           Retry that fallback once, then remove the empty banner if no photo
+           can paint. An errored image still reports complete=true. */
+        var source = img.previousElementSibling;
+        if (source && source.tagName === 'SOURCE' && source.srcset && !img.dataset.jpegRetried) {
+            img.dataset.jpegRetried = '1';
+            source.remove();
+            var jpeg = img.getAttribute('src');
+            if (jpeg) { img.src = jpeg + (jpeg.indexOf('?') < 0 ? '?' : '&') + 'jpeg-fallback=1'; }
+            return;
+        }
+        if (index !== current) return;
+        for (var n = 0; n < slides.length; n++) {
+            if (ready(slides[n])) { show(n); return; }
+        }
+        hero.classList.add('image-unavailable');
+    }
+    slides.forEach(function (img, index) {
+        img.addEventListener('load', function () {
+            if (hero.classList.contains('image-unavailable')) { show(index); }
+        });
+        img.addEventListener('error', function () { failed(img, index); });
+        if (img.getAttribute('src') && img.complete && !img.naturalWidth) { failed(img, index); }
+    });
     /* After load, not straight away: the first photo and the results come
        first, and the other four are only needed five seconds from now. */
     window.addEventListener('load', function () {
@@ -2219,6 +2251,9 @@ if (bannerToggle && heroBanner) {
         });
     });
 
+    /* Someone who has asked their system for less motion keeps one photo. */
+    if (slides.length < 2 || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+
     setInterval(function () {
         /* Nothing to animate with the banner hidden or the tab in the
            background, and advancing unseen would make the photo someone
@@ -2227,10 +2262,8 @@ if (bannerToggle && heroBanner) {
         var next = (current + 1) % slides.length;
         /* Not loaded yet (a slow connection): hold on the current photo
            rather than fade to nothing. */
-        if (!slides[next].complete || !slides[next].getAttribute('src')) return;
-        slides[current].classList.remove('is-active');
-        slides[next].classList.add('is-active');
-        current = next;
+        if (!slides[next].getAttribute('src') || !ready(slides[next])) return;
+        show(next);
     }, 5000);
 })();
 
