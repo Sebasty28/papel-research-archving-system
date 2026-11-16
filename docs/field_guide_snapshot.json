@@ -1,5 +1,5 @@
 {
- "built": "2026-11-16 15:17",
+ "built": "2026-11-16 15:33",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -230,7 +230,7 @@
    "lines": 1644
   },
   "includes/browser_interference.php": {
-   "lines": 134
+   "lines": 136
   },
   "includes/card_collapse.php": {
    "lines": 94
@@ -426,6 +426,9 @@
   },
   "reset_system_data.php": {
    "lines": 161
+  },
+  "scripts/_test_adblock.py": {
+   "lines": 57
   },
   "scripts/build_field_guide.py": {
    "lines": 909

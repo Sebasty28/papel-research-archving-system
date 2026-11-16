@@ -95,7 +95,9 @@
         }
         var bait = document.createElement('div');
         bait.id = 'ad-banner';
-        bait.className = 'papel-ad-probe adsbox ad-banner ad-placement';
+        /* AdBlock's current generic rules hide ad_banner and adslot on the
+           production domain; adsbox and ad-banner alone remain visible. */
+        bait.className = 'papel-ad-probe adsbox ad-banner ad_banner adslot ad-placement';
         bait.setAttribute('aria-hidden', 'true');
         document.body.appendChild(bait);
         setTimeout(function () {
