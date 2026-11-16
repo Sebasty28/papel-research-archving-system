@@ -35,7 +35,6 @@
     cursor: pointer;
     font: inherit;
 }
-.papel-browser-warning__actions button:last-child { background: #fff; color: #800000; }
 .papel-browser-warning__actions button:focus-visible { outline: 3px solid #c88484; outline-offset: 2px; }
 /* Common blocker cosmetic rules hide this bait. It stays outside the visible
    page and is removed as soon as the check finishes. */
@@ -44,34 +43,22 @@
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 (function () {
     var failed = false;
-    var previousFocus = null;
-
     function show() {
         if (!failed || !document.body || document.getElementById('papelBrowserWarning')) { return; }
-        previousFocus = document.activeElement;
         var layer = document.createElement('div');
         layer.id = 'papelBrowserWarning';
         layer.className = 'papel-browser-warning';
         layer.innerHTML = '<div class="papel-browser-warning__box" role="alertdialog" aria-modal="true" aria-labelledby="papelBrowserWarningTitle" aria-describedby="papelBrowserWarningText">' +
             '<h2 id="papelBrowserWarningTitle">A browser extension may affect PAPEL</h2>' +
             '<p id="papelBrowserWarningText">An ad blocker or another browser extension appears to be changing or blocking this page. Please turn it off for PAPEL, then reload. If the problem continues, check your connection or contact support.</p>' +
-            '<div class="papel-browser-warning__actions"><button type="button" data-action="reload">Reload page</button><button type="button" data-action="close">Dismiss</button></div></div>';
+            '<div class="papel-browser-warning__actions"><button type="button" data-action="reload">Reload page</button></div></div>';
         document.body.appendChild(layer);
-        var close = layer.querySelector('[data-action="close"]');
         var reload = layer.querySelector('[data-action="reload"]');
-        function dismiss() {
-            layer.remove();
-            if (previousFocus && previousFocus.isConnected && previousFocus.focus) { previousFocus.focus(); }
-        }
-        close.addEventListener('click', dismiss);
         reload.addEventListener('click', function () { location.reload(); });
         layer.addEventListener('keydown', function (event) {
-            if (event.key === 'Escape') { event.preventDefault(); dismiss(); }
-            if (event.key !== 'Tab') { return; }
-            if (event.shiftKey && document.activeElement === reload) {
-                event.preventDefault(); close.focus();
-            } else if (!event.shiftKey && document.activeElement === close) {
-                event.preventDefault(); reload.focus();
+            if (event.key === 'Escape' || event.key === 'Tab') {
+                event.preventDefault();
+                reload.focus();
             }
         });
         reload.focus();
