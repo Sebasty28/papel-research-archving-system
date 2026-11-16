@@ -77,6 +77,11 @@ html.papel-skel .papel-skel-layer {
        itself: it is scenery. */
     cursor: progress;
 }
+/* --cream is translucent in dark mode; the page beneath must never show
+   through a loading preview. */
+html[data-mode="dark"].papel-skel .papel-skel-layer {
+    background: var(--page-bg);
+}
 /* Zen Mode has no breadcrumb strip, so the bars' bottom edge is the navbar's
    alone. This is only the first frames: place() below writes the measured edge
    as soon as there is a DOM to measure. Without it the layer starts 36px (and
@@ -242,12 +247,12 @@ html.papel-skel .papel-skel-layer {
 html.zen-on .skel-hero { display: none; }
 html.zen-on .skel-band { margin-top: 1.25rem; }
 html.zen-on .skel-band + .skel-wrap { padding-top: 1rem; }
-/* The repository draws no banner at 425px and under (archive/index.php), so
+/* The repository draws no banner at 900px and under (archive/index.php), so
    neither does this: a block drawn here that the page is not about to paint
    is the jump this layer exists to cover, upside down. The same three rules
    as Zen's above, for the same reason and in the same order, and they must
    stay after the narrow widths' own .75rem to beat it at equal specificity. */
-@media (max-width: 425px) {
+@media (max-width: 900px) {
     .skel-hero { display: none; }
     .skel-band { margin-top: 1.25rem; }
     .skel-band + .skel-wrap { padding-top: 1rem; }

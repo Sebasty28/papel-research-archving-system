@@ -1,5 +1,5 @@
 {
- "built": "2026-11-16 22:46",
+ "built": "2026-11-16 23:33",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -164,7 +164,7 @@
    "lines": 954
   },
   "archive/index.php": {
-   "lines": 2927
+   "lines": 2918
   },
   "archive/login.php": {
    "lines": 1093
@@ -215,7 +215,7 @@
    "lines": 5
   },
   "includes/book_covers.php": {
-   "lines": 306
+   "lines": 310
   },
   "includes/book_viewer.php": {
    "lines": 1173
@@ -332,25 +332,25 @@
    "lines": 93
   },
   "includes/select_skin.php": {
-   "lines": 902
+   "lines": 923
   },
   "includes/session_timer.php": {
    "lines": 384
   },
   "includes/shelf_view.php": {
-   "lines": 693
+   "lines": 697
   },
   "includes/site_footer.php": {
    "lines": 771
   },
   "includes/site_head.php": {
-   "lines": 1803
+   "lines": 1801
   },
   "includes/site_header.php": {
-   "lines": 758
+   "lines": 759
   },
   "includes/skeleton.php": {
-   "lines": 742
+   "lines": 747
   },
   "includes/splash.php": {
    "lines": 167

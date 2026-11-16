@@ -519,18 +519,21 @@ html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list .sp-bars {
     width: 62%; height: 3px;
     border-top: 1px solid currentColor; border-bottom: 1px solid currentColor;
 }
-/* As many lines as the spine is thick, centred, with an ellipsis where the
-   last one is cut: on one line a spine held about ten letters of a title.
-   Held up in the viewer the whole title is on the spine and on the cover.
-   -webkit-line-clamp counts lines along the block axis, which in vertical
-   writing runs across the spine, so it clamps here as it does on a card. */
+/* Keep the spine in vertical writing on phones too. WebKit's line clamp
+   combines a vertical box with a horizontal line box on some mobile engines,
+   leaving the title sideways and clipped across the narrow spine. */
 html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list .sp-title {
     flex: 1 1 auto; min-height: 0;
-    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+    display: block;
+    width: 100%; max-width: 100%;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
     white-space: normal; overflow-wrap: break-word;
+    overflow: hidden;
     text-align: center;
     font-size: 7px; letter-spacing: .03em; line-height: 1.05;
-    text-overflow: ellipsis;
+    -webkit-text-size-adjust: none;
+    text-size-adjust: none;
 }
 
 /* ===== Bookshelf: the same books, stood spine out =====
@@ -639,12 +642,9 @@ html[data-view="bookshelf"] .paper-list .sp-end {
     max-height: 32%;
 }
 html[data-view="bookshelf"] .paper-list .sp-title {
-    -webkit-line-clamp: 3;
     font-size: clamp(7px, calc(var(--bd) * .225), 15px);
     line-height: 1.08;
 }
-html[data-view="bookshelf"] .paper-list .shelf-book[data-thick="2"] .sp-title,
-html[data-view="bookshelf"] .paper-list .shelf-book[data-thick="3"] .sp-title { -webkit-line-clamp: 4; }
 html[data-view="bookshelf"] .paper-list .sp-bars { height: 4px; }
 
 /* The bookmark: the mark sits above the spine; saved, the ribbon stands up
@@ -679,6 +679,10 @@ html[data-view="bookshelf"] .paper-list .paper-item:has(> .save-paper.is-saved:f
    room for three words. */
 @media (max-width: 700px) {
     html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list {
+        /* The short covers could not fit a long title, type and the footer;
+           a taller board keeps the stamped author and year inside the face. */
+        --bw: calc(116px * var(--shelf-scale));
+        --bh: calc(188px * var(--shelf-scale));
         padding: 0 .5rem;
         grid-template-columns: repeat(auto-fill, minmax(calc(var(--bw) + 18px), 1fr));
     }

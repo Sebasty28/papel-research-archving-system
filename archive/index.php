@@ -593,15 +593,15 @@ html.papel-skel .hero img { visibility: hidden; }
 .hero.collapsed ~ .layout,
 .hero.image-unavailable ~ .layout { margin-top: 1rem; }
 
-/* ---- No banner at all on a phone ----------------------------------------
+/* ---- No banner at all on mobile -----------------------------------------
    240px of photo above the thing the reader came for, on a screen where the
-   first result already starts below the fold. Gone outright at 425px and
-   under, at the owner's instruction on 15 November 2026, and gone rather
+   first result already starts below the fold. Gone outright at 900px and
+   under, at the owner's instruction, and gone rather
    than folded: `.collapsed` deliberately keeps the strip of photo behind the
    navbar and the crumb bar, and this is meant to be not seen.
 
-   Written as `(max-width: 425px)` with a `not all and (...)` inverse wherever
-   the other half is needed, never as `min-width: 426px`. A window 425.5px
+   Written as `(max-width: 900px)` with a `not all and (...)` inverse wherever
+   the other half is needed, never as `min-width: 901px`. A window 900.5px
    wide (fractional zoom, which this site meets from 110% up) matches neither
    integer, and the banner would come back in the gap. Same rule as the
    accessibility tab's two queries.
@@ -618,7 +618,7 @@ html.papel-skel .hero img { visibility: hidden; }
    phone would still fetch the one file it has no use for; on this page the
    banner is the photo's only consumer, the navbar strip being suppressed by
    $hero_under_nav. */
-@media (max-width: 425px) {
+@media (max-width: 900px) {
     .hero { display: none; }
     .hero + .search-band { margin-top: 1.25rem; }
     .hero ~ .layout { margin-top: 1rem; }
@@ -1515,7 +1515,7 @@ html[data-view="rows"] .paper-list .paper-item .paper-program {
                      image stays eager and `fetchpriority="high"`, consuming
                      the preload as it always did. */ ?>
             <picture>
-                <source media="(max-width: 425px)" srcset="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7">
+                <source media="(max-width: 900px)" srcset="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7">
                 <?php if ($set !== ''): ?><source type="image/webp" srcset="<?= e($set) ?>" sizes="100vw"><?php endif; ?>
             <img class="hero-slide is-active" src="../assests/images/<?= e($photo) ?>"
                  alt="PUP Biñan Campus" fetchpriority="high">
@@ -2162,7 +2162,7 @@ if (bannerToggle && heroBanner) {
        every notch for a photo that is display: none. matchMedia with the
        stylesheet's own query string, never innerWidth, which disagrees with
        it by a scrollbar at the boundary. */
-    var noBanner = window.matchMedia('(max-width: 425px)');
+    var noBanner = window.matchMedia('(max-width: 900px)');
 
     document.addEventListener('scroll', function () {
         if (bannerManual || noBanner.matches) { return; }
@@ -2190,6 +2190,7 @@ if (bannerToggle && heroBanner) {
 // ===== Banner slideshow: the order was shuffled by the server; this walks
 // it, one photo every five seconds. =====
 (function () {
+    if (window.matchMedia('(max-width: 900px)').matches) { return; }
     var hero   = document.getElementById('heroBanner');
     var slides = hero ? hero.querySelectorAll('.hero-slide') : [];
     if (!slides.length) return;
@@ -2227,32 +2228,21 @@ if (bannerToggle && heroBanner) {
         img.addEventListener('error', function () { failed(img, index); });
         if (img.getAttribute('src') && img.complete && !img.naturalWidth) { failed(img, index); }
     });
-    /* After load, not straight away: the first photo and the results come
-       first, and the other four are only needed five seconds from now. */
-    window.addEventListener('load', function () {
-        slides.forEach(function (img) {
-            /* The <source> first and the <img> after, which is what
-               site_header.php does for the same slideshow.
-
-               This read `img.dataset.srcset`, and there has never been a
-               `data-srcset` on the <img>: it is on the <source> beside it.
-               So nothing was ever promoted, the <source> stayed empty, the
-               picture resolved from the <img> src, and all four waiting
-               slides fetched the full 3840px **JPEG** - about 1.1MB per visit
-               to this page, which is precisely the weight the WebP ladder was
-               added to remove, on the one page where this banner is the photo.
-               Measured by reading the request list: four `.jpg` at Low
-               priority 0.59s after load, and no `.webp` among them. */
-            var webp = img.previousElementSibling;
-            if (webp && webp.tagName === 'SOURCE' && webp.dataset.srcset) {
-                webp.srcset = webp.dataset.srcset; delete webp.dataset.srcset;
-            }
-            if (img.dataset.src) { img.src = img.dataset.src; delete img.dataset.src; }
-        });
-    });
-
     /* Someone who has asked their system for less motion keeps one photo. */
     if (slides.length < 2 || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+
+    function loadSlide(index) {
+        var img = slides[index];
+        if (!img || !img.dataset.src) return;
+        /* Fetch only the next photo. Loading all four at once adds a burst of
+           requests to the repository's initial page load. */
+        var webp = img.previousElementSibling;
+        if (webp && webp.tagName === 'SOURCE' && webp.dataset.srcset) {
+            webp.srcset = webp.dataset.srcset; delete webp.dataset.srcset;
+        }
+        img.src = img.dataset.src; delete img.dataset.src;
+    }
+    window.addEventListener('load', function () { loadSlide(1); });
 
     setInterval(function () {
         /* Nothing to animate with the banner hidden or the tab in the
@@ -2264,6 +2254,7 @@ if (bannerToggle && heroBanner) {
            rather than fade to nothing. */
         if (!slides[next].getAttribute('src') || !ready(slides[next])) return;
         show(next);
+        loadSlide((next + 1) % slides.length);
     }, 5000);
 })();
 

@@ -137,11 +137,32 @@ select.is-skinned {
     width: 1.15rem; height: 1.15rem; padding: 0;
     background: none; border: 0; border-radius: var(--r-control, 4px);
     color: var(--grey, #545054); cursor: pointer;
+    z-index: 2;
 }
 .sel-arrow:hover { color: var(--maroon, #820707); }
 .sel-field[aria-expanded="true"] ~ .sel-arrow .sel-chev { transform: rotate(180deg); }
 /* A select that can be typed in: the box is a text field dressed as the button. */
 .sel-typein > .sel-type { cursor: text; padding-right: 1.9rem; line-height: 1.5; }
+/* A long selected value can scroll behind the chevron on narrow phones. Fade
+   only the field's inner edge, leaving the border and the arrow visible. */
+.sel-typein::after {
+    content: "";
+    position: absolute;
+    top: 1.5px; bottom: 1.5px; right: 1.5px;
+    width: 2.75rem;
+    border-radius: 0 var(--r-control, 4px) var(--r-control, 4px) 0;
+    background: linear-gradient(90deg, transparent, var(--cream, #fff) 55%);
+    pointer-events: none;
+    z-index: 1;
+}
+.sel-typein:focus-within::after {
+    background: linear-gradient(90deg, transparent, var(--white, #fff) 55%);
+}
+html[data-mode="dark"] .sel-typein:not(:focus-within)::after {
+    /* --cream has alpha in dark mode. Resolve it against the field's dark
+       surface so the text still disappears fully before it meets the arrow. */
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, white 6%, var(--white)) 55%);
+}
 .sel-typein > .sel-type::placeholder { color: var(--grey, #545054); opacity: 1; }
 .sel-typein > .sel-type:focus { outline: none; border-color: var(--maroon, #820707); }
 /* The row that keeps what was typed when it is not on the list. */

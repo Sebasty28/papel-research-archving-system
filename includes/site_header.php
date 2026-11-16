@@ -170,6 +170,7 @@ $login_notif_popup_items = $show_login_notif_popup
                      transferring. site_head.php preloads the same file, and the two
                      agree because nav_photo_order() answers the same for both. */ ?>
             <picture>
+                <source media="(max-width: 900px)" srcset="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7">
                 <?php if ($set !== ''): ?><source type="image/webp" srcset="<?= e($set) ?>" sizes="100vw"><?php endif; ?>
                 <img class="nav-slide is-active" src="<?= e(BASE_URL) ?>/assests/images/<?= e($photo) ?>"
                      alt="" decoding="async" fetchpriority="high">
@@ -529,6 +530,7 @@ $login_notif_popup_items = $show_login_notif_popup
 (function () {
     var strip  = document.getElementById('navPhoto');
     var slides = strip ? strip.querySelectorAll('.nav-slide') : [];
+    if (window.matchMedia('(max-width: 900px)').matches) { return; }
     if (slides.length < 2) { return; }
     var current = 0;
     function ready(img) { return img.complete && img.naturalWidth > 0; }
@@ -546,23 +548,21 @@ $login_notif_popup_items = $show_login_notif_popup
         img.addEventListener('error', failed);
         if (img.getAttribute('src') && img.complete && !img.naturalWidth) { failed(); }
     });
-    /* After load, not straight away: the page comes first, and the others are
-       not needed until five seconds from now. */
-    window.addEventListener('load', function () {
-        slides.forEach(function (img) {
-            /* The <source> first and the <img> after: a picture is resolved
-               from its sources, so a src set before them is fetched and then
-               dropped for the WebP. */
-            var webp = img.previousElementSibling;
-            if (webp && webp.tagName === 'SOURCE' && webp.dataset.srcset) {
-                webp.srcset = webp.dataset.srcset; delete webp.dataset.srcset;
-            }
-            if (img.dataset.src) { img.src = img.dataset.src; delete img.dataset.src; }
-        });
-    });
-
     /* Someone who has asked their system for less motion keeps one photo. */
     if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) { return; }
+
+    function loadSlide(index) {
+        var img = slides[index];
+        if (!img || !img.dataset.src) { return; }
+        /* Promote one next image at a time. Fetching all four together made
+           four simultaneous requests on every desktop page load. */
+        var webp = img.previousElementSibling;
+        if (webp && webp.tagName === 'SOURCE' && webp.dataset.srcset) {
+            webp.srcset = webp.dataset.srcset; delete webp.dataset.srcset;
+        }
+        img.src = img.dataset.src; delete img.dataset.src;
+    }
+    window.addEventListener('load', function () { loadSlide(1); });
 
     setInterval(function () {
         /* Nothing to animate in a background tab, and advancing unseen would
@@ -575,6 +575,7 @@ $login_notif_popup_items = $show_login_notif_popup
         slides[current].classList.remove('is-active');
         slides[next].classList.add('is-active');
         current = next;
+        loadSlide((next + 1) % slides.length);
     }, 5000);
 })();
 </script>

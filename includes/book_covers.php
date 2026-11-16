@@ -217,6 +217,10 @@ function book_covers_style(): void
 .bk-face {
     --s: var(--bk-scale, 1);
     display: flex; flex-direction: column; align-items: center;
+    /* Decorative cover text must fit the measured board on Android, whose
+       automatic text inflation can otherwise push the author and year off it. */
+    -webkit-text-size-adjust: none;
+    text-size-adjust: none;
     padding: calc(12px * var(--s)) calc(8px * var(--s)) calc(9px * var(--s)) calc(16px * var(--s));
     text-align: center;
     text-transform: uppercase;

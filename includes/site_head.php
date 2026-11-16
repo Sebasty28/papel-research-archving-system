@@ -32,19 +32,10 @@
 $lcp_photo = function_exists('nav_photo_order') ? (nav_photo_order()[0] ?? '') : '';
 if ($lcp_photo !== ''):
     $lcp_set = function_exists('nav_photo_srcset') ? nav_photo_srcset($lcp_photo) : '';
-    /* On the repository the photo's only consumer is that page's own banner
-       ($hero_under_nav suppresses the navbar strip there), and the banner is
-       not drawn at 425px and under. Preloading it anyway would fetch the one
-       file a phone has no use for, at high priority, which is the opposite of
-       what this block is for. Keyed on $PAGE_SKELETON because it is set before
-       this file is required and $hero_under_nav is not: the repository is the
-       page that draws .skel-hero, which is the same condition.
-
-       `not all and (max-width: 425px)` and never `min-width: 426px`, matching
-       the stylesheet: a window 425.5px wide matches neither integer and the
-       preload would go out for a banner that is not there. */
-    $lcp_media = (($PAGE_SKELETON ?? '') === 'repository')
-        ? ' media="not all and (max-width: 425px)"' : '';
+    /* Mobile pages have no campus photo, including the repository's hero.
+       Gate the preload at the same breakpoint so phones make no photo request.
+       The inverse query also handles fractional viewport widths at zoom. */
+    $lcp_media = ' media="not all and (max-width: 900px)"';
 ?>
 <?php if ($lcp_set !== ''): ?>
 <?php /* type="image/webp" so a browser that cannot decode WebP skips this
@@ -358,6 +349,13 @@ body:has(.crumb-bar) .nav-photo { height: calc(var(--nav-h) + var(--crumb-h)); }
    gap. */
 .nav-photo img.nav-slide { opacity: 0; transition: opacity 1.2s ease; }
 .nav-photo img.nav-slide.is-active[src] { opacity: 1; }
+/* Mobile uses a solid header and strip, with no image behind either. This
+   also closes the translucent seams seen at fractional device pixels. */
+@media (max-width: 900px) {
+    .nav-photo { display: none; }
+    .site-header { background: var(--white); -webkit-backdrop-filter: none; backdrop-filter: none; }
+    .crumb-bar { background: var(--maroon-surface-hover); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
 
 .nav-icon-btn {
     display: inline-flex;
