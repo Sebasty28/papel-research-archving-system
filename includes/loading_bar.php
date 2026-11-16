@@ -284,6 +284,26 @@ body.a11y-stop-animations .papel-loader-veil { display: none; }
     var workHideTimer = null;
     var leaving = false;
     var badgeImage = badge && badge.querySelector('img');
+    var badgeCheckTimer = null;
+    function badgeMediaBlocked() {
+        if (!badge || !badgeImage || !badge.classList.contains('is-working')) { return false; }
+        /* The site's accessibility setting intentionally hides the badge. */
+        if (document.body.classList.contains('a11y-stop-animations') ||
+            window.matchMedia('(prefers-reduced-motion: reduce)').matches) { return false; }
+        var badgeStyle = getComputedStyle(badge);
+        var imageStyle = getComputedStyle(badgeImage);
+        return badgeStyle.display === 'none' || badgeStyle.visibility === 'hidden' ||
+            imageStyle.display === 'none' || imageStyle.visibility === 'hidden' ||
+            imageStyle.opacity === '0' || badgeImage.getBoundingClientRect().width === 0 ||
+            (badgeImage.complete && badgeImage.naturalWidth === 0);
+    }
+    function checkBadgeMedia() {
+        if (!badgeMediaBlocked()) { return; }
+        /* A cosmetic blocker may hide an image without firing its error event.
+           Never leave the visitor looking at an empty pill and a locked page. */
+        badge.classList.add('is-media-broken');
+        if (window.papelBrowserInterference) { window.papelBrowserInterference.report(); }
+    }
     if (badgeImage) {
         badgeImage.addEventListener('error', function () {
             /* A blank badge over a dimmed page is the failure shown to the
@@ -291,6 +311,7 @@ body.a11y-stop-animations .papel-loader-veil { display: none; }
             badge.classList.add('is-media-broken');
             if (window.papelBrowserInterference) { window.papelBrowserInterference.report(); }
         });
+        badgeImage.addEventListener('load', checkBadgeMedia);
     }
 
     // The pill and the veil behind it come and go together.
@@ -311,11 +332,17 @@ body.a11y-stop-animations .papel-loader-veil { display: none; }
             workShownAt = Date.now();
             paintWork(true);
         }
+        clearTimeout(badgeCheckTimer);
+        requestAnimationFrame(checkBadgeMedia);
+        badgeCheckTimer = setTimeout(checkBadgeMedia, 2500);
     }
     function workHideAt(when) {
         clearTimeout(workHideTimer);
         workHideTimer = setTimeout(function () {
-            if (workJobs === 0) { paintWork(false); }
+            if (workJobs === 0) {
+                paintWork(false);
+                clearTimeout(badgeCheckTimer);
+            }
         }, Math.max(0, when - Date.now()));
     }
     function workStart() {

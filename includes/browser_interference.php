@@ -87,6 +87,12 @@
     };
 
     function checkAdBlocker() {
+        /* Some extensions replace a blocked script with an empty response, so
+           its error event never fires. The local probe must have run before
+           DOMContentLoaded if the browser allowed it through. */
+        if (window.papelAdProbeLoaded !== true) {
+            window.papelBrowserInterference.report();
+        }
         var bait = document.createElement('div');
         bait.id = 'ad-banner';
         bait.className = 'papel-ad-probe adsbox ad-banner ad-placement';
