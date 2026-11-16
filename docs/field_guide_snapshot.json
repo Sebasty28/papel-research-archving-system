@@ -1,5 +1,5 @@
 {
- "built": "2026-11-16 13:57",
+ "built": "2026-11-16 14:08",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -45,6 +45,9 @@
   },
   "app/admin/gdrive_settings.php": {
    "lines": 380
+  },
+  "app/admin/repair_2026_abstracts.php": {
+   "lines": 81
   },
   "app/admin/super_admin_manage_admins.php": {
    "lines": 571
@@ -427,14 +430,26 @@
   "reset_system_data.php": {
    "lines": 161
   },
+  "scripts/build_2026_abstracts.py": {
+   "lines": 90
+  },
   "scripts/build_field_guide.py": {
    "lines": 909
+  },
+  "scripts/extract_2026_abstracts.py": {
+   "lines": 26
   },
   "scripts/field_guide_content.py": {
    "lines": 872
   },
+  "scripts/find_2026_abstracts.py": {
+   "lines": 31
+  },
   "scripts/gdrive_keepalive.php": {
    "lines": 82
+  },
+  "scripts/inspect_missing_abstracts.py": {
+   "lines": 20
   },
   "scripts/migrations/add_gdrive_token_column.php": {
    "lines": 25
