@@ -242,7 +242,7 @@ $PAGE_SKELETON = 'table';
 
 <div class="crumb-bar">
     <div class="wrap crumb-inner">
-        <a href="<?= e(BASE_URL) ?>/archive/index.php">Home</a>
+        <a href="<?= e(BASE_URL) ?>/archive/index.php">Public Repository</a>
         <span class="material-symbols-outlined crumb-arrow">chevron_right</span>
         <a href="<?= e(role_home($u['user_role'])) ?>"><?= e(role_home_label($u['user_role'])) ?></a>
         <span class="material-symbols-outlined crumb-arrow">chevron_right</span>

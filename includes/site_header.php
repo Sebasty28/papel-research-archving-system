@@ -134,13 +134,38 @@ if ($u) {
    page and read by the next. Nothing to show if nothing is unread: a login
    with a clean slate should not still greet the reader with an empty card. */
 $show_login_notif_popup = false;
+$login_notif_popup_count = $unread_count;
 if (!empty($_SESSION['just_logged_in'])) {
     unset($_SESSION['just_logged_in']);
-    $show_login_notif_popup = $unread_count > 0;
+    if ($u && user_has_role($u, 'librarian')) {
+        /* The live manuscript queue has its own one-card notice. Keep those
+           requests out of the sign-in notification card so one request does
+           not open two dialogs in a row; other notices still appear here. */
+        $otherCount = $conn->prepare("SELECT COUNT(*) AS cnt FROM notifications
+            WHERE user_id = ? AND is_read = 0 AND notification_type <> 'manuscript'");
+        $otherCount->bind_param('i', $u['user_id']);
+        $otherCount->execute();
+        $login_notif_popup_count = (int)($otherCount->get_result()->fetch_assoc()['cnt'] ?? 0);
+        $otherCount->close();
+    }
+    $show_login_notif_popup = $login_notif_popup_count > 0;
 }
 $login_notif_popup_items = $show_login_notif_popup
-    ? array_slice(array_values(array_filter($recent_notifs, function ($n) { return !$n['is_read']; })), 0, 5)
+    ? array_slice(array_values(array_filter($recent_notifs, function ($n) use ($u) {
+        return !$n['is_read'] && (!user_has_role($u, 'librarian') || $n['notification_type'] !== 'manuscript');
+    })), 0, 5)
     : [];
+if ($show_login_notif_popup && $u && user_has_role($u, 'librarian')) {
+    /* A long manuscript queue can push every other notice out of the bell's
+       latest 20. Read those five directly for this sign-in card. */
+    $otherNotes = $conn->prepare("SELECT notification_id, message, is_read, created_at, paper_id, notification_type
+        FROM notifications WHERE user_id = ? AND is_read = 0 AND notification_type <> 'manuscript'
+        ORDER BY created_at DESC LIMIT 5");
+    $otherNotes->bind_param('i', $u['user_id']);
+    $otherNotes->execute();
+    $login_notif_popup_items = $otherNotes->get_result()->fetch_all(MYSQLI_ASSOC);
+    $otherNotes->close();
+}
 ?>
 <?php /* The campus photo behind the navbar's glass and the maroon strip under
          it: see .nav-photo in site_head.php. The Public Repository sets
@@ -345,6 +370,8 @@ $login_notif_popup_items = $show_login_notif_popup
                     </a>
                 </div>
             <?php else: ?>
+                <?php /* Zen is the default on a phone even when signed out, so
+                         its switch must be reachable without an account. */ ?>
                 <?php /* Signed out, the sheet's foot is Login, for the same
                          reason the avatar menu's is above it: on a phone the
                          row holds the mark and the menu button and little
@@ -357,6 +384,7 @@ $login_notif_popup_items = $show_login_notif_popup
                          focus has to go back to the menu button rather than
                          to this one, which the shutting has just hidden. */ ?>
                 <div class="nav-login">
+                    <?php zen_switch('sheet'); ?>
                     <button class="nav-login-btn" id="navSheetLoginBtn" type="button">
                         <span class="nav-action-content"><span class="material-symbols-outlined mi-20" aria-hidden="true">login</span><span class="nav-action-text">Login</span></span>
                     </button>
@@ -595,7 +623,7 @@ $login_notif_popup_items = $show_login_notif_popup
         <div class="notif-popup-card" role="dialog" aria-modal="true" aria-labelledby="notifPopupTitle">
             <div class="notif-dropdown-header">
                 <span id="notifPopupTitle">
-                    <?= (int)$unread_count ?> new notification<?= $unread_count === 1 ? '' : 's' ?>
+                    <?= (int)$login_notif_popup_count ?> new notification<?= $login_notif_popup_count === 1 ? '' : 's' ?>
                 </span>
                 <button class="notif-close" id="notifPopupClose" type="button" aria-label="Close">
                     <span class="material-symbols-outlined mi-18">close</span>
@@ -619,9 +647,9 @@ $login_notif_popup_items = $show_login_notif_popup
                     </a>
                 <?php endforeach; ?>
             </div>
-            <?php if ($unread_count > count($login_notif_popup_items)): ?>
+            <?php if ($login_notif_popup_count > count($login_notif_popup_items)): ?>
                 <a class="notif-view-all" href="<?= e(BASE_URL.'/notifications/notification_center.php') ?>">
-                    See all <?= (int)$unread_count ?> notifications
+                    See all <?= (int)$login_notif_popup_count ?> notifications
                 </a>
             <?php endif; ?>
         </div>

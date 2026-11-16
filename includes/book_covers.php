@@ -266,7 +266,8 @@ function book_covers_style(): void
 .bk-face .bk-title {
     font-size: calc(8.2px * var(--s)); font-weight: 800; line-height: 1.3;
     letter-spacing: .02em;
-    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 6;
+    width: 100%;
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 5;
     overflow: hidden;
     /* Hyphenated, not cut wherever the line ends. */
     overflow-wrap: break-word; -webkit-hyphens: auto; hyphens: auto;
@@ -287,7 +288,15 @@ function book_covers_style(): void
     display: flex; flex-direction: column; align-items: center;
     gap: calc(1.5px * var(--s));
     padding-top: calc(6px * var(--s));
+    flex-shrink: 0;
 }
+/* On the shelf, center the title and type in the room between a top band and
+   the byline. Auto margins shrink to zero for a long title, preserving the
+   footer's space. The held-up viewer keeps its separate, full-text layout. */
+.bk-face:not(.bv-front) .bk-title { margin-top: auto; }
+.bk-face:not(.bv-front) .bk-kind { margin-bottom: auto; }
+.bk-face:not(.bv-front) .bk-title:not(:has(+ .bk-kind)) { margin-bottom: auto; }
+.bk-face:not(.bv-front) .bk-foot { margin-top: 0; }
 .bk-face .bk-by-label { font-size: calc(4.6px * var(--s)); letter-spacing: .14em; opacity: .85; }
 .bk-face .bk-by,
 .bk-face .bk-mark {
@@ -297,12 +306,13 @@ function book_covers_style(): void
 .bk-face .bk-by   { font-size: calc(6px * var(--s)); font-weight: 700; letter-spacing: .05em; }
 .bk-face .bk-mark { margin-top: calc(4px * var(--s)); font-size: calc(5.6px * var(--s)); font-weight: 700; letter-spacing: .16em; }
 
-/* A shorter board, or one with words across its head, has a line of title
-   fewer. */
+/* A shorter board, or one with words across its head, has less room for the
+   title. Clamp before the footer reaches the edge; the full title stays in
+   the paper and the book viewer. */
 [data-tall="1"] .bk-face .bk-title,
 [data-tall="2"] .bk-face .bk-title,
-.bk-face:has(.bk-band) .bk-title { -webkit-line-clamp: 5; }
-[data-tall="2"] .bk-face:has(.bk-band) .bk-title { -webkit-line-clamp: 4; }
+.bk-face:has(.bk-band) .bk-title { -webkit-line-clamp: 4; }
+[data-tall="2"] .bk-face:has(.bk-band) .bk-title { -webkit-line-clamp: 3; }
 </style>
 <?php
 }

@@ -1587,6 +1587,7 @@ select.lf-input {
        the sheet reads as one list and not as a list with a control stuck on
        the end. */
     .nav-login-btn,
+    .nav-login > .zen-row,
     .nav-panel-item {
         display: flex;
         align-items: center;
@@ -1602,7 +1603,8 @@ select.lf-input {
         text-decoration: none;
         cursor: pointer;
     }
-    .nav-login-btn .material-symbols-outlined { color: var(--maroon); }
+    .nav-login-btn .material-symbols-outlined,
+    .nav-login > .zen-row .material-symbols-outlined { color: var(--maroon); }
 
     .main-nav {
         display: none;

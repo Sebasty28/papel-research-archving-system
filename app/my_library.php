@@ -434,9 +434,13 @@ html[data-density="comfortable"] .shelf-room { --shelf-scale: 1.12; }
     color: var(--cover-spine-foil, var(--cover-foil)); font-family: var(--font-body);
     font-weight: 800; text-transform: uppercase; text-shadow: 0 1px 0 rgba(0,0,0,.35);
 }
-.book-spine .sp-end, .book-spine .sp-title { writing-mode: vertical-rl; overflow: hidden; }
+.book-spine .sp-end, .book-spine .sp-title {
+    writing-mode: vertical-rl; text-orientation: mixed;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    -webkit-text-size-adjust: none; text-size-adjust: none;
+}
 .book-spine .sp-end { flex: 0 0 auto; max-height: 32%; font-size: clamp(6px, calc(var(--bd) * .185), 11px); letter-spacing: .06em; }
-.book-spine .sp-title { flex: 1 1 auto; min-height: 0; text-align: center; font-size: clamp(7px, calc(var(--bd) * .2), 12px); line-height: 1.05; overflow-wrap: anywhere; }
+.book-spine .sp-title { flex: 1 1 auto; min-height: 0; width: auto; max-width: calc(100% - 2px); text-align: center; font-size: clamp(7px, calc(var(--bd) * .2), 12px); line-height: 1.05; }
 .book-spine .sp-bars { flex: 0 0 auto; width: 62%; height: 3px; border-top: 1px solid currentColor; border-bottom: 1px solid currentColor; }
 .lib-saved[data-view="bookshelf"] .book:focus-visible .book-spine { box-shadow: 0 0 0 2px var(--white), 0 0 0 4px var(--maroon); }
 
@@ -624,7 +628,7 @@ html[data-density="comfortable"] .lib-request-view:is([data-view="shelf"], [data
 
 <div class="crumb-bar">
     <div class="wrap crumb-inner">
-        <a href="<?= e(BASE_URL) ?>/archive/index.php">Home</a>
+        <a href="<?= e(BASE_URL) ?>/archive/index.php">Public Repository</a>
         <span class="material-symbols-outlined crumb-arrow">chevron_right</span>
         <a href="my_library.php">My Library</a>
         <span class="material-symbols-outlined crumb-arrow">chevron_right</span>

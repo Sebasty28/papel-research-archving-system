@@ -519,17 +519,19 @@ html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list .sp-bars {
     width: 62%; height: 3px;
     border-top: 1px solid currentColor; border-bottom: 1px solid currentColor;
 }
-/* Keep the spine in vertical writing on phones too. WebKit's line clamp
-   combines a vertical box with a horizontal line box on some mobile engines,
-   leaving the title sideways and clipped across the narrow spine. */
+/* One vertical line gets a visible ellipsis at its foot. Wrapping into several
+   columns on a narrow spine hid the last columns without any indication that
+   the title continued. WebKit's line clamp also turns some phone spines
+   sideways, so this uses the single-line text-overflow rule instead. */
 html:is([data-view="shelf"], [data-view="bookshelf"]) .paper-list .sp-title {
     flex: 1 1 auto; min-height: 0;
     display: block;
-    width: 100%; max-width: 100%;
+    /* A full-width vertical line places its glyphs against the right edge.
+       Let the line take its glyph width so the spine's flex alignment centers it. */
+    width: auto; max-width: calc(100% - 2px);
     writing-mode: vertical-rl;
     text-orientation: mixed;
-    white-space: normal; overflow-wrap: break-word;
-    overflow: hidden;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     text-align: center;
     font-size: 7px; letter-spacing: .03em; line-height: 1.05;
     -webkit-text-size-adjust: none;

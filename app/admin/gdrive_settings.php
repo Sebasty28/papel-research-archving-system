@@ -161,7 +161,7 @@ if ($sc) $stored = (int)($sc->fetch_assoc()['n'] ?? 0);
 
 <div class="crumb-bar">
     <div class="wrap crumb-inner">
-        <a href="<?= e(BASE_URL) ?>/archive/index.php">Home</a>
+        <a href="<?= e(BASE_URL) ?>/archive/index.php">Public Repository</a>
         <span class="material-symbols-outlined crumb-arrow">chevron_right</span>
         <?php /* The reader's own desk, not the Director's. Hard-coded to
                  super_admin_review_dashboard.php, this crumb sent a Research

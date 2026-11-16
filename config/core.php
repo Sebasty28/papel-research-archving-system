@@ -152,12 +152,13 @@ function start_session_once(): void {
           . ' minutes with nothing happening. Please sign in again.';
       }
     }
-    /* **A request that only asks how long is left must not itself be the thing
+    /* **A background read must not itself be the thing
        that keeps the session alive.** `seen` is written on every request, so a
-       page polling for the time remaining would push the deadline forward each
+       page polling for the time remaining or a request queue would push the deadline forward each
        time it looked at it, and a browser left open would never idle out at
-       all. `app/session_status.php` defines PAPEL_SESSION_PEEK before requiring
-       this file, which makes its request invisible to the clock: the idle wipe
+       all. `app/session_status.php` and the Librarian's live request feed
+       define PAPEL_SESSION_PEEK before requiring this file, which makes those
+       requests invisible to the clock: the idle wipe
        above still runs, so a peek still reports an ended session, it simply
        does not count as activity. The same flag as PAPEL_PASSWORD_GATE and
        PAPEL_PAPER_PREVIEW, for the same reason: a page that has to be let out
@@ -2771,7 +2772,10 @@ function manuscript_request_file(array $u, int $paperId, array $paper, bool $has
     $stmt->execute();
     $stmt->close();
 
-    $lib  = $conn->query("SELECT user_id FROM users WHERE user_role = 'librarian' AND is_active = 1");
+    $librarianPosts = users_have_secondary_position()
+        ? "(user_role = 'librarian' OR secondary_position = 'Librarian')"
+        : "user_role = 'librarian'";
+    $lib  = $conn->query("SELECT user_id FROM users WHERE $librarianPosts AND is_active = 1");
     $note = ($u['full_name'] ?? 'A student') . ' requested access to the manuscript for "'
           . ($paper['title'] ?? 'a paper') . '".';
     foreach ($lib ? $lib->fetch_all(MYSQLI_ASSOC) : [] as $librow) {
@@ -5034,8 +5038,8 @@ function notification_link(?int $paperId, string $role, string $type = ''): stri
        paper_details.php, which is for a student's own papers and would be the
        wrong page here, so this has to be checked first. */
     if ($type === 'manuscript') {
-        if ($role === 'librarian') return BASE_URL . '/app/librarian/manuscript_requests.php';
         if ($role === 'student' && $paperId) return BASE_URL . '/archive/view_paper.php?id=' . $paperId;
+        if (user_has_role(current_user(), 'librarian')) return BASE_URL . '/app/librarian/manuscript_requests.php';
         return role_home($role);
     }
 

@@ -744,6 +744,7 @@ require_once ROOT_PATH.'/includes/account_preflight_js.php';
    after them means they get first refusal, and this one stands down when it
    sees the key was already handled. */
 require_once ROOT_PATH.'/includes/key_nav.php';
+require_once ROOT_PATH.'/includes/visited_breadcrumbs.php';
 /* The close button and the five-second life of every red and green banner.
    site_head.php has it already on any page with the shared head, where it
    must be to hold a banner back before it is drawn; this is for a page that
@@ -758,6 +759,10 @@ if (current_user()) { require_once ROOT_PATH.'/includes/notif_actions.php'; }
    costs those pages two indexed lookups and no markup. After loading_bar.php
    on purpose: it polls with the papelQuiet flag that file reads. */
 require_once ROOT_PATH.'/includes/manuscript_timer.php';
+/* A Librarian's open page watches the request queue, including while the
+   person is away from the keyboard. Each new batch updates one scrollable
+   notice instead of stacking dialogs. */
+require_once ROOT_PATH.'/includes/librarian_request_alert.php';
 /* The warning five minutes before the session goes idle, and the pop-up that
    says it has gone. Nothing at all for a visitor who is not signed in: there
    is no session to lose. After loading_bar.php for the same reason the

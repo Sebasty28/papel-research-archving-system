@@ -1338,9 +1338,9 @@ it bar the hooks listed below. Added 14 November 2026.
 
 | | |
 |---|---|
-| Key | `papel_zen`, `'1'` means on; off is the default, so that is the only answer worth storing |
+| Key | `papel_zen`: `'1'` means on, `'0'` means off; with no saved choice, Zen defaults on at 900px and below and off above it |
 | Class | `html.zen-on`, plus `sidebar-folded` |
-| Switch | `zen_switch()`, printed in **both** profile menus and in Settings > Appearance |
+| Switch | `zen_switch()`, printed in **both** profile menus, the signed-out phone menu and Settings > Appearance |
 
 **What goes**: the breadcrumb strip, the photo strip behind the navbar
 (`.nav-photo`), the footer, the accessibility tab, the scroll-to-top button,
@@ -1395,9 +1395,11 @@ not a reading mode.
   and holds the Contents, the PDF and Corpus, which are the work rather than
   the furniture. A paper page's Table of Contents rail stays for the same
   reason.
-- Signed out there is no profile menu and so no way to turn it on, but the
-  stylesheet and the pre-paint read are printed for everyone, so a setting made
-  while signed in still holds on the public pages afterwards.
+- On phones, Zen is on before the first paint when there is no stored choice.
+  The default follows the 900px breakpoint as the viewport changes, without
+  writing a preference. A switch press stores the visitor's explicit choice,
+  which takes precedence at either width. Signed-out visitors can reach the
+  switch in the phone menu too.
 
 Checked against the running site at 1280px and 390px, in both palettes, signed
 in: both menus, Settings, the repository, the dashboard, My Library, the
@@ -2979,6 +2981,13 @@ of it are two different acts, and this desk only ever needed the first.
   because a record is not an action. The handler still answers a posted
   `delete` as a revoke, for a page a librarian had open before the change.
 
+### Librarian request queue, live notice and export
+
+- `app/librarian/manuscript_requests_live.php` is a Librarian-only JSON read of pending requests. The shared `includes/librarian_request_alert.php` polls it every 20 seconds while the tab is visible and immediately when a hidden tab returns. One scrollable dialog lists all requests newer than the last dismissal (up to 100 rows shown); a later request updates that dialog in place or reopens it. `PAPEL_SESSION_PEEK` is defined before `core.php` so polling does not keep an idle account signed in. The sign-in notification dialog excludes manuscript notices for Librarians to avoid showing the same request twice.
+- The Pending, Granted and History tables show the requester, email, academic program and paper. Their search includes those fields. A link from the live notice opens and highlights the matching row, even if another Librarian has already moved it to Granted or History.
+- The Librarian-only `manuscript_requests_export.php` accepts a CSRF-protected POST and a choice of Pending, Granted, History or any combination, in CSV, XLSX, DOCX or PDF. Its action sits immediately left of search and opens a dialog for the group and format choices. The form opts out of the global submit spinner and workflow pill, and targets a hidden frame so a download does not trigger this page's navigation bar. It uses the same document writers and title/summary/section layout as the Director's review export. History has no 200-row screen limit in the export. `require_role(['librarian'])` covers a second Librarian post too; the request notification fan-out in `core.php` includes those accounts when the secondary-position column exists.
+- `includes/visited_breadcrumbs.php` builds the maroon strip from the pages visited in this browser tab. Public Repository is always its first link, each visited page follows, and revisiting an earlier page trims the trail there. The strip scrolls sideways on a narrow screen. Pages with the shared strip also print Public Repository as their server-rendered root link, instead of Home or My Dashboard.
+
 ### The public repository's page: 30 at a time, a pager, and a banner that folds
 
 - **Twenty results a page** (`$per_page` in `archive/index.php`), not ten: 1 to
@@ -3272,8 +3281,8 @@ is coloured by its programme's **group**, `book_cover_group()`, the way the camp
 - **One cover: the hardbound a Philippine research paper is bound in.** A leatherette board
   (three faint dot grids of 3, 5 and 7px, sizes that never line up, so it reads as grain and not
   as polka dots; two grids did), the spine cloth wrapped onto the front with the hinge pressed in
-  beside it, and everything stamped in foil, in capitals, centred: the title at the head, the
-  kind of paper under it, then "Presented by", the authors, and programme · year at the foot.
+  beside it, and everything stamped in foil, in capitals, centred: the title and
+  kind of paper centered in the available room, then "Presented by", the authors, and programme · year at the foot.
   It replaced four designs (a rule, a band, a frame, a pale foot) picked by the paper's number,
   which looked like no book anybody at the campus has handed in.
 - **The board and its stamping are written once**: `book_cover_face()` is the markup and
@@ -3319,7 +3328,7 @@ details card, the pop-up My Library always had; pressing the small book there pi
   for HRM, whose spine is yellow and is stamped in its own dark red. My Library's own dialog is
   gone; the card reproduces its layout and figures.
 - **Held up, the book is stamped in full.** The shelf's cover says what fits on 108px ("Baliza et
-  al.", "BSIE · 2026", a title clamped at six lines); the viewer stamps its front again from the
+  al.", "BSIE · 2026", a title clamped at five lines, fewer on shorter boards); the viewer stamps its front again from the
   details instead of copying it, with the whole title, every author and the programme by its full
   name, and keeps anything across the head of the shelf's cover (a request, a status). The spine
   carries the whole title too, on up to two lines. Each page passes `program`, `year` and `kind`
@@ -3532,10 +3541,10 @@ out, of different thicknesses and heights, on the boards Hardbounds stands its b
   spine is stamped. In the repository the head is the programme and the foot the year, both from
   the mark, the year told apart by its shape since either half can be missing. The dashboard has
   no mark: its head is the status (the band its covers carry) and its foot the year out of the
-  date. The title takes two lines, three on the two thicker spines, clamped with
-  `-webkit-line-clamp`, which in vertical writing counts lines across the spine as it counts them
-  down a card (tried in Chrome before relying on it). `overflow-wrap: break-word`, never
-  `anywhere`: that broke "PSYCHOLOGICAL" into "PSYCHOLOGICA L".
+  date. The title is centered between the bars and across the spine: its vertical line takes its glyph width, not the full spine width. It uses `text-overflow: ellipsis` when it is too long.
+  Wrapping had filled extra columns across the narrow spine and clipped them at its edge;
+  vertical `-webkit-line-clamp` also turned some titles sideways on phones. My Library uses the
+  same one-line rule. The full title remains on the paper and in the book viewer.
 - **Pressing a spine starts the viewer edge on**: `archive/index.php` passes `turn: 90` with the
   shelf, so the book leaves where it stood and turns to its cover as it is pulled out. Previous
   and next step along the shelf exactly as in Hardbounds.

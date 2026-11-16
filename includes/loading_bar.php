@@ -45,8 +45,8 @@
  * background requests the bar also reports.
  *
  * Every one of those workflows is a POST form, and nothing else on the site
- * is, bar three that are marked data-no-pill: the two exports, which are
- * downloads, and Mark all as read. So a POST form going out starts the pill,
+ * is, bar the forms marked data-no-pill: exports, frame posts and Mark all as
+ * read. So a POST form going out starts the pill,
  * however it is sent: the submit event for an ordinary button, and a wrapped
  * HTMLFormElement.prototype.submit for the forms action_dialogs.php sends
  * after its confirmation, which never fire that event. Workflows that run

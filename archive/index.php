@@ -1451,9 +1451,11 @@ html[data-view="rows"] .paper-list .paper-item .paper-program {
 <!-- ===== 3. Breadcrumb ===== -->
 <div class="crumb-bar">
     <div class="wrap crumb-inner">
-        <a href="<?= e(BASE_URL) ?>/archive/index.php">Home</a>
-        <span class="material-symbols-outlined crumb-arrow">chevron_right</span>
-        <span class="crumb-current"><?= $has_filters ? 'Search Results' : 'Public Repository' ?></span>
+        <a href="<?= e(BASE_URL) ?>/archive/index.php">Public Repository</a>
+        <?php if ($has_filters): ?>
+            <span class="material-symbols-outlined crumb-arrow">chevron_right</span>
+            <span class="crumb-current">Search Results</span>
+        <?php endif; ?>
         <?php /* The eye follows the same rule as the password toggle in
                  site_footer.php: it shows the action, not the state, so it
                  always agrees with the words beside it. Banner on screen →

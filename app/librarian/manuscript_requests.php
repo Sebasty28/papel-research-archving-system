@@ -225,6 +225,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 function manuscript_row_search(array $r): string {
     return mb_strtolower(trim(($r['student_name'] ?? '') . ' '
                             . ($r['student_no'] ?? '') . ' '
+                            . ($r['student_email'] ?? '') . ' '
+                            . ($r['student_program'] ?? '') . ' '
                             . ($r['paper_title'] ?? 'Untitled paper')));
 }
 
@@ -296,6 +298,7 @@ $paperJoin = "LEFT JOIN research_papers p ON p.paper_id = r.paper_id
               LEFT JOIN papers_archive pa ON pa.paper_id = r.paper_id
               JOIN users s ON s.user_id = r.student_user_id";
 $select    = "r.*, s.full_name AS student_name, s.student_id AS student_no,
+              s.email AS student_email, s.program AS student_program,
               COALESCE(p.title, pa.title) AS paper_title";
 
 /* Each tab's own sort chips (below) re-order client-side by the same field
@@ -397,14 +400,50 @@ $PAGE_SKELETON = 'table';
     margin-bottom: .875rem;
 }
 .mr-tabrow .mgmt-tabs { border-bottom: 0; margin-bottom: 0; }
-.mr-tabrow .mgmt-search { margin-bottom: .4rem; }
+.mr-tools { display: flex; align-items: center; gap: .5rem; margin: 0 0 .4rem auto; min-width: 0; }
+.mr-tools .mgmt-search { margin: 0; min-width: 0; }
+.mr-export-open { display: inline-flex; align-items: center; justify-content: center; gap: .35rem;
+    flex: none; min-height: 2rem; padding: .35rem .7rem; border: 1px solid var(--border);
+    border-radius: var(--r-control, 4px); background: var(--white); color: var(--maroon);
+    font: inherit; font-size: .8125rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.mr-export-open:hover, .mr-export-open:focus-visible { border-color: var(--maroon); background: var(--cream); }
+.mr-export-open .material-symbols-outlined { font-size: 18px; }
+.mr-export-dialog { width: min(29rem, calc(100vw - 2rem)); max-width: none;
+    max-height: calc(100vh - 2rem); max-height: min(36rem, 85dvh);
+    padding: 0; border: 1px solid var(--border); border-radius: var(--r-card, 8px);
+    background: var(--white); color: var(--ink); box-shadow: 0 18px 48px rgba(51,0,0,.28); overflow: auto; }
+.mr-export-dialog::backdrop { background: rgba(51,0,0,.48); backdrop-filter: blur(3px); }
+.mr-export-head { display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+    padding: .9rem 1rem; border-bottom: 1px solid var(--border); }
+.mr-export-head h2 { margin: 0; font-family: var(--font-head); font-size: 1.125rem; color: var(--maroon); }
+.mr-export-close { display: grid; place-items: center; flex: none; width: 2rem; height: 2rem;
+    padding: 0; border: 0; border-radius: var(--r-control, 4px); background: transparent;
+    color: var(--maroon); cursor: pointer; }
+.mr-export-close:hover { background: var(--cream); }
+.mr-export-dialog form { padding: 1rem; }
+.mr-export-dialog fieldset { display: grid; gap: .55rem; margin: 0 0 1rem; padding: 0; border: 0; }
+.mr-export-dialog legend { margin-bottom: .65rem; font-weight: 600; color: var(--maroon); }
+.mr-export-dialog label { font-size: .875rem; }
+.mr-export-dialog input { accent-color: var(--maroon); }
+.mr-export-format { display: grid; gap: .4rem; font-weight: 600; color: var(--maroon); }
+.mr-export-format select { width: 100%; min-height: 2.5rem; padding: .4rem .6rem;
+    border: 1px solid var(--border); border-radius: var(--r-control, 4px);
+    background: var(--white); color: var(--ink); font: inherit; font-weight: 400; }
+.mr-export-error { margin: .75rem 0 0; color: var(--bad-text); font-size: .8125rem; }
+.mr-export-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1.25rem; }
+.mr-export-actions button { min-height: 2.25rem; padding: .4rem .8rem; border-radius: var(--r-control, 4px);
+    font: inherit; font-size: .875rem; cursor: pointer; }
+.mr-export-cancel { border: 1px solid var(--border); background: var(--white); color: var(--ink); }
+.mr-export-download { border: 1px solid var(--maroon); background: var(--maroon); color: #fff; }
+.mr-export-download:hover { background: var(--dark-maroon); }
 
 @media (max-width: 768px) {
     /* Two lines, with the field taking the second one whole: beside the tabs it
        squeezed them into wrapping a word at a time. */
     .mr-tabrow { align-items: stretch; }
-    .mr-tabrow .mgmt-search { width: 100%; margin-bottom: .5rem; }
-    .mr-tabrow .mgmt-search input { width: 100%; }
+    .mr-tools { width: 100%; margin-left: 0; margin-bottom: .5rem; }
+    .mr-tools .mgmt-search { flex: 1 1 auto; }
+    .mr-tools .mgmt-search input { width: 100%; min-width: 0; }
 }
 </style>
 </head>
@@ -413,7 +452,7 @@ $PAGE_SKELETON = 'table';
 
 <div class="crumb-bar">
     <div class="wrap crumb-inner">
-        <a href="<?= e(role_home($u['user_role'])) ?>"><?= e(role_home_label($u['user_role'])) ?></a>
+        <a href="<?= e(BASE_URL) ?>/archive/index.php">Public Repository</a>
         <span class="material-symbols-outlined crumb-arrow">chevron_right</span>
         <span class="crumb-current">Manuscript Requests</span>
     </div>
@@ -472,13 +511,55 @@ $PAGE_SKELETON = 'table';
                     <span class="count"><?= count($history) ?></span>
                 </button>
             </div>
-            <?php /* One field for all three tabs, not one per pane: a Librarian looking
-                     for a student does not know yet whether that request is still
-                     pending, granted or already decided, and the tab counts say which
-                     tab to open while they type. Outside the tablist, which owns tabs
-                     and nothing else. */ ?>
-            <?php mgmt_search_field('Search name, ID or paper'); ?>
+            <?php /* The export action is immediately left of the shared search field.
+                     Both sit outside the tablist, which owns tabs and nothing else. */ ?>
+            <div class="mr-tools">
+                <?php if (user_has_role($u, 'librarian') && $requestsReady): ?>
+                    <button type="button" class="mr-export-open" id="mrExportOpen" aria-haspopup="dialog" aria-controls="mrExportDialog">
+                        <span class="material-symbols-outlined" aria-hidden="true">download</span>
+                        Export requests
+                    </button>
+                <?php endif; ?>
+                <?php mgmt_search_field('Search name, ID, email, program or paper'); ?>
+            </div>
         </div>
+
+        <?php if (user_has_role($u, 'librarian') && $requestsReady): ?>
+        <dialog class="mr-export-dialog" id="mrExportDialog" aria-labelledby="mrExportTitle">
+            <div class="mr-export-head">
+                <h2 id="mrExportTitle">Export manuscript requests</h2>
+                <button type="button" class="mr-export-close" id="mrExportClose" aria-label="Close export options">
+                    <span class="material-symbols-outlined" aria-hidden="true">close</span>
+                </button>
+            </div>
+            <form action="<?= e(BASE_URL) ?>/app/librarian/manuscript_requests_export.php" method="post"
+                  target="mrExportDownload" data-no-loading data-no-pill id="mrExportForm">
+                <?= csrf_field(); ?>
+                <fieldset>
+                    <legend>Include request groups</legend>
+                    <label><input type="checkbox" name="scopes[]" value="pending" checked> Pending</label>
+                    <label><input type="checkbox" name="scopes[]" value="granted" checked> Granted</label>
+                    <label><input type="checkbox" name="scopes[]" value="history" checked> History</label>
+                </fieldset>
+                <label class="mr-export-format">Format
+                    <select name="format" required>
+                        <option value="csv">CSV</option>
+                        <option value="xlsx">Excel (.xlsx)</option>
+                        <option value="docx">Word (.docx)</option>
+                        <option value="pdf">PDF</option>
+                    </select>
+                </label>
+                <p class="mr-export-error" id="mrExportError" role="alert" hidden>Choose at least one request group.</p>
+                <div class="mr-export-actions">
+                    <button type="button" class="mr-export-cancel" id="mrExportCancel">Cancel</button>
+                    <button type="submit" class="mr-export-download">Download</button>
+                </div>
+            </form>
+        </dialog>
+        <?php /* The attachment response belongs to this frame, so the desk does not
+                 enter a page-navigation loading state while the file downloads. */ ?>
+        <iframe name="mrExportDownload" title="Manuscript request export download" hidden></iframe>
+        <?php endif; ?>
 
         <div id="pendingPane" class="js-pane">
             <div class="mgmt-panel">
@@ -489,6 +570,8 @@ $PAGE_SKELETON = 'table';
                             <tr>
                                 <th><input type="checkbox" class="js-select-all" aria-label="Select all"></th>
                                 <th>Who is asking</th>
+                                <th>Gmail</th>
+                                <th>Academic Program</th>
                                 <th>Paper</th>
                                 <th>Requested</th>
                                 <th>Active grants</th>
@@ -498,7 +581,7 @@ $PAGE_SKELETON = 'table';
                         <tbody>
                         <?php if (!$pending): ?>
                             <tr>
-                                <td colspan="6">
+                                <td colspan="8">
                                     <div class="mgmt-empty">
                                         <span class="material-symbols-outlined">inbox</span>
                                         Nothing is waiting for you.
@@ -508,13 +591,15 @@ $PAGE_SKELETON = 'table';
                         <?php endif; ?>
                         <?php foreach ($pending as $r): ?>
                             <?php $activeCount = student_manuscript_active_count((int)$r['student_user_id']); ?>
-                            <tr data-sort-time="<?= strtotime($r['created_at']) ?>"
+                            <tr data-request-id="<?= (int)$r['request_id'] ?>" data-sort-time="<?= strtotime($r['created_at']) ?>"
                                 data-search="<?= e(manuscript_row_search($r)) ?>">
                                 <td><input type="checkbox" class="js-row-check" value="<?= (int)$r['request_id'] ?>" aria-label="Select this request"></td>
                                 <td class="mgmt-name">
                                     <?= e($r['student_name']) ?>
                                     <span class="mgmt-sub"><?= e($r['student_no']) ?></span>
                                 </td>
+                                <td><a href="mailto:<?= e($r['student_email']) ?>"><?= e($r['student_email']) ?></a></td>
+                                <td><?= e($r['student_program'] ?: '—') ?></td>
                                 <td>
                                     <a href="<?= e(BASE_URL) ?>/archive/view_paper.php?id=<?= (int)$r['paper_id'] ?>" target="_blank" rel="noopener">
                                         <?= e($r['paper_title'] ?? 'Untitled paper') ?>
@@ -570,7 +655,9 @@ $PAGE_SKELETON = 'table';
                         <thead>
                             <tr>
                                 <th><input type="checkbox" class="js-select-all" aria-label="Select all"></th>
-                                <th>Who asked</th>
+                                <th>Who is asking</th>
+                                <th>Gmail</th>
+                                <th>Academic Program</th>
                                 <th>Paper</th>
                                 <th>Granted</th>
                                 <th>Expires</th>
@@ -580,7 +667,7 @@ $PAGE_SKELETON = 'table';
                         <tbody>
                         <?php if (!$granted): ?>
                             <tr>
-                                <td colspan="6">
+                                <td colspan="8">
                                     <div class="mgmt-empty">
                                         <span class="material-symbols-outlined">lock_open</span>
                                         Nobody currently has access.
@@ -589,13 +676,15 @@ $PAGE_SKELETON = 'table';
                             </tr>
                         <?php endif; ?>
                         <?php foreach ($granted as $r): ?>
-                            <tr data-sort-time="<?= strtotime($r['granted_at']) ?>"
+                            <tr data-request-id="<?= (int)$r['request_id'] ?>" data-sort-time="<?= strtotime($r['granted_at']) ?>"
                                 data-search="<?= e(manuscript_row_search($r)) ?>">
                                 <td><input type="checkbox" class="js-row-check" value="<?= (int)$r['request_id'] ?>" aria-label="Select this request"></td>
                                 <td class="mgmt-name">
                                     <?= e($r['student_name']) ?>
                                     <span class="mgmt-sub"><?= e($r['student_no']) ?></span>
                                 </td>
+                                <td><a href="mailto:<?= e($r['student_email']) ?>"><?= e($r['student_email']) ?></a></td>
+                                <td><?= e($r['student_program'] ?: '—') ?></td>
                                 <td>
                                     <a href="<?= e(BASE_URL) ?>/archive/view_paper.php?id=<?= (int)$r['paper_id'] ?>" target="_blank" rel="noopener">
                                         <?= e($r['paper_title'] ?? 'Untitled paper') ?>
@@ -636,7 +725,9 @@ $PAGE_SKELETON = 'table';
                             <?php /* No tick boxes and no buttons: History is the record of
                                      what was done, and nothing is done to it from here. */ ?>
                             <tr>
-                                <th>Who asked</th>
+                                <th>Who is asking</th>
+                                <th>Gmail</th>
+                                <th>Academic Program</th>
                                 <th>Paper</th>
                                 <th>Outcome</th>
                                 <th>When</th>
@@ -645,7 +736,7 @@ $PAGE_SKELETON = 'table';
                         <tbody>
                         <?php if (!$history): ?>
                             <tr>
-                                <td colspan="4">
+                                <td colspan="6">
                                     <div class="mgmt-empty">
                                         <span class="material-symbols-outlined">history</span>
                                         Nothing has been decided yet.
@@ -667,12 +758,14 @@ $PAGE_SKELETON = 'table';
                                         ? 'Granted, ' . (int)$r['duration_hours'] . 'h, revoked'
                                         : 'Granted, ' . (int)$r['duration_hours'] . 'h, expired');
                             ?>
-                            <tr class="mgmt-row-off" data-sort-time="<?= strtotime($whenAt) ?>"
+                            <tr class="mgmt-row-off" data-request-id="<?= (int)$r['request_id'] ?>" data-sort-time="<?= strtotime($whenAt) ?>"
                                 data-search="<?= e(manuscript_row_search($r)) ?>">
                                 <td class="mgmt-name">
                                     <?= e($r['student_name']) ?>
                                     <span class="mgmt-sub"><?= e($r['student_no']) ?></span>
                                 </td>
+                                <td><a href="mailto:<?= e($r['student_email']) ?>"><?= e($r['student_email']) ?></a></td>
+                                <td><?= e($r['student_program'] ?: '—') ?></td>
                                 <td>
                                     <a href="<?= e(BASE_URL) ?>/archive/view_paper.php?id=<?= (int)$r['paper_id'] ?>" target="_blank" rel="noopener">
                                         <?= e($r['paper_title'] ?? 'Untitled paper') ?>
@@ -695,6 +788,32 @@ $PAGE_SKELETON = 'table';
 
 <script nonce="<?= csp_nonce() ?>">
 document.addEventListener('DOMContentLoaded', function () {
+    var exportOpen = document.getElementById('mrExportOpen');
+    var exportDialog = document.getElementById('mrExportDialog');
+    var exportForm = document.getElementById('mrExportForm');
+    if (exportOpen && exportDialog && exportForm) {
+        var exportError = document.getElementById('mrExportError');
+        exportOpen.addEventListener('click', function () { exportDialog.showModal(); });
+        ['mrExportClose', 'mrExportCancel'].forEach(function (id) {
+            document.getElementById(id).addEventListener('click', function () { exportDialog.close(); });
+        });
+        exportDialog.addEventListener('close', function () {
+            exportError.hidden = true;
+            exportOpen.focus();
+        });
+        exportForm.addEventListener('change', function () { exportError.hidden = true; });
+        exportForm.addEventListener('submit', function (event) {
+            if (!exportForm.querySelector('input[name="scopes[]"]:checked')) {
+                event.preventDefault();
+                exportError.hidden = false;
+                exportForm.querySelector('input[name="scopes[]"]').focus();
+                return;
+            }
+            // A download does not navigate away. Leave no modal or spinner stuck on screen.
+            setTimeout(function () { if (exportDialog.open) exportDialog.close(); }, 0);
+        });
+    }
+
     var tabs = document.querySelectorAll('.mgmt-tab');
     tabs.forEach(function (tab) {
         tab.addEventListener('click', function () {
@@ -704,6 +823,18 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         });
     });
+
+    var requestedId = Number(new URLSearchParams(location.search).get('request'));
+    if (Number.isSafeInteger(requestedId) && requestedId > 0) {
+        var requestedRow = document.querySelector('tr[data-request-id="' + requestedId + '"]');
+        if (requestedRow) {
+            var targetPane = requestedRow.closest('.js-pane');
+            var targetTab = targetPane && document.querySelector('.mgmt-tab[data-pane="' + targetPane.id + '"]');
+            if (targetTab) targetTab.click();
+            requestedRow.classList.add('is-found');
+            requestedRow.scrollIntoView({block: 'center', behavior: 'smooth'});
+        }
+    }
 
     /* Each pane sorts and selects on its own: "oldest" means something
        different to a queue of open requests than it does to a pile of past

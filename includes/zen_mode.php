@@ -19,10 +19,9 @@
  * It is kept **on the device** (localStorage, `papel_zen`), like the palette,
  * the sidebar's side and the accessibility tab, and read here before the first
  * paint. Read any later and the page would draw its furniture and take it away
- * again, which is the flash the whole pre-paint block in site_head.php exists
- * to prevent. Off is the default, so the only answer worth storing is '1': a
- * browser nobody has asked, and one with storage blocked, both start with the
- * ordinary site.
+ * again. With no saved choice, Zen is on at the site's phone breakpoint
+ * (900px) and off above it. Explicit '1' and '0' choices take precedence at
+ * either width; the automatic default is never written to storage.
  *
  * Required from includes/site_head.php, so every page that has a header has
  * this. A page with no furniture simply changes less.
@@ -43,18 +42,18 @@
  *   reloads, so this raises `papel:zen` on the document for those listeners. A
  *   ResizeObserver does see an element go to `display: none`, but relying on
  *   that would leave the reason invisible at the places that depend on it.
- * - **The switch is printed twice**, by `zen_switch()`: once in the avatar
- *   dropdown and once in the phone sheet, exactly as the dark-mode button is.
- *   Change both or neither. Both are wired by delegation, so the one in
- *   Settings needs no script of its own either.
+ * - **The switch is printed** by `zen_switch()` in the avatar dropdown, the
+ *   phone sheet (including for signed-out visitors), and Settings. All are
+ *   wired by delegation.
  */
 ?>
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 /* Before the first paint, with the sidebar's own pre-paint block: a mode
    restored late is a page that rearranges itself in front of the reader. */
 (function () {
-    var on = false;
-    try { on = localStorage.getItem('papel_zen') === '1'; } catch (e) {}
+    var saved = null;
+    try { saved = localStorage.getItem('papel_zen'); } catch (e) {}
+    var on = saved === '1' || (saved !== '0' && window.matchMedia('(max-width: 900px)').matches);
     if (!on) { return; }
     var el = document.documentElement;
     el.classList.add('zen-on');
@@ -156,7 +155,7 @@ button.zen-row-bare:focus-visible {
 </style>
 <?php
 /**
- * The switch, for the two profile menus and for Settings.
+ * The switch for the profile menus, the signed-out phone menu, and Settings.
  *
  * `$where` only picks the clothes: 'sheet' is the phone menu, whose rows wrap
  * their glyph and word in .nav-action-content so a rule can be drawn under
@@ -199,6 +198,9 @@ function zen_switch(string $where = 'dropdown'): void
     var KEY  = 'papel_zen';
     var FOLD = 'papel_sidebar_folded';
     var el   = document.documentElement;
+    var mobile = window.matchMedia('(max-width: 900px)');
+    var preference = null;
+    try { preference = localStorage.getItem(KEY); } catch (e) {}
 
     function on() { return el.classList.contains('zen-on'); }
 
@@ -214,7 +216,11 @@ function zen_switch(string $where = 'dropdown'): void
         }
     }
 
-    function apply(want) {
+    function apply(want, remember) {
+        if (remember !== false) {
+            preference = want ? '1' : '0';
+            try { localStorage.setItem(KEY, preference); } catch (e) {}
+        }
         if (want === on()) { return; }
         el.classList.toggle('zen-on', want);
         /* Off again, the reader's own answer about the side panel comes back.
@@ -225,7 +231,6 @@ function zen_switch(string $where = 'dropdown'): void
             try { folded = localStorage.getItem(FOLD) === '1'; } catch (e) { folded = false; }
         }
         el.classList.toggle('sidebar-folded', folded);
-        try { localStorage.setItem(KEY, want ? '1' : '0'); } catch (e) {}
         sync();
         /* Everything that measured a bar reads it again: --crumb-h in
            site_header.php, the repository's banner, and the side panel's rail.
@@ -250,6 +255,17 @@ function zen_switch(string $where = 'dropdown'): void
         e.stopPropagation();
         apply(!on());
     }, true);
+
+    /* Until the visitor chooses, the default follows the phone layout when a
+       window is resized or a device changes orientation. A saved choice wins. */
+    function followWidth(e) {
+        if (preference !== '1' && preference !== '0') { apply(e.matches, false); }
+    }
+    if (mobile.addEventListener) {
+        mobile.addEventListener('change', followWidth);
+    } else {
+        mobile.addListener(followWidth);
+    }
 
     /* Published for the pages that have their own reason to ask, and so the
        state can be driven in a check without pressing anything. */

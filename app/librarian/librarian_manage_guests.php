@@ -278,7 +278,7 @@ $PAGE_SKELETON = 'table';
 
 <div class="crumb-bar">
     <div class="wrap crumb-inner">
-        <a href="<?= e(BASE_URL) ?>/archive/index.php">Home</a>
+        <a href="<?= e(BASE_URL) ?>/archive/index.php">Public Repository</a>
         <span class="material-symbols-outlined crumb-arrow">chevron_right</span>
         <span class="crumb-current">Library Passes</span>
     </div>
