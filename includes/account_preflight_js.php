@@ -67,7 +67,10 @@ form[data-account-preflight] [aria-invalid="true"] { border-color:var(--bad-bord
                       stage = 'save';
                       busy('Saving changes...');
                       data.set('_async_profile', '1');
-                      return fetch(form.action, {
+                      /* The hidden input named "action" shadows form.action in
+                         browsers. Read the attribute to get the POST URL. */
+                      var saveUrl = new URL(form.getAttribute('action') || location.href, document.baseURI);
+                      return fetch(saveUrl.href, {
                           method: 'POST', credentials: 'same-origin', body: data,
                           headers: { 'Accept': 'application/json' }, papelQuiet: true
                       }).then(function (response) { return response.json(); })

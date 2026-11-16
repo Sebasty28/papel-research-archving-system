@@ -27,6 +27,17 @@ $surveyEmbedUrl = $surveyFormUrl . '?embedded=true';
 .survey-dialog button:focus-visible,
 .survey-dialog a:focus-visible { outline: 3px solid #e9b85f; outline-offset: 3px; }
 .survey-ribbon .material-symbols-outlined { font-size: 1.25rem; }
+/* The menu and the document reader need the phone's full touch area. */
+@media (max-width: 900px) {
+    html.nav-open .survey-ribbon,
+    body:has(.pdf-dock.is-open) .survey-ribbon { display: none; }
+    .survey-ribbon {
+        max-width: min(16rem, calc(100vw - 1rem));
+        padding: .6rem .75rem;
+        font-size: .75rem;
+        line-height: 1.2;
+    }
+}
 .survey-dialog {
     width: min(980px, calc(100vw - 2rem));
     max-width: none;

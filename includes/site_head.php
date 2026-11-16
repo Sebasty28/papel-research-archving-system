@@ -1624,11 +1624,18 @@ select.lf-input {
         background: var(--white);
         border-bottom: 1px solid var(--border);
         box-shadow: 0 14px 28px rgba(51, 0, 0, .16);
-        max-height: calc(100vh - 60px);
+        height: calc(100vh - 61px);
+        height: calc(100dvh - 61px);
+        max-height: calc(100vh - 61px);
+        max-height: calc(100dvh - 61px);
         overflow-y: auto;
+        overscroll-behavior: contain;
         z-index: 950;
     }
     html.nav-open .main-nav { display: flex; }
+    /* The open sheet covers the page through the bottom of the viewport.
+       A CAPTCHA challenge may already be open behind it. */
+    html.nav-open .site-header { z-index: 2147481500; }
 
     .main-nav a {
         padding: .8rem 1.25rem;   /* ~46px tall: sized for a fingertip */

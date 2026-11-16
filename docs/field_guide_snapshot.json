@@ -1,5 +1,5 @@
 {
- "built": "2026-11-16 16:46",
+ "built": "2026-11-16 18:03",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -206,7 +206,7 @@
    "lines": 1482
   },
   "includes/account_preflight_js.php": {
-   "lines": 92
+   "lines": 95
   },
   "includes/action_dialogs.php": {
    "lines": 341
@@ -317,7 +317,7 @@
    "lines": 163
   },
   "includes/recaptcha.php": {
-   "lines": 342
+   "lines": 349
   },
   "includes/review_checklist.php": {
    "lines": 486
@@ -344,7 +344,7 @@
    "lines": 771
   },
   "includes/site_head.php": {
-   "lines": 1787
+   "lines": 1794
   },
   "includes/site_header.php": {
    "lines": 744
@@ -356,7 +356,7 @@
    "lines": 167
   },
   "includes/survey_invite.php": {
-   "lines": 236
+   "lines": 247
   },
   "includes/theme.php": {
    "lines": 394

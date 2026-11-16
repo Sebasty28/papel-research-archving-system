@@ -235,11 +235,18 @@ function recaptcha_scripts(): string
             if (popup.style.border !== '0px') popup.style.border = '0px';
             var left = Math.round((view ? view.offsetLeft : 0) +
                                   Math.max(0, (width - popup.offsetWidth) / 2));
-            var top = Math.round((view ? view.offsetTop : 0) +
-                                 Math.max(0, (height - popup.offsetHeight) / 2));
+            /* Centre in the visible area below the sticky phone header. If
+               the challenge is taller than that area, start at the header's
+               foot so its title and image instructions stay reachable. */
+            var header = document.querySelector('.site-header');
+            var viewportTop = view ? view.offsetTop : 0;
+            var safeTop = Math.max(viewportTop,
+                header ? header.getBoundingClientRect().bottom + 4 : viewportTop);
+            var room = Math.max(0, viewportTop + height - safeTop);
+            var top = Math.round(safeTop + Math.max(0, (room - popup.offsetHeight) / 2));
             var wanted = {
                 position: 'fixed', left: left + 'px', top: top + 'px',
-                transform: 'none'
+                transform: 'none', 'z-index': '2147481000'
             };
             Object.keys(wanted).forEach(function (name) {
                 if (popup.style.getPropertyValue(name) !== wanted[name]) {
