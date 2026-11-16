@@ -36,6 +36,7 @@
     cursor: pointer;
     font: inherit;
 }
+.papel-browser-warning__actions button[data-action="close"] { background: #fff; color: #800000; }
 .papel-browser-warning__actions button:focus-visible { outline: 3px solid #c88484; outline-offset: 2px; }
 /* Common blocker cosmetic rules hide this bait. It stays outside the visible
    page and is removed as soon as the check finishes. */
@@ -44,26 +45,41 @@
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 (function () {
     var failed = false;
+    var dismissKey = 'papel_browser_warning_dismissed';
+    function dismissed() {
+        try { return sessionStorage.getItem(dismissKey) === '1'; }
+        catch (error) { return false; }
+    }
     function show() {
-        if (!failed || !document.body || document.getElementById('papelBrowserWarning')) { return; }
+        if (!failed || !document.body || dismissed() || document.getElementById('papelBrowserWarning')) { return; }
         /* The support form must remain reachable from this warning. */
         if (/\/pages\/contact_support\.php$/.test(location.pathname)) { return; }
+        var previousFocus = document.activeElement;
         var layer = document.createElement('div');
         layer.id = 'papelBrowserWarning';
         layer.className = 'papel-browser-warning';
         layer.innerHTML = '<div class="papel-browser-warning__box" role="alertdialog" aria-modal="true" aria-labelledby="papelBrowserWarningTitle" aria-describedby="papelBrowserWarningText">' +
-            '<h2 id="papelBrowserWarningTitle">A browser extension may affect PAPEL</h2>' +
-            '<p id="papelBrowserWarningText">An ad blocker or another browser extension appears to be changing or blocking this page. Please turn it off for PAPEL, then reload. If the problem continues, check your connection or <a href="<?= e(BASE_URL) ?>/pages/contact_support.php">contact support</a>.</p>' +
-            '<div class="papel-browser-warning__actions"><button type="button" data-action="reload">Reload page</button></div></div>';
+            '<h2 id="papelBrowserWarningTitle">Something may be affecting PAPEL</h2>' +
+            '<p id="papelBrowserWarningText">A browser extension or failed page resource may be interfering with PAPEL. If you use an ad blocker, turn it off for PAPEL and reload. Otherwise, you can dismiss this warning. If the problem continues, <a href="<?= e(BASE_URL) ?>/pages/contact_support.php">contact support</a>.</p>' +
+            '<div class="papel-browser-warning__actions"><button type="button" data-action="reload">Reload page</button><button type="button" data-action="close">Dismiss</button></div></div>';
         document.body.appendChild(layer);
         var support = layer.querySelector('a');
         var reload = layer.querySelector('[data-action="reload"]');
+        var close = layer.querySelector('[data-action="close"]');
+        function dismiss() {
+            try { sessionStorage.setItem(dismissKey, '1'); } catch (error) { /* Storage can be disabled. */ }
+            layer.remove();
+            if (previousFocus && previousFocus.focus && previousFocus.isConnected) { previousFocus.focus(); }
+        }
         reload.addEventListener('click', function () { location.reload(); });
+        close.addEventListener('click', dismiss);
         layer.addEventListener('keydown', function (event) {
-            if (event.key === 'Escape') { event.preventDefault(); reload.focus(); }
+            if (event.key === 'Escape') { event.preventDefault(); dismiss(); return; }
             if (event.key !== 'Tab') { return; }
             event.preventDefault();
-            (document.activeElement === reload ? support : reload).focus();
+            var controls = [support, reload, close];
+            var index = controls.indexOf(document.activeElement);
+            controls[(index + (event.shiftKey ? controls.length - 1 : 1)) % controls.length].focus();
         });
         reload.focus();
     }
