@@ -417,7 +417,7 @@ $PAGE_SKELETON = 'repository';
     font-size: 20px;
     margin: 0 .125rem;
     --mi-fill: 1;
-    --mi-wght: 700;
+    --mi-wght: 400;
 }
 .crumb-current { color: #fff; font-weight: 500; }
 

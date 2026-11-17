@@ -88,9 +88,8 @@ $loader_badge_gif = (defined('BASE_URL') ? BASE_URL : '/capstone')
        navbar at all. */
     top: 0;
     height: 3px;
-    /* Over everything, the start-up splash included: the first page load is
-       exactly when there is something to report, and a bar hidden behind the
-       splash reports it to nobody. */
+    /* Over everything, including the sign-in splash: a bar hidden behind it
+       reports a request to nobody. */
     z-index: 2147483100;    /* the splash sits at 2147483000 */
     pointer-events: none;        /* it is an indicator, never a target */
     overflow: hidden;

@@ -944,14 +944,15 @@ page is above the search box, so it read as a stray rule floating in the gap.
 
 ### The loading skeleton
 
-The splash (`includes/splash.php`) plays only on the first page of a visit and
-on a refresh: it returns early otherwise. So ordinary navigation from page to
-page had nothing over it, and a page painted the server's markup and then
-settled into its real shape in front of the reader. On the upload page that is
-a jump you cannot miss: the form paints as one column and `papelSide` rebuilds
-it into two panes with tab strips at `DOMContentLoaded`.
+The splash (`includes/splash.php`) now plays only while a successful sign-in
+leaves its page. It used to cover every first visit and refresh for at least
+2.5 seconds, even when the page was ready; that fixed wait made loading feel
+slow. The destination uses the skeleton, whose 300ms minimum covers the layout
+without holding the whole window for the GIF. Without a cover, the upload page
+paints as one column before `papelSide` rebuilds it into two panes at
+`DOMContentLoaded`, a jump you cannot miss.
 
-`includes/skeleton.php` covers that gap. It is required from the top of
+`includes/skeleton.php` covers every page load. It is required from the top of
 `site_head.php`, so it decides before the first paint, and prints its blocks
 from the end of `site_header.php`, so they are in `<body>` before the page's
 own content. The splash and the skeleton never both appear: the skeleton
@@ -1556,14 +1557,14 @@ range, and Google answers that with the complete variable font: 4,025,760
 bytes, at **VeryHigh** priority, on every page of the site. For comparison,
 everything else on the repository page came to about 1MB.
 
-Exactly four axis values are ever used, which a grep of the stylesheets
-settles: `FILL` 0 and 1 (`.mi-fill`, nine places), `wght` 400 and 700 (one
-place, the breadcrumb chevron), `GRAD` always 0, `opsz` always 24. Asking for
-that and no more is **1,144,228 bytes**, the same glyphs, nothing different on
-screen. Pinning `wght` to 400 as well would be 464,940 bytes, another 650KB,
-and costs the one bolder chevron; that is a design change and was left.
+The font originally asked for `FILL` 0 and 1 (`.mi-fill`, nine places),
+`wght` 400 and 700 (one breadcrumb chevron), `GRAD` 0 and `opsz` 24. That
+cut the download to **1,144,228 bytes**. The chevron now uses weight 400 too,
+so the request is the static-weight variant, previously measured at **464,940
+bytes**: about 650KB less on a cold visit. Check the current Google response
+if measuring a new release; the file can change upstream.
 
-- **Check the stylesheets before narrowing it further.** An axis value nobody
+- **Check the stylesheets before changing the axes.** An axis value nobody
   asked Google for renders at the nearest one that was sent, silently, so a
   new `--mi-wght` somewhere would simply look wrong rather than fail.
 - **Measure it by reading `Content-Length` off the woff2 Google serves**, not

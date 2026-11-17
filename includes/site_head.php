@@ -59,18 +59,11 @@ if ($lcp_photo !== ''):
          woff2 it serves. It was the largest thing on the site by a wide
          margin - the whole of the rest of the repository page is about 1MB.
 
-         Grepped out of the stylesheets, exactly four values are ever asked
-         for: FILL 0 and 1 (`.mi-fill`, nine places), wght 400 and 700 (one,
-         the breadcrumb chevron), GRAD always 0 and opsz always 24. Requesting
-         that and no more is **1,144,228 bytes, 1.09MB**: the same glyphs and
-         not one pixel different on screen.
-
-         Pinning wght to 400 as well would be 464,940 bytes, another 650KB
-         off, and costs the one slightly bolder chevron; that is a design
-         change and has not been made here. Check this against the stylesheets
-         before narrowing it further, since an axis value nobody requested
-         renders at the nearest one Google sent, silently. */ ?>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Material+Symbols+Outlined:FILL,GRAD,opsz,wght@0..1,0,24,400..700&display=swap" rel="stylesheet">
+         Grepped out of the stylesheets: FILL 0 and 1, GRAD 0, opsz 24, and
+         wght 400. The breadcrumb chevron was the only icon asking for 700;
+         using 400 there lets the whole site fetch the smaller static-weight
+         font. If a new icon weight is added, revisit this URL as well. */ ?>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Material+Symbols+Outlined:FILL,GRAD,opsz,wght@0..1,0,24,400&display=swap" rel="stylesheet">
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 /* =========================================================
    PAPEL: universal design tokens + site header/footer/modal

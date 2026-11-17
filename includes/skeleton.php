@@ -4,11 +4,9 @@
  * content area while a page is settling, in the way a chat app shows the shape
  * of a conversation before the messages arrive.
  *
- * It exists because the splash (includes/splash.php) only plays on the first
- * page of a visit and on a refresh: it returns early otherwise, so ordinary
- * navigation from page to page has nothing over it. On those navigations the
- * browser paints the server's markup and the page then settles into its real
- * shape, which on the upload page is a visible jump: the form paints as one
+ * It covers every page load, including the first visit and refresh. Without
+ * it the browser paints the server's markup before the page settles into its
+ * real shape. On the upload page that is a visible jump: the form paints as one
  * column and papelSide rebuilds it into two panes with tab strips at
  * DOMContentLoaded. The skeleton covers that.
  *
@@ -442,10 +440,8 @@ html.papel-skel-rail .skel-tab { width: auto; height: 30px; border-radius: 8px; 
 (function () {
     var root = document.documentElement;
 
-    /* The splash already covers the whole window on a first open or a refresh,
-       and lifts at the later of 2.5s and the load event, which is after the
-       page has finished settling. Two overlays for one wait would be one too
-       many, so the skeleton takes only the case the splash leaves uncovered. */
+    /* A sign-in can start the splash on the page being left. If that page
+       still has it, two overlays would be one too many. */
     if (root.classList.contains('papel-splash')) { return; }
 
     var MIN_VISIBLE = 300;     // so a cached page does not blink
