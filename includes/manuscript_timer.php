@@ -644,7 +644,7 @@ a.ms-panel-title:focus-visible { outline: 2px solid var(--maroon); outline-offse
      */
     function pageAbout(g) {
         var path = location.pathname;
-        if (/\/archive\/view_paper\.php$/.test(path)) {
+        if (/\/archive\/view_paper(?:\.php)?$/.test(path)) {
             var m = location.search.match(/[?&]id=(\d+)/);
             return !!m && parseInt(m[1], 10) === g.paper;
         }

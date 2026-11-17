@@ -16,7 +16,7 @@ if (defined('PAPEL_PAPER_PREVIEW')) return;
     if (window.top !== window) return;
     var inner = document.querySelector('.crumb-bar .crumb-inner');
     if (!inner) return;
-    var root = new URL(<?= json_encode(BASE_URL . '/archive/index.php') ?>, location.href).pathname;
+    var root = new URL(<?= json_encode(BASE_URL . '/archive/') ?>, location.href).pathname;
     var key = <?= json_encode('papel.visitedBreadcrumbs.' . (int)(current_user()['user_id'] ?? 0)) ?>;
     var current = inner.querySelector('.crumb-current');
     var label = current ? current.textContent.trim() : document.title.split('·')[0].trim();

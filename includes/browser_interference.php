@@ -54,7 +54,7 @@
     function show() {
         if (!failed || !document.body || dismissed() || document.getElementById('papelBrowserWarning')) { return; }
         /* The support form must remain reachable from this warning. */
-        if (/\/pages\/contact_support\.php$/.test(location.pathname)) { return; }
+        if (/\/pages\/contact_support(?:\.php)?$/.test(location.pathname)) { return; }
         var previousFocus = document.activeElement;
         var layer = document.createElement('div');
         layer.id = 'papelBrowserWarning';

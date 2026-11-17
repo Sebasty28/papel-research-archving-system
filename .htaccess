@@ -75,16 +75,37 @@ ServerSignature Off
     RewriteEngine On
     RewriteRule (^|/)\.git(/|$)                             - [R=404,L]
     RewriteRule ^(scripts|tests|docs|database|backups)(/|$) - [R=404,L]
-    RewriteRule ^reset_system_data\.php$                    - [R=404,L]
+    RewriteRule ^reset_system_data(?:\.php)?$                - [R=404,L]
+
+    # Keep browser page addresses free of .php. THE_REQUEST makes these rules
+    # apply only to an explicit URL, never to the internal rewrite below.
+    # Limit redirects to HTML navigation so PHP endpoints and file fetches keep
+    # their original URLs and request bodies. Existing query strings survive.
+    RewriteCond %{REQUEST_METHOD} ^(GET|HEAD)$
+    RewriteCond %{HTTP:Accept} text/html [NC]
+    RewriteCond %{THE_REQUEST} \.php(?:\?|\s) [NC]
+    RewriteCond %{REQUEST_URI} ^(.*/)index\.php$ [NC]
+    RewriteRule ^(.*/)?index\.php$ %1 [R=301,L,NE]
+
+    RewriteCond %{REQUEST_METHOD} ^(GET|HEAD)$
+    RewriteCond %{HTTP:Accept} text/html [NC]
+    RewriteCond %{THE_REQUEST} \.php(?:\?|\s) [NC]
+    RewriteCond %{REQUEST_URI} ^(.+)\.php$ [NC]
+    RewriteRule ^(.+)\.php$ %1 [R=301,L,NE]
+
+    # Serve clean page URLs without renaming the PHP files or their links.
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_FILENAME}.php -f
+    RewriteRule ^(.+[^/])$ $1.php [L]
 </IfModule>
 <IfModule !mod_rewrite.c>
     RedirectMatch 404 /\.git(/|$)
     RedirectMatch 404 ^/(scripts|tests|docs|database|backups)(/|$)
-    RedirectMatch 404 ^/reset_system_data\.php$
+    RedirectMatch 404 ^/reset_system_data(?:\.php)?$
 </IfModule>
 
 # No directory listings anywhere.
-Options -Indexes
+Options -Indexes -MultiViews
 
 <IfModule mod_php.c>
     # Try to disable expose_php via php_flag if permitted

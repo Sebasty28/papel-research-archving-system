@@ -2392,7 +2392,11 @@ function loadResults(url, pushState) {
                 } catch (err) {}
                 if (box.value !== asked) { box.value = asked; }
             }
-            if (pushState !== false) history.pushState({ papelAjax: true }, '', url);
+            if (pushState !== false) {
+                var pageUrl = new URL(url, location.href);
+                pageUrl.pathname = pageUrl.pathname.replace(/\/index\.php$/, '/').replace(/\.php$/, '');
+                history.pushState({ papelAjax: true }, '', pageUrl.pathname + pageUrl.search + pageUrl.hash);
+            }
         })
         .catch(function () { window.location.href = url; });
 }
