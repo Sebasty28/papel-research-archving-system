@@ -19,6 +19,7 @@
  * brand, the form, and Sign out, which is the one way past that is not setting
  * a password. The shell is still the shared one: includes/site_head.php for the
  * tokens and the theme, includes/page_theme.php for the card and the fields,
+ * includes/gate_shell.php for the bar and centered card,
  * and includes/password_form.php for the boxes, which is the same form
  * pages/settings.php draws.
  */
@@ -75,34 +76,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'chang
 <title>Choose a password · <?= e(APP_NAME) ?></title>
 <?php require_once ROOT_PATH.'/includes/site_head.php'; ?>
 <?php require_once ROOT_PATH.'/includes/page_theme.php'; ?>
+<?php require_once ROOT_PATH.'/includes/gate_shell.php'; ?>
 <?php require_once ROOT_PATH.'/includes/password_form.php'; ?>
 <style nonce="<?= e($nonce) ?>">
-/* A bar with the letterhead and the way out, in place of the navbar: the same
-   pale ground the navbar has, so the page still opens the way the site does.
-   The mark is site_head.php's own .brand-mark, the stencil painted in the
-   palette's accent, and not a second logo drawn here; the name beside it is
-   plain text, because .brand-word is placed absolutely and drawn out on hover,
-   which is a flourish for a bar with somewhere to go. */
-.gate-bar {
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 1rem;
-    width: 100%;
-    padding: .55rem 1.25rem;
-    background: var(--white);
-    border-bottom: 1px solid var(--border);
-}
-.gate-head { display: inline-flex; align-items: center; gap: .5rem; }
-.gate-name {
-    font-family: var(--font-head), serif;
-    font-size: 1.0625rem; font-weight: 600; letter-spacing: .01em;
-    color: var(--maroon);
-}
-.gate-bar .btn-sm-outline { text-decoration: none; }
-.gate-bar .btn-sm-outline .material-symbols-outlined { font-size: 17px; vertical-align: -3px; }
-/* The card is the page: nothing else is offered, so it sits in the middle
-   rather than at the top of an otherwise empty shell. */
-.gate-body { width: 100%; max-width: 34rem; margin: 2.5rem auto; padding: 0 1rem; }
-.gate-lede { margin: 0 0 1rem; font-size: .875rem; line-height: 1.6; color: var(--ink); }
 .gate-who {
     margin: 0 0 1.25rem; padding: .625rem .75rem;
     border-radius: var(--r-card, 8px);
@@ -110,10 +86,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'chang
 }
 .gate-who strong { font-weight: 600; }
 @media (max-width: 600px) {
-    .gate-bar { padding: .75rem 1rem; }
-    .gate-body { margin: 1rem auto; padding: 0 .75rem; }
-    .gate-body .page-card-header { padding: .875rem 1rem; }
-    .gate-body .page-card-body { padding: 1rem; }
     .gate-body .pw-wrap input { min-height: 44px; }
     .gate-body .btn-page { width: 100%; min-height: 44px; }
 }

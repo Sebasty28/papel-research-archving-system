@@ -1,5 +1,5 @@
 {
- "built": "2026-11-17 22:10",
+ "built": "2026-11-17 22:26",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -59,7 +59,7 @@
    "lines": 36
   },
   "app/choose_desk.php": {
-   "lines": 99
+   "lines": 89
   },
   "app/faculty/faculty_dashboard.php": {
    "lines": 236
@@ -262,6 +262,9 @@
   "includes/focus_ring.php": {
    "lines": 179
   },
+  "includes/gate_shell.php": {
+   "lines": 31
+  },
   "includes/key_nav.php": {
    "lines": 232
   },
@@ -416,7 +419,7 @@
    "lines": 220
   },
   "pages/change_password.php": {
-   "lines": 178
+   "lines": 150
   },
   "pages/contact_support.php": {
    "lines": 849
