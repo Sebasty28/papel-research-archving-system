@@ -321,7 +321,12 @@ body {
                 if (!res.ok) {
                     return res.text().then(function (why) { throw new Error(why || 'This file could not be opened.'); });
                 }
-                return res.arrayBuffer();
+                if (!/^application\/pdf\b/i.test(res.headers.get('Content-Type') || '')) {
+                    throw new Error('The server returned a page instead of a PDF. Please try again.');
+                }
+                return res.arrayBuffer().catch(function () {
+                    throw new Error('The PDF connection was interrupted. Please try again.');
+                });
             })
             .then(function (bytes) { return view.load(bytes); })
             .catch(function (err) {

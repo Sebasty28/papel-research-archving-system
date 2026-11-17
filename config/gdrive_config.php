@@ -648,6 +648,7 @@ function stream_from_gdrive(string $fileId): array
             $response = $client->authorize()->request('GET',
                 'https://www.googleapis.com/drive/v3/files/' . rawurlencode($fileId),
                 ['query' => ['alt' => 'media', 'supportsAllDrives' => 'true'],
+                 'headers' => ['Accept-Encoding' => 'identity'],
                  'stream' => true, 'http_errors' => false]);
 
             $code = $response->getStatusCode();
@@ -673,17 +674,96 @@ function stream_from_gdrive(string $fileId): array
                 return [null, null];
             }
 
-            $size = $response->getHeaderLine('Content-Length');
+            $sizeHeader = $response->getHeaderLine('Content-Length');
+            $size = ctype_digit($sizeHeader) && (int)$sizeHeader > 0
+                ? (int)$sizeHeader : null;
+            if ($size === null) {
+                /* Some Drive responses are chunked. The known file size lets
+                   us detect an early EOF and resume rather than treating it
+                   as a complete PDF. This extra request is only made when the
+                   media response gave no usable length. */
+                try {
+                    $meta = (new Google_Service_Drive($client))->files->get($fileId, [
+                        'fields' => 'size', 'supportsAllDrives' => true,
+                    ]);
+                    $metaSize = (int)$meta->getSize();
+                    if ($metaSize > 0) $size = $metaSize;
+                } catch (Throwable $e) {
+                    error_log('GDrive size unavailable for ' . $fileId . ': ' . $e->getMessage());
+                }
+            }
             $body = $response->getBody();
+            /* Guzzle's streamed response can say 200 before a single file byte
+               has arrived. Read the first piece before PAPEL sends PDF headers,
+               so a failed connection here can still be retried or answered as
+               a 502 instead of a broken 200 response in PDF.js. */
+            $first = '';
+            while (strlen($first) < 1024 && !$body->eof()) {
+                $piece = $body->read(65536);
+                if ($piece === '') break;
+                $first .= $piece;
+            }
+            if ($first === '') {
+                throw new RuntimeException('Drive returned an empty PDF stream');
+            }
+            if (strpos(substr($first, 0, 1024), '%PDF-') === false) {
+                throw new RuntimeException('Drive returned non-PDF bytes for a manuscript');
+            }
 
-            $send = function () use ($body) {
-                while (!$body->eof()) {
-                    echo $body->read(65536);
-                    flush();
-                    if (connection_aborted()) break;   // the reader went away; stop fetching
+            $send = function () use ($body, $first, $size, $client, $fileId) {
+                echo $first;
+                $sent = strlen($first);
+                flush();
+                for ($resume = 0; $resume <= 2 && !connection_aborted(); $resume++) {
+                    try {
+                        while (!$body->eof() && ($size === null || $sent < $size)) {
+                            $piece = $body->read(131072);
+                            if ($piece === '') break;
+                            echo $piece;
+                            $sent += strlen($piece);
+                            flush();
+                            if (connection_aborted()) return;
+                        }
+                        if ($size === null || $sent === $size) return;
+                    } catch (Throwable $e) {
+                        error_log('GDrive stream interrupted for ' . $fileId . ' after ' . $sent . ' bytes: ' . $e->getMessage());
+                    }
+                    if ($resume === 2) break;
+                    /* Continue at the exact byte after the last one sent. A
+                       plain 200 would duplicate the start of the PDF, so only
+                       an acknowledged partial response is accepted. */
+                    $resumed = false;
+                    for ($requestTry = 0; $requestTry < 2 && !$resumed; $requestTry++) {
+                        try {
+                            $next = $client->authorize()->request('GET',
+                                'https://www.googleapis.com/drive/v3/files/' . rawurlencode($fileId),
+                                ['query' => ['alt' => 'media', 'supportsAllDrives' => 'true'],
+                                 'headers' => ['Range' => 'bytes=' . $sent . '-',
+                                               'Accept-Encoding' => 'identity'],
+                                 'stream' => true, 'http_errors' => false]);
+                            $range = [];
+                            $validRange = $next->getStatusCode() === 206 &&
+                                preg_match('/^bytes ' . $sent . '-\\d+\\/(\\d+)$/',
+                                    $next->getHeaderLine('Content-Range'), $range);
+                            if (!$validRange || ($size !== null && (int)$range[1] !== $size)) {
+                                error_log('GDrive resume refused for ' . $fileId . ': HTTP ' . $next->getStatusCode());
+                                break;
+                            }
+                            if ($size === null) $size = (int)$range[1];
+                            $body = $next->getBody();
+                            $resumed = true;
+                        } catch (Throwable $e) {
+                            error_log('GDrive resume failed for ' . $fileId . ': ' . $e->getMessage());
+                            if ($requestTry === 0) usleep(300000);
+                        }
+                    }
+                    if (!$resumed) break;
+                }
+                if ($size !== null && $sent !== $size) {
+                    error_log('GDrive stream incomplete for ' . $fileId . ': ' . $sent . '/' . $size . ' bytes');
                 }
             };
-            return [$send, $size !== '' ? (int)$size : null];
+            return [$send, $size];
         } catch (Throwable $e) {
             // Nothing has been sent yet, so a second try is still free to fail.
             if (!$last) { usleep(400000); continue; }

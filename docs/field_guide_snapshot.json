@@ -1,5 +1,5 @@
 {
- "built": "2026-11-17 01:53",
+ "built": "2026-11-17 15:11",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -131,7 +131,7 @@
    "lines": 97
   },
   "app/student/pdf_viewer.php": {
-   "lines": 385
+   "lines": 390
   },
   "app/student/student_assistant.php": {
    "lines": 147
@@ -191,7 +191,7 @@
    "lines": 228
   },
   "config/gdrive_config.php": {
-   "lines": 898
+   "lines": 978
   },
   "config/groq_config.php": {
    "lines": 1007
@@ -317,7 +317,7 @@
    "lines": 124
   },
   "includes/pdf_dock.php": {
-   "lines": 1510
+   "lines": 1515
   },
   "includes/pdf_writer.php": {
    "lines": 429

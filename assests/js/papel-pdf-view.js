@@ -54,6 +54,8 @@
         var pdfDoc = null;
         var zoom = 1;              // 1 = fit the scroller's width
         var renderToken = 0;       // bumped to abandon a superseded render
+        var wraps = [], drawn = {}, failedPages = {};
+        var activePage = 0, activeTask = null, visibleFrame = 0;
         var loadToken = 0;         // the same, for a document still being opened
         var lastWidth = 0;         // the width the pages were last drawn at
         var workerReady = false;
@@ -157,10 +159,134 @@
             scroller.scrollTop = Math.max(0, top + place.ratio * wrap.offsetHeight - scroller.clientHeight / 2);
         }
 
-        /* Draws the document at the current width and zoom. Given a reading
-           place, it opens there rather than at the top. */
+        /* A long manuscript must never rasterise all its pages on load or on
+           every zoom. Only the pages near the viewport need canvases and text
+           layers; the sized wrappers keep scrolling and page numbers stable. */
+        function stopRendering() {
+            ++renderToken;
+            if (visibleFrame) { cancelAnimationFrame(visibleFrame); visibleFrame = 0; }
+            if (activeTask) { try { activeTask.cancel(); } catch (err) {} }
+            activeTask = null;
+            activePage = 0;
+            wraps = []; drawn = {}; failedPages = {};
+        }
+
+        function nearby() {
+            var box = scroller.getBoundingClientRect();
+            var mid = box.top + box.height / 2;
+            var near = [];
+            for (var i = 0; i < wraps.length; i++) {
+                var rect = wraps[i].getBoundingClientRect();
+                var distance = Math.abs((rect.top + rect.bottom) / 2 - mid);
+                if (rect.bottom >= box.top - box.height && rect.top <= box.bottom + box.height) {
+                    near.push({ page: i + 1, distance: distance });
+                } else if (drawn[i + 1] && (rect.bottom < box.top - box.height * 2 || rect.top > box.bottom + box.height * 2)) {
+                    // A distant canvas can cost tens of MB at high zoom.
+                    wraps[i].textContent = '';
+                    delete drawn[i + 1];
+                }
+            }
+            near.sort(function (a, b) { return a.distance - b.distance; });
+            return near.map(function (item) { return item.page; });
+        }
+
+        function visiblePages() {
+            if (!pdfDoc || !wraps.length || activePage) return;
+            var pages = nearby();
+            var page = pages.find(function (n) { return !drawn[n] && !failedPages[n]; });
+            if (!page) return;
+            var token = renderToken;
+            activePage = page;
+            pdfDoc.getPage(page).then(function (p) {
+                if (token !== renderToken) return;
+                var base = availableWidth();
+                var natural = p.getViewport({ scale: 1 });
+                var scale = (base / natural.width) * zoom;
+                var viewport = p.getViewport({ scale: scale });
+                var wrap = wraps[page - 1];
+                var before = wrap.offsetHeight;
+                wrap.style.width = Math.floor(viewport.width) + 'px';
+                wrap.style.height = Math.floor(viewport.height) + 'px';
+                if (wrap.getBoundingClientRect().bottom < scroller.getBoundingClientRect().top) {
+                    scroller.scrollTop += wrap.offsetHeight - before;
+                }
+                var canvas = document.createElement('canvas');
+                canvas.className = 'papel-pdf-canvas';
+                canvas.setAttribute('role', 'img');
+                canvas.setAttribute('aria-label', 'Page ' + page + ' of ' + pdfDoc.numPages);
+                // Bound backing-store memory, especially at 5x zoom on phones.
+                var pixels = Math.min(global.devicePixelRatio || 1, 2,
+                    Math.sqrt(8000000 / Math.max(1, viewport.width * viewport.height)));
+                canvas.width = Math.max(1, Math.floor(viewport.width * pixels));
+                canvas.height = Math.max(1, Math.floor(viewport.height * pixels));
+                var layer = document.createElement('div');
+                layer.className = 'papel-pdf-textlayer';
+                layer.style.setProperty('--scale-factor', scale);
+                wrap.textContent = '';
+                wrap.appendChild(canvas);
+                wrap.appendChild(layer);
+                activeTask = p.render({
+                    canvasContext: canvas.getContext('2d'), viewport: viewport,
+                    transform: pixels !== 1 ? [pixels, 0, 0, pixels, 0, 0] : null
+                });
+                return activeTask.promise.then(function () {
+                    if (token !== renderToken) return;
+                    drawn[page] = true;
+                    busy(false);
+                    while (readyWaiters.length) readyWaiters.shift()();
+                    failWaiters = [];
+                    // A usable page appears before the text layer is built.
+                    return p.getTextContent().then(function (textContent) {
+                        if (token !== renderToken || !wrap.isConnected) return;
+                        var divs = [];
+                        return pdfjsLib.renderTextLayer({
+                            textContentSource: textContent, container: layer,
+                            viewport: viewport, textDivs: divs
+                        }).promise.then(function () { markBold(p, textContent, divs); });
+                    });
+                });
+            }).catch(function (err) {
+                if (token !== renderToken) return;
+                if (err && err.name === 'RenderingCancelledException') return;
+                failedPages[page] = true;
+                if (readyWaiters.length) {
+                    readyWaiters = [];
+                    while (failWaiters.length) failWaiters.shift()(err);
+                }
+            }).then(function () {
+                if (token !== renderToken) return;
+                activePage = 0;
+                activeTask = null;
+                scheduleVisible();
+            });
+        }
+
+        function scheduleVisible() {
+            if (visibleFrame) return;
+            visibleFrame = requestAnimationFrame(function () {
+                visibleFrame = 0;
+                if (activePage && wraps[activePage - 1]) {
+                    var rect = wraps[activePage - 1].getBoundingClientRect();
+                    var box = scroller.getBoundingClientRect();
+                    if ((rect.bottom < box.top - box.height || rect.top > box.bottom + box.height) && activeTask) {
+                        activeTask.cancel();
+                    }
+                }
+                visiblePages();
+            });
+        }
+        scroller.addEventListener('scroll', scheduleVisible, { passive: true });
+        var readyWaiters = [], failWaiters = [];
+        function settleWaiters() {
+            while (readyWaiters.length) readyWaiters.shift()();
+            failWaiters = [];
+        }
+
+        /* Lay out the document at the current width, preserving the reading
+           position; the viewport renderer then draws only nearby pages. */
         function render(keep) {
-            var token = ++renderToken;
+            stopRendering();
+            var token = renderToken;
             if (!pdfDoc) return Promise.resolve();
 
             var base = availableWidth();
@@ -172,7 +298,6 @@
             if (base <= 0) { lastWidth = 0; return Promise.resolve(); }
             lastWidth = base;
 
-            var ratio = global.devicePixelRatio || 1;
             var total = pdfDoc.numPages;
 
             return pdfDoc.getPage(1).then(function (first) {
@@ -186,7 +311,6 @@
                    when its turn comes. */
                 var firstView = first.getViewport({ scale: (base / first.getViewport({ scale: 1 }).width) * zoom });
                 scroller.textContent = '';
-                var wraps = [];
                 for (var i = 0; i < total; i++) {
                     var w = document.createElement('div');
                     w.className = 'papel-pdf-page';
@@ -197,84 +321,13 @@
                 }
                 if (keep) putBack(keep, wraps);
 
-                // The page being read is drawn first, then on to the end, then
-                // the pages above it.
-                var start = keep ? Math.min(Math.max(keep.page, 1), total) : 1;
-                var order = [];
-                for (var a = start; a <= total; a++) order.push(a);
-                for (var b = 1; b < start; b++) order.push(b);
-                var done = 0;
-
-                function next() {
-                    if (token !== renderToken || done >= order.length) return Promise.resolve();
-                    var page = order[done++];
-
-                    return pdfDoc.getPage(page).then(function (p) {
-                        if (token !== renderToken) return;
-
-                        var natural = p.getViewport({ scale: 1 });
-                        // Fit the width first, then apply the zoom multiplier on
-                        // top, so 100% always means "as wide as the panel".
-                        var scale = (base / natural.width) * zoom;
-                        var viewport = p.getViewport({ scale: scale });
-
-                        // Wrapper so the text layer can sit exactly over the canvas.
-                        var wrap = wraps[page - 1];
-                        var before = wrap.offsetHeight;
-                        wrap.style.width = Math.floor(viewport.width) + 'px';
-                        wrap.style.height = Math.floor(viewport.height) + 'px';
-                        // A page above the one being read that turned out another
-                        // height would slide the text out from under the reader.
-                        if (page < start) scroller.scrollTop += wrap.offsetHeight - before;
-
-                        var canvas = document.createElement('canvas');
-                        canvas.className = 'papel-pdf-canvas';
-                        canvas.setAttribute('role', 'img');
-                        canvas.setAttribute('aria-label', 'Page ' + page + ' of ' + total);
-                        // Backing store in device pixels keeps text crisp; the CSS
-                        // size stays in layout pixels.
-                        canvas.width = Math.floor(viewport.width * ratio);
-                        canvas.height = Math.floor(viewport.height * ratio);
-
-                        var layer = document.createElement('div');
-                        layer.className = 'papel-pdf-textlayer';
-                        // PDF.js 3.x sizes the text spans from this custom property.
-                        layer.style.setProperty('--scale-factor', scale);
-
-                        wrap.appendChild(canvas);
-                        wrap.appendChild(layer);
-
-                        return p.render({
-                            canvasContext: canvas.getContext('2d'),
-                            viewport: viewport,
-                            transform: ratio !== 1 ? [ratio, 0, 0, ratio, 0, 0] : null
-                        }).promise.then(function () {
-                            if (token !== renderToken) return;
-                            return p.getTextContent();
-                        }).then(function (textContent) {
-                            if (token !== renderToken || !textContent) return;
-                            // Selectable, copyable text sitting invisibly on top of
-                            // the rendered picture.
-                            const divs = [];
-                            return pdfjsLib.renderTextLayer({
-                                textContentSource: textContent,
-                                container: layer,
-                                viewport: viewport,
-                                textDivs: divs
-                            }).promise.then(function () {
-                                markBold(p, textContent, divs);
-                            });
-                        }).then(function () {
-                            if (token !== renderToken) return;
-                            if (done === 1) { say(''); busy(false); }   // the first page is up
-                            return next();
-                        });
-                    });
-                }
-
-                return next();
-            }).catch(function () {
-                if (token === renderToken) { busy(false); say('This PDF could not be displayed.'); }
+                return new Promise(function (resolve, reject) {
+                    readyWaiters.push(resolve);
+                    failWaiters.push(reject);
+                    scheduleVisible();
+                });
+            }).catch(function (err) {
+                if (token === renderToken) { busy(false); throw err; }
             });
         }
 
@@ -287,7 +340,9 @@
             var place = readingPlace();
             zoom = clamped;
             onZoom(zoom);
-            render(place);
+            render(place).catch(function () {
+                fail(options.failMessage || 'This PDF could not be displayed.');
+            });
         }
 
         function step(direction) {
@@ -807,7 +862,9 @@
             if (!pdfDoc) return;
             var w = availableWidth();
             if (w <= 0 || Math.abs(w - lastWidth) < 2) return;   // hidden, or not really moved
-            render(readingPlace());
+            render(readingPlace()).catch(function () {
+                fail(options.failMessage || 'This PDF could not be displayed.');
+            });
         }
         function scheduleRelayout() {
             clearTimeout(resizeTimer);
@@ -849,7 +906,7 @@
                     pdfDoc = doc;
                     zoom = 1;
                     onZoom(zoom);
-                    return render().then(function () { return true; });
+                    return render().then(function () { return !overtaken(); });
                 }).then(function (drawn) {
                     if (!drawn) return;
                     // Announced once per page load, not on every document, so it
@@ -887,14 +944,16 @@
             hint:      hint,
             redraw:    render,
             clear: function () {
-                renderToken++;
+                settleWaiters();
+                stopRendering();
                 loadToken++;
                 scroller.textContent = '';
                 say('');
                 busy(false);
             },
             destroy: function () {
-                renderToken++;
+                settleWaiters();
+                stopRendering();
                 loadToken++;
                 if (pdfDoc) { try { pdfDoc.destroy(); } catch (err) {} pdfDoc = null; }
                 scroller.textContent = '';
