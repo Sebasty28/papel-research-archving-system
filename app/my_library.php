@@ -61,7 +61,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $clear = $conn->prepare(
                 "UPDATE manuscript_requests SET student_hidden_at = NOW()
                   WHERE student_user_id = ? AND student_hidden_at IS NULL AND status <> 'pending'
-                    AND (status <> 'granted' OR expires_at IS NULL OR expires_at <= NOW())"
+                    AND (status <> 'granted' OR expires_at IS NULL
+                         OR expires_at <= (UTC_TIMESTAMP() + INTERVAL 8 HOUR))"
             );
             $clear->bind_param('i', $uid);
             $clear->execute();

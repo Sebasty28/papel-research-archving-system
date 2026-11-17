@@ -201,11 +201,8 @@ $rc_order   = [
 $rc_waiting = 'COALESCE((SELECT MAX(aw.reviewed_at) FROM approval_workflow aw'
             . ' WHERE aw.paper_id = rp.paper_id), rp.upload_date)';
 
-/* How many rows at a time. Ten is a short page for a desk holding two
-   hundred papers, and the reader is the one who knows which they want. */
-$rc_per_sizes = [10, 25, 50];
-$per_page = (int)($_GET['per'] ?? 0);
-if (!in_array($per_page, $rc_per_sizes, true)) $per_page = 10;
+/* Match the Public Repository: twenty papers, with numbered pages below. */
+$per_page = 20;
 $page     = max(1, (int)($_GET['page'] ?? 1));
 $offset   = ($page - 1) * $per_page;
 
@@ -492,7 +489,7 @@ function rc_qs(array $over = []): string {
         'year' => $_GET['year'] ?? null, 'month'   => $_GET['month']   ?? null,
         'day'  => $_GET['day']  ?? null, 'sort'    => $_GET['sort']    ?? null,
         'page' => $_GET['page'] ?? null, 'section' => $_GET['section'] ?? null,
-        'ay'   => $_GET['ay']   ?? null, 'per'     => $_GET['per']     ?? null,
+        'ay'   => $_GET['ay']   ?? null,
     ];
     return http_build_query(array_filter(array_merge($base, $over), fn($v) => $v !== null && $v !== ''));
 }
@@ -529,6 +526,7 @@ if (!isset($PAGE_SKELETON)) { $PAGE_SKELETON = 'console'; }
 <?php require_once ROOT_PATH.'/includes/browse_console.php'; ?>
 <?php require_once ROOT_PATH.'/includes/console_shell.php'; ?>
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
+<?php require ROOT_PATH.'/assests/css/paper-pager.css'; ?>
 /* ---- What this desk is, said once at the top ---- */
 .rc-intro { margin-bottom: 1.25rem; }
 .rc-intro-heading { display: flex; align-items: center; gap: .35rem; }
@@ -608,63 +606,6 @@ if (!isset($PAGE_SKELETON)) { $PAGE_SKELETON = 'console'; }
 
 /* ---- Review controls on a card ---- */
 .rc-actions { margin-top: .875rem; display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
-
-/* ---- The line above the list ----
-   What is on screen, how much of it to show, and the pager. Each is given
-   room of its own: unspaced they read as one long sentence with numbers
-   scattered through it. */
-.toolbar-right { gap: .5rem; flex: 0 0 auto; }
-.rc-count { font-size: .75rem; color: var(--grey); white-space: nowrap; }
-.rc-per {
-    display: inline-flex; align-items: center; gap: .125rem;
-    font-size: .75rem; color: var(--grey); white-space: nowrap;
-    /* The rule marks where the count ends and the control begins. */
-    padding-left: .5rem; border-left: 1px solid var(--border);
-}
-.rc-per-label { margin-right: .25rem; }
-.rc-per a, .rc-per-on {
-    min-width: 1.35rem; padding: .1rem .25rem;
-    border-radius: var(--r-control, 4px);
-    text-align: center; text-decoration: none;
-}
-.rc-per a { color: var(--grey); }
-.rc-per a:hover { color: var(--maroon); background: var(--cream); }
-/* Marked by weight and colour, with no box of its own. It used to be a white
-   chip with a border, which read as a chip while this strip was tinted; the
-   console sits on the page now, and a white box on a white page is an outline
-   around nothing. */
-.rc-per-on {
-    color: var(--maroon); font-weight: 600;
-    padding: .05rem .2rem;
-}
-/* The arrows are the pager, so they sit apart from the numbers that are not. */
-.toolbar-right .toolbar-btn:first-of-type { margin-left: .25rem; }
-/* What actually decides whether the toolbar fits is how many tabs the desk has,
-   and that is not something a width query can see: the console is the same width
-   on the Director's two-tab desk as on the Coordinator's five-tab one. So the
-   count gives way from the fourth tab onwards, measured on the markup itself.
-   It is the one of the three that can go, since the list below already shows
-   what is on screen and the pager says where in it you are; the Director and
-   anyone else with room keeps it. */
-.dash-bar:has(.dash-tabs .dash-tab:nth-child(4)) .rc-count { display: none; }
-.dash-bar:has(.dash-tabs .dash-tab:nth-child(4)) .rc-per { padding-left: 0; border-left: 0; }
-
-/* And on a console too narrow even for two tabs and the count, measured on the
-   console rather than the window: a desk sits beside a sidebar and has far less
-   room than the viewport suggests, so the old window rule only noticed at 700px,
-   by which point the toolbar had been wrapping for hundreds of pixels. */
-@container desk (max-width: 620px) {
-    .rc-count { display: none; }
-    .rc-per { padding-left: 0; border-left: 0; }
-}
-/* Where container queries are not understood, the old window rule still
-   applies, so such a browser behaves exactly as it did before. */
-@supports not (container-type: inline-size) {
-    @media (max-width: 700px) {
-        .rc-count { display: none; }
-        .rc-per { padding-left: 0; border-left: 0; }
-    }
-}
 
 /* ---- How long it has been waiting ----
    Only shown where somebody is expected to act. On a reading tab it would
@@ -997,35 +938,6 @@ html[data-view="rows"] .paper-list .card-status .paper-action { display: none; }
                     </div>
                 </div>
 
-                <div class="toolbar-right">
-                    <?php /* Three things that were running into one another: what is on
-                             screen, how much of it to show, and how to move. Said in that
-                             order, with a rule between the first two and the arrows kept
-                             to the end where a pager belongs. */ ?>
-                    <span class="rc-count">Showing <?= $total_papers ? $start_item : 0 ?>&ndash;<?= $end_item ?> of <?= number_format($total_papers) ?></span>
-                    <?php /* A plain link per size rather than a select: the list is fetched
-                             by AJAX from the same query string everything else here uses. */ ?>
-                    <span class="rc-per">
-                        <span class="rc-per-label">Show</span>
-                        <?php foreach ($rc_per_sizes as $size): ?>
-                            <?php if ($size === $per_page): ?>
-                                <span class="rc-per-on"><?= $size ?></span>
-                            <?php else: ?>
-                                <a href="<?= e($rc_self) ?>?<?= rc_qs(['per' => $size, 'page' => null]) ?>"><?= $size ?></a>
-                            <?php endif; ?>
-                        <?php endforeach; ?>
-                    </span>
-                    <?php if ($page > 1): ?>
-                        <a class="toolbar-btn" href="<?= e($rc_self) ?>?<?= rc_qs(['page' => $page - 1]) ?>" aria-label="Previous page"><span class="material-symbols-outlined">chevron_left</span></a>
-                    <?php else: ?>
-                        <span class="toolbar-btn disabled"><span class="material-symbols-outlined">chevron_left</span></span>
-                    <?php endif; ?>
-                    <?php if ($page < $total_pages): ?>
-                        <a class="toolbar-btn" href="<?= e($rc_self) ?>?<?= rc_qs(['page' => $page + 1]) ?>" aria-label="Next page"><span class="material-symbols-outlined">chevron_right</span></a>
-                    <?php else: ?>
-                        <span class="toolbar-btn disabled"><span class="material-symbols-outlined">chevron_right</span></span>
-                    <?php endif; ?>
-                </div>
             </div>
 
             <div class="paper-list is-scrollable">
@@ -1197,6 +1109,9 @@ html[data-view="rows"] .paper-list .card-status .paper-action { display: none; }
                     </div>
                 <?php endif; ?>
             </div>
+            <?php require_once ROOT_PATH.'/includes/paper_pager.php'; ?>
+            <?= paper_pager_html($page, $total_pages, $start_item, $end_item, $total_papers, 'papers',
+                fn($n) => $rc_self . '?' . rc_qs(['page' => $n])) ?>
         </div>
 
         <?php

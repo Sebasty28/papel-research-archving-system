@@ -454,7 +454,7 @@ a.ms-panel-title:focus-visible { outline: 2px solid var(--maroon); outline-offse
     /* Grants this page has already counted out. The two clocks agree to within
        a second at best (the server's time() has no fraction, and the device's
        own may drift between polls), so a grant can run out here a moment before
-       the server's `expires_at > NOW()` stops returning it: the next poll then
+       the server's expiry check stops returning it: the next poll then
        handed the row back, the pill showed it again, and a second later it
        "ended" a second time, with a second pop-up behind the one just closed.
        An id ended here is finished for good; asking again is a new row with a
@@ -467,6 +467,30 @@ a.ms-panel-title:focus-visible { outline: 2px solid var(--maroon); outline-offse
     var polling = null;
     var SOON    = 15 * 60 * 1000;
     var FOLD    = 'papel.msTimerOpen';
+    /* Closing an expiry notice reloads the paper so its manuscript card is
+       rebuilt. Remember notices that were actually shown, or that reload can
+       announce the same grant again if the browser and database clocks cross
+       the expiry boundary on different seconds. A new request has a new id. */
+    var NOTICE_KEY = 'papel.msEnded.<?= $msTimerUid ?>';
+    var announced = {};
+    try {
+        var savedNotices = JSON.parse(localStorage.getItem(NOTICE_KEY) || '{}');
+        if (savedNotices && typeof savedNotices === 'object' && !Array.isArray(savedNotices)) {
+            announced = savedNotices;
+        }
+    } catch (e) {}
+
+    function noticeId(kind, g) { return kind + ':' + g.id + ':' + g.expires; }
+    function rememberNotice(kind, g) {
+        if (kind === 'granted') { return; }
+        announced[noticeId(kind, g)] = Date.now();
+        var keys = Object.keys(announced);
+        if (keys.length > 80) {
+            keys.sort(function (a, b) { return announced[b] - announced[a]; });
+            keys.slice(80).forEach(function (key) { delete announced[key]; });
+        }
+        try { localStorage.setItem(NOTICE_KEY, JSON.stringify(announced)); } catch (e) {}
+    }
 
     function nowMs() { return Date.now() + skew; }
     function pad(n)  { return n < 10 ? '0' + n : '' + n; }
@@ -625,6 +649,7 @@ a.ms-panel-title:focus-visible { outline: 2px solid var(--maroon); outline-offse
     var aClose = document.getElementById('msAlarmClose');
 
     function announce(kind, g) {
+        if (kind !== 'granted' && announced[noticeId(kind, g)]) { return; }
         queue.push({ kind: kind, g: g });
         next();
     }
@@ -695,6 +720,7 @@ a.ms-panel-title:focus-visible { outline: 2px solid var(--maroon); outline-offse
         }
         tickAlarm();
         dlg.showModal();
+        rememberNotice(item.kind, g);
         /* The pop-up is the one thing worth reading just then, so the panel
            behind it is folded away. */
         setOpen(false);

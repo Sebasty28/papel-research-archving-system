@@ -83,7 +83,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                    second affects nothing. */
                 $upd = $conn->prepare(
                     "UPDATE manuscript_requests
-                        SET status='granted', duration_hours=?, granted_by=?, granted_at=NOW(), expires_at=?
+                        SET status='granted', duration_hours=?, granted_by=?,
+                            granted_at=(UTC_TIMESTAMP() + INTERVAL 8 HOUR), expires_at=?
                       WHERE request_id = ? AND status='pending'");
                 $upd->bind_param('iisi', $duration, $u['user_id'], $expires, $reqId);
                 $upd->execute();
@@ -127,7 +128,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $find->close();
 
         $upd = $conn->prepare(
-            "UPDATE manuscript_requests SET status='denied', denied_by=?, denied_at=NOW()
+            "UPDATE manuscript_requests SET status='denied', denied_by=?,
+                    denied_at=(UTC_TIMESTAMP() + INTERVAL 8 HOUR)
               WHERE request_id = ? AND status='pending'");
         $upd->bind_param('ii', $u['user_id'], $reqId);
         $upd->execute();
@@ -179,7 +181,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 /* status='granted' repeated in the WHERE, as granting does:
                    two librarians acting on one row cannot both succeed. */
                 $upd = $conn->prepare(
-                    "UPDATE manuscript_requests SET denied_by=?, denied_at=NOW(), status='denied'
+                    "UPDATE manuscript_requests SET denied_by=?,
+                            denied_at=(UTC_TIMESTAMP() + INTERVAL 8 HOUR), status='denied'
                       WHERE request_id = ? AND status='granted'");
                 $upd->bind_param('ii', $u['user_id'], $rid);
                 $upd->execute();
@@ -311,11 +314,13 @@ $pending = $conn->query("SELECT $select FROM manuscript_requests r $paperJoin
                           WHERE r.status = 'pending' ORDER BY r.created_at ASC")
                 ->fetch_all(MYSQLI_ASSOC);
 $granted = $conn->query("SELECT $select FROM manuscript_requests r $paperJoin
-                          WHERE r.status = 'granted' AND r.expires_at > NOW()
+                          WHERE r.status = 'granted'
+                            AND r.expires_at > (UTC_TIMESTAMP() + INTERVAL 8 HOUR)
                           ORDER BY r.granted_at ASC")
                 ->fetch_all(MYSQLI_ASSOC);
 $history = $conn->query("SELECT $select FROM manuscript_requests r $paperJoin
-                          WHERE r.status = 'denied' OR (r.status = 'granted' AND r.expires_at <= NOW())
+                          WHERE r.status = 'denied' OR (r.status = 'granted'
+                            AND r.expires_at <= (UTC_TIMESTAMP() + INTERVAL 8 HOUR))
                           ORDER BY COALESCE(r.denied_at, r.granted_at) ASC
                           LIMIT 200")
                 ->fetch_all(MYSQLI_ASSOC);

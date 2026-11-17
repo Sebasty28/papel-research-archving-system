@@ -1,0 +1,35 @@
+/* Shared by the Public Repository and the paper dashboards. */
+.papel-pager {
+    margin: 1.25rem 0 .5rem;
+    padding: 1rem 0 .25rem;
+    border-top: 1px solid var(--border);
+    text-align: center;
+}
+.pager-nums {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: .1rem .45rem;
+    font-size: .8125rem;
+}
+.pg-num, .pg-step {
+    display: inline-flex;
+    align-items: center;
+    gap: .1rem;
+    padding: .15rem .3rem;
+    border-radius: var(--r-control, 4px);
+    color: var(--maroon);
+    text-decoration: none;
+}
+.pg-num:hover { text-decoration: underline; }
+.pg-num:focus-visible, .pg-step:focus-visible { outline: 2px solid var(--maroon); outline-offset: 1px; }
+.pg-num.is-here { color: var(--ink); font-weight: 700; }
+.pg-step { font-weight: 600; }
+.pg-step:hover .pg-word { text-decoration: underline; }
+.pg-step .material-symbols-outlined {
+    font-size: 16px;
+    line-height: 1;
+    display: block;
+}
+.pager-count { margin: .4rem 0 0; font-size: .6875rem; color: var(--grey); }

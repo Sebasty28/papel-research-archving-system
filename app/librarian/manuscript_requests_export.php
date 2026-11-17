@@ -20,8 +20,8 @@ $conn = db();
 $sections = [];
 foreach ($scopes as $scope) {
     $condition = $scope === 'pending' ? "r.status = 'pending'"
-               : ($scope === 'granted' ? "r.status = 'granted' AND r.expires_at > NOW()"
-                  : "r.status = 'denied' OR (r.status = 'granted' AND r.expires_at <= NOW())");
+               : ($scope === 'granted' ? "r.status = 'granted' AND r.expires_at > (UTC_TIMESTAMP() + INTERVAL 8 HOUR)"
+                  : "r.status = 'denied' OR (r.status = 'granted' AND r.expires_at <= (UTC_TIMESTAMP() + INTERVAL 8 HOUR))");
     $sql = "SELECT r.*, s.full_name AS student_name, s.student_id AS student_no,
                    s.email AS student_email, s.program AS student_program,
                    COALESCE(p.title, pa.title, 'Untitled paper') AS paper_title

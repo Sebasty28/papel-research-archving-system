@@ -2423,14 +2423,17 @@ function manuscript_request_history_hidden_ready(): bool
  * Lazy expiry: a lapsed grant's row is left exactly as it was written and
  * simply stops counting once expires_at is in the past, rather than being
  * flipped or deleted by a job that has to run on schedule. guest_sessions and
- * student_expiry_date() both work the same way.
+ * student_expiry_date() both work the same way. Grant expiry is stored as a
+ * Manila local DATETIME; the database session can use a different time zone,
+ * so compare it to Manila time derived from UTC rather than to NOW().
  */
 function student_manuscript_access(int $studentUserId, int $paperId): bool {
     if (!manuscript_requests_ready()) return false;      // no table, so no grant can exist
     $conn = db();
     $stmt = $conn->prepare(
         "SELECT 1 FROM manuscript_requests
-          WHERE student_user_id = ? AND paper_id = ? AND status = 'granted' AND expires_at > NOW()
+          WHERE student_user_id = ? AND paper_id = ? AND status = 'granted'
+            AND expires_at > (UTC_TIMESTAMP() + INTERVAL 8 HOUR)
           LIMIT 1");
     $stmt->bind_param('ii', $studentUserId, $paperId);
     $stmt->execute();
@@ -2574,7 +2577,8 @@ function student_manuscript_active_count(int $studentUserId): int {
     $conn = db();
     $stmt = $conn->prepare(
         "SELECT COUNT(*) FROM manuscript_requests
-          WHERE student_user_id = ? AND status = 'granted' AND expires_at > NOW()");
+          WHERE student_user_id = ? AND status = 'granted'
+            AND expires_at > (UTC_TIMESTAMP() + INTERVAL 8 HOUR)");
     $stmt->bind_param('i', $studentUserId);
     $stmt->execute();
     $stmt->bind_result($n);
@@ -2604,7 +2608,8 @@ function student_manuscript_grants(int $studentUserId): array {
            FROM manuscript_requests r
            LEFT JOIN research_papers p ON p.paper_id = r.paper_id AND p.current_status = 'approved'
            LEFT JOIN papers_archive  pa ON pa.paper_id = r.paper_id
-          WHERE r.student_user_id = ? AND r.status = 'granted' AND r.expires_at > NOW()
+          WHERE r.student_user_id = ? AND r.status = 'granted'
+            AND r.expires_at > (UTC_TIMESTAMP() + INTERVAL 8 HOUR)
           ORDER BY r.expires_at ASC");
     $stmt->bind_param('i', $studentUserId);
     $stmt->execute();
@@ -2668,7 +2673,8 @@ function student_open_request_papers(int $studentUserId): array {
     $stmt = $conn->prepare(
         "SELECT paper_id, status FROM manuscript_requests
           WHERE student_user_id = ?
-            AND (status = 'pending' OR (status = 'granted' AND expires_at > NOW()))
+            AND (status = 'pending' OR (status = 'granted'
+                 AND expires_at > (UTC_TIMESTAMP() + INTERVAL 8 HOUR)))
           ORDER BY created_at ASC");
     $stmt->bind_param('i', $studentUserId);
     $stmt->execute();
@@ -2767,7 +2773,7 @@ function manuscript_request_file(array $u, int $paperId, array $paper, bool $has
     $uid  = (int)$u['user_id'];
     $stmt = $conn->prepare(
         "INSERT INTO manuscript_requests (paper_id, student_user_id, status, created_at)
-         VALUES (?, ?, 'pending', NOW())");
+         VALUES (?, ?, 'pending', (UTC_TIMESTAMP() + INTERVAL 8 HOUR))");
     $stmt->bind_param('ii', $paperId, $uid);
     $stmt->execute();
     $stmt->close();

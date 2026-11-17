@@ -971,51 +971,7 @@ html[data-view="rows"] .paper-list .paper-pin-mark { display: inline-flex; }
 html[data-view="rows"] .paper-list .paper-pin-mark .pin-word { display: none; }
 .paper-pin-mark .pin-word { margin-left: .1rem; }
 
-/* ===== The pager at the foot of the list ==============================
-   The pages and the figures, in tokens only: a hardcoded hex breaks the dark
-   palette in silence. */
-.papel-pager {
-    margin: 1.25rem 0 .5rem;
-    padding: 1rem 0 .25rem;
-    border-top: 1px solid var(--border);
-    text-align: center;
-}
-.pager-nums {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: center;
-    gap: .1rem .45rem;
-    font-size: .8125rem;
-}
-.pg-num, .pg-step {
-    display: inline-flex;
-    align-items: center;
-    gap: .1rem;
-    padding: .15rem .3rem;
-    border-radius: var(--r-control, 4px);
-    color: var(--maroon);
-    text-decoration: none;
-}
-.pg-num:hover { text-decoration: underline; }
-.pg-num:focus-visible, .pg-step:focus-visible { outline: 2px solid var(--maroon); outline-offset: 1px; }
-.pg-num.is-here { color: var(--ink); font-weight: 700; }
-.pg-step { font-weight: 600; }
-/* **The underline goes under the word, not under the link.** Previous and
-   Next are inline-flex boxes holding a word and an arrow, and a decoration on
-   a flex container is drawn by each flex item for itself, from its own
-   baseline: the word's line sat at one height and the arrow's at another, two
-   or three pixels lower, which reads as a mistake rather than as a link. The
-   arrow is a mark, not a word, and is not underlined at all. */
-.pg-step:hover .pg-word { text-decoration: underline; }
-.pg-step .material-symbols-outlined {
-    font-size: 16px;
-    /* Centred on the word rather than sitting on its own line's floor: the
-       glyph box of a Material Symbol is taller than the letters beside it. */
-    line-height: 1;
-    display: block;
-}
-.pager-count { margin: .4rem 0 0; font-size: .6875rem; color: var(--grey); }
+<?php require ROOT_PATH.'/assests/css/paper-pager.css'; ?>
 
 /* ===== The keyword strip ==============================================
    The papers' own keywords, rolling past above the results. A scroll box, so
@@ -1848,59 +1804,9 @@ html[data-view="rows"] .paper-list .paper-item .paper-program {
             <?php endif; ?>
         </div>
 
-        <?php if ($total_pages > 1): ?>
-            <?php
-            /* The pager at the foot of the list, as a search engine draws it:
-               the name of the place stretched by one letter per page. PAPEL
-               has the E in the middle the way Google has its two o's, so one
-               page reads exactly PAPEL and ten read PAPEEEEEEEEEEL.
-
-               It sits **outside** the results well, not at the end of it: the
-               well is a box 620px high with its own scrollbar, and in Shelf
-               view it is a grid of books on painted boards, where a child of
-               it would be laid out as one more book-sized cell with a board
-               behind it. The empty state is a child of the well for its own
-               reasons and has a rule to turn the grid off; a second such
-               exception is worse than standing outside.
-
-               A window of ten pages at most, moving with the page you are on,
-               and held against the ends so the last pages still show ten. */
-            $pg_window = 10;
-            $pg_from   = max(1, min($page - 4, $total_pages - $pg_window + 1));
-            $pg_to     = min($total_pages, $pg_from + $pg_window - 1);
-            $pg_href   = function (int $n) use ($qs): string {
-                return 'index.php?' . $qs . '&page=' . $n;
-            };
-            ?>
-            <nav class="papel-pager" aria-label="Pages of results">
-                <?php /* The pages and the count, nothing else. The site's name was
-                         stretched across here, one letter a page, and it was a
-                         wordmark where a reader wanted a control. */ ?>
-                <div class="pager-nums">
-                    <?php if ($page > 1): ?>
-                        <a class="pg-step" href="<?= e($pg_href($page - 1)) ?>" rel="prev">
-                            <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span><span class="pg-word">Previous</span>
-                        </a>
-                    <?php endif; ?>
-                    <?php for ($i = $pg_from; $i <= $pg_to; $i++): ?>
-                        <?php if ($i === $page): ?>
-                            <span class="pg-num is-here" aria-current="page"><?= $i ?></span>
-                        <?php else: ?>
-                            <a class="pg-num" href="<?= e($pg_href($i)) ?>" aria-label="Page <?= $i ?>"><?= $i ?></a>
-                        <?php endif; ?>
-                    <?php endfor; ?>
-                    <?php if ($page < $total_pages): ?>
-                        <a class="pg-step" href="<?= e($pg_href($page + 1)) ?>" rel="next">
-                            <span class="pg-word">Next</span><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
-                        </a>
-                    <?php endif; ?>
-                </div>
-                <p class="pager-count">
-                    Showing <?= $total_papers > 0 ? $start_item : 0 ?>-<?= $end_item ?>
-                    of <?= number_format($total_papers) ?> papers
-                </p>
-            </nav>
-        <?php endif; ?>
+        <?php require_once ROOT_PATH.'/includes/paper_pager.php'; ?>
+        <?= paper_pager_html($page, $total_pages, $start_item, $end_item, $total_papers, 'papers',
+            fn($n) => 'index.php?' . $qs . '&page=' . $n) ?>
 
         <?php
         // Held back until the sidebar is captured too, so one AJAX response

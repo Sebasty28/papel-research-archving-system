@@ -28,9 +28,7 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
 }
 .main-col { position: relative; min-width: 0; }
 /* The same cream frame as the sidebar, around the search, tabs and results. */
-/* Named as a container so the toolbar inside it can be sized against the
-   console rather than against the window: the sidebar takes a third of the
-   page, which no viewport media query can see. */
+/* Keep the existing sizing context for the console frame. */
 .dash-shell {
     container-type: inline-size; container-name: desk;
     background: var(--cream); border-radius: var(--r-card, 8px); padding: .375rem;
@@ -101,11 +99,8 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
 }
 .dash-tools {
     display: flex; align-items: center; gap: .125rem;
-    flex: 0 0 auto; margin-left: .125rem;
+    flex: 0 0 auto; margin-left: auto;
 }
-/* Scoped to this bar: .toolbar-right is shared with the public repository's
-   own toolbar (includes/browse_console.php), which lays itself out. */
-.dash-bar > .toolbar-right { margin-left: auto; padding-left: .75rem; }
 /* ---- The row of tabs, and the chevrons that say it slides ----
    The tabs are one line that is reached by sliding it sideways when they do
    not all fit, and a line that slides with nothing to say so reads as a line
@@ -682,14 +677,9 @@ html[data-view="rows"] .paper-list .paper-card-toggle { display: none; }
        only thing here that scrolls. */
     .dash-tabs-glide { flex: 1 1 100%; }
     .dash-tabs { flex-wrap: nowrap; overflow-x: auto; }
-    /* Second row, in the Public Repository's order: the count and the pager at
-       the left, the tools at the right. The DOM has the tools first, because on
-       a wide screen they belong against the tabs, so the two swap by `order`
-       here rather than by being moved. Both are reached by the keyboard in DOM
-       order either way, and on this row that is the three buttons before the
-       pager, which is the order the wide layout reads in too. */
-    .dash-bar > .toolbar-right { order: 1; margin-left: 0; padding-left: 0; }
-    .dash-tools { order: 2; margin-left: auto; }
+    /* The tools stay at the right of the second row; page numbers live below
+       the results, as they do in the Public Repository. */
+    .dash-tools { margin-left: auto; }
 }
 
 /* Rows stay rows on a phone, and a phone row is two columns: the title, which

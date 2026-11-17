@@ -102,7 +102,7 @@ $filter_day   = (int)($_GET['day'] ?? 0);
 $sort_dir   = (($_GET['sort'] ?? '') === 'asc') ? 'ASC' : 'DESC';
 $sort_param = $sort_dir === 'ASC' ? 'asc' : 'desc';
 
-$per_page = 10;
+$per_page = 20;
 $page     = max(1, (int)($_GET['page'] ?? 1));
 $offset   = ($page - 1) * $per_page;
 
@@ -248,6 +248,7 @@ $VIEW_SHELF = true;
 <?php require_once ROOT_PATH.'/includes/console_shell.php'; ?>
 <?php require_once ROOT_PATH.'/includes/shelf_view.php'; ?>
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
+<?php require ROOT_PATH.'/assests/css/paper-pager.css'; ?>
 /* Delete sits apart from the actions, at the far end of the row, so it is never
    the button next to the one you meant to press. */
 .card-actions .draft-delete-form { margin-left: auto; }
@@ -429,19 +430,6 @@ $VIEW_SHELF = true;
                     </div>
                 </div>
 
-                <div class="toolbar-right">
-                    <span><span class="count-words">Showing items </span><?= $total_papers ? $start_item : 0 ?>-<?= $end_item ?> of <?= number_format($total_papers) ?></span>
-                    <?php if ($page > 1): ?>
-                        <a class="toolbar-btn" href="student_dashboard.php?<?= dash_qs(['page' => $page - 1]) ?>" aria-label="Previous page"><span class="material-symbols-outlined">chevron_left</span></a>
-                    <?php else: ?>
-                        <span class="toolbar-btn disabled"><span class="material-symbols-outlined">chevron_left</span></span>
-                    <?php endif; ?>
-                    <?php if ($page < $total_pages): ?>
-                        <a class="toolbar-btn" href="student_dashboard.php?<?= dash_qs(['page' => $page + 1]) ?>" aria-label="Next page"><span class="material-symbols-outlined">chevron_right</span></a>
-                    <?php else: ?>
-                        <span class="toolbar-btn disabled"><span class="material-symbols-outlined">chevron_right</span></span>
-                    <?php endif; ?>
-                </div>
             </div>
 
             <!-- Paper list -->
@@ -695,6 +683,9 @@ $VIEW_SHELF = true;
                     </div>
                 <?php endif; ?>
             </div>
+            <?php require_once ROOT_PATH.'/includes/paper_pager.php'; ?>
+            <?= paper_pager_html($page, $total_pages, $start_item, $end_item, $total_papers, 'papers',
+                fn($n) => 'student_dashboard.php?' . dash_qs(['page' => $n])) ?>
         </div>
 
         <?php
