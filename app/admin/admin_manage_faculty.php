@@ -40,6 +40,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               'email'      => $_POST['email'] ?? '',
               'faculty_id' => $_POST['faculty_id'] ?? '',
               'password'   => $_POST['password'] ?? '',
+              'title'      => $_POST['title'] ?? '',
+              'secondary_position' => $_POST['secondary_position'] ?? '',
+              'actor'      => $u,
           ], (int)($_POST['user_id'] ?? 0));
           flash($message ? 'success' : 'error',
                 $message ? trim($_POST['full_name'] ?? 'That adviser') . "'s details were saved."
@@ -161,7 +164,8 @@ function staff_table(array $rows, string $which): void {
                         data-full-name="<?= e($r['full_name']) ?>"
                         data-faculty-id="<?= e($r['faculty_id'] ?? '') ?>"
                         data-email="<?= e($r['email']) ?>"
-                        data-position="<?= e($r['title'] ?: staff_position_of($r)) ?>">
+                        data-position="<?= e(staff_position_of($r)) ?>"
+                        data-secondary-position="<?= e($r['secondary_position'] ?? '') ?>">
                         <td class="mgmt-name" data-label="Staff">
                             <?= e($r['full_name']) ?>
                             <span class="mgmt-sub" title="<?= e($r['email']) ?>"><?= e($r['email']) ?></span>
@@ -172,7 +176,12 @@ function staff_table(array $rows, string $which): void {
                                 <span class="mgmt-sub">Added <?= e(date('M j, Y', strtotime($r['created_at']))) ?></span>
                             </span>
                         </td>
-                        <td class="mgmt-prog" data-label="Position"><?= e($r['title'] ?: staff_position_of($r)) ?></td>
+                        <td class="mgmt-prog" data-label="Position">
+                            <?= e(staff_position_of($r)) ?>
+                            <?php if (!empty($r['secondary_position'])): ?>
+                                <span class="mgmt-sub">Also <?= e(staff_position_current_name($r['secondary_position'])) ?></span>
+                            <?php endif; ?>
+                        </td>
                         <td data-label="Actions">
                             <div class="mgmt-actions">
                                 <?php if ($which === 'archived'): ?>
@@ -383,7 +392,7 @@ $PAGE_SKELETON = 'table';
                         </select>
                         <small class="mgmt-hint">
                             A second post the same person holds. They sign in once and can open
-                            both desks. Leave it alone for almost everybody.
+                            both desks. A new assignment appears after their next sign-in.
                         </small>
                     </div>
                     <?php endif; ?>
@@ -551,6 +560,7 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('faculty_id').dataset.keeping = d.facultyId || '';
         document.getElementById('email').value      = d.email || '';
         if (positionSelect && d.position) { positionSelect.value = d.position; }
+        document.getElementById('secondary_position').value = d.secondaryPosition || '';
         relabelId();
         pw.value = '';
 

@@ -124,11 +124,15 @@ function admin_table(array $rows, string $position): void {
                         data-full-name="<?= e($r['full_name']) ?>"
                         data-faculty-id="<?= e($r['faculty_id'] ?? '') ?>"
                         data-email="<?= e($r['email']) ?>"
-                        data-position="<?= e(staff_position_of($r)) ?>">
+                        data-position="<?= e(staff_position_of($r)) ?>"
+                        data-secondary-position="<?= e($r['secondary_position'] ?? '') ?>">
                         <td class="mgmt-name" data-label="Admin">
                             <?= e($r['full_name']) ?>
                             <?php if ($off): ?><span class="mgmt-tag">Archived</span><?php endif; ?>
                             <span class="mgmt-sub" title="<?= e($r['email']) ?>"><?= e($r['email']) ?></span>
+                            <?php if (!empty($r['secondary_position'])): ?>
+                                <span class="mgmt-sub">Also <?= e(staff_position_current_name($r['secondary_position'])) ?></span>
+                            <?php endif; ?>
                         </td>
                         <td class="mgmt-id" data-label="ID">
                             <span class="mgmt-value">
@@ -326,7 +330,7 @@ $PAGE_SKELETON = 'table';
                         </select>
                         <small class="mgmt-hint">
                             A second post the same person holds. They sign in once and can open
-                            both desks. Leave it alone for almost everybody.
+                            both desks. A new assignment appears after their next sign-in.
                         </small>
                     </div>
                     <?php endif; ?>
@@ -523,6 +527,7 @@ document.addEventListener('DOMContentLoaded', function () {
         idInput.dataset.keeping = d.facultyId || '';
         document.getElementById('email').value       = d.email || '';
         positionSelect.value = d.position || '';
+        document.getElementById('secondary_position').value = d.secondaryPosition || '';
         relabelId();
         pw.value = '';
 

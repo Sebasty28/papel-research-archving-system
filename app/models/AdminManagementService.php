@@ -152,7 +152,10 @@ class AdminManagementService {
         }
         $role  = $map['role'];
         $level = $map['level'];
-        $title = trim($data['position']);
+        $title = staff_position_current_name($data['position']);
+        $second = users_have_secondary_position()
+            ? secondary_position_for($data['actor'] ?? current_user(), $data['secondary_position'] ?? '', $title)
+            : '';
 
         if (!$fullName || !$email || !$empId) {
             throw new InvalidArgumentException("Full name, ID and email are all required.");
@@ -181,21 +184,27 @@ class AdminManagementService {
             throw new InvalidArgumentException("Another account already uses that email or ID.");
         }
 
-        if ($password !== '') {
-            $hash = password_hash($password, PASSWORD_DEFAULT);
-            $stmt = $this->conn->prepare(
-                "UPDATE users SET full_name=?, email=?, faculty_id=?, user_role=?, admin_level=?,
-                                  title=?, password=?
-                 WHERE user_id=? AND user_role IN ('admin','head_academic','librarian')");
-            // name, email, id, role, level, title, hash, user_id
-            $stmt->bind_param('ssssissi', $fullName, $email, $empId, $role, $level, $title,
-                              $hash, $userId);
-        } else {
-            $stmt = $this->conn->prepare(
-                "UPDATE users SET full_name=?, email=?, faculty_id=?, user_role=?, admin_level=?, title=?
-                 WHERE user_id=? AND user_role IN ('admin','head_academic','librarian')");
-            $stmt->bind_param('ssssisi', $fullName, $email, $empId, $role, $level, $title, $userId);
+        $fields = ['full_name=?', 'email=?', 'faculty_id=?', 'user_role=?', 'admin_level=?', 'title=?'];
+        $values = [$fullName, $email, $empId, $role, $level, $title];
+        $types = 'ssssis';
+        if (users_have_secondary_position()) {
+            $fields[] = 'secondary_position=?';
+            $values[] = $second;
+            $types .= 's';
         }
+        if ($password !== '') {
+            $fields[] = 'password=?';
+            $values[] = password_hash($password, PASSWORD_DEFAULT);
+            $types .= 's';
+        }
+        $values[] = $userId;
+        $types .= 'i';
+        $stmt = $this->conn->prepare(
+            'UPDATE users SET ' . implode(', ', $fields)
+            . " WHERE user_id=? AND user_role IN ('admin','head_academic','librarian')");
+        $refs = [$types];
+        foreach ($values as $key => $_) { $refs[] = &$values[$key]; }
+        call_user_func_array([$stmt, 'bind_param'], $refs);
         return $stmt->execute();
     }
 

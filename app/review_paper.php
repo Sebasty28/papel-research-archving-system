@@ -22,10 +22,11 @@ $u    = current_user();
 
 $paper_id = (int)($_GET['id'] ?? 0);
 
-/* Which desk this reviewer belongs to, and therefore which papers are theirs
-   to read: an adviser sees the papers of the students whose accounts they
-   created; the Coordinator sees everything that has reached review. */
-$isAdviser = ($u['user_role'] === 'faculty');
+/* A dual-post reviewer opens this page from either desk. Preserve that desk's
+   scope and decision route instead of guessing from the account's primary role. */
+$requestedDesk = (string)($_GET['desk'] ?? '');
+$isAdviser = user_has_role($u, 'faculty')
+    && ($requestedDesk === 'faculty' || !user_has_role($u, 'admin'));
 $deskUrl   = $isAdviser
     ? BASE_URL . '/app/faculty/faculty_review_dashboard.php'
     : BASE_URL . '/app/admin/admin_review_dashboard.php';

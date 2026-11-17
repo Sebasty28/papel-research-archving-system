@@ -979,8 +979,8 @@ html[data-view="rows"] .paper-list .card-status .paper-action { display: none; }
                                              page instead: that one falls back to papers_archive. */ ?>
                                     <?php if ($rc_src === 'archive'): ?>
                                         <a href="<?= e(BASE_URL) ?>/archive/view_paper.php?id=<?= $pid ?>"><?= e($r['title']) ?></a>
-                                    <?php elseif (in_array($u['user_role'], ['faculty', 'admin'], true)): ?>
-                                        <a href="<?= e(BASE_URL) ?>/app/review_paper.php?id=<?= $pid ?>"><?= e($r['title']) ?></a>
+                                    <?php elseif (in_array($RC['review'] ?? '', ['faculty', 'admin'], true)): ?>
+                                        <a href="<?= e(BASE_URL) ?>/app/review_paper.php?id=<?= $pid ?>&amp;desk=<?= e($RC['review']) ?>"><?= e($r['title']) ?></a>
                                     <?php elseif ($status === 'approved'): ?>
                                         <a href="<?= e(BASE_URL) ?>/archive/view_paper.php?id=<?= $pid ?>"><?= e($r['title']) ?></a>
                                     <?php else: ?>

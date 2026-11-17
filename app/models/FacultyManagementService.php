@@ -74,6 +74,15 @@ class FacultyManagementService {
         if ($this->userRepo->isEmailOrFacultyIdTaken($data['email'], $data['faculty_id'], $userId)) {
             throw new InvalidArgumentException("Another account already uses that email or Faculty ID.");
         }
+        $map = staff_position_map($data['title'] ?? '');
+        if (!$map || !in_array($map['role'], self::MANAGES, true)) {
+            throw new InvalidArgumentException('Choose a position.');
+        }
+        $data['title'] = staff_position_current_name($data['title']);
+        $data['user_role'] = $map['role'];
+        $data['secondary_position'] = users_have_secondary_position()
+            ? secondary_position_for($data['actor'] ?? current_user(), $data['secondary_position'] ?? '', $data['title'])
+            : '';
         if ($password !== '' &&
             (strlen($password) < 6 || !preg_match('/[A-Z]/', $password) || !preg_match('/[0-9]/', $password))) {
             throw new InvalidArgumentException("Password must be at least 6 characters and contain at least one uppercase letter and one number.");

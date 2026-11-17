@@ -1,5 +1,5 @@
 {
- "built": "2026-11-17 16:02",
+ "built": "2026-11-17 16:21",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -38,7 +38,7 @@
    "lines": 151
   },
   "app/admin/admin_manage_faculty.php": {
-   "lines": 599
+   "lines": 609
   },
   "app/admin/admin_review_dashboard.php": {
    "lines": 139
@@ -47,7 +47,7 @@
    "lines": 380
   },
   "app/admin/super_admin_manage_admins.php": {
-   "lines": 571
+   "lines": 576
   },
   "app/admin/super_admin_review_dashboard.php": {
    "lines": 135
@@ -89,7 +89,7 @@
    "lines": 60
   },
   "app/models/AdminManagementService.php": {
-   "lines": 231
+   "lines": 240
   },
   "app/models/ArchiveRepository.php": {
    "lines": 140
@@ -98,7 +98,7 @@
    "lines": 56
   },
   "app/models/FacultyManagementService.php": {
-   "lines": 184
+   "lines": 193
   },
   "app/models/PaperRepository.php": {
    "lines": 99
@@ -107,7 +107,7 @@
    "lines": 84
   },
   "app/models/UserRepository.php": {
-   "lines": 179
+   "lines": 184
   },
   "app/my_library.php": {
    "lines": 1297
@@ -116,7 +116,7 @@
    "lines": 199
   },
   "app/review_paper.php": {
-   "lines": 810
+   "lines": 811
   },
   "app/save_paper.php": {
    "lines": 52

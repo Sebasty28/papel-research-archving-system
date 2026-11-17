@@ -126,24 +126,27 @@ class UserRepository {
         return (string)($row['faculty_id'] ?? '');
     }
 
-    /**
-     * Save an adviser's details. A blank password leaves the current one alone,
-     * so the two statements differ only in whether they touch it.
-     */
+    /** Save an adviser's primary and second posts with the rest of the form. */
     public function updateFacultyDetails($userId, $data, $password) {
-        if ($password !== '') {
-            $hash = password_hash($password, PASSWORD_DEFAULT);
-            $stmt = $this->conn->prepare(
-                "UPDATE users SET full_name=?, email=?, faculty_id=?, password=?
-                 WHERE user_id=? AND user_role IN ('faculty','librarian')");
-            $stmt->bind_param('ssssi', $data['full_name'], $data['email'], $data['faculty_id'],
-                              $hash, $userId);
-        } else {
-            $stmt = $this->conn->prepare(
-                "UPDATE users SET full_name=?, email=?, faculty_id=?
-                 WHERE user_id=? AND user_role IN ('faculty','librarian')");
-            $stmt->bind_param('sssi', $data['full_name'], $data['email'], $data['faculty_id'], $userId);
+        $fields = ['full_name=?', 'email=?', 'faculty_id=?', 'title=?', 'user_role=?'];
+        $values = [$data['full_name'], $data['email'], $data['faculty_id'],
+                   $data['title'], $data['user_role']];
+        if (users_have_secondary_position()) {
+            $fields[] = 'secondary_position=?';
+            $values[] = $data['secondary_position'];
         }
+        if ($password !== '') {
+            $fields[] = 'password=?';
+            $values[] = password_hash($password, PASSWORD_DEFAULT);
+        }
+        $values[] = $userId;
+        $stmt = $this->conn->prepare(
+            'UPDATE users SET ' . implode(', ', $fields)
+            . " WHERE user_id=? AND user_role IN ('faculty','librarian')");
+        $types = str_repeat('s', count($values) - 1) . 'i';
+        $refs = [$types];
+        foreach ($values as $key => $_) { $refs[] = &$values[$key]; }
+        call_user_func_array([$stmt, 'bind_param'], $refs);
         return $stmt->execute();
     }
 
@@ -158,7 +161,8 @@ class UserRepository {
         $marks = implode(',', array_fill(0, count($roles), '?'));
         $stmt = $this->conn->prepare(
             "SELECT user_id, full_name, email, username, title, faculty_id,
-                    admin_level, created_at, is_active, user_role
+                    admin_level, created_at, is_active, user_role" .
+                    (users_have_secondary_position() ? ', secondary_position' : '') . "
              FROM users WHERE user_role IN ($marks) AND is_active = ?
              ORDER BY created_at DESC");
         $args  = array_merge($roles, [$isActive]);
