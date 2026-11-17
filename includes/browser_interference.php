@@ -23,9 +23,9 @@
     font: 400 15px/1.5 system-ui, sans-serif;
 }
 .papel-browser-warning__box h2 { margin: 0 0 10px; font-size: 20px; line-height: 1.3; }
-.papel-browser-warning__box p { margin: 0 0 18px; }
+.papel-browser-warning__box p { margin: 0 0 18px; text-align: justify; }
 .papel-browser-warning__box a { color: #800000; text-decoration: underline; }
-.papel-browser-warning__actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.papel-browser-warning__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
 .papel-browser-warning__actions button {
     min-height: 42px;
     padding: 8px 16px;
