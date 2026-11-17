@@ -1,0 +1,1056 @@
+/* =========================================================
+   PAPEL: Public Repository landing page
+   Design tokens + header/footer/modal CSS now live in
+   includes/site_head.php. This block is page-specific only.
+   ========================================================= */
+:root {
+    --sidebar-w:    226px;
+    /* The same 6px the dashboards and the review desks leave
+       (console_shell.php's own fallback): this page used 36px, so the one
+       console with a banner over it was also the one with a corridor down the
+       middle. The search field is laid out on the same token, so it widens
+       with the results it searches. */
+    --col-gap:      6px;
+    /* The rendered height of the search field: .75rem of padding above and
+       below its content. Named rather than left implicit because the sidebar
+       is aligned against it: see .sidebar-right. Change the field's padding
+       and this has to follow, or the two tops drift apart again. */
+    --search-h:     50px;
+    /* The banner's own height, and how far the search field is pulled up into
+       it. Named because the photo's size is worked out from them in both
+       banner states: see .hero img. Both change at the breakpoints below. */
+    --hero-h:       240px;
+    --hero-overlap: 24px;
+}
+
+/* ===== 3. Breadcrumb strip =====
+   The strip's own background lives in site_head.php, which makes it tinted
+   glass over the photo behind it. A copy of the solid colour here painted over
+   that glass, on the one page whose photo most needed to show through. */
+.crumb-inner {
+    display: flex;
+    align-items: center;
+    gap: .25rem;
+    padding-top: .5rem;
+    padding-bottom: .5rem;
+    font-size: .75rem;
+    color: rgba(255,255,255,.85);
+}
+.crumb-inner a { color: #fff; text-decoration: none; font-weight: 500; }
+.crumb-inner a:hover { text-decoration: underline; }
+/* Current-location indicator: solid white arrow */
+.crumb-arrow {
+    color: #fff;
+    font-size: 20px;
+    margin: 0 .125rem;
+    --mi-fill: 1;
+    --mi-wght: 400;
+}
+.crumb-current { color: #fff; font-weight: 500; }
+
+/* ===== 4. Hero banner =====
+   The box stays the 240px it always was, so nothing below it moves; the photo
+   inside is what reaches past it. Upwards it runs to the top of the page, under
+   the navbar and the crumb strip, which are both made see-through over it (the
+   rules just below). Downwards it runs to the bottom edge of the search field
+   and fades out, gone by the field's bottom, so the photo melts into the page
+   instead of stopping on a hard line behind the field.
+
+   Neither the header nor the field is a fixed height: the header is 37px on a
+   wide screen and 61px once the nav wraps, and the field is 50px or 70px. The
+   script at the foot of the page measures both into these variables; the
+   values here are only what shows before it runs.
+
+   Hiding the banner does not take the photo away altogether. The strip of it
+   behind the navbar and the maroon strip under it stays, so the glass of both
+   still has something to show; it stops at the bottom of the maroon strip, and
+   everything below goes. The photo is not resized for that: it is clipped.
+   Its size is the same in both states, so the part behind the navbar is
+   exactly the part that was there before, and nothing slides or rescales as
+   it closes. */
+.hero {
+    --hero-lift: 0px;                             /* page top → top of this box */
+    --hero-nav: 0px;                              /* page top → bottom of the crumb strip */
+    --hero-fade: var(--search-h);                 /* the field's height */
+    /* Bottom of this box → bottom of the field, with the banner open. Worked
+       out rather than measured, because measured with the banner hidden it
+       would be a different number and the photo would change size. */
+    --hero-tail: calc(var(--hero-fade) - var(--hero-overlap));
+    /* How far the fade runs: twice the field's height, so it starts one field
+       above it. Over the field's height alone, as it first was, it read as a
+       hard band: too short a run to fade a photo that bright. */
+    --hero-fade-run: calc(var(--hero-fade) * 2);
+    position: relative;
+    height: var(--hero-h);
+    background: none;
+    transition: height .35s ease;
+}
+.hero.collapsed, .hero.image-unavailable { height: 0; }
+.hero.image-unavailable img { visibility: hidden; }
+.hero img {
+    position: absolute;
+    left: 0;
+    top: calc(-1 * var(--hero-lift));
+    width: 100%;
+    height: calc(var(--hero-h) + var(--hero-lift) + var(--hero-tail));
+    object-fit: cover;
+    display: block;
+    clip-path: inset(0);
+    transition: clip-path .35s ease;
+    /* A mask rather than a gradient laid over the photo: it fades to whatever
+       the page is painted in, so it needs no colour of its own and follows
+       the theme into dark mode.
+
+       Eased, not straight. A linear fade has a visible crease at each end,
+       where the rate of change jumps from nothing to full and back, and the
+       eye picks those out as the top and bottom of a band. These stops follow
+       a cosine ease-in-out (0.5 + 0.5·cos πt), so the photo starts to thin
+       imperceptibly and runs out just as gently. */
+    -webkit-mask-image: var(--hero-mask);
+            mask-image: var(--hero-mask);
+    --hero-mask: linear-gradient(to bottom,
+        black                  calc(100% - var(--hero-fade-run)),
+        rgba(0, 0, 0, .976)    calc(100% - var(--hero-fade-run) * .9),
+        rgba(0, 0, 0, .905)    calc(100% - var(--hero-fade-run) * .8),
+        rgba(0, 0, 0, .794)    calc(100% - var(--hero-fade-run) * .7),
+        rgba(0, 0, 0, .655)    calc(100% - var(--hero-fade-run) * .6),
+        rgba(0, 0, 0, .5)      calc(100% - var(--hero-fade-run) * .5),
+        rgba(0, 0, 0, .345)    calc(100% - var(--hero-fade-run) * .4),
+        rgba(0, 0, 0, .206)    calc(100% - var(--hero-fade-run) * .3),
+        rgba(0, 0, 0, .095)    calc(100% - var(--hero-fade-run) * .2),
+        rgba(0, 0, 0, .024)    calc(100% - var(--hero-fade-run) * .1),
+        transparent            100%);
+}
+/* Hidden: everything below the maroon strip is clipped away, leaving the top
+   --hero-nav of the photo: the part behind the navbar and the strip. The edge
+   it leaves is hard, but it falls exactly at the strip's bottom edge, so it
+   reads as that edge rather than the photo's. */
+.hero.collapsed img { clip-path: inset(0 0 calc(100% - var(--hero-nav)) 0); }
+
+/* The photo is put away while the loading skeleton is up (includes/skeleton.php).
+   It is the one part of this page that can show above that layer: the layer
+   starts at the maroon strip's bottom edge, and the navbar and the strip are
+   both tinted glass over this photo, which runs up behind them. What showed
+   was a slice of the real page in the top corner, cut off on a hard line at
+   the strip, with blank shapes under it. Hidden rather than covered, since
+   nothing may be drawn over the bars, and it comes back with everything else
+   as the layer lifts. visibility, not display: the box, and so the photo's
+   own size and the slideshow's first frame, stay exactly as they are. */
+html.papel-skel .hero img { visibility: hidden; }
+
+/* Slideshow: every photo is stacked in the same place by the rule above, and
+   only the active one is opaque. The transition list is restated in full
+   because it replaces the clip-path one rather than adding to it. A slide
+   with no src yet (still waiting in data-src) stays transparent whatever its
+   class, so a slow network shows the previous photo rather than a gap. */
+.hero img.hero-slide {
+    opacity: 0;
+    transition: clip-path .35s ease, opacity 1.2s ease;
+}
+.hero img.hero-slide.is-active[src] { opacity: 1; }
+
+/* The search field and the sidebar panel both sit on the photo, and a shadow
+   cast only downwards left their top edges to fend for themselves against a
+   bright wall. --shadow-up lifts them off it. Only while the banner is up:
+   with it hidden there is plain page above both, and nothing to lift from.
+   The focus state is restated because it replaces the whole shadow list. */
+.hero:not(.collapsed) + .search-band .search-form {
+    box-shadow: var(--shadow-up), var(--shadow-md);
+}
+.hero:not(.collapsed) + .search-band .search-form:focus-within {
+    box-shadow: var(--shadow-up), 0 0 0 3px rgba(177,125,125,.20);
+}
+/* Above 900px, where the panel rises onto the photo beside the field. Below
+   that it is a drawer and never touches the banner.
+
+   The panel's shadow wraps its top corners and runs a short way down each
+   side before fading, rather than sitting on the top edge alone. A box-shadow
+   on the panel itself can only do all of a side or none of it, and all of it
+   was a grey glow the full length of the column. So ::before, a strip across
+   the top 3rem, casts it instead; its sides are only that tall, and the blur
+   fades them out below. The part of its shadow that falls inside the panel
+   is covered by ::after, which carries the panel's cream: moved off the
+   panel because both pseudo-elements paint above the panel's own background,
+   and the strip's shadow would otherwise have smudged it. */
+@media (min-width: 901px) {
+    .hero:not(.collapsed) ~ .layout .sidebar-right { background: none; }
+    .hero:not(.collapsed) ~ .layout .sidebar-right::before,
+    .hero:not(.collapsed) ~ .layout .sidebar-right::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        border-radius: inherit;
+        pointer-events: none;
+    }
+    .hero:not(.collapsed) ~ .layout .sidebar-right::before {
+        height: 3rem;
+        box-shadow: var(--shadow-up-rim);
+        z-index: -2;
+    }
+    .hero:not(.collapsed) ~ .layout .sidebar-right::after {
+        bottom: 0;
+        background: var(--cream);
+        z-index: -1;
+    }
+}
+
+/* The photo runs under the crumb strip; site_head.php positions the strip so
+   it paints over the photo rather than under it. */
+
+/* The strip itself is tinted glass on every page now (site_head.php), banner
+   up or hidden alike: the photo runs behind it in both states, and solid
+   maroon would cut it in two with a band. */
+
+/* ===== 5. Search band: sits over the lower edge of the hero,
+   left-aligned to the main content column (matches Figma) ===== */
+.search-band {
+    position: relative;
+    z-index: 5;
+    margin-top: calc(-1 * var(--hero-overlap));
+    transition: margin-top .35s ease;
+}
+/* With the banner hidden there is no hero to overlap: drop the pull-up
+   so the search bar can't ride over the breadcrumb strip. */
+.hero.collapsed + .search-band,
+.hero.image-unavailable + .search-band { margin-top: 1.25rem; }
+/* Same reasoning for the layout below it: no photo to tuck under, so
+   drop its pull-up too or it rides over the search bar/sidebar. */
+.hero.collapsed ~ .layout,
+.hero.image-unavailable ~ .layout { margin-top: 1rem; }
+
+/* ---- No banner at all on mobile -----------------------------------------
+   240px of photo above the thing the reader came for, on a screen where the
+   first result already starts below the fold. Gone outright at 900px and
+   under, at the owner's instruction, and gone rather
+   than folded: `.collapsed` deliberately keeps the strip of photo behind the
+   navbar and the crumb bar, and this is meant to be not seen.
+
+   Written as `(max-width: 900px)` with a `not all and (...)` inverse wherever
+   the other half is needed, never as `min-width: 901px`. A window 900.5px
+   wide (fractional zoom, which this site meets from 110% up) matches neither
+   integer, and the banner would come back in the gap. Same rule as the
+   accessibility tab's two queries.
+
+   **Both sibling pull-ups have to go, and not in `.collapsed`'s form.** With
+   the hero `display: none` and `.search-band` still carrying
+   `margin-top: calc(-1 * var(--hero-overlap))`, the field rides up under the
+   crumb strip: an element that draws nothing is still a sibling, which is the
+   trap already written down for Zen's banner script and the import drawer's
+   panels, met here from the other side. `.layout`'s 1rem is restated for the
+   reason `.collapsed`'s is, to beat the .75rem the narrow widths give it.
+
+   The preload in includes/site_head.php carries the matching `media`, or a
+   phone would still fetch the one file it has no use for; on this page the
+   banner is the photo's only consumer, the navbar strip being suppressed by
+   $hero_under_nav. */
+@media (max-width: 900px) {
+    .hero { display: none; }
+    .hero + .search-band { margin-top: 1.25rem; }
+    .hero ~ .layout { margin-top: 1rem; }
+    /* An eye that shows and hides a banner which cannot appear is a dead
+       control, and it sits in the crumb strip where there is least room.
+       Named with its parent on purpose: `.btn-banner-toggle` alone is one
+       class, the same as the `display: inline-flex` further down this file,
+       and a media query adds no specificity, so the later rule won and the
+       eye stayed. Judge a rule by where it sits as well as by what it says. */
+    .crumb-inner .btn-banner-toggle { display: none; }
+}
+/* Search field and banner toggle share one row: hiding the banner must not
+   leave an empty full-width band between the search bar and the results. */
+.search-row {
+    display: grid;
+    grid-template-columns: 1fr var(--sidebar-w);
+    gap: .5rem var(--col-gap);
+    align-items: start;
+}
+.search-shell {
+    grid-column: 1;
+    grid-row: 1;
+    width: 100%;
+    position: relative;
+}
+/* The row under the search field is gone: it held the banner eye once (that
+   lives in the crumb strip now) and then only the phone's "Browse & Filters"
+   button, which is now one of the tool buttons beside Quick Settings. */
+
+/* Banner visibility toggle, in the crumb strip, at the far right, on the
+   maroon. It sat in the search row until the banner started running up under
+   the navbar; there it was a grey glyph floating on the photo's fade, and it
+   moved to a different row whenever the banner was hidden. Here it has the
+   same place in both states. */
+.btn-banner-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: .25rem;
+    background: none;
+    border: none;
+    color: var(--ink);
+    font-family: inherit;
+    font-size: .6875rem;
+    cursor: pointer;
+    padding: .3rem 0;
+    transition: color .2s;
+}
+.btn-banner-toggle:hover { color: var(--maroon); }
+/* Pinned to the strip rather than placed in the crumb row, so it lines up with
+   the navbar's own controls directly above it: the navbar runs full width and
+   holds them 1.5rem off the right edge at every width, while the crumbs sit
+   in the narrower centred .wrap. (.crumb-bar is already positioned, for the
+   banner: see the rule after .hero.) Anchored by its right edge, so the
+   words slide open leftwards, into the empty middle of the strip.
+
+   Lined up by what can be seen, not by the boxes. Every icon glyph carries
+   blank space at its sides, and different amounts: measured at 18px, the eye's
+   ink stops 2px inside its box, the avatar chevron's 6px inside its own plus
+   the 2px padding of the button around it, the Login icon's 3px plus that
+   button's 12px. Matching the boxes left the eye poking out past the chevron,
+   so each case steps it in by the difference. */
+.crumb-inner .btn-banner-toggle {
+    position: absolute;
+    right: calc(1.5rem + 6px);     /* signed in: under the chevron (2 + 6 − 2) */
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 0;
+    /* Quiet at rest (it is a setting, not something to act on every visit)
+       and full strength the moment it is pointed at, pressed or reached from
+       the keyboard. It was white held back to 40%, which the strip's maroon
+       mixed into a grey; this is the palette's own maroon instead, so the
+       glyph reads as the site's colour rather than as a washed white, and
+       nothing is faded any more, which leaves the hover a change of colour
+       alone.
+
+       The maroon, lightened, rather than the token on its own. The strip is
+       82% maroon over the banner photo, and measured against the band as it
+       is painted, --maroon itself comes out at 1.18:1 and is simply not
+       there. --soft-maroon clears 3:1 but this palette resolves it to a grey
+       rose that does not read as the site's colour at all. Mixing --maroon
+       toward white keeps the hue and buys the contrast: 5.1:1 where the photo
+       behind the band is dark, 2.8:1 at its very lightest. White is the mixing
+       operand, not a colour of its own, and is right in either theme because
+       the band is dark in both (--maroon-surface-hover does not lift).
+
+       Read the pixels before changing this. The photo moves every five
+       seconds, so what it looks like at a glance depends on which photo, and
+       the two candidates are a shade apart on screen and far apart measured. */
+    color: color-mix(in srgb, var(--maroon) 55%, #fff);
+    opacity: 1;
+    transition: color .2s ease;
+}
+.crumb-inner .btn-banner-toggle.is-guest {
+    right: calc(1.5rem + 13px);    /* signed out: under the Login icon (12 + 3 − 2) */
+}
+.crumb-inner .btn-banner-toggle:hover,
+.crumb-inner .btn-banner-toggle:active,
+.crumb-inner .btn-banner-toggle:focus-visible { color: #fff; opacity: 1; }
+/* At rest the control is one glyph. The words are still there: collapsed to
+   no width rather than removed, so they are read out to anyone using a screen
+   reader and slide open the moment the button is pointed at or tabbed to.
+   A tooltip would do neither. */
+.btn-banner-label {
+    max-width: 0;
+    opacity: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    transition: max-width .25s ease, opacity .18s ease;
+}
+.btn-banner-toggle:hover .btn-banner-label,
+.btn-banner-toggle:focus-visible .btn-banner-label {
+    max-width: 8rem;
+    opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+    .btn-banner-label { transition: none; }
+}
+
+/* ===== 6. Main layout ===== */
+.layout {
+    display: grid;
+    grid-template-columns: 1fr var(--sidebar-w);
+    gap: var(--col-gap);
+    align-items: start;
+    /* 1rem below the search field, banner up or hidden alike. This was
+       -1.25rem while the banner eye had a row of its own under the field,
+       pulling the results back up over that row; with the row gone the two
+       land in the same place. */
+    margin-top: 1rem;
+    padding-bottom: 3rem;
+}
+/* The search field and the sidebar are in two different grids (the field in
+   .search-row, the sidebar in .layout) so nothing tied their tops together
+   and the sidebar sat 66px lower in both banner states.
+
+   66px is not arbitrary: the sidebar column starts where .search-band ends,
+   which is the search field (50px) plus the 1rem the layout is offset by.
+
+   Only the sidebar rises; the results column keeps its place. Below 900px the
+   layout is a single column and the sidebar follows the content, so the pull
+   would drag it over the results: hence the media query. */
+@media (min-width: 901px) {
+    .sidebar-right {
+        margin-top: calc(-1 * (var(--search-h, 50px) + 1rem));
+        /* Raised to the search field's line, it now reaches 24px into the hero
+           photo: the same overlap the search card has. That card floats over
+           the photo on z-index 5; without the same treatment the sidebar is
+           static, so the hero paints across its top edge and clips the Browse
+           header. */
+        position: relative;
+        z-index: 5;
+    }
+}
+
+/* ===== The sidebar on either side: this page's share of it =====
+   The column swap itself lives in includes/browse_console.php, with the rest
+   of the sidebar. What stays here is the search row, which only this page has:
+   the field has to cross to the other column too, or it sits over the sidebar
+   instead of over the results it searches. */
+@media (min-width: 901px) {
+    html.sidebar-left .search-row { grid-template-columns: var(--sidebar-w) 1fr; }
+    html.sidebar-left .search-shell { grid-column: 2; }
+}
+
+/* Section heading with red underline */
+.section-heading {
+    font-family: var(--font-head);
+    font-size: 1.6875rem;
+    font-weight: 500;
+    line-height: 1.2;
+    color: var(--pup-maroon);
+    padding-bottom: .5rem;
+    border-bottom: 2px solid var(--maroon);
+    margin-bottom: .5rem;
+}
+
+
+/* Site header/footer/login-modal CSS now live in includes/site_head.php */
+
+/* ===== 10. Responsive (page-specific layout only) ===== */
+/* ===== The sidebar as a drawer, on a phone =====
+   In one column the Browse and Filter cards land underneath every result:
+   a long scroll from the search box they belong to, which is where the eye
+   is. On a narrow screen they become a drawer instead, opened by a button
+   beside the search field.
+
+   The <aside> is not moved in the DOM to do this. An AJAX filter replaces
+   its innerHTML in place, so the element has to stay exactly where the
+   script goes looking for it; only its painting changes. */
+.btn-tools-toggle,
+.tools-backdrop,
+.btn-tools-close { display: none; }
+
+@media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; gap: 2rem; margin-top: .75rem; }
+    .search-row { grid-template-columns: 1fr; gap: .5rem; }
+    /* The photos are 3840x680, which is 5.6 times as wide as it is tall,
+       and the box they fill is nothing like that shape once the window
+       narrows. Covering it scales the photo to the box's height and throws
+       the sides away, so the narrower the window the more it looks zoomed
+       in: measured on one photo, the banner showed 75% of it at 1440px, 66%
+       at 1280, 49% at 900, 39% at 600 and 29% at 390, which is four book
+       spines where a desktop shows a wall of them.
+
+       The box cannot be narrower, and filling it with an undistorted photo
+       fixes the crop exactly, so the only way to widen the view is to make
+       the box shorter. Two things come out of it, and the tail goes first
+       because it costs nothing to see:
+
+       - The tail is the part of the photo that carries on below the banner
+         and fades out behind the search field. At 390px it was 28px of box
+         for something the field covers anyway, so it is 14px here, with the
+         fade shortened to match. The field is inside the page's gutter and
+         the photo is not, so a few pixels of tail still have to survive in
+         the 16px either side of it: that is what the 14 is for.
+       - The banner itself then gives up what it must. 190/150/124 become
+         150/115/100.
+
+       Together, at 390px: a box of 237px becomes 199px, and the view widens
+       from 29% of the photo to 35%. A phone cannot reach a desktop's
+       framing whatever is done here - 85px of the box runs up behind the
+       navbar and the maroon strip and is there however short the banner is,
+       which caps a 390px screen at 61% even with no banner at all. */
+    :root { --hero-h: 150px; }
+    .hero {
+        --hero-tail: 14px;
+        /* The fade has to fit inside a tail this short, or it would start
+           above the banner's own bottom edge and thin the photo where it is
+           still meant to be solid. */
+        --hero-fade-run: 64px;
+    }
+
+    /* Everything else about it comes from .toolbar-btn, which it now is; all
+       this width decides is whether there is a drawer to open at all. */
+    .btn-tools-toggle { display: inline-flex; }
+    /* Marked while its drawer is open, the way a pressed tool button would be.
+       The drawer covers this button at a phone's width, so this is seen on the
+       way out rather than the way in, and on a tablet both are on screen. */
+    html.tools-open .btn-tools-toggle { background: var(--cream); color: var(--dark-maroon); }
+
+    .sidebar-right {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: min(88vw, 360px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        margin: 0;
+        padding: 3rem 1rem 2rem;
+        /* **Opaque, whatever the palette.** --cream is rgba(255,255,255,.06)
+           under Old Night, and this is the one place the panel lies *over* the
+           page rather than beside it, so the results and the banner photo were
+           legible straight through the filters: a glass panel nobody asked
+           for, and no blur involved. The tint is painted as an image over an
+           opaque ground rather than swapped for another colour, so the light
+           palette is untouched (its cream is opaque and covers the ground
+           exactly as before) while the dark one gets that 6% white over the
+           surface colour, which lifts the drawer off the page behind its veil.
+
+           **Twin**: includes/browse_console.php carries the same rule for the
+           consoles that share this drawer, and this page keeps its own copy
+           because the drawer's styling is tangled with the banner's (see the
+           note by the drawer's script below). Change both or neither. */
+        background-color: var(--white);
+        background-image: linear-gradient(var(--cream), var(--cream));
+        box-shadow: -4px 0 24px rgba(51, 0, 0, .18);
+        transform: translateX(100%);
+        transition: transform .3s cubic-bezier(.4, 0, .2, 1);
+        /* Under the login slide-in (1200) on purpose: signing in should still
+           come out on top of a drawer left open behind it. */
+        z-index: 1090;
+    }
+    html.tools-open .sidebar-right { transform: translateX(0); }
+
+    .tools-backdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: rgba(51, 0, 0, .40);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .3s;
+        z-index: 1085;
+    }
+    html.tools-open .tools-backdrop { opacity: 1; pointer-events: auto; }
+
+    /* Outside the <aside>, because everything inside it is replaced whenever
+       a filter is applied and a close button in there would be swept away. */
+    html.tools-open .btn-tools-close {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        position: fixed;
+        top: .5rem;
+        right: .5rem;
+        width: 38px;
+        height: 38px;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        color: var(--maroon);
+        cursor: pointer;
+        z-index: 1095;
+    }
+    html.tools-open { overflow: hidden; }
+}
+
+/* A paper this reader has an open manuscript request on is first in the list
+   however the list is sorted, and says why: an order nobody can account for
+   reads as a fault. */
+.paper-pin {
+    display: inline-flex;
+    align-items: center;
+    gap: .2rem;
+    padding: .05rem .4rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--maroon) 12%, transparent);
+    color: var(--maroon);
+    font-family: var(--font-body);
+    font-size: .625rem;
+    font-weight: 600;
+    letter-spacing: .02em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+.paper-pin .material-symbols-outlined { font-size: 13px; line-height: 1; }
+/* A grant is the one a reader can act on, so it is the filled one: white on
+   the accent, tick and words alike. */
+.paper-pin.is-open { background: var(--maroon-surface); color: #fff; }
+
+/* The chip at the foot of the card, under the programme. The column it is in
+   is left-aligned, because its links read as a column of text; the chip is a
+   mark rather than a line to read, and `margin-left: auto` on a box only as
+   wide as its own words carries it to the card's right-hand edge, which is
+   the corner the eye goes to last. */
+.paper-pin-tag {
+    display: flex;
+    width: fit-content;
+    margin: .3rem 0 0 auto;
+}
+/* The mark at the head of the title. Only Rows draws it: a row is one line,
+   and a third line in its last column would grow every row on the page. */
+.paper-pin-mark { display: none; margin-right: .4rem; }
+html[data-view="rows"] .paper-list .paper-pin-tag  { display: none; }
+html[data-view="rows"] .paper-list .paper-pin-mark { display: inline-flex; }
+/* In a row, the tick alone: that line is already cut with an ellipsis, and
+   the words are in its tooltip and on the card. */
+html[data-view="rows"] .paper-list .paper-pin-mark .pin-word { display: none; }
+.paper-pin-mark .pin-word { margin-left: .1rem; }
+
+/* Shared by the Public Repository and the paper dashboards. */
+.papel-pager {
+    margin: 1.25rem 0 .5rem;
+    padding: 1rem 0 .25rem;
+    border-top: 1px solid var(--border);
+    text-align: center;
+}
+.pager-nums {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: .1rem .45rem;
+    font-size: .8125rem;
+}
+.pg-num, .pg-step {
+    display: inline-flex;
+    align-items: center;
+    gap: .1rem;
+    padding: .15rem .3rem;
+    border-radius: var(--r-control, 4px);
+    color: var(--maroon);
+    text-decoration: none;
+}
+.pg-num:hover { text-decoration: underline; }
+.pg-num:focus-visible, .pg-step:focus-visible { outline: 2px solid var(--maroon); outline-offset: 1px; }
+.pg-num.is-here { color: var(--ink); font-weight: 700; }
+.pg-step { font-weight: 600; }
+.pg-step:hover .pg-word { text-decoration: underline; }
+.pg-step .material-symbols-outlined {
+    font-size: 16px;
+    line-height: 1;
+    display: block;
+}
+.pager-count { margin: .4rem 0 0; font-size: .6875rem; color: var(--grey); }
+
+
+/* ===== The keyword strip ==============================================
+   The papers' own keywords, rolling past above the results. A scroll box, so
+   a swipe, a sideways wheel and the keyboard all work without a line of
+   script; the script only nudges scrollLeft along and stops when anybody
+   touches it. */
+/* **A grid item's automatic minimum is its content, not zero.** The strip's
+   track is one row of every keyword twice over, about 7,000px, and a scroll
+   box does not hide that from the column it sits in: the results column grew
+   to 7,184px, the page scrolled sideways, and the strip, being as wide as its
+   own content, never scrolled at all, so nothing rolled and nothing could be
+   dragged. Measured, not guessed: .layout's columns read `226px 7183.66px`.
+   Scoped to this page rather than written into includes/browse_console.php,
+   which the dashboards and the four review desks also read. */
+.main-col { min-width: 0; }
+/* The strip and the View All Keywords button, which share a line on a phone.
+   This box is what takes the middle of the toolbar; the strip inside it takes
+   whatever the button leaves. The negative margin is not decoration: the
+   toolbar's own gap is 1rem and the tools stand .25rem apart, so without it
+   the button would sit three quarters of an inch further from the tool it has
+   always been the first of, which is a move and not the same position. */
+.kw-row {
+    flex: 1 1 10rem;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: .25rem;
+    margin-right: -.75rem;
+}
+.kw-rail {
+    /* The middle of the toolbar: it takes what the count and the tools leave,
+       and never pushes either of them out of the row. */
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    /* A finger drags it sideways; the page still scrolls up and down under
+       the same finger. */
+    touch-action: pan-x pan-y;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    /* Faded at both ends, so a chip half out of the box reads as more to come
+       rather than as a word cut off. */
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 1.5rem, #000 calc(100% - 1.5rem), transparent);
+            mask-image: linear-gradient(to right, transparent, #000 1.5rem, #000 calc(100% - 1.5rem), transparent);
+    cursor: grab;
+    /* Dragging it would otherwise select the keywords it is made of, and the
+       strip would fill with blue. The chips are links; the words are not
+       there to be copied out of a moving strip. */
+    user-select: none;
+    -webkit-user-select: none;
+}
+.kw-rail::-webkit-scrollbar { display: none; }
+/* The worded button. Everything else about it comes from .toolbar-btn, which
+   it is; what it needs is room for its words, since that rule is a 26px
+   square made for one glyph. */
+.kw-more {
+    flex: 0 0 auto;
+    width: auto;
+    padding: 0 .5rem;
+    font-size: .6875rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+/* Nothing in front of the strip: an empty end of the row takes no space. */
+.toolbar-left:empty { display: none; }
+/* Shown for a moment when a sixth keyword is pressed, in the colours a
+   refusal is said in everywhere else on the site. */
+.kw-limit {
+    flex: 0 0 auto;
+    padding: .05rem .4rem;
+    border-radius: 999px;
+    background: var(--bad-bg);
+    color: var(--bad-text);
+    white-space: nowrap;
+}
+.kw-limit[hidden] { display: none; }
+
+/* ----- Every keyword, in a dialog ----------------------------------- */
+.kw-dialog {
+    /* Stated: the site's reset takes away the margin a modal dialog centres
+       itself with, and it opened in the top left-hand corner. */
+    margin: auto;
+    width: min(42rem, calc(100vw - 2rem));
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--r-card, 8px);
+    background: var(--white);
+    color: var(--ink);
+    box-shadow: 0 18px 50px rgba(51, 0, 0, .28);
+    font-family: var(--font-body), 'Inter', sans-serif;
+}
+.kw-dialog::backdrop { background: rgba(51, 0, 0, .42); }
+.kw-dialog-card { padding: 1rem 1.1rem 1rem; margin: 0; }
+.kw-dialog-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: .75rem;
+}
+.kw-dialog-head h2 {
+    margin: 0;
+    font-family: var(--font-head), serif;
+    font-size: 1.0625rem;
+    color: var(--maroon);
+}
+.kw-dialog-count { font-size: .75rem; color: var(--grey); }
+.kw-dialog-meta { display: flex; align-items: baseline; gap: .7rem; }
+.kw-dialog-clear {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--maroon);
+    font: inherit;
+    font-size: .75rem;
+    text-decoration: underline;
+    cursor: pointer;
+}
+.kw-dialog-clear:disabled { color: var(--grey); text-decoration: none; cursor: default; opacity: .65; }
+.kw-dialog-clear:focus-visible { outline: 2px solid var(--maroon); outline-offset: 2px; }
+.kw-dialog-note { margin: .25rem 0 .7rem; font-size: .75rem; color: var(--grey); }
+/* The one line that says the limit has been met, in the colours a refusal is
+   said in everywhere else. */
+.kw-dialog-note.is-full { color: var(--bad-text); font-weight: 600; }
+.kw-dialog-list {
+    display: flex;
+    flex-wrap: wrap;
+    /* Both of these, or the chips stretch to fill the height the floor below
+       gives this box: a search matching one keyword drew it as a pill the
+       height of five rows. align-items is the row, align-content the rows
+       within the box. */
+    align-items: flex-start;
+    align-content: flex-start;
+    gap: .35rem;
+    /* As tall as it needs up to half the window, then it scrolls: there are as
+       many keywords as the papers have between them. */
+    /* A floor as well as a ceiling: typing in the find field empties the list
+       for a moment at a time, and without this the whole dialog shrank to the
+       height of its own buttons and grew again on the next letter. */
+    min-height: 5.5rem;
+    max-height: min(22rem, 50vh);
+    /* The wheel stops at the end of this list rather than carrying on into
+       whatever is behind the dialog. */
+    overscroll-behavior: contain;
+    overflow-y: auto;
+    padding: .15rem .1rem .4rem;
+}
+.kw-pick { cursor: pointer; font: inherit; font-size: .75rem; }
+.kw-dialog-acts {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    padding-top: .75rem;
+    border-top: 1px solid var(--border);
+}
+/* The field on the left, the two buttons pushed to the right by it. */
+.kw-dialog-find {
+    flex: 1 1 10rem;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: .3rem;
+    padding: .2rem .5rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--white);
+    color: var(--grey);
+}
+.kw-dialog-find:focus-within { border-color: var(--maroon); }
+.kw-dialog-find .material-symbols-outlined { font-size: 16px; }
+.kw-dialog-find input {
+    flex: 1 1 auto;
+    min-width: 0;
+    border: 0;
+    outline: none;
+    background: none;
+    color: var(--ink);
+    font: inherit;
+    font-size: .75rem;
+}
+/* The X at the field's right-hand end. Its room is the field's own padding,
+   so the words do not shift along when it appears. */
+.kw-find-clear {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.1rem;
+    height: 1.1rem;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    color: var(--grey);
+    cursor: pointer;
+}
+.kw-find-clear:hover { background: var(--cream); color: var(--maroon); }
+.kw-find-clear:focus-visible { outline: 2px solid var(--maroon); outline-offset: 1px; }
+.kw-find-clear .material-symbols-outlined { font-size: 14px; }
+.kw-find-clear[hidden] { display: none; }
+.kw-dialog-none { font-size: .6875rem; color: var(--grey); }
+.kw-dialog-none[hidden] { display: none; }
+/* A chip the find has taken out of view. */
+.kw-pick[hidden] { display: none; }
+
+/* **The page behind a dialog does not scroll.** A modal <dialog> holds the
+   focus and the top layer but not the wheel: the repository went on scrolling
+   under it, which on a page as long as this one is the dialog apparently
+   drifting up the window. Locked on <html> and never on <body>: the body
+   becomes a scroll box of its own there, and the navbar, which is sticky,
+   scrolls away under it. */
+html.kw-locked { overflow: hidden; }
+@media (max-width: 640px) {
+    .kw-dialog { width: calc(100vw - 1.25rem); }
+    .kw-dialog-card { padding: .85rem .85rem .85rem; }
+    .kw-pick { font-size: .8125rem; padding: .25rem .6rem; }
+}
+.kw-rail.is-dragging { cursor: grabbing; }
+.kw-track { display: flex; width: max-content; }
+.kw-set { display: flex; gap: .3rem; padding-right: .3rem; }
+.kw-chip {
+    display: inline-block;
+    padding: .15rem .55rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--cream);
+    color: var(--maroon);
+    font-size: .6875rem;
+    line-height: 1.5;
+    white-space: nowrap;
+    text-decoration: none;
+    transition: background .12s ease, color .12s ease, border-color .12s ease;
+}
+.kw-chip:hover, .kw-chip:focus-visible {
+    background: var(--maroon-surface);
+    border-color: var(--maroon-surface);
+    color: #fff;
+}
+/* The keyword the results are already narrowed to. */
+.kw-chip.is-on {
+    background: var(--maroon-surface);
+    border-color: var(--maroon-surface);
+    color: #fff;
+    font-weight: 600;
+}
+@media (max-width: 900px) {
+    /* The keywords take the whole row: on a phone they and the tools on one
+       line leave the keywords about 60px. The tools go up beside the heading
+       (below), so the strip has the row to itself. */
+    .kw-row { flex-basis: 100%; order: 3; position: relative; margin-right: 0; }
+    .kw-chip { font-size: .75rem; padding: .2rem .6rem; }
+
+    /* **View All Keywords rides at the right-hand end of the strip's own
+       line, over it.** There is no room beside the strip at this width (the
+       whole point of giving it the row), and up beside the heading the words
+       would push the four tools off the corner. Laid over the strip it costs
+       no line of its own, and the strip goes on gliding underneath.
+
+       It needs a ground of its own, or a chip passing under it would be read
+       through the words, and the strip's own fade only covers the last
+       1.5rem; `::before` carries that ground a little further left so a chip
+       arrives at it rather than appearing at its edge. The ground has to
+       survive :hover too: a touch screen leaves :hover on after a tap, and
+       browse_console.php answers that by putting the fill back to transparent,
+       which on a button standing over something else would make its words
+       unreadable from the moment it was pressed.
+
+       The track carries the button's width at its end, so every keyword can
+       still be scrolled clear of it and pressed. Without that the last chips
+       on the strip would be under the overlay and unreachable, which is a
+       control hiding the thing it is about. */
+    .kw-more, .kw-more:hover {
+        position: absolute;
+        right: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        height: 28px;
+        padding: 0 .4rem;
+        font-size: .75rem;
+        /* The page's own ground, not --white: under Old Night <body> is a
+           shade darker than the surfaces, and a plate of --white over it
+           would read as a faint rectangle hanging in the strip. */
+        background: var(--page-bg);
+        color: var(--maroon);
+        z-index: 1;
+    }
+    .kw-more::before {
+        content: '';
+        position: absolute;
+        right: 100%;
+        top: 0;
+        bottom: 0;
+        width: 2rem;
+        background: linear-gradient(to right, transparent, var(--page-bg));
+        pointer-events: none;
+    }
+    .kw-rail.has-end-room .kw-set { padding-right: 9.5rem; }   /* the button (120px) and its fade (32px) */
+
+    /* **The tools sit in the column's top right-hand corner**, on the
+       heading's own line, rather than on the row below it where they were a
+       second line of furniture above the first result.
+
+       Taken out of the flow to get there: the heading and the toolbar are
+       siblings in the results column, and two siblings cannot share a line
+       without a box around them, which would mean rebuilding the column for
+       the narrowest screen only. The column is the positioning context, so
+       `right: 0` is its own right-hand edge and not the window's, which is
+       what keeps the group flush with the corner rather than near it. The
+       heading is given their width as padding so a long one wraps instead of
+       running underneath them. */
+    .main-col { position: relative; }
+    .section-heading { padding-right: 9.5rem; min-height: 2.25rem; }
+    .toolbar-right {
+        position: absolute;
+        top: 0;
+        right: 0;
+        gap: .1rem;
+    }
+    /* They are a row of buttons at the top of a page rather than a toolbar
+       beside a count: the 40px tap target stays, the box around it goes. */
+    .toolbar-right .toolbar-btn { width: 36px; height: 36px; }
+    .browse-toolbar { padding-top: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sidebar-right, .tools-backdrop { transition: none; }
+    .kw-chip { transition: none; }
+}
+@media (max-width: 600px) {
+    :root { --hero-h: 115px; --hero-overlap: 32px; }
+    .section-heading { font-size: 1.375rem; }
+    .paper-foot { grid-template-columns: 1fr; gap: .25rem; }
+    /* Cards give the title and metadata the whole line. The action and
+       programme share a footer without squeezing the date. */
+    .paper-item .paper-side {
+        display: flex; align-items: baseline; justify-content: space-between;
+        flex-wrap: wrap; gap: .125rem .5rem;
+    }
+    .paper-item .paper-program {
+        order: -1; flex: 1 1 8rem; min-width: 0;
+        overflow-wrap: anywhere;
+    }
+    .paper-meta > span { overflow-wrap: anywhere; }
+    /* The page's gutter drops to 1rem here and the menu button goes with it. */
+    .crumb-inner .btn-banner-toggle,
+    .crumb-inner .btn-banner-toggle.is-guest { right: calc(1rem + 11px); }
+}
+/* Keep scan-friendly columns where the results area has room for them. */
+html[data-view="rows"] .paper-list.is-scrollable { overflow-x: auto; }
+html[data-view="rows"] .paper-list .paper-item {
+    display: grid; min-width: 700px;
+    grid-template-columns: minmax(12rem, 1fr) 9rem 10.5rem 7rem;
+    align-items: center; column-gap: .75rem;
+}
+html[data-view="rows"] .paper-list .paper-foot,
+html[data-view="rows"] .paper-list .paper-item .paper-info { display: contents; }
+html[data-view="rows"] .paper-list .paper-item .paper-title {
+    grid-column: 1; min-width: 0; margin: 0; padding-right: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    overflow-wrap: normal;
+}
+html[data-view="rows"] .paper-list .paper-item .paper-authors {
+    display: block; grid-column: 2; min-width: 0; margin: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+html[data-view="rows"] .paper-list .paper-item .paper-meta {
+    display: flex; grid-column: 3; min-width: 0; flex-wrap: nowrap;
+    white-space: nowrap; overflow: hidden;
+}
+html[data-view="rows"] .paper-list .paper-item .paper-side {
+    display: block; grid-column: 4; min-width: 0; overflow: hidden;
+    white-space: nowrap; line-height: 1.4;
+}
+html[data-view="rows"] .paper-list .paper-item .paper-action {
+    display: block; overflow: hidden; text-overflow: ellipsis;
+}
+html[data-view="rows"] .paper-list .paper-item .paper-program {
+    display: block; order: 0; flex: none;
+    overflow: hidden; text-overflow: ellipsis;
+}
+@media (max-width: 600px) {
+    /* Two short lines fit every field on a phone: title and author above,
+       date/type and the action below. The bookmark keeps its own corner. */
+    html[data-view="rows"] .paper-list.is-scrollable { overflow-x: hidden; }
+    html[data-view="rows"] .paper-list .paper-item {
+        min-width: 0; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+        grid-template-rows: auto auto; align-items: start;
+        gap: .125rem .5rem; padding-right: 1.5rem;
+    }
+    html[data-view="rows"] .paper-list .paper-item .paper-title {
+        grid-column: 1; grid-row: 1; font-size: .6875rem;
+    }
+    html[data-view="rows"] .paper-list .paper-item .paper-authors {
+        grid-column: 2; grid-row: 1; font-size: .625rem;
+        padding-right: 1.1rem;
+    }
+    html[data-view="rows"] .paper-list .paper-item .paper-meta {
+        grid-column: 1; grid-row: 2; font-size: .625rem;
+    }
+    html[data-view="rows"] .paper-list .paper-item .paper-side {
+        grid-column: 2; grid-row: 2; font-size: .625rem; line-height: 1.2;
+    }
+    html[data-view="rows"] .paper-list .paper-item .paper-action {
+        font-size: inherit;
+    }
+}
+/* The narrowest phones: .75rem of gutter, and the menu button's own padding
+   down from 7px to 5px (includes/site_head.php). */
+@media (max-width: 380px) {
+    .crumb-inner .btn-banner-toggle,
+    .crumb-inner .btn-banner-toggle.is-guest { right: calc(.75rem + 9px); }
+}
+/* A phone, compact: the same notch down the result cards take at this width
+   (the block at the foot of includes/browse_console.php), for the three things
+   on this page that are not cards. The banner gives up height too: at 150px it
+   was a third of the screen before a single result. */
+@media (max-width: 480px) {
+    :root { --hero-h: 100px; --hero-overlap: 26px; }
+    .section-heading { font-size: 1.1875rem; }
+}

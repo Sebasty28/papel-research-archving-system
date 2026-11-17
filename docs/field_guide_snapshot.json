@@ -1,5 +1,5 @@
 {
- "built": "2026-11-18 00:17",
+ "built": "2026-11-18 00:37",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -173,7 +173,7 @@
    "lines": 956
   },
   "archive/index.php": {
-   "lines": 2853
+   "lines": 1053
   },
   "archive/login.php": {
    "lines": 1095
@@ -212,7 +212,7 @@
    "lines": 12
   },
   "includes/accessibility.php": {
-   "lines": 1482
+   "lines": 213
   },
   "includes/account_preflight_js.php": {
    "lines": 95
@@ -227,16 +227,16 @@
    "lines": 320
   },
   "includes/book_viewer.php": {
-   "lines": 1173
+   "lines": 106
   },
   "includes/browse_card.php": {
    "lines": 207
   },
   "includes/browse_console.php": {
-   "lines": 1340
+   "lines": 41
   },
   "includes/browse_console_js.php": {
-   "lines": 1644
+   "lines": 105
   },
   "includes/browser_interference.php": {
    "lines": 161
@@ -245,7 +245,7 @@
    "lines": 97
   },
   "includes/console_shell.php": {
-   "lines": 783
+   "lines": 17
   },
   "includes/docx_writer.php": {
    "lines": 356
@@ -350,19 +350,19 @@
    "lines": 93
   },
   "includes/select_skin.php": {
-   "lines": 923
+   "lines": 47
   },
   "includes/session_timer.php": {
    "lines": 384
   },
   "includes/shelf_view.php": {
-   "lines": 699
+   "lines": 179
   },
   "includes/site_footer.php": {
    "lines": 778
   },
   "includes/site_head.php": {
-   "lines": 1796
+   "lines": 111
   },
   "includes/site_header.php": {
    "lines": 788

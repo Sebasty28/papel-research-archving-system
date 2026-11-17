@@ -1,0 +1,436 @@
+/* ===== The window ===== */
+html.bv-locked { overflow: hidden; }
+.bv {
+    position: fixed; inset: 0;
+    width: 100vw; height: 100dvh; max-width: none; max-height: none;
+    margin: 0; padding: 0; border: 0;
+    color: var(--ink);
+    overflow: hidden;
+    /* The veil is the dialog's own background rather than ::backdrop, so the
+       two modes ease from one tone to the other: darker while the book is held
+       up, since a busy shelf behind it competes with it, and My Library's own
+       tone under the card. Measured, not judged from a scaled-down capture
+       (which reads far lighter than it is): white behind the darker veil
+       comes out at about 68 of 255. */
+    background: rgba(16, 7, 7, .78);
+    transition: background-color .3s ease;
+}
+.bv::backdrop { background: transparent; }
+.bv.is-details { background: rgba(20, 8, 8, .55); }
+.bv[open] { animation: bv-in .2s ease-out; }
+@keyframes bv-in { from { background-color: transparent; } }
+
+/* The close, top right, while the book is held up; the card has its own. */
+.bv-x {
+    position: absolute; top: .75rem; right: .75rem; z-index: 3;
+    display: inline-flex; padding: .35rem; border: 0; border-radius: 50%;
+    background: rgba(0, 0, 0, .28); color: #fff; cursor: pointer;
+}
+.bv-x:hover { background: rgba(0, 0, 0, .45); }
+.bv-x:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.bv.is-details .bv-x { display: none; }
+
+/* The bookmark, top left, opposite the close: the one control on the book
+   while it is held up, so a paper can be saved from here without setting it
+   down into the card. It is the shared button (includes/save_paper.php), so
+   one press answers for every copy of itself - the card's own Save, the mark
+   on the shelf behind - and the ribbon follows it. In the clothes the close
+   wears, because it stands on the veil and not on a card; the page's own
+   tokens for a mark are drawn to be read on the page. Hidden with the book
+   when it is set down, the card having a Save of its own, and printed at all
+   only for a reader who has a library. */
+.bv .bv-save {
+    position: absolute; top: .75rem; left: .75rem; z-index: 3;
+    display: inline-flex; padding: .35rem; border: 0; border-radius: 50%;
+    background: rgba(0, 0, 0, .28); color: #fff; cursor: pointer;
+}
+.bv .bv-save:hover { background: rgba(0, 0, 0, .45); color: #fff; }
+.bv .bv-save:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.bv .bv-save .material-symbols-outlined { font-size: 22px; }
+/* --maroon-surface, the fill: --maroon is --accent-light, which under Old
+   Night is plain white, so a disc filled from it under a white glyph is a
+   white mark on a white disc. The same rule as the colour picker's radio in
+   includes/theme.php, and the one that block states for Old Night. */
+.bv .bv-save.is-saved { background: var(--maroon-surface); color: #fff; }
+/* The page's --bad-text is a dark red, meant for a white card; on this veil
+   it cannot be read, so the refusal is said in a pale tint of it and in the
+   tooltip the shared script writes. */
+.bv .bv-save.is-failed { color: #ffd2cc; }
+.bv .bv-save[hidden], .bv.is-details .bv-save { display: none; }
+
+.bv-hint {
+    position: absolute; left: 0; right: 0; bottom: 1.25rem; z-index: 2;
+    margin: 0; text-align: center; pointer-events: none;
+    font-size: .8125rem; letter-spacing: .02em; color: #fff; opacity: .88;
+    transition: opacity .2s;
+}
+.bv-hint .material-symbols-outlined { font-size: 16px; vertical-align: -3px; margin-right: .25rem; }
+.bv.is-details .bv-hint { opacity: 0; }
+
+/* ---- Previous and next, at the window's edges ----
+   The way a file preview steps through a folder: a round arrow at each side,
+   half way down, white on a dark disc so it reads on any shelf behind. Gone
+   at either end of the shelf rather than greyed, since an arrow that does
+   nothing is one more thing to read, and gone under the card, which is about
+   one paper. */
+.bv-nav {
+    position: absolute; top: 50%; z-index: 3;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 3rem; height: 3rem; margin-top: -1.5rem;
+    padding: 0; border: 0; border-radius: 50%;
+    background: rgba(0, 0, 0, .38); color: #fff; cursor: pointer;
+    transition: background .15s, opacity .2s;
+}
+.bv-nav:hover { background: rgba(0, 0, 0, .6); }
+.bv-nav:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.bv-nav .material-symbols-outlined { font-size: 30px; }
+/* In from the edges, clear of the Accessibility tab, which stands at the
+   left edge of every page (36px) and showed under the arrow through the veil. */
+.bv-prev { left: 3rem; }
+.bv-next { right: 3rem; }
+.bv-nav[hidden], .bv.is-details .bv-nav { display: none; }
+/* While one book goes and the next comes, the mover fades as well as slides. */
+.bv-mover { transition: opacity .2s ease; }
+.bv-mover.is-away { opacity: 0; }
+
+/* ===== The book, as an object =====
+   Six faces about one centre: --w, --h and --d are its width, height and
+   thickness, set from script to suit the window, and every face is placed
+   from them. Its own perspective is part of its transform (written from
+   script), so it is seen from the same place whether it is held up in the
+   middle of the window or set down in the corner of the card. */
+.bv-layer {
+    position: absolute; inset: 0; z-index: 2;
+    pointer-events: none;
+}
+.bv-mover {
+    position: absolute; left: 50%; top: 50%;
+    width: 0; height: 0;
+    will-change: transform;
+}
+/* Its shadow on the floor, which stays on the floor however the book turns. */
+.bv-floor {
+    position: absolute;
+    left: calc(var(--w) * -.62); width: calc(var(--w) * 1.24);
+    top: calc(var(--h) / 2 + var(--w) * .05); height: calc(var(--w) * .2);
+    background: radial-gradient(closest-side, rgba(0, 0, 0, .42), rgba(0, 0, 0, 0));
+    pointer-events: none;
+}
+.bv.is-details .bv-floor { opacity: 0; transition: opacity .2s; }
+.bv-book {
+    position: absolute;
+    left: calc(var(--w) / -2); top: calc(var(--h) / -2);
+    width: var(--w); height: var(--h);
+    transform-style: preserve-3d;
+    pointer-events: auto;
+    cursor: grab;
+    touch-action: none;
+    outline: none;
+    will-change: transform;
+}
+.bv-book.is-held { cursor: grabbing; }
+.bv.is-details .bv-book { cursor: zoom-in; }
+.bv-face {
+    position: absolute;
+    backface-visibility: hidden; -webkit-backface-visibility: hidden;
+}
+.bv-front, .bv-back { left: 0; top: 0; width: var(--w); height: var(--h); }
+.bv-front {
+    transform: translateZ(calc(var(--d) / 2));
+    border-radius: 2px 5px 5px 2px;
+    overflow: hidden;
+}
+.bv-book:focus-visible .bv-front { box-shadow: 0 0 0 3px #fff, 0 0 0 6px var(--maroon); }
+
+/* ---- Nothing cut on the held-up book ----
+   The shelf's cover clamps the title, cuts a byline with an ellipsis and keeps
+   every line to one. Held up, everything is stamped in full and wraps, and the
+   type is sized by --t: the cover's own scale times --fit, which script brings
+   down until it all fits the board. The margins keep --s, the board's scale,
+   so the spine cloth and the hinge are the same width on the front as on the
+   back. Prefixed with .bv so they outweigh the shared rules, :has() included. */
+.bv .bv-front { --t: calc(var(--bk-scale) * var(--fit, 1)); justify-content: flex-start; }
+.bv .bv-front .bk-band {
+    font-size: calc(5.4px * var(--t));
+    white-space: normal; overflow: visible; text-overflow: clip;
+}
+.bv .bv-front .bk-title {
+    display: block; -webkit-line-clamp: unset; overflow: visible;
+    font-size: calc(8.2px * var(--t));
+}
+.bv .bv-front .bk-kind {
+    display: block; -webkit-line-clamp: unset; overflow: visible;
+    margin-top: calc(7px * var(--t));
+    font-size: calc(5.4px * var(--t));
+}
+.bv .bv-front .bk-foot { gap: calc(1.5px * var(--t)); padding-top: calc(6px * var(--t)); }
+.bv .bv-front .bk-by-label { font-size: calc(4.6px * var(--t)); }
+.bv .bv-front .bk-by,
+.bv .bv-front .bk-mark {
+    white-space: normal; overflow: visible; text-overflow: clip;
+    line-height: 1.35;
+}
+.bv .bv-front .bk-by { font-size: calc(5.6px * var(--t)); }
+.bv .bv-front .bk-program { margin-top: calc(5px * var(--t)); font-size: calc(5px * var(--t)); letter-spacing: .1em; }
+.bv .bv-front .bk-year    { margin-top: calc(2px * var(--t)); font-size: calc(5.6px * var(--t)); }
+/* The back board: the same leatherette, blank, as a bound paper's is. Turned
+   half round, so the spine cloth that wraps onto it is drawn on its right,
+   which is the book's left. */
+.bv-back {
+    transform: rotateY(180deg) translateZ(calc(var(--d) / 2));
+    border-radius: 5px 2px 2px 5px;
+    background-color: var(--cover);
+    background-image:
+        linear-gradient(242deg, rgba(255, 255, 255, .10), rgba(255, 255, 255, 0) 36%,
+                                rgba(0, 0, 0, 0) 62%, rgba(0, 0, 0, .22)),
+        linear-gradient(270deg,
+            transparent             calc(9px  * var(--bk-scale)),
+            rgba(0, 0, 0, .34)      calc(9px  * var(--bk-scale)), rgba(0, 0, 0, .34)      calc(10px * var(--bk-scale)),
+            rgba(255, 255, 255, .13) calc(10px * var(--bk-scale)), rgba(255, 255, 255, .13) calc(11px * var(--bk-scale)),
+            transparent             calc(11px * var(--bk-scale))),
+        linear-gradient(270deg, var(--cover-spine) 0 calc(7px * var(--bk-scale)), transparent calc(7px * var(--bk-scale))),
+        radial-gradient(circle, rgba(255, 255, 255, .05) 0 .5px, transparent .9px),
+        radial-gradient(circle, rgba(0, 0, 0, .055) 0 .5px, transparent 1px),
+        radial-gradient(circle, rgba(0, 0, 0, .04) 0 .6px, transparent 1.1px);
+    background-size: auto, auto, auto, 3px 3px, 5px 5px, 7px 7px;
+    background-position: 0 0, 0 0, 0 0, 0 0, 1px 2px, 3px 1px;
+}
+
+/* The spine: the cloth, and what is stamped down it, the way the campus's
+   bound papers are: the programme at the head, the title, the year at the
+   foot, each between a pair of gold bars. */
+.bv-spine, .bv-edge { left: calc((var(--w) - var(--d)) / 2); top: 0; width: var(--d); height: var(--h); }
+.bv-spine {
+    transform: rotateY(-90deg) translateZ(calc(var(--w) / 2));
+    background-color: var(--cover-spine);
+    background-image:
+        linear-gradient(90deg, rgba(0, 0, 0, .28), rgba(255, 255, 255, .10) 45%, rgba(0, 0, 0, .30)),
+        radial-gradient(circle, rgba(255, 255, 255, .05) 0 .5px, transparent .9px),
+        radial-gradient(circle, rgba(0, 0, 0, .06) 0 .5px, transparent 1px);
+    background-size: auto, 3px 3px, 5px 5px;
+    color: var(--cover-spine-foil, var(--cover-foil));
+    overflow: hidden;
+}
+.bv-spine-text {
+    position: absolute; left: 50%; top: 50%;
+    width: var(--h); height: var(--d);
+    transform: translate(-50%, -50%) rotate(90deg);
+    display: flex; align-items: center; justify-content: center;
+    gap: calc(5px * var(--bk-scale));
+    padding: 0 calc(9px * var(--bk-scale));
+    font-family: var(--font-body), 'Inter', sans-serif;
+    font-size: calc(5.2px * var(--bk-scale)); font-weight: 800;
+    letter-spacing: .1em; text-transform: uppercase; white-space: nowrap;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, .35);
+}
+.bv-bars {
+    flex: 0 0 auto;
+    width: calc(3.5px * var(--bk-scale)); height: 62%;
+    border-left: calc(.9px * var(--bk-scale)) solid currentColor;
+    border-right: calc(.9px * var(--bk-scale)) solid currentColor;
+}
+/* The whole title, on up to two lines and as small as it has to be (script
+   brings --fit down until it fits), rather than one line cut short. */
+.bv-spine-title {
+    flex: 1 1 auto; min-width: 0; max-height: 100%;
+    overflow: hidden; text-align: center;
+    white-space: normal; line-height: 1.15;
+    font-size: calc(5.2px * var(--bk-scale) * var(--fit, 1));
+}
+.bv-spine-end { flex: 0 0 auto; }
+
+/* The page edges. Paper is paper on a dark page too, so its ground is a
+   literal white, drawn in the palette's own soft tone like the shelf's. */
+.bv-edge {
+    transform: rotateY(90deg) translateZ(calc(var(--w) / 2));
+    background:
+        linear-gradient(90deg, rgba(0, 0, 0, .14), rgba(0, 0, 0, 0) 18%, rgba(0, 0, 0, 0) 82%, rgba(0, 0, 0, .14)),
+        repeating-linear-gradient(90deg,
+            color-mix(in srgb, var(--soft-maroon) 6%, #fff) 0 1.4px,
+            color-mix(in srgb, var(--soft-maroon) 32%, #fff) 1.4px 2.3px);
+}
+.bv-top, .bv-bottom { left: 0; top: calc((var(--h) - var(--d)) / 2); width: var(--w); height: var(--d); }
+.bv-top    { transform: rotateX(90deg) translateZ(calc(var(--h) / 2)); }
+.bv-bottom { transform: rotateX(-90deg) translateZ(calc(var(--h) / 2)); }
+.bv-top, .bv-bottom {
+    background:
+        /* the spine at the left end, the boards along the long sides */
+        linear-gradient(90deg, var(--cover-spine) 0 4%, transparent 4%),
+        linear-gradient(0deg, var(--cover) 0 6%, transparent 6% 94%, var(--cover) 94%),
+        repeating-linear-gradient(0deg,
+            color-mix(in srgb, var(--soft-maroon) 6%, #fff) 0 1.4px,
+            color-mix(in srgb, var(--soft-maroon) 30%, #fff) 1.4px 2.3px);
+}
+
+/* ---- The gap it left on the shelf ----
+   A book held up here is not also standing on the shelf behind it. The one
+   that was pressed is hidden for as long as it is in the window, so the
+   flight reads as that book being pulled out rather than as a copy of it
+   appearing: the board shows a gap where it stood, the way a shelf does when
+   somebody has taken a paper off it.
+
+   visibility, not display: the slot keeps its width, so the gap stays a gap
+   and the books on either side do not slide along to close it. The class
+   goes on the element the page handed over (.shelf-book here, .book in My
+   Library), so a page needs no rule of its own; the shelf adds one for the
+   bookmark above the slot, which would otherwise hang over the space. */
+.bv-taken { visibility: hidden; }
+
+/* ---- The bookmark ribbon ----
+   A saved paper carries its ribbon up off the shelf with it: the same one
+   includes/shelf_view.php tucks into the pages, at this book's size (every
+   figure is the shelf's, times --bk-scale). It is a face of the book, in the
+   book's own preserve-3d space at half its thickness, so the boards hide the
+   part that is inside by depth rather than by a picture of depth, it turns
+   with the book, and it goes down into the details card with it, that card's
+   book being this same element made smaller.
+
+   Shown while the window holds a Save button that says saved, which is the
+   class the shared script keeps painted on every copy of itself
+   (includes/save_paper.php). So it answers a press here, in the card, or on
+   the shelf behind, with nothing to keep in step; a reader with no library
+   has no such button and so no ribbon. Out of the book and above it until
+   then, the way the shelf's slides in. */
+.bv-ribbon {
+    position: absolute;
+    right: calc(13px * var(--bk-scale, 1));
+    top: calc(-22px * var(--bk-scale, 1));
+    width: calc(12px * var(--bk-scale, 1));
+    height: calc(74px * var(--bk-scale, 1));
+    clip-path: polygon(0 0, 50% 16%, 100% 0, 100% 100%, 0 100%);
+    background:
+        linear-gradient(90deg, rgba(0, 0, 0, .28), rgba(255, 255, 255, .14) 45%, rgba(0, 0, 0, .22)),
+        var(--maroon-surface);
+    pointer-events: none;
+    opacity: 0;
+    transform: translateZ(0) translateY(calc(-36px * var(--bk-scale, 1)));
+    transition: transform .5s cubic-bezier(.2, .9, .25, 1), opacity .25s ease;
+}
+.bv:has(.save-paper.is-saved) .bv-ribbon {
+    opacity: 1;
+    transform: translateZ(0) translateY(0);
+}
+
+/* ===== The details card =====
+   My Library's pop-up, the same layout and the same figures: the book small on
+   the left (the slot here is only its place; the book itself is the one held
+   up a moment ago, set down over it), the paper on the right. */
+.bv-card {
+    position: absolute; left: 50%; top: 50%; z-index: 1;
+    transform: translate(-50%, -50%);
+    width: min(44rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem);
+    display: flex; gap: 1.5rem; padding: 1.5rem;
+    border-radius: var(--r-card, 8px);
+    background: var(--white); color: var(--ink);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, .35);
+    overflow: auto; overscroll-behavior: contain;
+    opacity: 0; visibility: hidden;
+    transition: opacity .25s ease, visibility 0s linear .25s;
+}
+.bv.is-details .bv-card {
+    opacity: 1; visibility: visible;
+    /* After the book has most of the way to go, so the card arrives to meet it. */
+    transition: opacity .28s ease .22s, visibility 0s;
+}
+/* The top padding is the ribbon's: a saved paper's bookmark stands out of the
+   top of the book, and the book is set down here at half the size it was held
+   up at, so the end needs about 31px of room above the board (22px at the
+   shelf's 108px, times the slot's width over that). With the card's own
+   1.5rem it was 2px short, and the swallowtail crossed the card's top edge
+   into the veil - a sliver whose width changed with the window. The ribbon
+   stands out of the book, not out of the card. Measured, not judged by eye. */
+.bv-slot { flex: 0 0 auto; width: calc(150px + 34px); padding: 1rem 0 0 .5rem; }
+.bv-slot-book { width: 150px; height: 216px; }
+.bv-body { flex: 1 1 auto; min-width: 0; padding-right: 1.5rem; }
+.bv-kicker { margin: 0 0 .375rem; font-size: .6875rem; letter-spacing: .06em; text-transform: uppercase; color: var(--grey); }
+.bv-title { margin: 0; font-family: var(--font-head); font-size: 1.125rem; font-weight: 600; line-height: 1.3; color: var(--maroon); }
+.bv-authors { margin: .375rem 0 0; font-size: .8125rem; color: var(--ink); }
+.bv-abstract { margin: .875rem 0 0; font-size: .8125rem; line-height: 1.6; color: var(--ink); }
+/* The card's prose is justified, as a bound paper's own page is: the three
+   blocks that run to more than a line, and not the title or the kicker above
+   them, which are headings and would only have their words pulled apart. The
+   last line of each stays ranged left, which is what text-align does on its
+   own and what text-align-last would undo.
+
+   Measured on the abstract, the card being 326px wide on a phone and 424 on a
+   desktop: the right edge goes from 58.6px of rag to 0 at 390px (38 to 0 at
+   1280), and the price is the word space, which is 3.7px throughout a ranged
+   edge and runs to 13.2px on the worst line here (10 at 1280). That is the
+   bargain justification always is; at three and a half spaces on one line of
+   eleven it is worth it, and anything wider would not be.
+
+   `hyphens: auto` is asked for because it is what keeps those gaps down in a
+   column this narrow, and it needs the document's language, which every page
+   carrying this declares on <html> itself. It changed nothing in the figures
+   above: headless Chrome has no hyphenation dictionary, so this is the
+   unhyphenated case measured, and a browser that has one can only do better. */
+.bv-authors, .bv-abstract, .bv-note {
+    text-align: justify;
+    hyphens: auto;
+}
+.bv-abstract:empty, .bv-note:empty, .bv-authors:empty, .bv-kicker:empty { display: none; }
+.bv-note { margin: .875rem 0 0; font-size: .75rem; color: var(--grey); }
+.bv-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .625rem; margin-top: 1rem; }
+.bv-actions .save-paper.is-labelled { margin-top: 0; }
+.bv-close {
+    position: absolute; top: .625rem; right: .625rem;
+    display: inline-flex; padding: .25rem; border: 0; background: none;
+    color: var(--grey); cursor: pointer; border-radius: var(--r-control, 4px);
+}
+.bv-close:hover { color: var(--maroon); background: var(--cream); }
+
+/* ===== Putting it back =====
+   Closing is the flight run backwards: the book goes home to the gap it left
+   on the shelf, turning back to the angle it stood at, and only when it has
+   landed does the window close and the shelf book appear again (goHome() and
+   takeDown() in the script below). So everything else in the window has to be
+   out of the way while it travels - the veil, the card, the arrows, the hint
+   and the two marks - or the book flies out from behind furniture that is
+   still sitting there.
+
+   These come after the rules they undo, `.bv.is-details .bv-card` among them,
+   because they are the same weight and the later one wins. */
+.bv.is-leaving { background: transparent; }
+.bv.is-leaving .bv-card {
+    opacity: 0; visibility: hidden;
+    transition: opacity .18s ease, visibility 0s linear .18s;
+}
+.bv.is-leaving .bv-x,
+.bv.is-leaving .bv-save,
+.bv.is-leaving .bv-nav,
+.bv.is-leaving .bv-hint,
+.bv.is-leaving .bv-floor { opacity: 0; }
+/* The colours these already eased stay named: a bare `opacity` here would
+   replace the shared .save-paper transition on the bookmark. */
+.bv-x, .bv-save { transition: opacity .18s ease, background .15s, color .15s; }
+.bv-floor { transition: opacity .18s ease; }
+.bv.is-leaving .bv-book { cursor: default; }
+
+@media (max-width: 700px) {
+    .bv-card { flex-direction: column; align-items: center; gap: 1rem; padding: 1.25rem 1rem; }
+    .bv-slot-book { width: 120px; height: 173px; }
+    .bv-slot { width: calc(120px + 34px); }
+    /* Once the flight ends, keep the cover in the scrolling card itself. A
+       viewport-fixed 3D layer follows card scrolling a frame late on iOS and
+       can lie over the title or buttons while the browser moves the page. */
+    .bv.is-details.is-settled .bv-layer { display: none; }
+    .bv-slot-book:has(.bv-front) { cursor: zoom-in; }
+    .bv-slot-book .bv-front {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        transform: none;
+        --bk-scale: 1.1111;
+    }
+    .bv-slot-book:focus-visible { outline: 2px solid var(--maroon); outline-offset: 3px; }
+    .bv-body { padding-right: 0; width: 100%; }
+    .bv-hint { font-size: .75rem; }
+    /* The book is 62% of a phone's width, which leaves the arrows the edges. */
+    .bv-nav { width: 2.5rem; height: 2.5rem; margin-top: -1.25rem; }
+    .bv-nav .material-symbols-outlined { font-size: 26px; }
+    .bv-prev { left: .35rem; }
+    .bv-next { right: .35rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .bv[open], .bv-card, .bv.is-details .bv-card, .bv-hint, .bv-mover, .bv-ribbon { animation: none; transition: none; }
+}

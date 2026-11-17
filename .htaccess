@@ -54,6 +54,16 @@
     </IfModule>
 </FilesMatch>
 
+# Cache source assets briefly, and keep filemtime-versioned assets for a year.
+# asset_url() changes ?v= whenever an asset is edited, so repeat visits can
+# reuse the unchanged stylesheet or script without downloading it again.
+<FilesMatch "\.(css|js|woff2?|png|jpe?g|gif|svg|webp|ico)$">
+    <IfModule mod_headers.c>
+        Header set Cache-Control "public, max-age=3600"
+        Header set Cache-Control "public, max-age=31536000, immutable" "expr=%{QUERY_STRING} =~ /(^|&)v=[0-9]+(&|$)/"
+    </IfModule>
+</FilesMatch>
+
 # Disable Server Signature (ID-015)
 ServerSignature Off
 
