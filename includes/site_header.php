@@ -18,7 +18,10 @@ if (!$u) {
         ['label' => 'Contact Support',  'href' => BASE_URL.'/pages/contact_support.php',  'match' => ['contact_support.php']],
     ];
 } else {
-    switch ($u['user_role']) {
+    $nav_position = active_desk_position($u);
+    $nav_map = staff_position_map($nav_position);
+    $nav_role = $nav_map['role'] ?? $u['user_role'];
+    switch ($nav_role) {
         case 'student':
             $nav_links = [
                 ['label' => 'My Dashboard', 'href' => BASE_URL.'/app/student/student_dashboard.php', 'match' => ['student_dashboard.php']],
@@ -38,10 +41,10 @@ if (!$u) {
             ];
             break;
         case 'admin':
-            if (($u['admin_level'] ?? 1) == 2) {
+            if ($nav_position === 'Head of Academic Programs') {
                 // Level 2 is the Head of Academic Programs, who shares that desk.
                 $nav_links = [
-                    ['label' => role_home_label('admin'), 'href' => BASE_URL.'/app/faculty/head_review_dashboard.php', 'match' => ['head_review_dashboard.php']],
+                    ['label' => 'My Dashboard', 'href' => BASE_URL.'/app/faculty/head_review_dashboard.php', 'match' => ['head_review_dashboard.php']],
                 ];
             } else {
                 /* Storage Folder is the Director's page too, and is offered here
@@ -49,7 +52,7 @@ if (!$u) {
                    Level 1 only: this branch is already the Coordinator, the head
                    of academic programs having been answered above. */
                 $nav_links = [
-                    ['label' => role_home_label('admin'), 'href' => BASE_URL.'/app/admin/admin_review_dashboard.php', 'match' => ['admin_review_dashboard.php']],
+                    ['label' => 'Review Desk', 'href' => BASE_URL.'/app/admin/admin_review_dashboard.php', 'match' => ['admin_review_dashboard.php']],
                     ['label' => 'Manage Faculty',      'href' => BASE_URL.'/app/admin/admin_manage_faculty.php',  'match' => ['admin_manage_faculty.php']],
                     ['label' => 'Storage Folder',      'href' => BASE_URL.'/app/admin/gdrive_settings.php',       'match' => ['gdrive_settings.php']],
                 ];
@@ -82,10 +85,8 @@ if (!$u) {
             ];
     }
 
-    /* One person, two posts. The second desk is offered as a single link
-       rather than the whole of that role's menu: two complete menus side by
-       side is a navbar nobody can read, and the desk is the way in to
-       everything else that role has. Null for almost everybody. */
+    /* The chosen position decides which desk's menu is shown. A single link
+       returns dual-position staff to the chooser when they want to switch. */
     $second_desk = secondary_desk_link($u);
     if ($second_desk) {
         $nav_links[] = [
@@ -348,7 +349,7 @@ if ($show_login_notif_popup && $u && user_has_role($u, 'librarian')) {
                                  thing twice. The row is the name and the role. */ ?>
                         <span class="nav-account-who">
                             <span class="nav-account-name"><?= e($display_name) ?></span>
-                            <span class="nav-account-role"><?= e(role_label($u)) ?></span>
+                            <span class="nav-account-role"><?= e(count(user_positions($u)) > 1 ? active_desk_position($u) : role_label($u)) ?></span>
                         </span>
                     </div>
                     <a href="<?= e(BASE_URL.'/pages/settings.php') ?>">
@@ -470,7 +471,7 @@ if ($show_login_notif_popup && $u && user_has_role($u, 'librarian')) {
                     <div class="dd-head">
                         <div class="dd-identity">
                             <span class="dd-name"><?= e($display_name) ?></span>
-                            <span class="dd-role"><?= e(role_label($u)) ?></span>
+                            <span class="dd-role"><?= e(count(user_positions($u)) > 1 ? active_desk_position($u) : role_label($u)) ?></span>
                         </div>
                         <button type="button" class="dd-close" id="userDropdownClose" aria-label="Close">
                             <span class="material-symbols-outlined mi-18">close</span>

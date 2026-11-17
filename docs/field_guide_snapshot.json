@@ -1,5 +1,5 @@
 {
- "built": "2026-11-17 16:21",
+ "built": "2026-11-17 16:43",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -41,7 +41,7 @@
    "lines": 609
   },
   "app/admin/admin_review_dashboard.php": {
-   "lines": 139
+   "lines": 143
   },
   "app/admin/gdrive_settings.php": {
    "lines": 380
@@ -53,10 +53,13 @@
    "lines": 135
   },
   "app/auth/login.php": {
-   "lines": 1181
+   "lines": 1184
   },
   "app/auth/logout.php": {
    "lines": 36
+  },
+  "app/choose_desk.php": {
+   "lines": 77
   },
   "app/faculty/faculty_dashboard.php": {
    "lines": 236
@@ -173,7 +176,7 @@
    "lines": 2830
   },
   "archive/login.php": {
-   "lines": 1093
+   "lines": 1095
   },
   "archive/view_paper.php": {
    "lines": 1114
@@ -185,7 +188,7 @@
    "lines": 265
   },
   "config/core.php": {
-   "lines": 5975
+   "lines": 6010
   },
   "config/error_handler.php": {
    "lines": 228
@@ -227,7 +230,7 @@
    "lines": 1173
   },
   "includes/browse_card.php": {
-   "lines": 205
+   "lines": 207
   },
   "includes/browse_console.php": {
    "lines": 1340
@@ -359,7 +362,7 @@
    "lines": 1803
   },
   "includes/site_header.php": {
-   "lines": 787
+   "lines": 788
   },
   "includes/skeleton.php": {
    "lines": 747

@@ -251,7 +251,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       }
 
       $redirect = $_POST['redirect'] ?? $_GET['redirect'] ?? null;
-      $login_done($redirect === 'archive' ? BASE_URL.'/archive/index.php' : role_home($user_role));
+      $signedIn = current_user();
+      $login_done(count(user_positions($signedIn)) > 1
+          ? BASE_URL . '/app/choose_desk.php'
+          : ($redirect === 'archive' ? BASE_URL.'/archive/index.php' : desk_home($signedIn)));
   }
 }
 

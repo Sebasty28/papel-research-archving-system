@@ -75,9 +75,10 @@ Ask `config/core.php`, never a role string:
 | `can_manage_research_operations($u)` | the Director, or that. |
 | `require_research_operations()` | closes a page to everybody else. |
 
-Both read `user_has_role()` and `user_level_for()`, so a **second post counts**:
+`is_research_coordinator()` reads `user_positions()`, so a **second post counts**:
 a librarian who also holds the Research Coordinator post is the Coordinator
-here. Checked against all seven role shapes.
+here. This also handles a Head who additionally coordinates; both positions
+use the `admin` role but have different levels.
 
 **What moved:**
 
@@ -156,10 +157,13 @@ second post is a position name in `users.secondary_position`, resolved through
   passed for the wrong reason (nothing arrived) and a legitimate second post
   could not be given either. The admins console passes `$_POST` whole and
   needed no such change.
-- The navbar offers **one link to the other desk** (`secondary_desk_link()`),
-  not that role's whole menu: two complete menus side by side is a navbar
-  nobody can read. `position_home()` finds it, because `role_home()` reads the
-  signed-in account's own `admin_level` and a second post brings its own.
+- After sign-in, an account with two posts opens `app/choose_desk.php`: two
+  cards on a white page, one for each position. The choice lives in the session
+  as `active_position`; it decides the landing desk and which role's navbar is
+  shown. The navbar offers **one Switch desk link** (`secondary_desk_link()`)
+  back to the chooser, not two complete menus side by side. `position_home()`
+  finds the second post's desk, because `role_home()` reads the account's own
+  `admin_level` and a second post brings its own.
 - **The approval chain is not restricted.** A person who is both Subject
   Adviser and Research Coordinator may approve at both steps, which the owner
   chose deliberately on 12 November 2026. For those papers the second step adds

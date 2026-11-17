@@ -15,14 +15,18 @@ require_once '../../app/models/PaperService.php';
 $conn = db();
 $u    = current_user();
 
-/* The session can be stale about which kind of admin this is, and Records
-   Officers have their own dashboard. Read the level from the database. */
-$al = $conn->prepare("SELECT admin_level FROM users WHERE user_id = ?");
-$al->bind_param('i', $u['user_id']);
-$al->execute();
-if ($row = $al->get_result()->fetch_assoc()) $u['admin_level'] = (int)$row['admin_level'];
-$al->close();
-if (($u['admin_level'] ?? 1) == 2) { header('Location: '.BASE_URL.'/app/faculty/head_review_dashboard.php'); exit; }
+/* A person can be both Head and Coordinator. This desk belongs to the
+   Coordinator position, including when it is their second post. Read the
+   current row so a role removed after sign-in cannot keep reviewing papers. */
+$accountStmt = $conn->prepare('SELECT * FROM users WHERE user_id = ?');
+$accountStmt->bind_param('i', $u['user_id']);
+$accountStmt->execute();
+$liveAccount = $accountStmt->get_result()->fetch_assoc();
+$accountStmt->close();
+if (!$liveAccount || !is_research_coordinator($liveAccount)) {
+    header('Location: ' . BASE_URL . '/archive/index.php');
+    exit;
+}
 
 $SELF = 'admin_review_dashboard.php';
 

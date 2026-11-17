@@ -74,8 +74,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
          went away when the birthdate was dropped from sign-in, leaving a test
          that nothing could pass, so nobody but a guest could get in here.
          An ID and a password now, the same as the main login. */
+      $second_col = users_have_secondary_position() ? ', secondary_position' : '';
       $stmt = $conn->prepare(
-        "SELECT user_id, username, email, password, full_name, user_role, is_active, expires_on, admin_level
+        "SELECT user_id, username, email, password, full_name, user_role, is_active, expires_on, admin_level{$second_col}
          FROM users
          WHERE (username=? OR email=?
                 OR (student_id IS NOT NULL AND student_id<>'' AND student_id=?)
@@ -114,13 +115,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           'full_name'   => $row['full_name'],
           'user_role'   => $row['user_role'],
           'admin_level' => (int)($row['admin_level'] ?? 1),
+          'secondary_position' => $row['secondary_position'] ?? null,
         ]);
         if ($first_sign_in || password_gate_required_by_record((int)$row['user_id'])) {
           password_gate_open($first_sign_in);
           header('Location: ' . password_gate_url());
           exit;
         }
-        header('Location: index.php');
+        header('Location: ' . desk_home(current_user()));
         exit;
       }
     }

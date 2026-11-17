@@ -814,6 +814,7 @@ function login_user(array $u): void {
     session_regenerate_id(true);
     $_SESSION['user'] = $u;
     $_SESSION['just_logged_in'] = true;
+    unset($_SESSION['active_position']);
 }
 
 /* ---------------------------------------------------------------------------
@@ -1246,8 +1247,44 @@ function position_home(?string $position): string {
     return role_home($map['role']);
 }
 
+/** The position chosen for this sign-in, falling back to the primary post. */
+function active_desk_position(?array $u): string {
+    $posts = user_positions($u);
+    if (!$posts) { return ''; }
+    $chosen = (string)($_SESSION['active_position'] ?? '');
+    return in_array($chosen, $posts, true) ? $chosen : $posts[0];
+}
+
+/** The next page after sign-in, or the current desk on later visits. */
+function desk_home(?array $u): string {
+    if (!$u) { return BASE_URL . '/archive/index.php'; }
+    $posts = user_positions($u);
+    if (count($posts) > 1) {
+        $chosen = (string)($_SESSION['active_position'] ?? '');
+        if (!in_array($chosen, $posts, true)) {
+            return BASE_URL . '/app/choose_desk.php';
+        }
+        if ($chosen !== $posts[0]) { return position_home($chosen); }
+    }
+    return role_home((string)($u['user_role'] ?? ''));
+}
+
+/** The name of the current desk in shared navigation. */
+function desk_home_label(?array $u): string {
+    if (!$u) { return 'Public Repository'; }
+    $posts = user_positions($u);
+    if (count($posts) > 1 && !in_array((string)($_SESSION['active_position'] ?? ''), $posts, true)) {
+        return 'Choose desk';
+    }
+    $position = active_desk_position($u);
+    if ($position === 'Head of Academic Programs') { return 'My Dashboard'; }
+    if ($position === 'Research Coordinator') { return 'Review Desk'; }
+    $map = staff_position_map($position);
+    return role_home_label($map['role'] ?? (string)($u['user_role'] ?? ''));
+}
+
 /**
- * The other desk this person may work at, or null for almost everybody.
+ * A way back to the two-card chooser, or null for single-position accounts.
  *
  * One link rather than the whole of the other role's menu: two complete menus
  * side by side is a navbar nobody can read, and the desk is the way in to
@@ -1260,7 +1297,7 @@ function secondary_desk_link(?array $u): ?array {
     $posts = user_positions($u);
     if (count($posts) < 2) { return null; }
 
-    return ['label' => $posts[1] . ' desk', 'href' => position_home($posts[1])];
+    return ['label' => 'Switch desk', 'href' => BASE_URL . '/app/choose_desk.php'];
 }
 
 /**
@@ -1352,11 +1389,9 @@ function user_level_for(?array $u, string $role): int {
 /**
  * Is this account the Research Coordinator?
  *
- * The level is the whole question. A Head of Academic Programs is an `admin`
- * too and differs only by admin_level, so a bare role check hands the head
- * every page meant for the Coordinator. Asked through user_has_role() and
- * user_level_for(), so a second post counts: somebody who advises and
- * coordinates is the Coordinator here as well.
+ * The role alone cannot distinguish Coordinator from Head: both may be admin,
+ * and one account may even hold both positions. Ask the resolved positions so
+ * either the primary or the second Coordinator post counts.
  */
 /* ---------------------------------------------------------------------------
    The campus photos behind the navbar and the repository's banner
@@ -1428,7 +1463,7 @@ function nav_photo_srcset(string $photo): string {
 }
 
 function is_research_coordinator(?array $u): bool {
-    return user_has_role($u, 'admin') && user_level_for($u, 'admin') === 1;
+    return in_array('Research Coordinator', user_positions($u), true);
 }
 
 /** The two accounts that run the research operation. */

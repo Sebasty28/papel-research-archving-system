@@ -32,7 +32,7 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
 /* Not a second, lesser Settings. Anybody not being held here is sent to their
    own desk: the one place to change a password by choice is Settings. */
 if (!password_gate_held()) {
-    header('Location: ' . role_home((string)($u['user_role'] ?? '')));
+    header('Location: ' . desk_home($u));
     exit;
 }
 
@@ -59,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'chang
            to the account's desk without replaying onboarding. */
         if ($firstVisit) $_SESSION['papel_view_tour'] = 1;
         flash('success', $done['message']);
-        header('Location: ' . role_home((string)($u['user_role'] ?? '')));
+        header('Location: ' . desk_home($u));
         exit;
     }
     flash('error', $done['message']);

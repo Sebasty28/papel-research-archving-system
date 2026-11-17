@@ -43,9 +43,9 @@ function browse_card_links(?array $u): array
         return $links;
     }
 
-    $home = role_home($role);
+    $home = desk_home($u);
     $links[] = [
-        'label' => role_home_label($role),
+        'label' => desk_home_label($u),
         'href'  => $home,
         'match' => [basename((string)parse_url($home, PHP_URL_PATH))],
         // The dashboard proper, as against its drafts view.
@@ -86,7 +86,9 @@ function browse_card_links(?array $u): array
  */
 function quick_action_links(?array $u): array
 {
-    $role = (string)($u['user_role'] ?? '');
+    $position = active_desk_position($u);
+    $map = staff_position_map($position);
+    $role = (string)($map['role'] ?? ($u['user_role'] ?? ''));
 
     if ($role === 'student') {
         return [
@@ -105,7 +107,7 @@ function quick_action_links(?array $u): array
         ];
     }
 
-    $isCoordinator = $role === 'admin' && ($u['admin_level'] ?? 1) == 1;
+    $isCoordinator = $position === 'Research Coordinator';
     if (!($role === 'faculty' || $isCoordinator)) {
         return [];
     }

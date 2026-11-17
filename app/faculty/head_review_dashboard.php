@@ -14,8 +14,8 @@ require_once '../../config/core.php';
    recorded at level 2. Both land here: a level-1 admin is the Research
    Coordinator and belongs on their own desk, so they are sent back to it. */
 require_role(['head_academic', 'admin']);
-if (current_user()['user_role'] === 'admin' && (int)(current_user()['admin_level'] ?? 1) !== 2) {
-    header('Location: ' . BASE_URL . '/app/admin/admin_review_dashboard.php');
+if (!in_array('Head of Academic Programs', user_positions(current_user()), true)) {
+    header('Location: ' . desk_home(current_user()));
     exit;
 }
 require_once '../../config/workflow.php';
