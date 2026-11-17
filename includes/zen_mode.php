@@ -5,16 +5,16 @@
  * One switch, in the profile menu, that quiets everything on the page which is
  * not the page: the breadcrumb strip, the footer, the photo strip behind the
  * navbar, the accessibility tab, the scroll-to-top button, Corpus's floating
- * button, his greeting and pane shortcut, the survey invitation, the "Make it yours" card, the repository's photo
+ * button, his greeting and pane shortcut, the "Make it yours" card, the repository's photo
  * banner, and the console side panel, which folds to its rail rather than
  * going, so the filters are still a press away.
  *
  * What stays is deliberate. **The navbar stays**, because the switch that
  * turns this off lives in it: a mode with no way out is a trap, and a mode
  * whose way out is a keystroke nobody was told about is the same trap with a
- * secret. The notification bell, the manuscript countdown, the flash messages
- * and the loading bar stay too; a grant running out and a paper being returned
- * are news, not furniture.
+ * secret. The notification bell, the manuscript countdown, the flash messages,
+ * the survey invitation and the loading bar stay too; a grant running out and
+ * a paper being returned are news, and the survey remains available.
  *
  * It is kept **on the device** (localStorage, `papel_zen`), like the palette,
  * the sidebar's side and the accessibility tab, and read here before the first
@@ -77,8 +77,6 @@ html.zen-on #scrollJump,
 html.zen-on #chat-button,
 html.zen-on #chat-nudge,
 html.zen-on .side-corpus,
-html.zen-on .survey-ribbon,
-html.zen-on .survey-nudge,
 html.zen-on #themeWelcome {
     display: none;
 }

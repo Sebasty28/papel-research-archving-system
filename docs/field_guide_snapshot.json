@@ -1,5 +1,5 @@
 {
- "built": "2026-11-17 22:26",
+ "built": "2026-11-17 22:32",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -398,7 +398,7 @@
    "lines": 334
   },
   "includes/zen_mode.php": {
-   "lines": 285
+   "lines": 283
   },
   "index.php": {
    "lines": 12
