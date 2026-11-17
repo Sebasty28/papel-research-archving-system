@@ -1079,6 +1079,19 @@ html[data-view="rows"] .paper-list .paper-pin-mark .pin-word { display: none; }
     color: var(--maroon);
 }
 .kw-dialog-count { font-size: .75rem; color: var(--grey); }
+.kw-dialog-meta { display: flex; align-items: baseline; gap: .7rem; }
+.kw-dialog-clear {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--maroon);
+    font: inherit;
+    font-size: .75rem;
+    text-decoration: underline;
+    cursor: pointer;
+}
+.kw-dialog-clear:disabled { color: var(--grey); text-decoration: none; cursor: default; opacity: .65; }
+.kw-dialog-clear:focus-visible { outline: 2px solid var(--maroon); outline-offset: 2px; }
 .kw-dialog-note { margin: .25rem 0 .7rem; font-size: .75rem; color: var(--grey); }
 /* The one line that says the limit has been met, in the colours a refusal is
    said in everywhere else. */
@@ -2506,6 +2519,7 @@ function loadResults(url, pushState) {
         var card   = document.getElementById('kwDialogCard');
         var list   = document.getElementById('kwDialogList');
         var count  = document.getElementById('kwDialogCount');
+        var clear  = document.getElementById('kwDialogClear');
         var note   = document.getElementById('kwDialogNote');
         var find   = document.getElementById('kwDialogFind');
         var wipe   = document.getElementById('kwDialogFindClear');
@@ -2517,6 +2531,7 @@ function loadResults(url, pushState) {
         function draw() {
             var full = picked.length >= MAX;
             count.textContent = picked.length + ' of ' + MAX + ' chosen';
+            clear.disabled = picked.length === 0;
             note.classList.toggle('is-full', full);
             note.textContent = full
                 ? 'Five keywords at most. Press one of them again to take it out.'
@@ -2600,6 +2615,11 @@ function loadResults(url, pushState) {
             if (at > -1) { picked.splice(at, 1); }
             else if (picked.length >= MAX) { draw(); return; }   // the note says why
             else { picked.push(label); }
+            draw();
+        });
+
+        clear.addEventListener('click', function () {
+            picked = [];
             draw();
         });
 
@@ -2786,7 +2806,10 @@ window.addEventListener('popstate', function () {
         <form method="dialog" class="kw-dialog-card" id="kwDialogCard" tabindex="-1">
             <div class="kw-dialog-head">
                 <h2 id="kwDialogTitle">Keywords</h2>
-                <span class="kw-dialog-count" id="kwDialogCount"></span>
+                <div class="kw-dialog-meta">
+                    <span class="kw-dialog-count" id="kwDialogCount"></span>
+                    <button type="button" class="kw-dialog-clear" id="kwDialogClear">Clear keywords</button>
+                </div>
             </div>
             <p class="kw-dialog-note" id="kwDialogNote">Choose up to five. Press one again to take it out.</p>
             <div class="kw-dialog-list" id="kwDialogList">
