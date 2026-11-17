@@ -937,6 +937,7 @@ $types_res = $conn->query("SELECT DISTINCT paper_type FROM research_papers WHERE
 </footer>
 
 <?php include __DIR__.'/../includes/accessibility.php'; ?>
+<?php require_once ROOT_PATH.'/includes/terms_modal.php'; ?>
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 /* Right-click is handled once in includes/accessibility.php, included just
    above, and that copy leaves links alone. A blanket one here overrode it. */

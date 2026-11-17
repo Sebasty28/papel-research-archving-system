@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../config/core.php';
 start_session_once();
 $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
+$modalView = ($_GET['modal'] ?? '') === '1';
 ?>
 <!doctype html>
 <html lang="en">
@@ -9,9 +10,28 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Terms and Conditions · <?= e(APP_NAME) ?></title>
+<?php if (!$modalView): ?>
 <?php require_once ROOT_PATH.'/includes/site_head.php'; ?>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.min.css" rel="stylesheet">
 <?php require_once ROOT_PATH.'/includes/page_theme.php'; ?>
+<?php else: ?>
+<base target="_blank">
+<style nonce="<?= $nonce ?>">
+:root { --white: #fff; --ink: #332721; --grey: #706d6b; --maroon: #700b0b; --soft-maroon: #b17d7d; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--white); color: var(--ink); font: 15px/1.6 Arial, sans-serif; }
+.page-body { padding: .5rem .75rem 1.25rem; }
+.page-intro { display: none; }
+.page-card { padding: .75rem 1rem; }
+.page-card + .page-card { border-top: 1px solid #eadfdd; }
+.page-card-header { display: flex; align-items: center; color: var(--maroon); }
+.page-card-header h2 { margin: .5rem 0; font-size: 1.125rem; }
+.page-card-header i { display: none; }
+.page-card-body p { margin: 0 0 .875rem; }
+.page-card-body a { color: var(--maroon); }
+@media (max-width: 600px) { .page-card { padding: .5rem .25rem; } }
+</style>
+<?php endif; ?>
 <style nonce="<?= $nonce ?>">
 .updated-note { font-size: .8125rem; color: var(--grey); font-style: italic; margin-bottom: 1rem; }
 .lead-text { color: var(--ink); font-size: 1rem; line-height: 1.75; }
@@ -35,21 +55,24 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
     width: 6px; height: 6px; border-radius: 50%; background: var(--soft-maroon);
 }
 .page-card-body p, .terms-section li { text-align: justify; }
+@media (max-width: 600px) {
+    .terms-embedded .page-card-body p, .terms-embedded .terms-section li { text-align: left; }
+}
 </style>
 </head>
-<body>
+<body<?= $modalView ? ' class="terms-embedded"' : '' ?>>
 
-<?php require ROOT_PATH.'/includes/site_header.php'; ?>
+<?php if (!$modalView): require ROOT_PATH.'/includes/site_header.php'; endif; ?>
 
 <!-- ===== Hero ===== -->
 <!-- Breadcrumb -->
-<div class="crumb-bar">
+<?php if (!$modalView): ?><div class="crumb-bar">
     <div class="wrap crumb-inner">
         <a href="<?= e(BASE_URL) ?>/archive/index.php">Public Repository</a>
         <span class="material-symbols-outlined crumb-arrow">chevron_right</span>
         <span class="crumb-current">Terms and Conditions</span>
     </div>
-</div>
+</div><?php endif; ?>
 
 <!-- ===== Body ===== -->
 <main class="page-body">
@@ -158,6 +181,6 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
         </div>
     </div>
 </main>
-<?php require ROOT_PATH.'/includes/site_footer.php'; ?>
+<?php if (!$modalView): require ROOT_PATH.'/includes/site_footer.php'; endif; ?>
 </body>
 </html>

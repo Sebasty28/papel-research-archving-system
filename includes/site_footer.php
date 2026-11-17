@@ -37,6 +37,7 @@
         </nav>
     </div>
 </footer>
+<?php require_once ROOT_PATH.'/includes/terms_modal.php'; ?>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
@@ -401,7 +402,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function setPageInert(on) {
         Array.prototype.forEach.call(document.body.children, function (el) {
-            if (el === loginPanel || el === modalBackdrop) { return; }
+            if (el === loginPanel || el === modalBackdrop || el.id === 'termsModal') { return; }
             if (isRecaptchaLayer(el)) { return; }
             if (on) { el.setAttribute('inert', ''); } else { el.removeAttribute('inert'); }
         });
@@ -587,7 +588,8 @@ document.addEventListener('DOMContentLoaded', function () {
     });
     // Escape closes it, as it closes any other dialog on the site.
     document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape' && loginPanel.classList.contains('open')) { closeLoginModal(); }
+        if (e.key === 'Escape' && loginPanel.classList.contains('open')
+            && !(document.getElementById('termsModal') || {}).open) { closeLoginModal(); }
     });
     document.getElementById('closeModalBtn') && document.getElementById('closeModalBtn').addEventListener('click', closeLoginModal);
     modalBackdrop && modalBackdrop.addEventListener('click', closeLoginModal);

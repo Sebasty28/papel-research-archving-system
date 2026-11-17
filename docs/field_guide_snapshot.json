@@ -1,5 +1,5 @@
 {
- "built": "2026-11-17 23:45",
+ "built": "2026-11-18 00:10",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -170,7 +170,7 @@
    "lines": 38
   },
   "archive/home.php": {
-   "lines": 954
+   "lines": 956
   },
   "archive/index.php": {
    "lines": 2853
@@ -359,7 +359,7 @@
    "lines": 699
   },
   "includes/site_footer.php": {
-   "lines": 776
+   "lines": 778
   },
   "includes/site_head.php": {
    "lines": 1796
@@ -375,6 +375,9 @@
   },
   "includes/survey_invite.php": {
    "lines": 411
+  },
+  "includes/terms_modal.php": {
+   "lines": 92
   },
   "includes/theme.php": {
    "lines": 394
@@ -443,7 +446,7 @@
    "lines": 780
   },
   "pages/terms_and_conditions.php": {
-   "lines": 164
+   "lines": 187
   },
   "reset_system_data.php": {
    "lines": 161
