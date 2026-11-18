@@ -321,7 +321,7 @@ $PAGE_SKELETON = 'table';
     require ROOT_PATH.'/includes/password_once.php';
     ?>
 
-    <div class="mgmt-grid">
+    <div class="mgmt-grid mgmt-align-roll">
 
         <!-- ============ Create / edit ============
              One panel does both, exactly as on Manage Students. -->

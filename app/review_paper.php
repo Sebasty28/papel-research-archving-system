@@ -195,6 +195,7 @@ $PAGE_SKELETON = 'reader';
     padding-top: 1.25rem; border-top: 1px solid var(--border);
 }
 .rv-actions .rv-spacer { margin-left: auto; font-size: .75rem; color: var(--grey); }
+#confirmDone { accent-color: var(--maroon); }
 </style>
 </head>
 <body>

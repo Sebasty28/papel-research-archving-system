@@ -280,7 +280,7 @@ $PAGE_SKELETON = 'table';
     require ROOT_PATH.'/includes/password_once.php';
     ?>
 
-    <div class="mgmt-grid">
+    <div class="mgmt-grid mgmt-align-roll">
 
         <!-- ============ Create / edit ============ -->
         <?php /* No heading row, as on My Students: the page title says what

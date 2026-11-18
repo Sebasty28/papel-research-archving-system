@@ -434,6 +434,13 @@ html[data-mode="dark"] { --search-clear: #CFC3AE; }
     scrollbar-gutter: stable;
     -webkit-overflow-scrolling: touch;
 }
+/* The three account rolls match the form's bottom edge in the two-column
+   layout. Script measures the available room after tabs and filters render. */
+@media (min-width: 1101px) {
+    .mgmt-align-roll .mgmt-scroll {
+        height: var(--mgmt-roll-height, clamp(16rem, calc(100dvh - 12rem), 31.25rem));
+    }
+}
 .mgmt-scroll:focus-visible { outline: 2px solid var(--maroon); outline-offset: -2px; }
 .mgmt-table { width: 100%; border-collapse: collapse; font-size: .8125rem; color: var(--ink); }
 .mgmt-table tbody tr.is-search-off { display: none; }
@@ -1162,6 +1169,53 @@ select.import-cell { min-width: 8rem; cursor: pointer; }
 
     document.addEventListener('DOMContentLoaded', addControl);
 })();
+</script>
+<script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
+/* Align the visible account table with the bottom of its form. Keeping the
+   measurement on the grid also gives each tab the same scroll height. */
+document.addEventListener('DOMContentLoaded', function () {
+    var grid = document.querySelector('.mgmt-grid.mgmt-align-roll');
+    var form = grid && grid.querySelector('#formPanel');
+    var roll = grid && grid.querySelector(':scope > section:not(#formPanel)');
+    if (!form || !roll) return;
+
+    var frame = 0;
+    function sync() {
+        frame = 0;
+        var root = document.documentElement;
+        if (window.innerWidth <= 1100 || root.classList.contains('mgmt-dock-center') ||
+            root.classList.contains('mgmt-form-folded')) {
+            grid.style.removeProperty('--mgmt-roll-height');
+            return;
+        }
+        var pane = roll.querySelector('.js-pane:not([hidden]) .mgmt-panel');
+        if (!pane) {
+            grid.style.removeProperty('--mgmt-roll-height');
+            return;
+        }
+        var room = Math.max(160, Math.round(form.getBoundingClientRect().bottom -
+                                             pane.getBoundingClientRect().top - 2));
+        grid.style.setProperty('--mgmt-roll-height', room + 'px');
+    }
+    function schedule() {
+        if (!frame) frame = requestAnimationFrame(sync);
+    }
+    if (window.ResizeObserver) {
+        var sizes = new ResizeObserver(schedule);
+        sizes.observe(form);
+        sizes.observe(roll.querySelector('.mgmt-tabs-row'));
+        roll.querySelectorAll('.mgmt-chips').forEach(function (bar) { sizes.observe(bar); });
+    }
+    new MutationObserver(schedule).observe(roll, {
+        subtree: true, attributes: true, attributeFilter: ['hidden']
+    });
+    new MutationObserver(schedule).observe(document.documentElement, {
+        attributes: true, attributeFilter: ['class']
+    });
+    window.addEventListener('resize', schedule, { passive: true });
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(schedule);
+    schedule();
+});
 </script>
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 /* The three account consoles share one search input across their tabs. On a

@@ -356,6 +356,12 @@ html.sidebar-left .pd-side-swap .side-icon-right { display: inline-flex; }
 }
 .pd-callout .pd-who { display: block; margin-top: .5rem; font-size: .6875rem; color: var(--grey); }
 .pd-callout .btn-sm-maroon { margin-top: .75rem; }
+/* The returned-paper notice keeps its pale background in dark mode. Use ink
+   for that light surface instead of the page's light-on-dark text tokens. */
+html[data-mode="dark"] .pd-callout:not(.is-info) > .material-symbols-outlined,
+html[data-mode="dark"] .pd-callout:not(.is-info) h2 { color: var(--accent-dark); }
+html[data-mode="dark"] .pd-callout:not(.is-info) p { color: #2B1B0E; }
+html[data-mode="dark"] .pd-callout:not(.is-info) .pd-who { color: #545054; }
 
 .pd-card {
     background: var(--white); border: 1px solid var(--border); border-radius: var(--r-card, 8px);
