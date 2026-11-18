@@ -2,14 +2,9 @@
 
 **PUP Biñan Research Archiving System**
 Reference material for Chapter 2 and Chapter 3 of the Capstone Project 2 paper.
-Prepared 28 October 2026 from the repository (61 commits, 16 August to 27 October 2026), the
-database structure in `database/schema.sql`, and the deployment workflows in `.github/workflows/`.
-
-> **About the version numbers.** The repository has no version tags yet. The numbers in
-> Section 3 were assigned after the fact, by reading the commit history and grouping it into
-> releases under Semantic Versioning rules. They are a faithful reading of what changed and
-> when, and they are the numbers we propose to adopt from here on. Section 3.5 explains how to
-> start tagging without accidentally deploying an old build to production.
+Prepared from the repository, the database structure in `database/schema.sql`,
+and the deployment workflows in `.github/workflows/`. Version and iteration
+information updated 18 November 2026. The current version decision is in Section 3.
 
 ---
 
@@ -26,7 +21,7 @@ database structure in `database/schema.sql`, and the deployment workflows in `.g
 9. [Database design](#9-database-design)
 10. [Security design](#10-security-design)
 11. [Testing and verification](#11-testing-and-verification)
-12. [Known limitations and the road to 1.0.0](#12-known-limitations-and-the-road-to-100)
+12. [Known limitations](#12-known-limitations)
 13. [Where each part of this document fits in the paper](#13-where-each-part-of-this-document-fits-in-the-paper)
 
 ---
@@ -114,207 +109,46 @@ PDF without a third-party library).
 
 ## 3. Version history under Semantic Versioning
 
-> **Version correction (18 November 2026):** The project owner has designated
-> `0.12.0` as the current version for the nine development iterations. Features
-> added after the original `0.12.0` label remain in the system and are being
-> incorporated into the iteration descriptions. The dated release notes below
-> record the earlier numbering practice; their later version labels are not the
-> current version policy. Do not advance `VERSION` without the owner's request.
+### 3.1 Current version decision
 
-### 3.1 The rule
+The project owner has set **v0.12.0** as PAPEL's current version while the
+research paper uses nine development iterations. Work completed after the
+original v0.12.0 write-up is included in the current system without removing
+features or creating another numbered iteration. Do not change `VERSION` or
+create a later release tag unless the owner explicitly asks.
 
-Semantic Versioning writes a release as **MAJOR.MINOR.PATCH**:
+Semantic Versioning uses MAJOR.MINOR.PATCH: an incompatible change raises MAJOR,
+a compatible feature raises MINOR, and a fix without a feature raises PATCH.
+The version is frozen at 0.12.0 for now. The nine labels below are the
+research paper's retrospective iteration labels; they do not claim that every
+past commit carried that version at the time.
 
-- **MAJOR** goes up for a change that breaks what already works for users or for stored data.
-- **MINOR** goes up for a new feature that keeps everything else working.
-- **PATCH** goes up for a fix that adds no feature.
+### 3.2 Nine development iterations
 
-While a system is still being built and has not been accepted by its users, it stays at
-**0.y.z**: anything may still change. **1.0.0** is the first build released to its real users,
-which for PAPEL is the production deployment after User Acceptance Testing. Pre-releases are
-written with a suffix, for example `1.0.0-rc.1` (release candidate 1).
+| Iteration | Label | Main contribution |
+|---|---|---|
+| 1 | v0.1.0 Prototype | Core submission, review, cloud storage, document analysis, analytics, and archiving |
+| 2 | v0.5.0 Alpha | Modular foundation, broader roles, migrations, background work, and session hardening |
+| 3 | v0.6.0 Alpha-to-Beta transition | Version-controlled baseline for further development |
+| 4 | v0.7.0 Beta | Institutional role hierarchy, approval workflow, and bot check; v0.7.1 refined the interface |
+| 5 | v0.8.0 Beta | Shared viewer and interface components for staging readiness |
+| 6 | v0.9.0 Release Candidate | Staging and production pipelines and automated testing |
+| 7 | v0.10.0 Release Candidate (AI layer) | Corpus and the Cloudflare Worker proxy for Groq |
+| 8 | v0.11.0 Release Candidate (workflow) | Editable Review Checklist and review and storage fixes |
+| 9 | v0.12.0 Release Candidate (current) | Current upload editor, live preview, repository, staff management, and refinements |
 
-### 3.2 Summary
+The full descriptions, including the distinction between internal technical
+work and user-facing changes, are in
+[PAPEL_Development_Iterations.md](PAPEL_Development_Iterations.md).
 
-| Version | Date | Environment | Headline |
-|---|---|---|---|
-| 0.1.0 | 16 Aug 2026 | Local | Baseline: the full submission, review and repository system on a clean history |
-| 0.2.0 | 23–24 Aug 2026 | Local | Account consoles rebuilt; Librarian guest access; support requests; report exports; PUPPY assistant gets a face |
-| 0.3.0 | 30 Aug 2026 | Local | Upload Paper rework; dark mode; site-wide loading bar; automated test suite; reCAPTCHA on sign-in |
-| 0.4.0 | 7 Sep 2026 | Local | Manuscript requests to the Librarian; browse cards; keyboard navigation; actions inside notifications |
-| 0.5.0 | 18–20 Sep 2026 | Local | UI/UX revision: splash screen, page sections, banner slideshow, formatted chatbot replies |
-| 0.5.1 | 20 Sep 2026 | Local | Fixes: archive sign-in panel on phones, small UI fixes; ERD and use case diagrams added |
-| 0.6.0 | 1 Oct 2026 | Local | One file-serving endpoint for every manuscript; Workflow Handbook; chatbot hardening (prompt guard, rate limits) |
-| 0.6.1 | 12 Oct 2026 | Local | Banner photographs replaced |
-| 0.7.0 | 14 Oct 2026 | **Staging opens** | CI/CD to InfinityFree; one-time-code sign-in step removed; notification repair; host checks |
-| 0.7.1 | 15–16 Oct 2026 | Staging | Staging start-up fixes; chatbot fixes; mascot GIF fix; loading glitch fix |
-| 0.8.0 | 16 Oct 2026 | Staging | One shared PDF viewer and docked PDF panel site-wide; Corpus chatbot typing indicator |
-| 0.9.0 | 21–22 Oct 2026 | Staging | Two manuscript files per paper (IMRAD and Full); chosen written sections; Groq proxy Worker; upload diagnostics |
-| 0.9.1 | 22–23 Oct 2026 | Staging | Fixes: first-try sign-in, readable host refusals, Drive storage-folder check, adviser desk on an older database |
-| 0.10.0 | 23 Oct 2026 | Staging | Editable review checklist for the Subject Adviser |
-| 0.11.0 | 23 Oct 2026 | Staging | Sections of the author's own (Custom mode, presets for thesis and feasibility study) |
-| 0.11.1 | 27 Oct 2026 | Staging | Fix: `manuscript_requests` table added for databases built from `schema.sql` |
-| 0.12.0 | 27 Oct 2026 | Staging | "Other" paper and manuscript types; year-only dates; faithful abstract extraction; type-in dropdowns |
-| 0.13.0 | in progress | Local | Two-pane upload editor with tabs; live Public Repository preview of the paper |
-| 1.0.0-rc.1 | planned | Production (UAT) | First production build, for User Acceptance Testing |
-| 1.0.0 | planned | Production | Accepted release, after UAT and the final defence |
+### 3.3 Repository release markers
 
-### 3.3 Release notes
-
-#### 0.1.0 (16 August 2026): Baseline · Local
-
-The project was moved to a fresh Git history. The earlier repository carried an email password
-and students' consent and copyright forms, which cannot be removed from a history by a later
-commit, so the code was re-committed clean with secrets in an ignored `.env` file.
-
-What the system already did at this point:
-
-- Sign-in by role (student, faculty, admin, head academic, super admin, librarian, guest).
-- Student upload of a paper with its PDF, metadata and IMRaD sections, with AI metadata extraction.
-- The approval chain: Subject Adviser, then Research Coordinator, with return-with-feedback.
-- The Public Repository with search and filters, the paper page and the PDF viewer.
-- Review desks for each staff role, account management consoles, the analytics dashboard.
-- Notifications in the app and by email; Google Drive storage; archiving of papers.
-
-Also: a complete `.env` template (27 settings), the contributor notes in `CLAUDE.md`, and a Git guide.
-
-#### 0.2.0 (23 to 24 August 2026): Accounts and administration · Local
-
-- **Added** the Librarian's guest-access console (`librarian_manage_guests.php`), replacing the old admin guest page.
-- **Added** support requests: a user who cannot sign in asks the right staff member for a password reset or an account fix (`support_requests` table).
-- **Added** a password generator on every create-account form, a one-time password reveal, and a password audit tab (`password_changes` table).
-- **Added** exports to Excel, Word and PDF from the project's own writers.
-- **Added** `database/schema.sql`, so a new copy of the site can be built from one import.
-- **Added** faces for the PUPPY upload assistant that react to the conversation (waiting, thinking, answered, failed), one colour per AI engine.
-- **Removed** the forgotten-password and one-time-code pages, the separate HAP dashboards and stored plain-text passwords; the two HAP roles were routed to one desk.
-
-#### 0.3.0 (30 August 2026): Upload Paper and the test suite · Local
-
-- **Changed** the Upload Paper page and refined dark mode across the site.
-- **Added** the one loading indicator for the whole site (`loading_bar.php`).
-- **Added** the automated test suite (`tests/m1` to `m9`: authentication, dashboard, submission, review, archive, notifications, security, AI) with a results report.
-- **Added** the Field Guide (`docs/field_guide.html`), a generated description of every page.
-- **Added** a Google Drive keep-alive script so the stored token does not lapse.
-- **Added** reCAPTCHA in front of both sign-in forms (the main one and the archive's). It stays switched off until both keys exist, so a missing key cannot lock everyone out.
-
-#### 0.4.0 (7 September 2026): Manuscript requests · Local
-
-- **Added** manuscript requests: a student asks a Librarian to unlock one paper's full manuscript, which is granted for 1 to 24 hours (`manuscript_requests` table, `app/librarian/manuscript_requests.php`).
-- **Added** the shared browse card, keyboard navigation, and actions that can be taken straight from a notification.
-
-#### 0.5.0 (18 to 20 September 2026): UI/UX revision · Local
-
-- **Added** a splash screen, a favicon, page sections, and a re-styled set of management pages.
-- **Changed** the Public Repository banner into a shuffled photo slideshow (every five seconds, a new order each visit).
-- **Changed** chatbot replies to real paragraphs and lists.
-
-**0.5.1 (20 September):** the archive sign-in panel no longer scrolls sideways on phones; small
-UI fixes. The Entity Relationship Diagram and the Use Case Diagram were added to the
-documentation with the scripts that draw them (`docs/diagrams/`); documentation does not change
-the version of the software, so this stays a patch.
-
-#### 0.6.0 (1 October 2026): One way to serve a file · Local
-
-- **Added** `app/paper_file.php`, the single endpoint every manuscript and supporting document is served through, with its access checks in one place.
-- **Added** the PAPEL Workflow Handbook (HTML and PDF, `docs/handbook/`).
-- **Changed** the AI chatbot with a prompt-injection guard and per-user rate limits.
-
-**0.6.1 (12 October):** banner photographs replaced.
-
-#### 0.7.0 (14 October 2026): Staging opens
-
-- **Added** GitHub Actions workflows: every push to `main` deploys to **staging**; a version tag deploys to **production**. The build installs and trims the Composer dependencies (about 900 files instead of 26,000, under the free host's file limit) and refuses any file over 10 MB.
-- **Removed** the emailed one-time code from sign-in for good (`users.is_otp_exempt` dropped). Sign-in is ID and password.
-- **Fixed** notifications stored with no type (`run_notification_type_repair.php`).
-- **Added** host check utilities for the shared host.
-
-#### 0.7.1 (15 to 16 October 2026): Staging fixes
-
-Start-up and configuration fixes for the host, a mascot GIF upload fix, chatbot fixes, and a
-loading glitch fix.
-
-#### 0.8.0 (16 October 2026): One PDF viewer
-
-- **Changed** the upload page to use the same PDF panel as every paper page, instead of a look-alike copy. A student's own file is drawn from memory and never leaves the browser until they submit.
-- **Added** docking the PDF panel to either side of the page, between the navigation bar and the footer.
-- **Added** a typing indicator for the Corpus chatbot (the PUPPY assistant's successor).
-
-#### 0.9.0 (21 to 22 October 2026): Two manuscripts and chosen sections
-
-- **Added** IMRAD and Full Manuscript as two files of one paper (`paper_manuscripts` table). A paper handed in both ways is one paper with two files, never two papers.
-- **Changed** `supporting_documents.document_type` from an ENUM to a `VARCHAR` with a `document_name`, so a named optional document is no longer stored blank.
-- **Added** the choice of which written sections to submit (the Abstract only, or any combination).
-- **Added** the Groq proxy on Cloudflare Workers, since the host blocks outbound calls.
-- **Added** `upload_diagnostics.php`, a staff page showing what the server can and cannot do, including database gaps.
-
-#### 0.9.1 (22 to 23 October 2026): Fixes found on staging
-
-- **Fixed** sign-in failing on the first attempt after an idle period (the sign-in form's security token was being discarded).
-- **Fixed** refusals from the host reaching the student as an unexplained error.
-- **Fixed** uploads failing because the configured Drive folder belonged to another account: the Storage Folder page now checks a folder before saving it.
-- **Fixed** the Subject Adviser's desk ending in an error on a database that had not run the latest migration; added `2026-10-21_catch_up.sql` for phpMyAdmin.
-
-#### 0.10.0 (23 October 2026): Editable review checklist
-
-- **Added** ready-made checklists (IMRaD, Undergraduate Thesis, Capstone Project, Feasibility Study, Blank) chosen from a dropdown, and editing sections for one paper (`paper_checklist.items_json`).
-- **Changed** the checklist save to an upsert, so a second round of review keeps the new ticks.
-- **Changed** the Coordinator's view of the checklist to read-only.
-
-#### 0.11.0 (23 October 2026): Sections of the author's own
-
-- **Added** Custom mode: authors add up to 12 sections with their own names, typed or from a preset (Full Manuscript, Undergraduate Thesis, Feasibility Study). Stored inside `imrad_content`, so no migration was needed.
-
-#### 0.11.1 (27 October 2026): Database fix
-
-- **Fixed** students meeting an error page on staging when opening a paper: the `manuscript_requests` table had never been exported into `schema.sql`. Added to it, plus `2026-10-27_manuscript_requests.sql`.
-
-#### 0.12.0 (27 October 2026): Upload Paper updates
-
-- **Added** "Other" for the paper type and the manuscript type, named in the student's own words.
-- **Added** "No exact date: use the year only" for Date Completed.
-- **Changed** abstract extraction to copy the abstract word for word from the PDF, or leave the box alone.
-- **Added** type-to-search dropdowns for the paper type and the Academic Program.
-
-#### 0.13.0 (in progress, not yet committed)
-
-- **Added** the two-pane upload editor: tabs for Upload Paper, Writing View, Preview and the PDF on the main pane, and Contents and Corpus on a resizable, movable side pane.
-- **Added** a live Preview of the paper exactly as the Public Repository will show it once published (`app/student/paper_preview.php`).
-
-### 3.4 What has to happen before 1.0.0
-
-See Section 12. In short: staging's database caught up, the production server set up by hand
-(database, Drive connection, storage folder, `.env`), the remaining known gaps closed, and UAT
-passed on a `1.0.0-rc` build.
-
-### 3.5 Adopting the version numbers in Git
-
-> ⚠ **Pushing any tag that starts with `v` deploys that build to production.** The production
-> workflow runs on `tags: ['v*']`. Pushing `v0.1.0` today would replace production with the
-> 16 August code.
-
-To record the history safely, tag the past releases **without** the `v`, which the workflow
-ignores, for example `git tag -a 0.12.0 d10fc1e -m "Upload Paper updates"`. Use the `v` prefix
-only for a build that is meant to go to production, starting with `v1.0.0-rc.1`.
-
-| Version | Commit |
-|---|---|
-| 0.1.0 | `1561f9e` |
-| 0.2.0 | `9983202` |
-| 0.3.0 | `36c5966` |
-| 0.4.0 | `266d114` |
-| 0.5.0 | `7e4aa84` |
-| 0.5.1 | `b8d6b53` |
-| 0.6.0 | `b25e378` |
-| 0.6.1 | `da4ec44` |
-| 0.7.0 | `658bddd` |
-| 0.7.1 | `725b49a` |
-| 0.8.0 | `e50ff4a` |
-| 0.9.0 | `2e61da6` |
-| 0.9.1 | `f6417de` |
-| 0.10.0 | `9df9b90` |
-| 0.11.0 | `aab033d` |
-| 0.11.1 | `2293c6a` |
-| 0.12.0 | `d10fc1e` |
+The root `VERSION` file reads `0.12.0`. The production tag `v0.12.0`
+points to the commit that sets that value and retains all current features.
+The public GitHub Release also uses `v0.12.0`. Earlier 1.x tags and the
+v1.0.0 GitHub Release were retired on 18 November 2026 as part of this
+numbering correction. The original Git commits and their messages were
+preserved. For deployment rules, see [RELEASING.md](RELEASING.md).
 
 ---
 
@@ -545,7 +379,7 @@ flowchart LR
     D --> E[GitHub Actions deploys to Staging]
     E --> F{Works on Staging?}
     F -- no --> B
-    F -- yes, ready for users --> G[Tag v1.x.y]
+    F -- yes, owner authorizes release --> G[Tag the approved version]
     G --> H[GitHub Actions deploys to Production]
 ```
 
@@ -901,28 +735,15 @@ One row per paper (unique `paper_id`). `items_json` holds the list exactly as th
 
 ---
 
-## 12. Known limitations and the road to 1.0.0
-
-**Before `1.0.0-rc.1` (UAT on production):**
-
-- [ ] Run the three SQL files on staging (`2026-10-21_catch_up.sql`, `2026-10-23_checklist_items.sql`, `2026-10-27_manuscript_requests.sql`) until the diagnostics page reads "No gaps".
-- [ ] Commit and deploy 0.13.0 (two-pane editor and preview) and test it on staging.
-- [ ] Replace the placeholder `CSRF_KEY` in `.env` (this signs everyone out once).
-- [ ] Set up production by hand: import `schema.sql`, create the first Director with `scripts/setup.php`, write `.env` with `APP_ENV=production`, connect Google Drive, set a storage folder that account can edit, set the Worker's allowed origins.
-- [ ] Recover or reset the Director's password on each copy.
-
-**Before `1.0.0`:**
-
-- [ ] UAT with each role: student, Adviser, Coordinator, HAP, Director, Librarian, guest.
-- [ ] Fix what UAT finds (each fix a `1.0.0-rc.N`).
-- [ ] Remove the leftover inline `style="..."` attributes (blocked by the CSP and so doing nothing).
-- [ ] Retire or update the stale files in `docs/`.
-
-**Accepted limitations:**
+## 12. Known limitations
 
 - `time_to_approval` exists only for papers approved after it was added.
-- Drafts hold no PDF: a student re-attaches the files when continuing a draft (deliberate, so nothing is stored for work not handed in).
-- Free hosting limits: no shell, no outbound API calls, 10 MB per file, about 30,000 files per account.
+- Drafts hold no PDF: a student re-attaches the files when continuing a draft.
+- Free hosting limits include no server shell, restricted outbound API calls,
+  a 10 MB file limit, and a file-count limit.
+
+The owner has not authorized a version after v0.12.0. Testing and any later
+production changes continue under the release rule in [RELEASING.md](RELEASING.md).
 
 ---
 
