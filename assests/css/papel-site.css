@@ -1354,7 +1354,8 @@ select.lf-input {
     font-size: .875rem;
     margin-bottom: 1rem;
 }
-.panel-alert.error { background: #fdeaea; color: var(--dark-maroon); }
+/* This alert stays pale pink in Old Night, where --dark-maroon becomes white. */
+.panel-alert.error { background: #fdeaea; color: #630000; }
 .panel-alert.success { background: #e7f6ed; color: #1b5e35; }
 .login-field-error { color: var(--maroon); margin-top: .4rem; }
 .lf-input[aria-invalid="true"] { border-color: var(--maroon); }
