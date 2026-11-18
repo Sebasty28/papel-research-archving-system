@@ -97,7 +97,7 @@ $byPosition = $adminService->getStaffByPosition($OFFERED);
 function admin_table(array $rows, string $position): void {
     ?>
     <div class="mgmt-panel">
-        <div class="mgmt-scroll">
+        <div class="mgmt-scroll" tabindex="0" role="region" aria-label="<?= e($position) ?> accounts">
             <table class="mgmt-table">
                 <thead>
                     <tr>

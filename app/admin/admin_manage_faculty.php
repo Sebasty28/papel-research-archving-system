@@ -133,7 +133,7 @@ try {
 function staff_table(array $rows, string $which): void {
     ?>
     <div class="mgmt-panel">
-        <div class="mgmt-scroll">
+        <div class="mgmt-scroll" tabindex="0" role="region" aria-label="<?= $which === 'archived' ? 'Archived staff' : 'Active staff' ?>">
             <table class="mgmt-table">
                 <thead>
                     <tr>

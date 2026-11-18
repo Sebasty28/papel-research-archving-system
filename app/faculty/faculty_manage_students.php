@@ -778,7 +778,7 @@ $PAGE_SKELETON = 'table';
                 <?php mgmt_filter_bar($PROGRAMS, $SECTION_FILTERS, $YEAR_FILTERS); ?>
 
                 <div class="mgmt-panel">
-                    <div class="mgmt-scroll">
+                    <div class="mgmt-scroll" tabindex="0" role="region" aria-label="Active students">
                         <table class="mgmt-table" id="activeStudentsTable">
                             <thead>
                                 <tr>
@@ -821,7 +821,7 @@ $PAGE_SKELETON = 'table';
                 <?php mgmt_filter_bar($PROGRAMS, $SECTION_FILTERS, $YEAR_FILTERS); ?>
 
                 <div class="mgmt-panel">
-                    <div class="mgmt-scroll">
+                    <div class="mgmt-scroll" tabindex="0" role="region" aria-label="Archived and expired students">
                         <table class="mgmt-table" id="archivedStudentsTable">
                             <thead>
                                 <tr>
@@ -993,7 +993,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 row.hidden = !show;
                 if (show) { shown++; }
             });
-            if (noMatch) { noMatch.hidden = (shown > 0); }
+            if (noMatch) { noMatch.hidden = (shown > 0 || rows.length === 0); }
         }
 
         /* Reorder the rows themselves rather than hiding and redrawing: the

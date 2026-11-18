@@ -423,10 +423,22 @@ html[data-mode="dark"] { --search-clear: #CFC3AE; }
 }
 
 /* ---- Roll ---- */
-.mgmt-scroll { max-width: 100%; overflow-x: auto; }
+/* Keep the account roll the same height across tabs and account counts. Its
+   header and rows scroll inside the panel, so a long roll does not stretch
+   the management page. Shorter viewports keep room for the page controls. */
+.mgmt-scroll {
+    width: 100%;
+    height: clamp(16rem, calc(100vh - 12rem), 31.25rem);
+    height: clamp(16rem, calc(100dvh - 12rem), 31.25rem);
+    overflow: auto;
+    scrollbar-gutter: stable;
+    -webkit-overflow-scrolling: touch;
+}
+.mgmt-scroll:focus-visible { outline: 2px solid var(--maroon); outline-offset: -2px; }
 .mgmt-table { width: 100%; border-collapse: collapse; font-size: .8125rem; color: var(--ink); }
 .mgmt-table tbody tr.is-search-off { display: none; }
 .mgmt-table th {
+    position: sticky; top: 0; z-index: 1;
     text-align: left; white-space: nowrap;
     padding: .6rem .625rem;
     background: var(--cream);

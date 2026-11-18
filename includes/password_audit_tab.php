@@ -99,7 +99,7 @@ function password_audit_pane(array $rows, string $who = 'accounts'): void {
     ?>
     <div id="passwordPane" class="js-pane" hidden>
         <div class="mgmt-panel">
-            <div class="mgmt-scroll">
+            <div class="mgmt-scroll" tabindex="0" role="region" aria-label="Password changes">
                 <table class="mgmt-table">
                     <thead>
                         <tr>
