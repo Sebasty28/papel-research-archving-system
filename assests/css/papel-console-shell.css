@@ -590,7 +590,9 @@ html[data-view="rows"] .paper-list .paper-card-toggle { display: none; }
 .card-feedback {
     margin-top: .875rem; padding: .625rem .875rem;
     background: #fdeaea; border-radius: var(--r-card, 8px);
-    font-size: .75rem; color: var(--dark-maroon); line-height: 1.6;
+    /* This surface stays pale pink in Old Night; --dark-maroon becomes a
+       light accent there and leaves the feedback almost white on pink. */
+    font-size: .75rem; color: #630000; line-height: 1.6;
 }
 .card-actions { margin-top: .875rem; display: flex; gap: .5rem; flex-wrap: wrap; }
 /* .btn-sm-maroon and .btn-sm-outline now live in site_head.php. */
