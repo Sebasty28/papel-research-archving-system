@@ -17,29 +17,47 @@ if (defined('PAPEL_PAPER_PREVIEW')) return;
     var inner = document.querySelector('.crumb-bar .crumb-inner');
     if (!inner) return;
     var root = new URL(<?= json_encode(BASE_URL . '/archive/') ?>, location.href).pathname;
+    var searchKey = root + '?search';
+    /* The links use index.php, while the server presents /archive/ after its
+       clean-URL redirect. Both spellings must be the same visit. */
+    function pagePath(path) {
+        if (path === root || path === root.slice(0, -1) || path === root + 'index' || path === root + 'index.php') return root;
+        return path.endsWith('.php') ? path.slice(0, -4) : path;
+    }
+    function entryKey(entry) {
+        var path = pagePath(entry.href.split('?')[0]);
+        return path === root ? (entry.label === 'Search Results' ? searchKey : root) : path;
+    }
     var key = <?= json_encode('papel.visitedBreadcrumbs.' . (int)(current_user()['user_id'] ?? 0)) ?>;
     var current = inner.querySelector('.crumb-current');
     var label = current ? current.textContent.trim() : document.title.split('·')[0].trim();
     var href = location.pathname + location.search;
-    var identity = location.pathname === root && location.search ? root + '?search' : location.pathname;
-    var trail = [];
+    var onRepository = pagePath(location.pathname) === root;
+    var isSearch = onRepository && !!current;
+    var identity = isSearch ? searchKey : pagePath(location.pathname);
+    var trail = [{label: 'Public Repository', href: root, key: root}];
     try {
         var saved = JSON.parse(sessionStorage.getItem(key) || '[]');
         if (Array.isArray(saved)) {
-            trail = saved.filter(function (entry) {
+            saved.filter(function (entry) {
                 return entry && typeof entry.label === 'string' && typeof entry.href === 'string'
                     && entry.href.charAt(0) === '/' && entry.href.indexOf('//') !== 0;
+            }).forEach(function (entry) {
+                var id = entryKey(entry);
+                if (id === root) { trail = [{label: 'Public Repository', href: root, key: root}]; return; }
+                var earlier = trail.findIndex(function (item) { return item.key === id; });
+                if (earlier >= 0) trail = trail.slice(0, earlier);
+                trail.push({label: entry.label, href: entry.href, key: id});
             });
-            if (trail.length > 20) trail = [trail[0]].concat(trail.slice(-19));
         }
     } catch (e) {}
-    if (!trail.length || trail[0].href !== root) trail = [{label: 'Public Repository', href: root}];
-    if (href === root) {
-        trail = [{label: 'Public Repository', href: root}];
+    if (onRepository) {
+        /* Browse, login-modal and anti-bot query parameters do not create a
+           second repository crumb. Only real search results are a child. */
+        trail = [{label: 'Public Repository', href: root, key: root}];
+        if (isSearch) trail.push({label: label || 'Search Results', href: href, key: searchKey});
     } else {
-        var position = trail.findIndex(function (entry) {
-            return (entry.key || entry.href.split('?')[0]) === identity;
-        });
+        var position = trail.findIndex(function (entry) { return entry.key === identity; });
         if (position >= 0) {
             trail = trail.slice(0, position + 1);
             trail[position] = {label: label || 'Page', href: href, key: identity};

@@ -1,5 +1,5 @@
 {
- "built": "2026-11-18 19:04",
+ "built": "2026-11-18 19:40",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -404,7 +404,7 @@
    "lines": 325
   },
   "includes/visited_breadcrumbs.php": {
-   "lines": 77
+   "lines": 95
   },
   "includes/xlsx_writer.php": {
    "lines": 334
