@@ -154,6 +154,13 @@ foreach ($approvalByType as &$_r) {
 }
 unset($_r);
 
+/* Compact chart series keep long program lists readable without losing totals. */
+$programChart = array_slice($stats, 0, 7);
+$otherPrograms = array_sum(array_map('intval', array_column(array_slice($stats, 7), 'total_papers')));
+if ($otherPrograms > 0) {
+    $programChart[] = ['program' => 'Other programs', 'total_papers' => $otherPrograms];
+}
+
 /* ---- Every submission, one row each ---------------------------------------
    The part that matters once there are years of these: sortable, searchable,
    and paged, so the page stays the same size whether it is describing ten
@@ -543,6 +550,17 @@ $chartData = [
     'types'    => array_map(function ($r) {
         return ['label' => paper_type_label($r['paper_type']), 'value' => (int)$r['count']];
     }, $paperTypeStats),
+    'status'   => [
+        ['label' => 'Approved', 'value' => $approved],
+        ['label' => 'In review', 'value' => $pending],
+        ['label' => 'Returned', 'value' => $returned],
+        ['label' => 'Other', 'value' => max(0, $totalSubs - $approved - $pending - $returned)],
+    ],
+    'programs' => array_map(function ($r) {
+        return ['label' => $r['program'] === 'Other programs' ? 'Other programs' :
+                (function_exists('program_code') ? program_code($r['program']) : $r['program']),
+                'value' => (int)$r['total_papers']];
+    }, $programChart),
 ];
 ?><!doctype html>
 <html lang="en">
@@ -566,6 +584,15 @@ body { background: var(--white); display: flex; flex-direction: column; min-heig
     font-family: var(--font-head); font-size: 1.375rem; font-weight: 600;
     color: var(--maroon); margin: 0 0 .2rem;
 }
+.an-heading-line { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem; margin-bottom: .2rem; }
+.an-heading-line h1 { margin: 0; }
+.an-ai-badge {
+    display: inline-flex; align-items: center; gap: .25rem; min-height: 1.5rem;
+    padding: .15rem .5rem; border: 1px solid var(--border); border-radius: 5px;
+    background: var(--cream); color: var(--maroon);
+    font: 600 .6875rem/1.2 var(--font-body); white-space: nowrap;
+}
+.an-ai-badge .material-symbols-outlined { font-size: 14px; }
 .an-head p { font-size: .8125rem; color: var(--grey); margin: 0; max-width: 44rem; line-height: 1.6; }
 /* ---- Export dropdown ----
    One button with four ways out of the page. The menu is a plain absolutely
@@ -764,28 +791,30 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
 
 /* ---- Headline figures ---- */
 .an-tiles {
-    display: grid; gap: .875rem; margin-bottom: 1.125rem;
-    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    display: grid; gap: .75rem; margin-bottom: 1rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
 }
-.an-tile { background: var(--white); border: 1px solid var(--border); border-radius: var(--r-card, 8px); padding: .875rem 1rem; }
+.an-tile { min-width: 0; background: var(--white); border: 1px solid var(--border); border-radius: 5px; padding: 1rem; overflow: hidden; }
 .an-tile-label {
     font-size: .6875rem; text-transform: uppercase; letter-spacing: .04em;
     color: var(--grey); display: block; margin-bottom: .25rem;
 }
 .an-tile-value {
     font-family: var(--font-head); font-size: 1.625rem; font-weight: 600;
-    color: var(--maroon); line-height: 1.1; font-variant-numeric: tabular-nums;
+    color: var(--ink); line-height: 1.15; font-variant-numeric: tabular-nums;
+    display: block; overflow-wrap: anywhere;
 }
-.an-tile-note { display: block; font-size: .6875rem; color: var(--grey); margin-top: .2rem; }
+.an-tile-note { display: block; font-size: .6875rem; color: var(--grey); margin-top: .35rem; overflow-wrap: anywhere; }
 .an-tile-note.is-up { color: var(--ok-text); }
 .an-tile-note.is-down { color: var(--bad-text); }
 
 /* ---- Cards ---- */
-.an-card { background: var(--white); border: 1px solid var(--border); border-radius: var(--r-card, 8px); margin-bottom: 1.125rem; overflow: hidden; }
+.an-card { min-width: 0; background: var(--white); border: 1px solid var(--border); border-radius: 5px; margin-bottom: 1rem; overflow: hidden; }
 .an-card-head {
-    display: flex; align-items: center; gap: .5rem;
+    display: flex; align-items: center; gap: .5rem; min-width: 0; flex-wrap: wrap;
     padding: .8rem 1.125rem; border-bottom: 1px solid var(--border);
-    font-family: var(--font-head); font-size: .875rem; font-weight: 600; color: var(--maroon);
+    font-family: var(--font-head); font-size: .875rem; font-weight: 600; color: var(--ink);
+    overflow-wrap: anywhere;
 }
 .an-card-head .material-symbols-outlined { font-size: 18px; }
 .an-card-head .an-hint { margin-left: auto; font-family: var(--font-body); font-size: .6875rem; color: var(--grey); font-weight: 400; }
@@ -802,7 +831,7 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
 .an-card[data-collapsed="1"] > .an-card-head { border-bottom: 0; }
 .an-card[data-collapsed="1"] > .an-card-head .an-card-toggle .material-symbols-outlined { transform: rotate(-90deg); }
 .an-card[data-collapsed="1"] > .an-card-content { display: none; }
-.an-card-body { padding: 1.125rem; }
+.an-card-body { min-width: 0; padding: 1.125rem; }
 
 .an-ai-body { display: flex; gap: .75rem; align-items: flex-start; }
 .an-ai-body .material-symbols-outlined { color: var(--maroon); font-size: 20px; flex: 0 0 auto; }
@@ -810,12 +839,14 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
 .an-ai-empty { font-size: .8125rem; color: var(--grey); }
 
 /* ---- Charts ---- */
-.an-grid { display: grid; gap: 1.125rem; align-items: start; grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); }
-.an-chart { position: relative; height: 15rem; }
-.an-chart-card { border-top: 3px solid var(--maroon); box-shadow: 0 3px 12px rgba(51, 0, 0, .05); }
+.an-grid { display: grid; gap: 1rem; align-items: start; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.an-chart { position: relative; min-width: 0; height: 16rem; }
+.an-chart canvas { max-width: 100%; }
+.an-chart-card { box-shadow: 0 1px 3px rgba(51, 0, 0, .04); }
+.an-chart-card .an-card-head { min-height: 3.25rem; background: var(--cream); }
 .an-figure-number { display: inline-flex; align-items: center; justify-content: center;
-    min-width: 1.7rem; height: 1.7rem; padding: 0 .35rem; border-radius: .4rem;
-    background: var(--cream); color: var(--maroon); font: 700 .75rem/1 Arial, sans-serif; }
+    flex: 0 0 auto; min-width: 1.7rem; height: 1.7rem; padding: 0 .35rem; border-radius: 5px;
+    background: var(--white); border: 1px solid var(--border); color: var(--maroon); font: 700 .75rem/1 Arial, sans-serif; }
 .an-figure-caption { margin: .65rem 0 0; padding-top: .65rem; border-top: 1px solid var(--border);
     color: var(--grey); font-size: .75rem; line-height: 1.45; }
 .an-expandable { cursor: zoom-in; }
@@ -840,15 +871,16 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
     background: linear-gradient(to right, transparent, var(--cream) 60%);
 }
 .an-table-glide.can-left::before, .an-table-glide.can-right::after { opacity: 1; }
-.an-scroll { overflow-x: auto; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
+.an-scroll { max-height: 22rem; overflow: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.an-submissions .an-scroll { max-height: 28rem; }
 .an-table { width: 100%; border-collapse: collapse; font-size: .8125rem; color: var(--ink); }
 .an-table th {
-    text-align: left; white-space: nowrap; padding: .6rem .75rem;
+    position: sticky; top: 0; z-index: 2; text-align: left; white-space: nowrap; padding: .6rem .75rem;
     background: var(--cream); font-size: .6875rem; font-weight: 600;
     text-transform: uppercase; letter-spacing: .04em; color: var(--grey);
     border-bottom: 1px solid var(--border);
 }
-.an-table td { padding: .65rem .75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+.an-table td { padding: .65rem .75rem; border-bottom: 1px solid var(--border); vertical-align: top; overflow-wrap: anywhere; }
 .an-table tbody tr:last-child td { border-bottom: none; }
 .an-table tbody tr:hover { background: var(--cream); }
 .an-submissions.is-loading .an-table tbody { opacity: .55; }
@@ -924,6 +956,21 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
 .an-modal-body { padding: 1.25rem; overflow: auto; }
 .an-modal-body .an-chart { height: min(60vh, 26rem); }
 
+/* Analytics controls share a restrained five-pixel radius. */
+.an-filters, .an-filter select, .an-filter input, .an-chip,
+.an-card-toggle, .an-figure-number, .an-bar, .an-bar span,
+.an-status, .an-page, .an-col-help-popover, .an-modal-panel,
+.an-modal-close, .an-export-menu, .an-export-preview-panel,
+.an-export-preview-foot button { border-radius: 5px; }
+.an-card-head .an-hint { min-width: 0; overflow-wrap: anywhere; }
+.an-table--submissions { min-width: 58rem; }
+.an-table--submissions td:first-child { min-width: 14rem; max-width: 22rem; }
+.an-table--submissions td:nth-child(2) { min-width: 9rem; max-width: 14rem; }
+.an-table--submissions td:nth-child(4) { min-width: 9rem; max-width: 14rem; }
+@media (max-width: 900px) {
+    .an-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
 @media (max-width: 700px) {
     .an-export-preview { padding: 0; }
     .an-export-preview-panel { width: 100%; height: 100dvh; border-radius: 0; }
@@ -937,6 +984,7 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
     .an-filter { flex: 1 1 100%; }
     .an-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .625rem; }
     .an-tile { min-width: 0; padding: .75rem; }
+    .an-tile-value { font-size: 1.4rem; }
     .an-grid { grid-template-columns: minmax(0, 1fr); gap: .75rem; }
     .an-card { min-width: 0; margin-bottom: .75rem; }
     .an-card-head { flex-wrap: wrap; padding: .75rem; }
@@ -971,7 +1019,10 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
 
     <div class="an-head">
         <div>
-            <h1>Analytics</h1>
+            <div class="an-heading-line">
+                <h1>Analytics</h1>
+                <span class="an-ai-badge"><span class="material-symbols-outlined" aria-hidden="true">auto_awesome</span> AI-powered insights</span>
+            </div>
             <p>
                 Every paper handed in for review.
                 <?php if ($openDrafts): ?>
@@ -1132,11 +1183,11 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
         </div>
     </div>
 
-    <!-- ---- What the numbers say ---- -->
+    <!-- ---- AI interpretation of the filtered statistics ---- -->
     <div class="an-card" data-an-card="insight">
         <div class="an-card-head">
-            <span class="material-symbols-outlined">auto_awesome</span> What the numbers say
-            <span class="an-hint">Written by AI from the figures shown</span>
+            <span class="material-symbols-outlined">auto_awesome</span> AI insight
+            <span class="an-hint">Generated from the filtered program statistics</span>
         </div>
         <div class="an-card-body">
             <?php if (trim((string)$aiInsight) !== ''): ?>
@@ -1208,6 +1259,34 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
                     <div class="an-empty"><span class="material-symbols-outlined">donut_small</span>Nothing to plot.</div>
                 <?php endif; ?>
                 <p class="an-figure-caption">Figure 4. Share of submissions by paper type</p>
+            </div>
+        </div>
+
+        <div class="an-card an-chart-card" data-an-card="status">
+            <div class="an-card-head"><span class="an-figure-number" aria-label="Figure 5">05</span> Review status</div>
+            <div class="an-card-body">
+                <?php if ($totalSubs): ?>
+                    <div class="an-chart an-expandable" data-chart="status" title="Click to enlarge">
+                        <canvas id="statusChart"></canvas>
+                    </div>
+                <?php else: ?>
+                    <div class="an-empty"><span class="material-symbols-outlined">donut_small</span>Nothing to plot.</div>
+                <?php endif; ?>
+                <p class="an-figure-caption">Figure 5. Share of submissions by review status</p>
+            </div>
+        </div>
+
+        <div class="an-card an-chart-card" data-an-card="programs">
+            <div class="an-card-head"><span class="an-figure-number" aria-label="Figure 6">06</span> Submissions by program</div>
+            <div class="an-card-body">
+                <?php if ($programChart): ?>
+                    <div class="an-chart an-expandable" data-chart="programs" title="Click to enlarge">
+                        <canvas id="programChart"></canvas>
+                    </div>
+                <?php else: ?>
+                    <div class="an-empty"><span class="material-symbols-outlined">bar_chart</span>Nothing to compare.</div>
+                <?php endif; ?>
+                <p class="an-figure-caption">Figure 6. Submitted papers by program; remaining programs grouped</p>
             </div>
         </div>
     </div>
@@ -1333,9 +1412,10 @@ document.addEventListener('DOMContentLoaded', function () {
        in-place filter update replaces the result cards. */
     var cardStates = Object.create(null);
     var cardLabels = {
-        insight: 'What the numbers say', timeline: 'Submissions over time',
+        insight: 'AI insight', timeline: 'Submissions over time',
         monthly: 'This month against last', approval: 'Approval rate by paper type',
-        types: 'Paper types', 'by-type': 'By paper type',
+        types: 'Paper types', status: 'Review status', programs: 'Submissions by program',
+        'by-type': 'By paper type',
         'by-program': 'By program', submissions: 'Every submission'
     };
     function bindCardToggles() {
@@ -1736,18 +1816,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                 ctx.font = '700 20px Arial, sans-serif';
                 ctx.fillText(String(sum), (area.left + area.right) / 2, (area.top + area.bottom) / 2);
-            } else if (data.length <= 12) {
-                var horizontal = chart.options.indexAxis === 'y';
-                chart.getDatasetMeta(0).data.forEach(function (item, index) {
-                    var value = Number(data[index] || 0);
-                    if (horizontal) {
-                        ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-                        ctx.fillText(value + '%', Math.min(item.x + 6, chart.chartArea.right - 35), item.y);
-                    } else {
-                        ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-                        ctx.fillText(String(value), item.x, Math.max(item.y - 5, chart.chartArea.top + 12));
-                    }
-                });
             }
             ctx.restore();
         }
@@ -1789,7 +1857,7 @@ document.addEventListener('DOMContentLoaded', function () {
         };
         var noLegend = { legend: { display: false } };
         var tip = { backgroundColor: ink, titleColor: '#fff', bodyColor: '#fff',
-                    padding: 10, cornerRadius: 6, displayColors: false };
+                    padding: 10, cornerRadius: 5, displayColors: false };
 
         return {
             timeline: function () {
@@ -1805,7 +1873,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 return { type: 'bar',
                     data: { labels: labels('monthly'), datasets: [{
                         data: values('monthly'), backgroundColor: [soft, maroon],
-                        borderRadius: 6, maxBarThickness: 64 }] },
+                        borderRadius: 5, maxBarThickness: 64 }] },
                     options: { responsive: true, maintainAspectRatio: false,
                                plugins: Object.assign({ tooltip: tip }, noLegend), scales: axes } };
             },
@@ -1813,32 +1881,63 @@ document.addEventListener('DOMContentLoaded', function () {
                 return { type: 'bar',
                     data: { labels: labels('approval'), datasets: [{
                         data: values('approval'), backgroundColor: maroon,
-                        borderRadius: 6, maxBarThickness: 40 }] },
+                        borderRadius: 5, maxBarThickness: 40 }] },
                     options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
                         plugins: Object.assign({ tooltip: Object.assign({}, tip, {
                             callbacks: { label: function (c) { return c.parsed.x + '% approved'; } } }) }, noLegend),
                         scales: {
                             x: { beginAtZero: true, max: 100, grid: { color: border }, border: { display: false },
                                  ticks: { color: grey, callback: function (v) { return v + '%'; } } },
-                            y: { grid: { display: false }, ticks: { color: grey } } } } };
+                            y: { grid: { display: false }, ticks: { color: grey,
+                                callback: function (value) { var label = this.getLabelForValue(value); return label.length > 22 ? label.slice(0, 20) + '…' : label; } } } } } };
             },
             types: function () {
                 return { type: 'doughnut',
-                    data: { labels: labels('types'), datasets: [{
+                    data: { labels: labels('types').map(function (label) {
+                        return label.length > 24 ? label.slice(0, 22) + '…' : label;
+                    }), datasets: [{
                         data: values('types'), backgroundColor: series,
                         borderColor: color('--white', '#fff'), borderWidth: 2 }] },
                     options: { responsive: true, maintainAspectRatio: false, cutout: '58%',
-                        plugins: { legend: { position: 'right', labels: { boxWidth: 10, boxHeight: 10,
+                        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10,
                                    usePointStyle: true, pointStyle: 'circle', color: ink, padding: 12 } },
-                                   tooltip: tip } } };
+                                   tooltip: Object.assign({}, tip, { callbacks: {
+                                       title: function (items) { return data.types[items[0].dataIndex].label; }
+                                   } }) } } };
+            },
+            status: function () {
+                var shown = data.status.filter(function (entry) { return entry.value > 0; });
+                return { type: 'doughnut',
+                    data: { labels: shown.map(function (entry) { return entry.label; }),
+                        datasets: [{ data: shown.map(function (entry) { return entry.value; }),
+                            backgroundColor: shown.map(function (entry) {
+                                return ({ Approved: maroon, 'In review': soft, Returned: '#d3a3a3', Other: dark })[entry.label];
+                            }),
+                            borderColor: color('--white', '#fff'), borderWidth: 2 }] },
+                    options: { responsive: true, maintainAspectRatio: false, cutout: '62%',
+                        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10,
+                            usePointStyle: true, pointStyle: 'circle', color: ink, padding: 12 } }, tooltip: tip } } };
+            },
+            programs: function () {
+                return { type: 'bar',
+                    data: { labels: labels('programs'), datasets: [{ data: values('programs'),
+                        backgroundColor: maroon, borderRadius: 5, maxBarThickness: 20 }] },
+                    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                        plugins: Object.assign({ tooltip: tip }, noLegend),
+                        scales: { x: { beginAtZero: true, grid: { color: border }, border: { display: false },
+                            ticks: { color: grey, precision: 0 } },
+                            y: { grid: { display: false }, ticks: { color: grey,
+                                callback: function (value) { var label = this.getLabelForValue(value); return label.length > 18 ? label.slice(0, 16) + '…' : label; } } } } } };
             }
         };
     }
 
     var titles = { timeline: 'Figure 1. Submissions over time', monthly: 'Figure 2. This month against last',
-                   approval: 'Figure 3. Approval rate by paper type', types: 'Figure 4. Paper types' };
+                   approval: 'Figure 3. Approval rate by paper type', types: 'Figure 4. Paper types',
+                   status: 'Figure 5. Review status', programs: 'Figure 6. Submissions by program' };
     var canvases = { timeline: 'timelineChart', monthly: 'monthlyChart',
-                     approval: 'approvalRateChart', types: 'paperTypeChart' };
+                     approval: 'approvalRateChart', types: 'paperTypeChart',
+                     status: 'statusChart', programs: 'programChart' };
 
     var configs = build();
     var drawn = {};
@@ -1863,7 +1962,9 @@ document.addEventListener('DOMContentLoaded', function () {
         var exportConfigs = build(light);
         var captions = {
             timeline: 'Figure 1. Submissions over time', monthly: 'Figure 2. Submissions this month and last month',
-            approval: 'Figure 3. Percentage approved by paper type', types: 'Figure 4. Share of submissions by paper type'
+            approval: 'Figure 3. Percentage approved by paper type', types: 'Figure 4. Share of submissions by paper type',
+            status: 'Figure 5. Share of submissions by review status',
+            programs: 'Figure 6. Submitted papers by program; remaining programs grouped'
         };
         return Object.keys(canvases).map(function (key) {
             if (!document.getElementById(canvases[key])) return null;
