@@ -26,6 +26,15 @@ a public repository makes the approved work readable.
 **PHP 8.0.30 · MariaDB · XAMPP · vanilla JS · Chart.js.** No framework, no build
 step. Files are served straight from `C:/xampp/htdocs/capstone`.
 
+### Version freeze
+
+The project owner has set the current system version to **0.12.0** while the
+nine development iteration descriptions are reconciled with the current site.
+Do not raise or otherwise change `VERSION`, create a later release tag, or
+describe the current system as a 1.x release unless the owner explicitly asks.
+Keep the existing features and code; this is a version and documentation
+correction, not a feature rollback.
+
 ---
 
 ## The approval chain

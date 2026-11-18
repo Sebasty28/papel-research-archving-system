@@ -97,12 +97,12 @@ function app_env_badge(): string {
  * deployed by FTP with no git on the far side (.github/workflows/deploy-staging.yml
  * excludes .git), so nothing on the server can work it out for itself.
  *
- * Semantic Versioning, MAJOR.MINOR.PATCH, as docs/PAPEL_System_Overview.md
- * section 3 sets out: 0.y.z while the system is still being built, 1.0.0 at the
- * first release accepted by its users. Raise it in that file when you cut a
- * release, and tag the commit to match.
+ * Semantic Versioning, MAJOR.MINOR.PATCH. The project owner has set 0.12.0 as
+ * the current version while the nine development iterations are reconciled.
+ * Do not raise it without an explicit decision from the owner. A release tag
+ * must match the VERSION file on the commit it identifies.
  *
- * The file may carry SemVer build metadata after a '+' (0.13.0+a1b2c3d). The
+ * The file may carry SemVer build metadata after a '+' (0.12.0+a1b2c3d). The
  * staging deploy writes the commit there on every push, because staging gets
  * every push and not only the tagged releases, so the number alone cannot say
  * which build is actually up there.

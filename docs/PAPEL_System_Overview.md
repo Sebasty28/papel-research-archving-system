@@ -114,6 +114,13 @@ PDF without a third-party library).
 
 ## 3. Version history under Semantic Versioning
 
+> **Version correction (18 November 2026):** The project owner has designated
+> `0.12.0` as the current version for the nine development iterations. Features
+> added after the original `0.12.0` label remain in the system and are being
+> incorporated into the iteration descriptions. The dated release notes below
+> record the earlier numbering practice; their later version labels are not the
+> current version policy. Do not advance `VERSION` without the owner's request.
+
 ### 3.1 The rule
 
 Semantic Versioning writes a release as **MAJOR.MINOR.PATCH**:

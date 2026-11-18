@@ -16,6 +16,7 @@ is not maintained). A record is not stale; a record that claims to be current is
 |---|---|
 | [WORKFLOW_DIAGRAM.md](WORKFLOW_DIAGRAM.md) | The approval chain: every status, who sets it, how a paper goes backwards, and the withdraw window. Cited to the lines that write each status. |
 | [PAPEL_System_Overview.md](PAPEL_System_Overview.md) | The long reference: what the system is, the version history, the database design. Written for Chapters 2 and 3 of the capstone paper, so it explains things the code takes for granted. |
+| [PAPEL_Development_Iterations.md](PAPEL_Development_Iterations.md) | The owner's nine development-iteration descriptions, updated to account for the current system while holding the version at v0.12.0. |
 | [RELEASING.md](RELEASING.md) | How the version number in the footer is set and what to click to move a build to staging or production. GitHub Desktop, no commands. |
 | [DEPLOYING_PRODUCTION.md](DEPLOYING_PRODUCTION.md) | Setting up a copy of the site from nothing: hosting, secrets, database, Drive connection, storage folder. Production was built from it on 12 November 2026, so it is now also the record of that. |
 | [GIT_GUIDE.md](GIT_GUIDE.md) | Git and GitHub for someone who has not used version control before. Explains what the commands do, not only what to type. |

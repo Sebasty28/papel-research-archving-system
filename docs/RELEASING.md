@@ -1,5 +1,12 @@
 # Releasing PAPEL, with GitHub Desktop
 
+> **Current version decision (18 November 2026):** The project owner has fixed
+> PAPEL's current version at `0.12.0` while the nine iteration descriptions are
+> updated. Keep all current features. Do not bump `VERSION` or create a later
+> release tag unless the owner explicitly requests it. The examples and earlier
+> 1.x release account below describe the previous numbering practice and are
+> superseded by this decision.
+
 How the version number in the footer is set, and what to click to move a build to
 staging or to production. No commands: everything here is GitHub Desktop, except
 editing one file, which you do in your editor.
