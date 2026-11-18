@@ -1579,14 +1579,27 @@ was measured arriving on the public repository, which never shows it. It is
 `data-src` now, promoted the first time the pill is painted. The `width` and
 `height` stay on the element so the box keeps its size either way.
 
-**What this does not fix, and is worth knowing.** On the repository the LCP
-element is the banner photo, and `html.papel-skel .hero img { visibility:
-hidden }` hides it for as long as the loading skeleton is up. Measured on
-staging, cold: the photo's bytes are **finished at 751ms** and it paints at
-1,572 to 2,152ms, which is when the skeleton lifts. So the skeleton sets a
-floor under this page's LCP. The photo is hidden on purpose (a slice of the
-real page showing above the layer reads worse), so this is a trade rather than
-a bug, and changing it means deciding which of the two matters more here.
+**The repository's desktop LCP photo paints above the skeleton.** The photo
+used to finish downloading well before the skeleton lifted, then remain hidden
+by `html.papel-skel .hero img { visibility: hidden }`. The desktop repository
+skeleton now starts below the real search band; its photo and field paint in
+their final places while the results remain covered. The photo's initial
+`--hero-lift` and `--hero-nav` are set inside the hero before the image can
+paint. Without that early measurement, the later geometry script moved the
+visible photo upward by 72px. Local cold runs at 1536px with 40ms RTT and a
+2x CPU slowdown showed median LCP moving from 2,452ms to 888ms, with no hero
+layout shift in the after runs. Treat that as a lab comparison, not field data;
+recheck on staging and after changes to the banner or skeleton.
+
+**Public repository filter lists are cached.** `includes/public_repository_filters.php`
+stores one compressed snapshot in `system_settings`: years, paper types,
+programs, uncategorized state, and ranked keywords. Publication via
+`set_status()`, and archive or restore via `ArchiveService`, refresh it; a
+one-hour age limit repairs out-of-band edits. A failed cache write leaves the
+repository readable. Run `php scripts/explain_public_repository.php` as the
+archive grows. At 27 approved papers, the main, search, and type queries use
+`idx_papers_status` but still filesort for the expression-based date order;
+measure again before changing the index or sort semantics.
 
 **Two measuring notes, both of which cost time:**
 

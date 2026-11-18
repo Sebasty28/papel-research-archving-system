@@ -1,5 +1,5 @@
 {
- "built": "2026-11-18 00:37",
+ "built": "2026-11-18 12:54",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -98,7 +98,7 @@
    "lines": 140
   },
   "app/models/ArchiveService.php": {
-   "lines": 56
+   "lines": 60
   },
   "app/models/FacultyManagementService.php": {
    "lines": 193
@@ -173,7 +173,7 @@
    "lines": 956
   },
   "archive/index.php": {
-   "lines": 1053
+   "lines": 1030
   },
   "archive/login.php": {
    "lines": 1095
@@ -188,7 +188,7 @@
    "lines": 265
   },
   "config/core.php": {
-   "lines": 6010
+   "lines": 6014
   },
   "config/error_handler.php": {
    "lines": 228
@@ -334,6 +334,9 @@
   "includes/progress_tracker.php": {
    "lines": 163
   },
+  "includes/public_repository_filters.php": {
+   "lines": 123
+  },
   "includes/recaptcha.php": {
    "lines": 349
   },
@@ -368,7 +371,7 @@
    "lines": 788
   },
   "includes/skeleton.php": {
-   "lines": 743
+   "lines": 760
   },
   "includes/splash.php": {
    "lines": 83
@@ -454,11 +457,17 @@
   "scripts/build_field_guide.py": {
    "lines": 909
   },
+  "scripts/explain_public_repository.php": {
+   "lines": 45
+  },
   "scripts/field_guide_content.py": {
    "lines": 872
   },
   "scripts/gdrive_keepalive.php": {
    "lines": 82
+  },
+  "scripts/measure_repository_lcp.py": {
+   "lines": 145
   },
   "scripts/migrations/add_gdrive_token_column.php": {
    "lines": 25

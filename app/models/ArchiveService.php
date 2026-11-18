@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/ArchiveRepository.php';
+require_once __DIR__ . '/../../includes/public_repository_filters.php';
 
 class ArchiveService {
     private $archiveRepo;
@@ -24,6 +25,7 @@ class ArchiveService {
             $this->archiveRepo->deleteActive($paperId);
             
             $this->conn->commit();
+            public_repository_filter_cache_after_change($this->conn);
             return true;
         } catch (Exception $e) {
             $this->conn->rollback();
@@ -46,6 +48,7 @@ class ArchiveService {
             $this->archiveRepo->deleteArchive($paperId);
             
             $this->conn->commit();
+            public_repository_filter_cache_after_change($this->conn);
             return true;
         } catch (Exception $e) {
             $this->conn->rollback();

@@ -3566,6 +3566,10 @@ function paper_owner(int $paper_id): ?int {
 function set_status(int $paper_id, string $status): void {
   $conn = db(); $stmt = $conn->prepare("UPDATE research_papers SET current_status=? WHERE paper_id=?");
   $stmt->bind_param('si',$status,$paper_id); $stmt->execute();
+  if ($status === 'approved') {
+    require_once __DIR__.'/../includes/public_repository_filters.php';
+    public_repository_filter_cache_after_change($conn);
+  }
 }
 
 function add_workflow(int $paper_id, int $reviewer_id, string $level, string $status, string $feedback=''): void {

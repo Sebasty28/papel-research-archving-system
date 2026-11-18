@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__.'/../config/core.php';
 require_once __DIR__.'/../config/gdrive_config.php';
+require_once __DIR__.'/../includes/public_repository_filters.php';
 start_session_once();
 $u = current_user();
 
@@ -246,9 +247,10 @@ if (!empty($fetch_params)) $stmt->bind_param($fetch_types, ...$fetch_params);
 $stmt->execute();
 $result = $stmt->get_result();
 
-// Sidebar filter data
-$years_res    = $conn->query("SELECT DISTINCT COALESCE(YEAR(research_date), year) AS year FROM research_papers WHERE $base_where ORDER BY year DESC");
-$types_res    = $conn->query("SELECT DISTINCT paper_type FROM research_papers WHERE $base_where AND paper_type IS NOT NULL AND paper_type != '' ORDER BY paper_type ASC");
+// One public snapshot, refreshed when a paper is published, archived or restored.
+$public_filters = public_repository_filter_data($conn);
+$filter_years = $public_filters['years'];
+$filter_types = $public_filters['types'];
 
 $program_options = [
     'Bachelor of Science in Information Technology'              => 'BS Information Technology',
@@ -265,12 +267,10 @@ $program_options = [
     'Other'                                                     => 'Others',
 ];
 $active_programs = $program_options;
-$used_res = $conn->query("SELECT DISTINCT program_category FROM research_papers WHERE $base_where AND program_category IS NOT NULL AND program_category != ''");
-while ($row = $used_res->fetch_assoc()) {
-    if (!isset($active_programs[$row['program_category']])) $active_programs[$row['program_category']] = $row['program_category'];
+foreach ($public_filters['programs'] as $program) {
+    if (!isset($active_programs[$program])) $active_programs[$program] = $program;
 }
-$uncat_res = $conn->query("SELECT COUNT(*) FROM research_papers WHERE $base_where AND (program_category IS NULL OR program_category = '')");
-if ($uncat_res && $uncat_res->fetch_row()[0] > 0) $active_programs['Uncategorized'] = '⚠️ Uncategorized';
+if ($public_filters['uncategorized']) $active_programs['Uncategorized'] = '⚠️ Uncategorized';
 
 /* How many of this reader's saved papers are in the repository right now:
    the number beside the switch. Not count($saved_ids), which also counts the
@@ -288,43 +288,10 @@ if ($can_save && $saved_ids) {
     $sc->close();
 }
 
-/* The keywords on the strip above the results: what the repository is about,
-   taken from the papers themselves rather than written out by hand, so it says
-   what is actually on file and grows with it.
-
-   From $base_where, the whole repository, not $full_where: a strip that
-   narrowed with the filters would empty itself on the search it had just been
-   used to make, which is the one moment it is in the way. The commonest first,
-   then alphabetically so the order does not shuffle between two of equal
-   weight, and the first spelling met is the one shown (`machine learning` and
-   `Machine Learning` are one keyword and should not be two chips). */
-$keyword_chips = [];
-$keyword_all   = [];
-$kw_res = $conn->query("SELECT keywords FROM research_papers WHERE $base_where
-                         AND keywords IS NOT NULL AND keywords <> ''");
-if ($kw_res) {
-    $kw_seen = [];   // lower-cased key => ['label' => first spelling, 'n' => papers]
-    while ($row = $kw_res->fetch_assoc()) {
-        foreach (explode(',', (string)$row['keywords']) as $kw) {
-            $kw = trim(preg_replace('/\s+/u', ' ', $kw));
-            /* A word nobody would press: an empty cell, a stray letter, or a
-               whole sentence somebody pasted into the keywords box. */
-            if ($kw === '' || mb_strlen($kw) < 3 || mb_strlen($kw) > 32) { continue; }
-            $key = mb_strtolower($kw);
-            if (!isset($kw_seen[$key])) { $kw_seen[$key] = ['label' => $kw, 'n' => 0]; }
-            $kw_seen[$key]['n']++;
-        }
-    }
-    uasort($kw_seen, function ($a, $b) {
-        return $b['n'] <=> $a['n'] ?: strcasecmp($a['label'], $b['label']);
-    });
-    /* The strip takes the commonest thirty: it is a way in, not the index, and
-       a strip of two hundred chips is a strip nobody reaches the end of. The
-       whole list is kept for the dialog behind the button beside it, where
-       there is room to show every one. */
-    $keyword_all   = array_values($kw_seen);
-    $keyword_chips = array_slice($keyword_all, 0, 30);
-}
+/* The strip and its dialog use the same ranked list, regardless of the
+   visitor's current search or filters. Only the first thirty enter the strip. */
+$keyword_all = $public_filters['keywords'];
+$keyword_chips = array_slice($keyword_all, 0, 30);
 
 /* The chosen keywords, lower-cased, for marking the chips that are on. */
 $search_lower = array_map('mb_strtolower', $search_terms);
@@ -436,6 +403,19 @@ $PAGE_SKELETON = 'repository';
          the first time one was removed. Made for a 3840×680 canvas. */
       $hero_photos = nav_photo_order(); ?>
 <section class="hero" id="heroBanner">
+    <?php /* Set the photo's initial geometry before its image can paint. The
+             full fit at the foot of the page also measures the search field,
+             but waiting for that fit moved a visible photo up by the height
+             of the navbar and breadcrumb strip. */ ?>
+    <script nonce="<?= csp_nonce() ?>">
+    (function () {
+        var hero = document.getElementById('heroBanner');
+        var crumb = document.querySelector('.crumb-bar');
+        if (!hero) return;
+        hero.style.setProperty('--hero-lift', Math.max(0, Math.round(hero.getBoundingClientRect().top + window.scrollY)) + 'px');
+        if (crumb) hero.style.setProperty('--hero-nav', Math.max(0, Math.round(crumb.getBoundingClientRect().bottom + window.scrollY)) + 'px');
+    })();
+    </script>
     <?php foreach ($hero_photos as $i => $photo): ?>
         <?php $set = nav_photo_srcset($photo); ?>
         <?php if ($i === 0): ?>
@@ -852,8 +832,7 @@ $PAGE_SKELETON = 'repository';
                         <input type="radio" name="type" value="" <?= $filter_type === '' ? 'checked' : '' ?>> All Types
                     </label>
                     <?php
-                    $types_res->data_seek(0);
-                    while ($t = $types_res->fetch_assoc()):
+                    foreach ($filter_types as $t):
                         $tv = $t['paper_type'];
                         $tl = paper_type_label($tv);
                     ?>
@@ -861,7 +840,7 @@ $PAGE_SKELETON = 'repository';
                         <input type="radio" name="type" value="<?= e($tv) ?>" <?= $filter_type === $tv ? 'checked' : '' ?>>
                         <?= e($tl) ?>
                     </label>
-                    <?php endwhile; ?>
+                    <?php endforeach; ?>
                 </div>
 
                 <?php if (!$is_member): ?>
@@ -870,13 +849,12 @@ $PAGE_SKELETON = 'repository';
                     <select name="year" class="filter-select">
                         <option value="">All Year</option>
                         <?php
-                        $years_res->data_seek(0);
-                        while ($y = $years_res->fetch_assoc()):
+                        foreach ($filter_years as $y):
                         ?>
                         <option value="<?= $y['year'] ?>" <?= $filter_year == $y['year'] ? 'selected' : '' ?>>
                             <?= $y['year'] ?>
                         </option>
-                        <?php endwhile; ?>
+                        <?php endforeach; ?>
                     </select>
                 </div>
                 <?php endif; ?>
@@ -910,13 +888,12 @@ $PAGE_SKELETON = 'repository';
                     <select name="year" class="filter-select">
                         <option value="">All Year</option>
                         <?php
-                        $years_res->data_seek(0);
-                        while ($y = $years_res->fetch_assoc()):
+                        foreach ($filter_years as $y):
                         ?>
                         <option value="<?= $y['year'] ?>" <?= $filter_year == $y['year'] ? 'selected' : '' ?>>
                             <?= $y['year'] ?>
                         </option>
-                        <?php endwhile; ?>
+                        <?php endforeach; ?>
                     </select>
                     <select name="month" class="filter-select">
                         <option value="">All Month</option>

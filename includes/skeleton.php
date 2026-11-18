@@ -232,6 +232,17 @@ html.papel-skel .papel-skel-layer {
 .skel-band .skel-wrap { width: 100%; padding: 0 var(--skel-gutter); }
 /* The gap under the field is .layout's own margin-top, 1rem and .75rem. */
 .skel-band + .skel-wrap { padding-top: 1rem; }
+/* On the desktop repository, the real photo and search field are already in
+   their final positions. Cover only the result list, leaving the photo free
+   to paint as soon as it loads instead of waiting for the whole page. */
+@media (min-width: 901px) {
+    html:not(.zen-on).papel-skel .skel-repo-layer {
+        top: calc(var(--nav-h, 37px) + var(--crumb-h, 36px) + var(--hero-h, 240px)
+                  + var(--search-h, 50px) - var(--hero-overlap, 24px));
+    }
+    html:not(.zen-on) .skel-repo-layer .skel-hero,
+    html:not(.zen-on) .skel-repo-layer .skel-band { display: none; }
+}
 @media (max-width: 900px) {
     .skel-band { --skel-field-h: 70px; }
     .skel-band + .skel-wrap { padding-top: .75rem; }
@@ -525,6 +536,11 @@ html.papel-skel-rail .skel-tab { width: auto; height: 30px; border-radius: 8px; 
             var b = bars[i].getBoundingClientRect().bottom;
             if (b > low) { low = b; }
         }
+        if (el.classList.contains('skel-repo-layer') && window.innerWidth > 900 &&
+            !root.classList.contains('zen-on')) {
+            var search = document.querySelector('.search-band');
+            if (search) { low = Math.max(low, search.getBoundingClientRect().bottom); }
+        }
         if (low > 0) { el.style.top = low + 'px'; }
     }
 
@@ -568,7 +584,8 @@ html.papel-skel-rail .skel-tab { width: auto; height: 30px; border-radius: 8px; 
 function papel_skeleton_layer(): void
 {
     $shape = isset($GLOBALS['PAPEL_SKEL_SHAPE']) ? $GLOBALS['PAPEL_SKEL_SHAPE'] : 'page';
-    $cls   = 'papel-skel-layer' . ($shape === 'panes' ? ' skel-panes' : '');
+    $cls   = 'papel-skel-layer' . ($shape === 'panes' ? ' skel-panes' : '')
+           . ($shape === 'repository' ? ' skel-repo-layer' : '');
 
     echo '<div class="' . $cls . '" id="papelSkel" aria-hidden="true">';
     switch ($shape) {
@@ -626,8 +643,8 @@ function papel_skel_console(): void
     echo '</div></div>';
 }
 
-/* The Public Repository: the photo band and the search band above the same
-   desk. */
+/* The Public Repository: the photo and search placeholders remain for mobile
+   and Zen. Desktop browsing shows the real banner and search above this layer. */
 function papel_skel_repo(): void
 {
     echo '<div class="skel-hero"></div>';

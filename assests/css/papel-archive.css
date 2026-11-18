@@ -127,16 +127,9 @@
    reads as that edge rather than the photo's. */
 .hero.collapsed img { clip-path: inset(0 0 calc(100% - var(--hero-nav)) 0); }
 
-/* The photo is put away while the loading skeleton is up (includes/skeleton.php).
-   It is the one part of this page that can show above that layer: the layer
-   starts at the maroon strip's bottom edge, and the navbar and the strip are
-   both tinted glass over this photo, which runs up behind them. What showed
-   was a slice of the real page in the top corner, cut off on a hard line at
-   the strip, with blank shapes under it. Hidden rather than covered, since
-   nothing may be drawn over the bars, and it comes back with everything else
-   as the layer lifts. visibility, not display: the box, and so the photo's
-   own size and the slideshow's first frame, stay exactly as they are. */
-html.papel-skel .hero img { visibility: hidden; }
+/* The repository skeleton begins below the real banner and search field on
+   desktop, so this image can paint as soon as it loads. Hiding it until the
+   results skeleton lifted added over a second of LCP render delay. */
 
 /* Slideshow: every photo is stacked in the same place by the rule above, and
    only the active one is opaque. The transition list is restated in full
