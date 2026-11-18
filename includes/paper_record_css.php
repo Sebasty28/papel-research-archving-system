@@ -437,6 +437,14 @@ html.sidebar-left .pd-side-swap .side-icon-right { display: inline-flex; }
 }
 .pd-file.is-optional .pd-file-state { color: var(--grey); font-weight: 400; }
 .pd-file-state .material-symbols-outlined { font-size: 14px; }
+/* Required missing files keep a pale card in Old Night. Its regular ink and
+   maroon tokens become light there, so give only this pale surface dark text. */
+html[data-mode="dark"] .pd-file.is-missing:not(.is-optional) .pd-file-name { color: #302729; }
+html[data-mode="dark"] .pd-file.is-missing:not(.is-optional) .pd-file-ico,
+html[data-mode="dark"] .pd-file.is-missing:not(.is-optional) .pd-file-state {
+    color: #630000;
+    opacity: 1;
+}
 
 /* The checklist: the reason this page exists */
 .pd-check-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1.25rem 2rem; }

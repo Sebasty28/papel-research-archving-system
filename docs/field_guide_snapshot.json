@@ -1,5 +1,5 @@
 {
- "built": "2026-11-18 13:57",
+ "built": "2026-11-18 14:00",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -311,7 +311,7 @@
    "lines": 35
   },
   "includes/paper_record_css.php": {
-   "lines": 791
+   "lines": 799
   },
   "includes/password_audit_tab.php": {
    "lines": 201
