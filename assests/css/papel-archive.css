@@ -195,6 +195,17 @@
 /* The strip itself is tinted glass on every page now (site_head.php), banner
    up or hidden alike: the photo runs behind it in both states, and solid
    maroon would cut it in two with a band. */
+/* With the banner folded in Old Night, the strip's fractional bottom edge
+   blends one device row of maroon into the charcoal page. Paint that join in
+   the page's own colour, without changing the strip's measured height. The
+   open banner keeps its uninterrupted photo behind the glass. */
+html[data-color="old-night"] .crumb-bar:has(+ .hero.collapsed)::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; bottom: -1px; height: 2px;
+    background: var(--page-bg);
+    pointer-events: none;
+}
 
 /* ===== 5. Search band: sits over the lower edge of the hero,
    left-aligned to the main content column (matches Figma) ===== */
