@@ -1,5 +1,5 @@
 {
- "built": "2026-11-18 18:24",
+ "built": "2026-11-18 19:04",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -59,7 +59,7 @@
    "lines": 36
   },
   "app/choose_desk.php": {
-   "lines": 89
+   "lines": 90
   },
   "app/faculty/faculty_dashboard.php": {
    "lines": 236
@@ -134,10 +134,10 @@
    "lines": 97
   },
   "app/student/pdf_viewer.php": {
-   "lines": 390
+   "lines": 391
   },
   "app/student/student_assistant.php": {
-   "lines": 147
+   "lines": 180
   },
   "app/student/student_cancel_submission.php": {
    "lines": 104
@@ -155,7 +155,7 @@
    "lines": 435
   },
   "app/student/student_upload_ai.php": {
-   "lines": 14915
+   "lines": 14942
   },
   "app/student/upload_diagnostics.php": {
    "lines": 245
@@ -170,7 +170,7 @@
    "lines": 38
   },
   "archive/home.php": {
-   "lines": 956
+   "lines": 960
   },
   "archive/index.php": {
    "lines": 1030
@@ -246,6 +246,12 @@
   },
   "includes/console_shell.php": {
    "lines": 17
+  },
+  "includes/corpus_knowledge.php": {
+   "lines": 51
+  },
+  "includes/corpus_widget.php": {
+   "lines": 151
   },
   "includes/docx_writer.php": {
    "lines": 356
@@ -344,7 +350,7 @@
    "lines": 486
   },
   "includes/review_console.php": {
-   "lines": 1545
+   "lines": 1552
   },
   "includes/save_paper.php": {
    "lines": 290
@@ -362,7 +368,7 @@
    "lines": 179
   },
   "includes/site_footer.php": {
-   "lines": 778
+   "lines": 779
   },
   "includes/site_head.php": {
    "lines": 111
@@ -425,7 +431,7 @@
    "lines": 220
   },
   "pages/change_password.php": {
-   "lines": 150
+   "lines": 151
   },
   "pages/contact_support.php": {
    "lines": 849

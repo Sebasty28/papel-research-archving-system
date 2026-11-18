@@ -771,6 +771,7 @@ require_once ROOT_PATH.'/includes/librarian_request_alert.php';
    manuscript countdown is, its polls carrying that file's papelQuiet flag. */
 require_once ROOT_PATH.'/includes/session_timer.php';
 require ROOT_PATH.'/includes/accessibility.php';
+require_once ROOT_PATH.'/includes/corpus_widget.php';
 if (!defined('PAPEL_PAPER_PREVIEW')) {
     require_once ROOT_PATH.'/includes/survey_invite.php';
 }

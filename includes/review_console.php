@@ -603,6 +603,7 @@ if (!isset($PAGE_SKELETON)) { $PAGE_SKELETON = 'console'; }
 }
 .rc-chip a { color: var(--maroon); text-decoration: none; font-weight: 600; line-height: 1; }
 .rc-clear { margin-left: auto; color: var(--maroon); font-size: .6875rem; }
+.rc-empty-filters { display: flex; flex-wrap: wrap; justify-content: center; gap: .375rem; margin: .25rem 0 .5rem; }
 
 /* ---- Review controls on a card ---- */
 .rc-actions { margin-top: .875rem; display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
@@ -835,6 +836,8 @@ html[data-view="rows"] .paper-list .card-status .paper-action { display: none; }
             if ($filter_section) $rcChips[] = ['label' => 'Section ' . $filter_section, 'href' => e($rc_self) . '?' . rc_qs(['section' => null, 'page' => null])];
             if ($filter_ay)      $rcChips[] = ['label' => 'A.Y. ' . $filter_ay, 'href' => e($rc_self) . '?' . rc_qs(['ay' => null, 'page' => null])];
             if ($filter_year)    $rcChips[] = ['label' => (int)$filter_year, 'href' => e($rc_self) . '?' . rc_qs(['year' => null, 'page' => null])];
+            if ($filter_month >= 1 && $filter_month <= 12) $rcChips[] = ['label' => date('F', mktime(0, 0, 0, $filter_month, 1)), 'href' => e($rc_self) . '?' . rc_qs(['month' => null, 'page' => null])];
+            if ($filter_day >= 1 && $filter_day <= 31) $rcChips[] = ['label' => 'Day ' . $filter_day, 'href' => e($rc_self) . '?' . rc_qs(['day' => null, 'page' => null])];
             if ($search)          $rcChips[] = ['label' => '"' . $search . '"', 'href' => e($rc_self) . '?' . rc_qs(['q' => null, 'page' => null])];
             ?>
             <?php if ($rcChips): ?>
@@ -1098,12 +1101,16 @@ html[data-view="rows"] .paper-list .card-status .paper-action { display: none; }
                 <?php endforeach; ?>
 
                 <?php if (!$papers): ?>
-                    <?php /* An empty queue is the normal state of a review desk, not an
-                             error, so each tab says what its own emptiness means. */ ?>
+                    <?php
+                    $emptyFilters = array_column($rcChips, 'label');
+                    ?>
                     <div class="empty-state">
                         <span class="material-symbols-outlined"><?= e($rc_tabs[$tab]['empty_icon'] ?? $RC['empty']['icon']) ?></span>
-                        <p><?= e($rc_tabs[$tab]['empty'] ?? $RC['empty']['text']) ?></p>
-                        <?php if ($search || $filter_type || $filter_prog || $filter_year || $filter_month || $filter_day): ?>
+                        <p><?= $emptyFilters ? 'No papers match these filters in this tab.' : e($rc_tabs[$tab]['empty'] ?? $RC['empty']['text']) ?></p>
+                        <?php if ($emptyFilters): ?>
+                            <div class="rc-empty-filters" aria-label="Active filters">
+                                <?php foreach ($emptyFilters as $label): ?><span class="rc-chip"><?= e($label) ?></span><?php endforeach; ?>
+                            </div>
                             <a href="<?= e($rc_self) ?>?tab=<?= e($tab) ?>">Clear filters</a>
                         <?php endif; ?>
                     </div>

@@ -145,5 +145,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'chang
 <?php require_once ROOT_PATH.'/includes/account_preflight_js.php'; ?>
 <?php require_once ROOT_PATH.'/includes/flash_dismiss.php'; ?>
 <?php require_once ROOT_PATH.'/includes/focus_ring.php'; ?>
+<?php require_once ROOT_PATH.'/includes/corpus_widget.php'; ?>
 </body>
 </html>

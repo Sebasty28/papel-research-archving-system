@@ -938,6 +938,10 @@ $types_res = $conn->query("SELECT DISTINCT paper_type FROM research_papers WHERE
 
 <?php include __DIR__.'/../includes/accessibility.php'; ?>
 <?php require_once ROOT_PATH.'/includes/terms_modal.php'; ?>
+<style nonce="<?= e(csp_nonce()) ?>">
+#corpusGlobal { --white: #fff; --cream: #f8f2f1; --ink: #2b1b0e; --grey: #595959; --maroon: #762c2c; --maroon-surface: #762c2c; --border: #d9d0ce; --font-body: Arial, sans-serif; --font-head: Arial, sans-serif; --shadow-md: 0 6px 18px rgba(0,0,0,.2); }
+</style>
+<?php require_once ROOT_PATH.'/includes/corpus_widget.php'; ?>
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 /* Right-click is handled once in includes/accessibility.php, included just
    above, and that copy leaves links alone. A blanket one here overrode it. */

@@ -385,5 +385,6 @@ body {
     }
 })();
 </script>
+<?php require_once ROOT_PATH.'/includes/corpus_widget.php'; ?>
 </body>
 </html>

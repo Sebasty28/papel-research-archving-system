@@ -2,6 +2,7 @@
 error_reporting(0);
 ini_set('display_errors', '0');
 require_once '../../config/core.php';
+require_once '../../includes/corpus_knowledge.php';
 /* Anyone who writes a paper, which is everyone.
 
    Staff upload their own work here too, and their submissions are published the
@@ -6259,13 +6260,13 @@ body.pdf-docked > .site-footer {
                     <div class="chat-identity-tip" id="chatIdentityTip" role="tooltip">
                         <span class="tip-name">Corpus</span>
                         <span class="tip-desc">AI Chatbot of the PAPEL</span>
-                        <p class="tip-body">Corpus is here to get your paper handed in properly. It knows what the repository asks for and what belongs in each box on this form.</p>
+                        <p class="tip-body">Corpus can help with PAPEL throughout the site. Here it can guide you through your submission and explain the fields on this form.</p>
                         <ul class="tip-list">
                             <li>What to attach: Ethics Clearance, Consent Form and Data Collection instruments</li>
                             <li>What the file must be: a PDF, up to <?= e(max_upload_label()) ?></li>
                             <li>How Extract with AI fills the form from your manuscript</li>
                         </ul>
-                        <p class="tip-body tip-limit">It will not write your paper or answer questions outside PAPEL. For anything beyond the submission, ask your research adviser.</p>
+                        <p class="tip-body tip-limit">Corpus helps with PAPEL and research submission questions. It will not write your paper or answer unrelated questions.</p>
                     </div>
                 </div>
             </div>
@@ -13232,6 +13233,20 @@ function flashPuppyState(state, ms) {
    not take the dots down while the second is still coming. */
 const CHAT_TYPING_ID = 'chat-typing';
 let chatTypingJobs = 0;
+const corpusHistoryKey = <?= json_encode(corpus_history_key($u)) ?>;
+let corpusHistory = [];
+try {
+    const saved = JSON.parse(sessionStorage.getItem(corpusHistoryKey) || '[]');
+    if (Array.isArray(saved)) corpusHistory = saved.filter(line =>
+        line && (line.role === 'user' || line.role === 'assistant') && typeof line.content === 'string' && line.content.length <= 2000
+    ).slice(-12);
+} catch (error) {}
+
+function rememberCorpus(role, content) {
+    corpusHistory.push({role, content: String(content)});
+    corpusHistory = corpusHistory.slice(-12);
+    try { sessionStorage.setItem(corpusHistoryKey, JSON.stringify(corpusHistory)); } catch (error) {}
+}
 
 /* Held even when the reply is already in hand. An answer that lands in the same
    instant as the question reads as a canned string rather than as something
@@ -13294,7 +13309,9 @@ async function sendMessage() {
     const msg = input.value.trim();
     if (!msg) return;
 
+    const prior = corpusHistory.slice(-6);
     addMessage(msg, 'user');
+    rememberCorpus('user', msg);
     input.value = '';
 
     clearTimeout(puppyRevertTimer);          // a reaction still counting down must not
@@ -13316,12 +13333,20 @@ async function sendMessage() {
         const res = await fetch('student_assistant.php', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({message: msg}),
+            body: JSON.stringify({
+                message: msg,
+                _token: <?= json_encode(csrf_token()) ?>,
+                page: location.pathname,
+                title: document.title,
+                sections: ['Upload Paper', 'Writing View', 'Contents', 'Preview'],
+                history: prior
+            }),
             /* The dots in the panel are this request's progress report; the
                bar at the top of the page stays out of it. loading_bar.php */
             papelQuiet: true
         });
         const data = await res.json();
+        if (!res.ok) mood = 'alert';
         await puppyFinishThinking(thinkingSince);
         await chatTypingFloor(typingSince);
         /* The engine can change under us, when the one that was answering runs
@@ -13348,6 +13373,7 @@ async function sendMessage() {
 
     hideChatTyping();
     addMessage(reply, 'bot', mood);
+    if (!mood) rememberCorpus('assistant', reply);
     flashPuppyState(mood ? 'alert' : 'successful', mood ? 4000 : 3200);
 }
 
@@ -13468,6 +13494,7 @@ function addMessage(text, sender, mood) {
 
 // Wire up all inline-handler replacements
 document.addEventListener('DOMContentLoaded', function() {
+    corpusHistory.forEach(line => addMessage(line.content, line.role === 'assistant' ? 'bot' : 'user'));
     // Status checkboxes
     document.getElementById('status_published').addEventListener('change', function() { handleStatusChange(this); });
     document.getElementById('status_unpublished').addEventListener('change', function() { handleStatusChange(this); });
