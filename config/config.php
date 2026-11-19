@@ -216,7 +216,9 @@ define('COOKIE_SECURE', filter_var($_ENV['COOKIE_SECURE'] ?? 'false', FILTER_VAL
  * that host ceiling. max_upload_bytes() in core.php takes whichever of the
  * three is smallest, and every page and validator quotes it, so the figure a
  * student is promised is the figure the server will actually accept. */
-define('UPLOAD_MAX_MB', (int)($_ENV['UPLOAD_MAX_MB'] ?? 50));
+// The application ceiling stays at 30 MB even when PHP or the host allows more.
+define('UPLOAD_POLICY_MAX_MB', 30);
+define('UPLOAD_MAX_MB', min(UPLOAD_POLICY_MAX_MB, (int)($_ENV['UPLOAD_MAX_MB'] ?? UPLOAD_POLICY_MAX_MB)));
 
 /* Where the browser sends a paper's text to have its metadata read.
  *

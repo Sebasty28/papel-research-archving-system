@@ -171,9 +171,9 @@ if ($filter_year > 0) {
     $types .= 'i';
 }
 if ($filter_type) {
-    $where_extra .= " AND paper_type = ?";
-    $params[] = $filter_type;
-    $types .= 's';
+    /* The shared type filter, so Undergraduate Thesis also finds a paper stored under
+       the retired "thesis" code (paper_type_aliases()). It adds its own parameters. */
+    $where_extra .= " AND " . paper_type_filter_sql('paper_type', $filter_type, $params, $types);
 }
 // Month/day narrow the research date (the date shown on each result row)
 if ($filter_month >= 1 && $filter_month <= 12) {

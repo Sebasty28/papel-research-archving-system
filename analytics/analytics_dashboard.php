@@ -40,6 +40,19 @@ $fStatus  = trim($_GET['status']  ?? '');
 $fQuery   = trim($_GET['q']       ?? '');
 
 $FROM  = "FROM research_papers rp LEFT JOIN users u ON u.user_id = rp.uploaded_by";
+/* A paper's programme is the paper's own (program_category, what decides its
+   filing folder and every report it appears in), and the uploader's account
+   only for a paper that has none. Reading the account alone, as this page did,
+   lost every paper a Librarian files for somebody else: the Librarian's account
+   has no programme, so 24 of the 27 papers on file were in no programme at all,
+   and the filter, Figure 6 and the tables knew only BSIT. Written from code and
+   nothing posted, so it is safe to interpolate, like the whitelisted sort. */
+$PROG  = paper_program_sql('rp', 'u');   // config/core.php; shared with the review desks
+// The paper's type with retired aliases folded in ("thesis" is Undergraduate Thesis): see paper_type_sql().
+$TYPE  = paper_type_sql('rp.paper_type');
+/* Group by the expression, never by its alias: `GROUP BY program` is read as
+   the users table's own column, which put all 24 of a Librarian's uploads in
+   one group under whichever programme came first ("BSA 24"). */
 $where = [$submitted('rp')];
 $args  = [];
 $types = '';
@@ -47,8 +60,9 @@ $types = '';
 if ($fYear !== '' && ctype_digit($fYear)) {
     $where[] = "YEAR(rp.upload_date) = ?";   $args[] = (int)$fYear;  $types .= 'i';
 }
-if ($fProgram !== '') { $where[] = "u.program = ?";          $args[] = $fProgram; $types .= 's'; }
-if ($fType    !== '') { $where[] = "rp.paper_type = ?";      $args[] = $fType;    $types .= 's'; }
+if ($fProgram !== '') { $where[] = "$PROG = ?";              $args[] = $fProgram; $types .= 's'; }
+// The shared type filter: Undergraduate Thesis also finds papers stored under the retired "thesis".
+if ($fType    !== '') { $where[] = paper_type_filter_sql('rp.paper_type', $fType, $args, $types); }
 if ($fStatus  !== '') { $where[] = "rp.current_status = ?";  $args[] = $fStatus;  $types .= 's'; }
 if ($fQuery   !== '') {
     $where[] = "(rp.title LIKE ? OR rp.author_names LIKE ? OR u.full_name LIKE ?)";
@@ -88,10 +102,16 @@ $one  = function ($res, $key = 'v', $default = 0) {
 $all = "FROM research_papers rp LEFT JOIN users u ON u.user_id = rp.uploaded_by WHERE " . $submitted('rp');
 $optYears = array_column($rows($conn->query(
     "SELECT DISTINCT YEAR(rp.upload_date) v $all ORDER BY v DESC")), 'v');
-$optPrograms = array_column($rows($conn->query(
-    "SELECT DISTINCT u.program v $all AND u.program IS NOT NULL AND u.program <> '' ORDER BY v")), 'v');
+/* Every programme the campus offers, in the order programs_map() keeps them,
+   and not only the ones somebody has submitted under: a list of one (BSIT) hid
+   the other programmes as if they did not exist, and choosing one with nothing
+   in it is itself an answer ("no submissions yet"). Any other value found on a
+   submitter's account (Faculty Member, a retired or typed-in name) follows the
+   map, so no paper on file becomes impossible to filter to. */
+$optPrograms = program_filter_options(array_column($rows($conn->query(
+    "SELECT DISTINCT $PROG v $all AND $PROG IS NOT NULL ORDER BY v")), 'v'));
 $optTypes = array_column($rows($conn->query(
-    "SELECT DISTINCT rp.paper_type v $all AND rp.paper_type IS NOT NULL AND rp.paper_type <> '' ORDER BY v")), 'v');
+    "SELECT DISTINCT $TYPE v $all AND rp.paper_type IS NOT NULL AND rp.paper_type <> '' ORDER BY v")), 'v');
 $optStatuses = array_column($rows($conn->query(
     "SELECT DISTINCT rp.current_status v $all ORDER BY v")), 'v');
 
@@ -132,23 +152,23 @@ $monthDelta = $thisMonth - $lastMonth;
 
 /* ---- Breakdowns ---- */
 $paperTypeStats = $rows($run(
-    "SELECT COALESCE(NULLIF(rp.paper_type,''),'Unspecified') AS paper_type, COUNT(*) AS count
-     $FROM $WHERE GROUP BY paper_type ORDER BY count DESC"));
+    "SELECT COALESCE(NULLIF($TYPE,''),'Unspecified') AS paper_type, COUNT(*) AS count
+     $FROM $WHERE GROUP BY COALESCE(NULLIF($TYPE,''),'Unspecified') ORDER BY count DESC"));
 $totalPapers = array_sum(array_column($paperTypeStats, 'count'));
 
 $stats = $rows($run(
-    "SELECT u.program,
+    "SELECT $PROG AS program,
             COUNT(*) AS total_papers,
             SUM(rp.current_status = 'approved') AS approved,
             SUM(rp.current_status = 'draft')    AS revisions
-     $FROM $WHERE AND u.program IS NOT NULL AND u.program <> ''
-     GROUP BY u.program ORDER BY total_papers DESC"));
+     $FROM $WHERE AND $PROG IS NOT NULL
+     GROUP BY $PROG ORDER BY total_papers DESC"));
 
 $approvalByType = $rows($run(
-    "SELECT COALESCE(NULLIF(rp.paper_type,''),'Unspecified') AS paper_type,
+    "SELECT COALESCE(NULLIF($TYPE,''),'Unspecified') AS paper_type,
             COUNT(*) AS total,
             SUM(rp.current_status = 'approved') AS approved
-     $FROM $WHERE GROUP BY paper_type HAVING total > 0 ORDER BY total DESC"));
+     $FROM $WHERE GROUP BY COALESCE(NULLIF($TYPE,''),'Unspecified') HAVING total > 0 ORDER BY total DESC"));
 foreach ($approvalByType as &$_r) {
     $_r['rate'] = $_r['total'] > 0 ? round(($_r['approved'] / $_r['total']) * 100, 1) : 0;
 }
@@ -170,7 +190,7 @@ $SORTS = [
     'date'    => ['rp.upload_date',    'Submitted'],
     'title'   => ['rp.title',          'Title'],
     'student' => ['u.full_name',       'Student'],
-    'program' => ['u.program',         'Program'],
+    'program' => [$PROG,               'Program'],
     'type'    => ['rp.paper_type',     'Type'],
     'status'  => ['rp.current_status', 'Status'],
 ];
@@ -185,7 +205,7 @@ $offset = ($page - 1) * $perPage;
 
 $papers = $rows($run(
     "SELECT rp.paper_id, rp.title, rp.paper_type, rp.current_status, rp.upload_date,
-            rp.author_names, u.full_name AS student, u.program
+            rp.author_names, u.full_name AS student, $PROG AS program
      $FROM $WHERE
      ORDER BY {$SORTS[$sort][0]} $dir, rp.paper_id DESC
      LIMIT ? OFFSET ?", [$perPage, $offset], 'ii'));
@@ -282,7 +302,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     fputcsv($out, ['EVERY SUBMISSION']);
     fputcsv($out, ['Submitted', 'Title', 'Student', 'Program', 'Type', 'Status']);
     $everything = $rows($run("SELECT rp.title, rp.paper_type, rp.current_status, rp.upload_date,
-                                     u.full_name AS student, u.program
+                                     u.full_name AS student, $PROG AS program
                               $FROM $WHERE ORDER BY {$SORTS[$sort][0]} $dir"));
     foreach ($everything as $r) {
         fputcsv($out, [substr((string)$r['upload_date'], 0, 10), $r['title'], $r['student'],
@@ -318,7 +338,7 @@ if (in_array($exportFormat, ['xlsx', 'docx', 'pdf'], true)) {
     }
 
     $everything = $rows($run("SELECT rp.title, rp.paper_type, rp.current_status, rp.upload_date,
-                                     u.full_name AS student, u.program
+                                     u.full_name AS student, $PROG AS program
                               $FROM $WHERE ORDER BY {$SORTS[$sort][0]} $dir"));
 
     /* The figures, as sent by the page. Each is a data URL; anything that is
@@ -850,6 +870,49 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
 .an-figure-caption { margin: .65rem 0 0; padding-top: .65rem; border-top: 1px solid var(--border);
     color: var(--grey); font-size: .75rem; line-height: 1.45; }
 .an-expandable { cursor: zoom-in; }
+
+/* ---- Choosing how a figure is drawn ----
+   The button sits in the card's head beside the fold; its menu is one fixed
+   element on <body> (the card clips its overflow), at 910 with the column help
+   popover: above the navbar's 900 to 903, under the enlarged view's 20000. */
+.an-view-btn {
+    display: inline-flex; align-items: center; gap: .3rem; flex: 0 0 auto; margin-left: auto;
+    padding: .25rem .4rem .25rem .5rem; border: 1px solid var(--border); border-radius: 5px;
+    background: var(--white); color: var(--maroon); cursor: pointer;
+    font: 600 .75rem/1.2 var(--font-body);
+}
+.an-view-btn:hover { border-color: var(--soft-maroon); }
+.an-view-btn:focus-visible { outline: 2px solid var(--maroon); outline-offset: 1px; }
+.an-view-btn .material-symbols-outlined { font-size: 16px; }
+.an-view-btn .an-view-caret { font-size: 16px; color: var(--grey); }
+.an-card-head .an-hint ~ .an-view-btn, .an-view-btn + .an-card-toggle { margin-left: 0; }
+.an-view-menu {
+    position: fixed; z-index: 910; width: min(21rem, calc(100vw - 1rem)); max-height: min(28rem, calc(100vh - 1rem));
+    overflow: auto; overscroll-behavior: contain; padding: .35rem;
+    border: 1px solid var(--border); border-radius: 5px; background: var(--white); color: var(--ink);
+    box-shadow: 0 8px 24px rgba(51, 0, 0, .18);
+}
+.an-view-menu[hidden] { display: none; }
+.an-view-menu-head { padding: .4rem .55rem .5rem; font: 600 .6875rem/1.3 var(--font-body); color: var(--grey);
+    text-transform: uppercase; letter-spacing: .03em; }
+.an-view-item {
+    display: flex; align-items: flex-start; gap: .55rem; width: 100%; padding: .45rem .55rem;
+    border: 0; border-radius: 5px; background: transparent; color: var(--ink); text-align: left; cursor: pointer;
+    font: 500 .8125rem/1.35 var(--font-body);
+}
+.an-view-item:hover, .an-view-item:focus-visible { background: var(--cream); outline: none; }
+.an-view-item[aria-checked="true"] { color: var(--maroon); font-weight: 600; }
+.an-view-item > .material-symbols-outlined { font-size: 18px; color: var(--maroon); flex: 0 0 auto; margin-top: .05rem; }
+.an-view-text { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
+.an-view-tag { flex: 0 0 auto; padding: .05rem .35rem; border: 1px solid var(--border); border-radius: 5px;
+    font-size: .625rem; font-weight: 600; color: var(--grey); }
+.an-view-tick { font-size: 18px; color: var(--maroon); flex: 0 0 auto; }
+/* A figure drawn as a table fills the chart's own box and scrolls inside it. */
+.an-view-tablebox { position: absolute; inset: 0; overflow: auto; }
+.an-view-tablebox[hidden] { display: none; }
+.an-view-table { width: 100%; }
+.an-view-table .is-num { text-align: right; white-space: nowrap; }
+.an-view-table .is-total td { font-weight: 600; border-top: 1px solid var(--border); }
 .an-empty { padding: 2.5rem 1rem; text-align: center; color: var(--grey); font-size: .8125rem; }
 .an-empty .material-symbols-outlined { font-size: 32px; display: block; margin: 0 auto .5rem; opacity: .5; }
 
@@ -989,7 +1052,9 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
     .an-card { min-width: 0; margin-bottom: .75rem; }
     .an-card-head { flex-wrap: wrap; padding: .75rem; }
     .an-card-head .an-hint { order: 3; flex-basis: 100%; margin-left: 0; }
+    .an-card-head .an-view-btn { order: 2; margin-left: auto; }
     .an-card-head .an-card-toggle, .an-card-head .an-hint + .an-card-toggle { order: 2; margin-left: auto; }
+    .an-card-head .an-view-btn + .an-card-toggle { margin-left: 0; }
     .an-card-body { padding: .75rem; }
     .an-table--types { min-width: 28rem; }
     .an-table--programs { min-width: 34rem; }
@@ -1830,106 +1895,260 @@ document.addEventListener('DOMContentLoaded', function () {
 
     var data = JSON.parse(document.getElementById('anChartData').textContent);
 
-    var labels = function (k) { return data[k].map(function (d) { return d.label; }); };
-    var values = function (k) { return data[k].map(function (d) { return d.value; }); };
+    /* ---- Chart types the reader may choose ---------------------------------
+       Every figure can be drawn more than one way, but not every way is honest
+       for every figure. What decides it is the shape of the data, not taste:
 
-    function build(palette) {
-        var color = function (name, fallback) { return palette ? (palette[name] || fallback) : token(name, fallback); };
-        var maroon = color('--maroon', '#820707'),
-            soft   = color('--soft-maroon', '#b17d7d'),
-            dark   = color('--dark-maroon', '#630000'),
-            ink    = color('--ink', '#330000'),
-            grey   = color('--grey', '#9f9f9f'),
-            border = color('--border', '#e6d4d4'),
-            cream  = color('--cream', '#fff5f5');
-        var series = [maroon, soft, dark, '#a85a5a', '#d3a3a3', '#7a3b3b', '#c98c8c'];
+         time   counts in time order          (Figure 1)
+         pair   two counts set side by side   (Figure 2)
+         rate   percentages that do NOT add   (Figure 3: each type's approval
+                up to 100                      rate is out of its own papers)
+         parts  counts that make one whole    (Figures 4, 5, 6)
 
-        if (!palette) {
-            Chart.defaults.font.family = token('--font-body', 'Inter') + ', Inter, system-ui, sans-serif';
-            Chart.defaults.font.size = 11;
-            Chart.defaults.color = grey;
+       suitable() answers, for one figure as its data stands now, which kinds may
+       be drawn and why the others may not. Only the suitable ones are offered in
+       the menu (the owner's choice, 20 November 2026); the reasons stay here as
+       the record of each rule. It is asked again whenever the filters change the
+       data: a pie of one slice, or a line through one point, is refused then and
+       only then. */
+    var KINDS = {
+        line:     { label: 'Line',             icon: 'show_chart' },
+        area:     { label: 'Area',             icon: 'area_chart' },
+        stepped:  { label: 'Stepped line',     icon: 'stacked_line_chart' },
+        column:   { label: 'Column',           icon: 'bar_chart' },
+        bar:      { label: 'Bar',              icon: 'align_horizontal_left' },
+        dot:      { label: 'Dot plot',         icon: 'scatter_plot' },
+        radar:    { label: 'Radar',            icon: 'radar' },
+        doughnut: { label: 'Doughnut',         icon: 'donut_large' },
+        pie:      { label: 'Pie',              icon: 'pie_chart' },
+        stacked:  { label: '100% stacked bar', icon: 'view_week' },
+        table:    { label: 'Table',            icon: 'table_rows' }
+    };
+    var ORDER = ['line', 'area', 'stepped', 'column', 'bar', 'dot', 'radar', 'doughnut', 'pie', 'stacked', 'table'];
+    var SHAPE = { timeline: 'time', monthly: 'pair', approval: 'rate', types: 'parts', status: 'parts', programs: 'parts' };
+    // What each figure has always been drawn as, and what it opens as until someone chooses.
+    var DEFAULTS = { timeline: 'area', monthly: 'column', approval: 'bar', types: 'doughnut', status: 'doughnut', programs: 'bar' };
+    var COLUMNS = {
+        timeline: ['Period', 'Submissions'], monthly: ['Month', 'Submissions'],
+        approval: ['Paper type', 'Approved'], types: ['Paper type', 'Submissions'],
+        status: ['Status', 'Submissions'], programs: ['Program', 'Submissions']
+    };
+    var PIE_MAX = 7;   // the series palette has seven colours, and past that slices cannot be told apart
+
+    function rowsOf(key) { return (data[key] || []).map(function (r) { return { label: String(r.label), value: Number(r.value) || 0 }; }); }
+
+    function suitable(key) {
+        var rows = rowsOf(key), shape = SHAPE[key], n = rows.length;
+        var filled = rows.filter(function (r) { return r.value > 0; }).length;
+        var why = {};
+        var noOrder = shape === 'rate' ? 'Paper types have no order, so a line joining them would suggest a trend that is not there.'
+                                       : 'These categories have no order, so a line joining them would suggest a trend that is not there.';
+        if (shape === 'time') {
+            ['pie', 'doughnut', 'stacked'].forEach(function (k) { why[k] = 'Time periods are not parts of one whole, and slices would hide the order they come in.'; });
+            why.bar = 'Time reads left to right, so it is drawn upright: use Column.';
+            why.radar = 'A radar joins the last period back to the first, as if time went round in a circle.';
+            if (n < 2) ['line', 'area', 'stepped'].forEach(function (k) { why[k] = 'A line needs at least two periods; there is only one.'; });
+        } else if (shape === 'pair') {
+            ['line', 'area', 'stepped'].forEach(function (k) { why[k] = 'Two months are compared side by side, not followed as a trend.'; });
+            ['pie', 'doughnut', 'stacked'].forEach(function (k) { why[k] = 'Last month and this month are not parts of one whole.'; });
+            why.radar = 'A radar needs at least three things to compare.';
+        } else if (shape === 'rate') {
+            ['line', 'area', 'stepped'].forEach(function (k) { why[k] = noOrder; });
+            ['pie', 'doughnut', 'stacked'].forEach(function (k) { why[k] = 'Approval rates do not add up to 100%: each is out of its own papers, so they cannot be slices of one whole.'; });
+            if (n < 3) why.radar = 'A radar needs at least three paper types.';
+        } else {
+            ['line', 'area', 'stepped'].forEach(function (k) { why[k] = noOrder; });
+            why.radar = 'A radar is for scores on one shared scale; counts across categories read more truthfully as bars.';
+            var slice = filled < 2 ? 'Only one category has any papers, so the whole would be a single slice.'
+                      : (filled > PIE_MAX ? 'More than ' + PIE_MAX + ' slices cannot be told apart; a bar keeps every one readable.' : null);
+            if (slice) ['pie', 'doughnut', 'stacked'].forEach(function (k) { why[k] = slice; });
         }
+        return why;
+    }
 
-        var axes = {
-            x: { grid: { display: false }, ticks: { color: grey, autoSkip: true, maxRotation: 0 } },
-            y: { beginAtZero: true, grid: { color: border }, border: { display: false },
-                 ticks: { color: grey, precision: 0 } }
+    var VIEW_KEY = 'papel_analytics_views';
+    var chosen = {};
+    try { chosen = JSON.parse(localStorage.getItem(VIEW_KEY) || '{}') || {}; } catch (e) { chosen = {}; }
+    function remember() { try { localStorage.setItem(VIEW_KEY, JSON.stringify(chosen)); } catch (e) {} }
+
+    /* What a figure is drawn as now: the reader's choice if it still suits the
+       data, then the figure's usual kind if that does, then the first of the
+       plain ones that does. The usual kind is checked like any other: under
+       some filters Figure 5 has papers in one status only, and its doughnut is
+       then a single ring that says nothing. A choice the data no longer suits is
+       kept, not overwritten, so it comes back when the filters change again. */
+    function kindFor(key) {
+        var why = suitable(key);
+        var want = chosen[key];
+        if (want && KINDS[want] && !why[want]) return want;
+        if (!why[DEFAULTS[key]]) return DEFAULTS[key];
+        var fallback = ['column', 'bar', 'dot', 'table'].filter(function (k) { return !why[k]; });
+        return fallback[0] || 'table';
+    }
+
+    function palette(pal) {
+        var color = function (name, fallback) { return pal ? (pal[name] || fallback) : token(name, fallback); };
+        var c = {
+            maroon: color('--maroon', '#820707'), soft: color('--soft-maroon', '#b17d7d'),
+            dark: color('--dark-maroon', '#630000'), ink: color('--ink', '#330000'),
+            grey: color('--grey', '#9f9f9f'), border: color('--border', '#e6d4d4'),
+            cream: color('--cream', '#fff5f5'), white: color('--white', '#fff')
         };
-        var noLegend = { legend: { display: false } };
-        var tip = { backgroundColor: ink, titleColor: '#fff', bodyColor: '#fff',
-                    padding: 10, cornerRadius: 5, displayColors: false };
+        /* Anything filled (a bar, a slice, a segment) takes --maroon-surface, never
+           --maroon: under Old Night --maroon and --dark-maroon both lift to white,
+           which made the first and third slices of every pie the same white and a
+           bar a white block (see "--maroon is the mark" in CLAUDE.md). The third
+           slice keeps --dark-maroon where that is still dark, and a pale rose
+           where it has lifted, so seven slices stay seven colours in either palette.
+           Lines and dots are marks and keep --maroon, which reads on both grounds. */
+        c.fill = color('--maroon-surface', c.maroon);
+        var third = c.dark.toLowerCase() === c.maroon.toLowerCase() ? '#f0dada' : c.dark;
+        c.series = [c.fill, c.soft, third, '#a85a5a', '#d3a3a3', '#7a3b3b', '#c98c8c'];
+        c.third = third;
+        c.tip = { backgroundColor: c.ink, titleColor: '#fff', bodyColor: '#fff', padding: 10, cornerRadius: 5, displayColors: false };
+        return c;
+    }
 
-        return {
-            timeline: function () {
-                return { type: 'line',
-                    data: { labels: labels('timeline'), datasets: [{
-                        data: values('timeline'), borderColor: maroon, backgroundColor: cream,
-                        fill: true, tension: .35, pointBackgroundColor: maroon,
-                        pointRadius: 3, pointHoverRadius: 5, borderWidth: 2 }] },
-                    options: { responsive: true, maintainAspectRatio: false,
-                               plugins: Object.assign({ tooltip: tip }, noLegend), scales: axes } };
-            },
-            monthly: function () {
-                return { type: 'bar',
-                    data: { labels: labels('monthly'), datasets: [{
-                        data: values('monthly'), backgroundColor: [soft, maroon],
-                        borderRadius: 5, maxBarThickness: 64 }] },
-                    options: { responsive: true, maintainAspectRatio: false,
-                               plugins: Object.assign({ tooltip: tip }, noLegend), scales: axes } };
-            },
-            approval: function () {
-                return { type: 'bar',
-                    data: { labels: labels('approval'), datasets: [{
-                        data: values('approval'), backgroundColor: maroon,
-                        borderRadius: 5, maxBarThickness: 40 }] },
-                    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-                        plugins: Object.assign({ tooltip: Object.assign({}, tip, {
-                            callbacks: { label: function (c) { return c.parsed.x + '% approved'; } } }) }, noLegend),
-                        scales: {
-                            x: { beginAtZero: true, max: 100, grid: { color: border }, border: { display: false },
-                                 ticks: { color: grey, callback: function (v) { return v + '%'; } } },
-                            y: { grid: { display: false }, ticks: { color: grey,
-                                callback: function (value) { var label = this.getLabelForValue(value); return label.length > 22 ? label.slice(0, 20) + '…' : label; } } } } } };
-            },
-            types: function () {
-                return { type: 'doughnut',
-                    data: { labels: labels('types').map(function (label) {
-                        return label.length > 24 ? label.slice(0, 22) + '…' : label;
-                    }), datasets: [{
-                        data: values('types'), backgroundColor: series,
-                        borderColor: color('--white', '#fff'), borderWidth: 2 }] },
-                    options: { responsive: true, maintainAspectRatio: false, cutout: '58%',
-                        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10,
-                                   usePointStyle: true, pointStyle: 'circle', color: ink, padding: 12 } },
-                                   tooltip: Object.assign({}, tip, { callbacks: {
-                                       title: function (items) { return data.types[items[0].dataIndex].label; }
-                                   } }) } } };
-            },
-            status: function () {
-                var shown = data.status.filter(function (entry) { return entry.value > 0; });
-                return { type: 'doughnut',
-                    data: { labels: shown.map(function (entry) { return entry.label; }),
-                        datasets: [{ data: shown.map(function (entry) { return entry.value; }),
-                            backgroundColor: shown.map(function (entry) {
-                                return ({ Approved: maroon, 'In review': soft, Returned: '#d3a3a3', Other: dark })[entry.label];
-                            }),
-                            borderColor: color('--white', '#fff'), borderWidth: 2 }] },
-                    options: { responsive: true, maintainAspectRatio: false, cutout: '62%',
-                        plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10,
-                            usePointStyle: true, pointStyle: 'circle', color: ink, padding: 12 } }, tooltip: tip } } };
-            },
-            programs: function () {
-                return { type: 'bar',
-                    data: { labels: labels('programs'), datasets: [{ data: values('programs'),
-                        backgroundColor: maroon, borderRadius: 5, maxBarThickness: 20 }] },
-                    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-                        plugins: Object.assign({ tooltip: tip }, noLegend),
-                        scales: { x: { beginAtZero: true, grid: { color: border }, border: { display: false },
-                            ticks: { color: grey, precision: 0 } },
-                            y: { grid: { display: false }, ticks: { color: grey,
-                                callback: function (value) { var label = this.getLabelForValue(value); return label.length > 18 ? label.slice(0, 16) + '…' : label; } } } } } };
+    function config(key, kind, c) {
+        var shape = SHAPE[key], rate = shape === 'rate';
+        var rows = rowsOf(key);
+        // A slice of nothing is not drawn; a bar of nothing is, since "none" is an answer there.
+        if (kind === 'pie' || kind === 'doughnut' || kind === 'stacked') rows = rows.filter(function (r) { return r.value > 0; });
+        var full = rows.map(function (r) { return r.label; });
+        var short = function (n) { return full.map(function (l) { return l.length > n ? l.slice(0, n - 2) + '…' : l; }); };
+        var vals = rows.map(function (r) { return r.value; });
+        var total = vals.reduce(function (a, b) { return a + b; }, 0);
+        var share = function (v) { return total ? Math.round(v / total * 1000) / 10 : 0; };
+        var say = function (v) {
+            if (rate) return v + '% approved';
+            var s = v + (v === 1 ? ' paper' : ' papers');
+            return shape === 'parts' && total ? s + ' (' + share(v) + '% of ' + total + ')' : s;
+        };
+        var catColor = function (i) {
+            if (key === 'status') return ({ Approved: c.fill, 'In review': c.soft, Returned: '#d3a3a3', Other: c.third })[full[i]] || c.series[i % 7];
+            return c.series[i % c.series.length];
+        };
+        var tip = Object.assign({}, c.tip, { callbacks: {
+            title: function (items) { return items.length ? full[items[0].dataIndex] : ''; },
+            label: function (ctx) { return say(ctx.raw); }
+        } });
+        var valueAxis = { beginAtZero: true, grid: { color: c.border }, border: { display: false },
+                          ticks: rate ? { color: c.grey, callback: function (v) { return v + '%'; } } : { color: c.grey, precision: 0 } };
+        if (rate) valueAxis.max = 100;
+        var catAxis = function (n) { return { grid: { display: false }, ticks: { color: c.grey, autoSkip: true, maxRotation: 0,
+            callback: function (value) { var l = this.getLabelForValue(value); return l.length > n ? l.slice(0, n - 2) + '…' : l; } } }; };
+        var base = function (type, dataset, extra) {
+            return Object.assign({ type: type, data: { labels: full, datasets: [dataset] },
+                options: { responsive: true, maintainAspectRatio: false,
+                           plugins: { legend: { display: false }, tooltip: tip } } }, extra || {});
+        };
+        var legendBottom = { position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, usePointStyle: true,
+                             pointStyle: 'circle', color: c.ink, padding: 12 } };
+
+        switch (kind) {
+            case 'line': case 'area': case 'stepped': {
+                var cfgLine = base('line', { data: vals, borderColor: c.maroon, borderWidth: 2,
+                    backgroundColor: kind === 'area' ? c.cream : 'transparent', fill: kind === 'area',
+                    // Monotone, so the smoothed curve never dips below zero or above a peak between two counts.
+                    tension: kind === 'stepped' ? 0 : .35, cubicInterpolationMode: 'monotone',
+                    stepped: kind === 'stepped' ? 'middle' : false,
+                    pointBackgroundColor: c.maroon, pointRadius: 3, pointHoverRadius: 5 });
+                cfgLine.options.scales = { x: catAxis(14), y: valueAxis };
+                return cfgLine;
             }
-        };
+            case 'column': case 'bar': {
+                var flat = kind === 'bar';
+                var cfgBar = base('bar', { data: vals, borderRadius: 5,
+                    backgroundColor: key === 'monthly' ? [c.soft, c.fill] : c.fill,
+                    maxBarThickness: flat ? (full.length > 6 ? 20 : 40) : 64 });
+                cfgBar.options.indexAxis = flat ? 'y' : 'x';
+                cfgBar.options.scales = flat ? { x: valueAxis, y: catAxis(20) } : { x: catAxis(14), y: valueAxis };
+                return cfgBar;
+            }
+            case 'dot': {
+                // Points against a zero-based axis, no line between them: the comparison a bar makes, with less ink.
+                var upright = shape === 'time';
+                var cfgDot = base('line', { data: vals, showLine: false, pointRadius: 6, pointHoverRadius: 8,
+                    pointBackgroundColor: c.maroon, pointBorderColor: c.white, pointBorderWidth: 1.5 });
+                cfgDot.options.indexAxis = upright ? 'x' : 'y';
+                // Each point in the middle of its category's slot, as a bar would be, not on the slot's edge.
+                var dotCats = Object.assign(catAxis(upright ? 14 : 20), { offset: true });
+                cfgDot.options.scales = upright ? { x: dotCats, y: valueAxis } : { x: valueAxis, y: dotCats };
+                cfgDot.options.layout = { padding: { right: 8 } };
+                return cfgDot;
+            }
+            case 'radar': {
+                var cfgRadar = base('radar', { data: vals, borderColor: c.maroon, backgroundColor: c.cream, borderWidth: 2,
+                    pointBackgroundColor: c.maroon, pointRadius: 3 });
+                /* Each spoke is named with its own value, and the ring labels are
+                   hidden: printed up the top spoke they sat on its point (a 100%
+                   rate is drawn exactly where "100%" is written). */
+                cfgRadar.data.labels = short(16).map(function (l, i) { return l + ' · ' + (rate ? vals[i] + '%' : vals[i]); });
+                cfgRadar.options.scales = { r: { beginAtZero: true, max: rate ? 100 : undefined,
+                    grid: { color: c.border }, angleLines: { color: c.border },
+                    pointLabels: { color: c.ink, font: { size: 11 } },
+                    ticks: { display: false, stepSize: rate ? 25 : undefined } } };
+                return cfgRadar;
+            }
+            case 'pie': case 'doughnut': {
+                var cfgPie = base(kind, { data: vals, backgroundColor: vals.map(function (v, i) { return catColor(i); }),
+                    borderColor: c.white, borderWidth: 2 });
+                cfgPie.data.labels = short(24);
+                if (kind === 'doughnut') cfgPie.options.cutout = key === 'status' ? '62%' : '58%';
+                cfgPie.options.plugins.legend = legendBottom;
+                return cfgPie;
+            }
+            case 'stacked': {
+                // One bar, 100 wide, each category its share of it: the pie's question asked along a ruler.
+                var labs = short(24);
+                return { type: 'bar',
+                    data: { labels: [''], datasets: rows.map(function (r, i) {
+                        return { label: labs[i], data: [share(r.value)], count: r.value, backgroundColor: catColor(i),
+                                 borderColor: c.white, borderWidth: 1, maxBarThickness: 56 };
+                    }) },
+                    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                        plugins: { legend: legendBottom, tooltip: Object.assign({}, c.tip, { callbacks: {
+                            title: function (items) { return items.length ? full[items[0].datasetIndex] : ''; },
+                            label: function (ctx) { return say(ctx.dataset.count); } } }) },
+                        scales: { x: { stacked: true, beginAtZero: true, max: 100, grid: { color: c.border }, border: { display: false },
+                                       ticks: { color: c.grey, callback: function (v) { return v + '%'; } } },
+                                  y: { stacked: true, grid: { display: false }, ticks: { display: false } } } } };
+            }
+        }
+        return null;
+    }
+
+    function tableHtml(key) {
+        var esc = function (s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+        var rows = rowsOf(key), shape = SHAPE[key], head = COLUMNS[key];
+        var total = rows.reduce(function (a, r) { return a + r.value; }, 0);
+        var parts = shape === 'parts';
+        var html = '<table class="an-table an-view-table"><thead><tr><th scope="col">' + esc(head[0]) + '</th><th scope="col" class="is-num">' + esc(head[1]) + '</th>'
+                 + (parts ? '<th scope="col" class="is-num">Share</th>' : '') + '</tr></thead><tbody>';
+        rows.forEach(function (r) {
+            html += '<tr><td>' + esc(r.label) + '</td><td class="is-num">' + esc(shape === 'rate' ? r.value + '%' : String(r.value)) + '</td>'
+                  + (parts ? '<td class="is-num">' + (total ? Math.round(r.value / total * 1000) / 10 : 0) + '%</td>' : '') + '</tr>';
+        });
+        if (parts) html += '<tr class="is-total"><td>Total</td><td class="is-num">' + total + '</td><td class="is-num">100%</td></tr>';
+        return html + '</tbody></table>';
+    }
+
+    /* Draws one figure into a box holding a canvas: as a chart, or as a table
+       in place of it. Returns the Chart, or null for a table. */
+    function paint(box, key, c) {
+        var canvas = box.querySelector('canvas');
+        var kind = kindFor(key);
+        var tableBox = box.querySelector('.an-view-tablebox');
+        if (kind === 'table') {
+            if (!tableBox) { tableBox = document.createElement('div'); tableBox.className = 'an-view-tablebox'; box.appendChild(tableBox); }
+            tableBox.innerHTML = tableHtml(key);
+            tableBox.hidden = false;
+            canvas.hidden = true;
+            return null;
+        }
+        if (tableBox) tableBox.hidden = true;
+        canvas.hidden = false;
+        return new Chart(canvas, config(key, kind, c));
     }
 
     var titles = { timeline: 'Figure 1. Submissions over time', monthly: 'Figure 2. This month against last',
@@ -1939,27 +2158,33 @@ document.addEventListener('DOMContentLoaded', function () {
                      approval: 'approvalRateChart', types: 'paperTypeChart',
                      status: 'statusChart', programs: 'programChart' };
 
-    var configs = build();
+    var colors = palette();
     var drawn = {};
     var instance = null, openKey = null, opener = null;
 
-    function drawAll() {
-        Object.keys(configs).forEach(function (key) {
-            var el = document.getElementById(canvases[key]);
-            if (!el) { return; }
-            if (drawn[key]) { drawn[key].destroy(); }
-            drawn[key] = new Chart(el, configs[key]());
-        });
+    function setFont() {
+        Chart.defaults.font.family = token('--font-body', 'Inter') + ', Inter, system-ui, sans-serif';
+        Chart.defaults.font.size = 11;
+        Chart.defaults.color = colors.grey;
     }
+    setFont();
+
+    function drawOne(key) {
+        var el = document.getElementById(canvases[key]);
+        if (!el) return;
+        if (drawn[key]) { drawn[key].destroy(); }
+        drawn[key] = paint(el.parentNode, key, colors);
+    }
+    function drawAll() { Object.keys(canvases).forEach(drawOne); }
     drawAll();
+
     window.papelAnalyticsExportFigures = function (format) {
-        var light = {
+        var light = palette({
             '--maroon': '#820707', '--soft-maroon': '#b17d7d',
             '--dark-maroon': '#630000', '--ink': '#330000',
             '--grey': '#6e6a6e', '--border': '#e6d4d4',
             '--cream': '#fff5f5', '--white': '#ffffff'
-        };
-        var exportConfigs = build(light);
+        });
         var captions = {
             timeline: 'Figure 1. Submissions over time', monthly: 'Figure 2. Submissions this month and last month',
             approval: 'Figure 3. Percentage approved by paper type', types: 'Figure 4. Share of submissions by paper type',
@@ -1968,15 +2193,19 @@ document.addEventListener('DOMContentLoaded', function () {
         };
         return Object.keys(canvases).map(function (key) {
             if (!document.getElementById(canvases[key])) return null;
+            /* The export carries the figure as the reader chose to see it. A table
+               has no picture, so it goes out as the figure's usual chart, the
+               document already holding the same numbers in its own tables. */
+            var kind = kindFor(key) === 'table' ? DEFAULTS[key] : kindFor(key);
             var canvas = document.createElement('canvas');
             canvas.width = 1000;
             canvas.height = 500;
-            var config = exportConfigs[key]();
-            config.options.responsive = false;
-            config.options.animation = false;
-            config.options.font = { family: 'Arial, sans-serif', size: 15 };
-            config.options.plugins.papelValueLabels = { fontSize: 15 };
-            config.plugins = [{
+            var cfg = config(key, kind, light);
+            cfg.options.responsive = false;
+            cfg.options.animation = false;
+            cfg.options.font = { family: 'Arial, sans-serif', size: 15 };
+            cfg.options.plugins.papelValueLabels = { fontSize: 15 };
+            cfg.plugins = [{
                 id: 'exportWhiteBackground',
                 beforeDraw: function (chart) {
                     var context = chart.ctx;
@@ -1986,7 +2215,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     context.restore();
                 }
             }];
-            var chart = new Chart(canvas, config);
+            var chart = new Chart(canvas, cfg);
             var url = canvas.toDataURL(format === 'pdf' ? 'image/jpeg' : 'image/png', 0.92);
             chart.destroy();
             return { caption: captions[key], url: url, width: canvas.width, height: canvas.height };
@@ -1997,20 +2226,24 @@ document.addEventListener('DOMContentLoaded', function () {
         if (chart) requestAnimationFrame(function () { chart.resize(); });
     });
 
-    new MutationObserver(function () {
-        configs = build();
-        drawAll();
-        if (instance && openKey) {
-            instance.destroy();
-            instance = new Chart(document.getElementById('modalChart'), configs[openKey]());
-        }
-    }).observe(document.documentElement, {
-        attributes: true, attributeFilter: ['data-mode', 'data-color', 'data-theme']
-    });
-
     /* ---- The larger view ---- */
     var modal = document.getElementById('chartModal');
     var modalTitle = document.getElementById('chartModalTitle');
+    var modalBox = document.getElementById('modalChart').parentNode;
+
+    function openModalChart() {
+        if (instance) { instance.destroy(); instance = null; }
+        instance = paint(modalBox, openKey, colors);
+    }
+
+    new MutationObserver(function () {
+        colors = palette();
+        setFont();
+        drawAll();
+        if (openKey) openModalChart();
+    }).observe(document.documentElement, {
+        attributes: true, attributeFilter: ['data-mode', 'data-color', 'data-theme']
+    });
 
     function closeModal() {
         modal.classList.remove('is-open');
@@ -2022,17 +2255,18 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function bindExpandables() {
         document.querySelectorAll('.an-expandable').forEach(function (box) {
+            if (box.dataset.anBound) return;
+            box.dataset.anBound = '1';
             box.setAttribute('tabindex', '0');
             box.setAttribute('role', 'button');
             var open = function () {
                 var key = box.dataset.chart;
-                if (!configs[key]) { return; }
-                modalTitle.textContent = titles[key] || 'Chart';
+                if (!SHAPE[key]) { return; }
+                modalTitle.textContent = (titles[key] || 'Chart') + ' · ' + KINDS[kindFor(key)].label;
                 modal.classList.add('is-open');
                 document.body.style.overflow = 'hidden';
-                if (instance) { instance.destroy(); }
-                instance = new Chart(document.getElementById('modalChart'), configs[key]());
                 openKey = key;
+                openModalChart();
                 opener = box;
                 document.getElementById('chartModalPanel').focus();
             };
@@ -2043,14 +2277,155 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
     bindExpandables();
+
+    /* ---- The chooser on each figure ----
+       A button in the card's head naming what the figure is drawn as, opening a
+       menu of the kinds that suit its data and nothing else, the figure's usual
+       kind marked. The menu is one element on
+       <body>, fixed: the card clips its own overflow, so a menu inside it would
+       be cut off at the card's edge. */
+    var menu = document.createElement('div');
+    menu.className = 'an-view-menu';
+    menu.id = 'anViewMenu';
+    menu.setAttribute('role', 'menu');
+    menu.hidden = true;
+    document.body.appendChild(menu);
+    var menuFor = null;   // the button the menu is open for
+
+    function buttonFace(btn, key) {
+        var k = KINDS[kindFor(key)];
+        btn.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">' + k.icon + '</span>'
+                      + '<span class="an-view-name">' + k.label + '</span>'
+                      + '<span class="material-symbols-outlined an-view-caret" aria-hidden="true">expand_more</span>';
+        btn.setAttribute('aria-label', 'Chart type for ' + (titles[key] || 'this figure') + ': ' + k.label + '. Change');
+    }
+
+    function closeMenu(focusBack) {
+        if (menu.hidden) return;
+        menu.hidden = true;
+        if (menuFor) {
+            menuFor.setAttribute('aria-expanded', 'false');
+            if (focusBack) menuFor.focus();
+        }
+        menuFor = null;
+    }
+
+    function placeMenu(btn) {
+        var r = btn.getBoundingClientRect();
+        menu.style.left = '0px'; menu.style.top = '0px';
+        var w = menu.offsetWidth, h = menu.offsetHeight;
+        var left = Math.min(Math.max(8, r.right - w), innerWidth - w - 8);
+        var top = r.bottom + 6;
+        if (top + h > innerHeight - 8 && r.top - h - 6 > 8) top = r.top - h - 6;
+        menu.style.left = Math.max(8, left) + 'px';
+        menu.style.top = Math.max(8, top) + 'px';
+    }
+
+    function openMenu(btn) {
+        var key = btn.dataset.anView;
+        var why = suitable(key), now = kindFor(key);
+        menu.innerHTML = '';
+        var head = document.createElement('div');
+        head.className = 'an-view-menu-head';
+        head.textContent = 'Show ' + (titles[key] || 'this figure').replace(/^Figure \d+\. /, '').toLowerCase() + ' as';
+        menu.appendChild(head);
+        // Only what this figure's data can honestly be drawn as; the rest are not offered at all.
+        ORDER.filter(function (kind) { return !why[kind]; }).forEach(function (kind) {
+            var item = document.createElement('button');
+            item.type = 'button';
+            item.className = 'an-view-item';
+            item.setAttribute('role', 'menuitemradio');
+            item.setAttribute('aria-checked', kind === now ? 'true' : 'false');
+            item.dataset.kind = kind;
+            item.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">' + KINDS[kind].icon + '</span>'
+                + '<span class="an-view-text"><span class="an-view-label"></span></span>'
+                + (kind === DEFAULTS[key] ? '<span class="an-view-tag">Usual</span>' : '')
+                + (kind === now ? '<span class="material-symbols-outlined an-view-tick" aria-hidden="true">check</span>' : '');
+            item.querySelector('.an-view-label').textContent = KINDS[kind].label;
+            item.addEventListener('click', function () {
+                chosen[key] = kind;
+                remember();
+                drawOne(key);
+                buttonFace(btn, key);
+                closeMenu(true);
+            });
+            menu.appendChild(item);
+        });
+        menu.hidden = false;
+        menuFor = btn;
+        btn.setAttribute('aria-expanded', 'true');
+        placeMenu(btn);
+        var first = menu.querySelector('.an-view-item[aria-checked="true"]') || menu.querySelector('.an-view-item');
+        if (first) first.focus();
+    }
+
+    menu.addEventListener('keydown', function (e) {
+        var items = Array.prototype.slice.call(menu.querySelectorAll('.an-view-item'));
+        var at = items.indexOf(document.activeElement);
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            var next = items[(at + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length];
+            if (next) next.focus();
+        } else if (e.key === 'Home' || e.key === 'End') {
+            e.preventDefault();
+            (e.key === 'Home' ? items[0] : items[items.length - 1]).focus();
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            closeMenu(true);
+        } else if (e.key === 'Tab') {
+            closeMenu(false);
+        }
+    });
+    document.addEventListener('pointerdown', function (e) {
+        if (!menu.hidden && !menu.contains(e.target) && e.target.closest('.an-view-btn') !== menuFor) closeMenu(false);
+    }, true);
+    /* A scroll moves the button, so the fixed menu follows it, and closes only
+       once the button has left the window. Closing on any scroll looked right
+       and was not: the page scrolls smoothly, and the tail of a scroll still
+       running when the button was pressed shut the menu before it was seen. */
+    document.addEventListener('scroll', function (e) {
+        if (menu.hidden || !menuFor || menu.contains(e.target)) return;
+        var r = menuFor.getBoundingClientRect();
+        if (r.bottom < 0 || r.top > innerHeight) closeMenu(false); else placeMenu(menuFor);
+    }, true);
+    window.addEventListener('resize', function () { closeMenu(false); });
+
+    function bindViewChoosers() {
+        document.querySelectorAll('.an-chart-card[data-an-card]').forEach(function (card) {
+            var key = card.dataset.anCard;
+            if (!SHAPE[key] || !card.querySelector('.an-chart canvas')) return;   // an empty figure has nothing to redraw
+            var head = card.querySelector('.an-card-head');
+            if (!head) return;
+            var btn = head.querySelector('.an-view-btn');
+            if (!btn) {
+                btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'an-view-btn';
+                btn.dataset.anView = key;
+                btn.setAttribute('aria-haspopup', 'menu');
+                btn.setAttribute('aria-expanded', 'false');
+                btn.setAttribute('aria-controls', 'anViewMenu');
+                btn.title = 'Change the chart type';
+                btn.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    if (menuFor === btn) closeMenu(true); else { closeMenu(false); openMenu(btn); }
+                });
+                head.insertBefore(btn, head.querySelector('.an-card-toggle'));
+            }
+            buttonFace(btn, key);
+        });
+    }
+    bindViewChoosers();
+
     document.addEventListener('analytics:updated', function () {
+        closeMenu(false);
         if (modal.classList.contains('is-open')) closeModal();
-        Object.keys(drawn).forEach(function (key) { drawn[key].destroy(); });
+        Object.keys(drawn).forEach(function (key) { if (drawn[key]) drawn[key].destroy(); });
         drawn = {};
         data = JSON.parse(document.getElementById('anChartData').textContent);
-        configs = build();
         drawAll();
         bindExpandables();
+        bindViewChoosers();
     });
 
     document.getElementById('chartModalClose').addEventListener('click', closeModal);

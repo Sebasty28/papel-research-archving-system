@@ -160,9 +160,13 @@ if ($rc_requested_tab === null) {
 // Shared by the filter bar's own select and the export's "filtered by" line
 // further down, so the two can never disagree about what a type is called.
 // The types on the upload form, then Other, which matches every type an author typed themselves.
-$rcTypeLabels = paper_type_filter_options();
+$rcTypeLabels = paper_type_filter_options(true);
 
 $search        = trim($_GET['q'] ?? '');
+/* The paper's own programme, not the uploader's account: a Librarian files papers
+   for other people and has none, so the Course filter offered only BSIT and every
+   paper a Librarian filed was in no course at all. See paper_program_sql(). */
+$rc_prog       = paper_program_sql('rp', 'u');
 $filter_type   = trim($_GET['type'] ?? '');
 $filter_prog   = trim($_GET['program'] ?? '');
 $filter_year   = (int)($_GET['year'] ?? 0);
@@ -218,7 +222,7 @@ if ($search) {
     $t = "%$search%"; array_push($params, $t, $t, $t, $t); $types .= 'ssss';
 }
 if ($filter_type)    { $where .= " AND " . paper_type_filter_sql('rp.paper_type', $filter_type, $params, $types); }
-if ($filter_prog)    { $where .= " AND u.program = ?";     $params[] = $filter_prog; $types .= 's'; }
+if ($filter_prog)    { $where .= " AND $rc_prog = ?";      $params[] = $filter_prog; $types .= 's'; }
 if ($filter_section) { $where .= " AND u.section LIKE ?";  $params[] = "%$filter_section%"; $types .= 's'; }
 if ($filter_ay)      { $where .= " AND u.academic_year = ?"; $params[] = $filter_ay; $types .= 's'; }
 if ($filter_year) { $where .= " AND COALESCE(YEAR(rp.research_date), rp.year) = ?"; $params[] = $filter_year; $types .= 'i'; }
@@ -247,7 +251,7 @@ if (in_array($rcExportFormat, ['csv', 'xlsx', 'docx', 'pdf'], true)) {
     $exq = $conn->prepare("SELECT rp.title, rp.paper_type, rp.current_status, rp.upload_date,
                                    COALESCE(NULLIF(u.full_name, ''), NULLIF(rp.author_names, ''),
                                             'Account removed') AS student,
-                                   u.program AS student_program,
+                                   $rc_prog AS student_program,
                                    u.section AS student_section, u.academic_year AS student_ay
                             $rc_from WHERE $where
                             ORDER BY COALESCE(rp.research_date, rp.upload_date) DESC");
@@ -378,7 +382,7 @@ $sql = "SELECT rp.paper_id, rp.title, rp.author_names, rp.year, rp.keywords, rp.
                rp.upload_date, rp.research_date, rp.paper_type, rp.manuscript_type, rp.current_status,
                rp.file_path, rp.gdrive_file_id,
                $rc_waiting AS rc_waiting_since,
-               u.user_id AS author_id, u.program AS author_program,
+               u.user_id AS author_id, $rc_prog AS author_program,
                /* The archive is joined loosely, because papers_archive is meant to
                   outlive the accounts it names: a paper whose author has since been
                   deleted has no u.full_name at all. The card prints this in three
@@ -464,12 +468,13 @@ $yq->execute();
 $years = array_filter(array_column($yq->get_result()->fetch_all(MYSQLI_ASSOC), 'y'));
 $yq->close();
 
-$pq = $conn->prepare("SELECT DISTINCT u.program AS p $rc_from
-                      WHERE ({$rc_scope['sql']}) AND u.program IS NOT NULL AND u.program <> ''
+$pq = $conn->prepare("SELECT DISTINCT $rc_prog AS p $rc_from
+                      WHERE ({$rc_scope['sql']}) AND $rc_prog IS NOT NULL
                       ORDER BY p ASC LIMIT 30");
 if ($rc_scope['types'] !== '') $pq->bind_param($rc_scope['types'], ...$rc_scope['params']);
 $pq->execute();
-$programs = array_column($pq->get_result()->fetch_all(MYSQLI_ASSOC), 'p');
+// Every course, not only those on this desk: see program_filter_options().
+$programs = program_filter_options(array_column($pq->get_result()->fetch_all(MYSQLI_ASSOC), 'p'));
 $pq->close();
 
 $ayq = $conn->prepare("SELECT DISTINCT u.academic_year AS ay $rc_from
@@ -1206,7 +1211,7 @@ html[data-view="rows"] .paper-list .card-status .paper-action { display: none; }
                     <label class="filter-radio">
                         <input type="radio" name="type" value="" <?= $filter_type === '' ? 'checked' : '' ?>> All Types
                     </label>
-                    <?php foreach (['capstone' => 'Capstone Project', 'research' => 'Research Paper', 'thesis' => 'Thesis'] as $tv => $tl): ?>
+                    <?php foreach ($rcTypeLabels as $tv => $tl): ?>
                         <label class="filter-radio">
                             <input type="radio" name="type" value="<?= e($tv) ?>" <?= $filter_type === $tv ? 'checked' : '' ?>> <?= e($tl) ?>
                         </label>

@@ -2542,8 +2542,8 @@ function max_upload_label(): string {
 }
 
 /**
- * The most one request may carry, in bytes: PHP's post_max_size. 0 when it is
- * unlimited.
+ * The most one request may carry: the 30 MB application ceiling, or PHP's
+ * post_max_size if the host's limit is lower.
  *
  * max_upload_bytes() is the ceiling for a single file. A paper handed in as
  * IMRAD and as Full Manuscript sends two of them in one request, together with
@@ -2552,17 +2552,18 @@ function max_upload_label(): string {
  * page adds the sizes up against this before it sends anything.
  */
 function max_post_bytes(): int {
+    $ceiling = UPLOAD_POLICY_MAX_MB * 1024 * 1024;
     $raw = trim((string)ini_get('post_max_size'));
-    if ($raw === '' || $raw === '-1') return 0;
+    if ($raw === '' || $raw === '-1') return $ceiling;
     $unit = strtolower($raw[strlen($raw) - 1]);
     $n = (int)$raw;
     if ($unit === 'g')      $n *= 1024 * 1024 * 1024;
     elseif ($unit === 'm')  $n *= 1024 * 1024;
     elseif ($unit === 'k')  $n *= 1024;
-    return max(0, $n);
+    return $n > 0 ? min($ceiling, $n) : $ceiling;
 }
 
-/** The same limit as a label for a reader: "40MB". */
+/** The same limit as a label for a reader: "30MB". */
 function max_post_label(): string {
     return floor(max_post_bytes() / 1048576) . 'MB';
 }
@@ -3007,6 +3008,39 @@ function programs_map(): array {
            other or those papers are findable only under "Other". */
         'Bachelor of Science in Accountancy' => 'BSA',
     ];
+}
+
+/**
+ * The SQL for a paper's programme: the paper's own (program_category, which
+ * decides its filing folder and every report it appears in), and the uploader's
+ * account only for a paper that has none.
+ *
+ * Every list and report that filters, groups or prints by programme reads this,
+ * never the account's `program` alone. A Librarian files papers for other
+ * people and has no programme of their own, so reading the account lost every
+ * one of those papers (24 of the 27 on file on 20 November 2026): the Course and
+ * Program filters offered only BSIT and the papers were in no programme at all.
+ *
+ * Group by the expression itself, never by an alias: `GROUP BY program` is read
+ * as the users table's own column. Built from code, never from input.
+ */
+function paper_program_sql(string $paper = 'rp', string $user = 'u'): string {
+    return "COALESCE(NULLIF(TRIM($paper.program_category),''), NULLIF(TRIM($user.program),''))";
+}
+
+/**
+ * What a programme filter offers: every programme the campus has, in
+ * programs_map() order and not only those with papers (choosing an empty one is
+ * itself an answer), then any other value found on file (Faculty Member, a
+ * typed-in or retired name), so no paper becomes impossible to filter to.
+ */
+function program_filter_options(array $found = []): array {
+    $out = array_keys(programs_map());
+    foreach ($found as $p) {
+        $p = trim((string)$p);
+        if ($p !== '' && !in_array($p, $out, true)) $out[] = $p;
+    }
+    return $out;
 }
 
 /** The short code for a programme, or the name itself if it is not a known one. */
@@ -4203,8 +4237,30 @@ function paper_type_folder(string $paperType): string {
  * The paper types to offer as a filter: the ones on the form, then Other, which
  * matches every paper whose author typed their own.
  */
-function paper_type_filter_options(): array {
-    return paper_types() + [PAPER_TYPE_OTHER => 'Other'];
+function paper_type_filter_options(bool $onFile = false): array {
+    $out = paper_types();
+    /* A retired type is offered only while papers still carry it. Without this, the
+       one paper filed as "thesis" (20 November 2026) could not be reached by any
+       type filter on any desk or dashboard: the types summed to 26 of 27. Asked
+       only by a page (true), never by the unit list, which pins the plain four. */
+    if ($onFile) {
+        static $retiredOnFile = null;
+        if ($retiredOnFile === null) {
+            $retiredOnFile = [];
+            try {
+                $r = db()->query("SELECT DISTINCT LOWER(TRIM(paper_type)) t FROM research_papers
+                                  UNION SELECT DISTINCT LOWER(TRIM(paper_type)) FROM papers_archive");
+                $found = $r ? array_column($r->fetch_all(MYSQLI_ASSOC), 't') : [];
+                foreach (paper_types_retired() as $k => $label) {
+                    // An alias is not a type of its own: its papers are under the type it stands for.
+                    if (isset(paper_type_aliases()[$k])) continue;
+                    if (in_array($k, $found, true)) $retiredOnFile[$k] = $label;
+                }
+            } catch (Throwable $e) { $retiredOnFile = []; }
+        }
+        $out += $retiredOnFile;
+    }
+    return $out + [PAPER_TYPE_OTHER => 'Other'];
 }
 
 /**
@@ -4217,9 +4273,49 @@ function paper_type_filter_sql(string $column, string $value, array &$params, st
         $types   .= 's';
         return "$column LIKE ?";
     }
-    $params[] = $value;
-    $types   .= 's';
-    return "$column = ?";
+    // A type matches its aliases too: Undergraduate Thesis finds the papers stored as "thesis".
+    $want = paper_type_canonical($value);
+    $match = [$want];
+    foreach (paper_type_aliases() as $old => $new) {
+        if ($new === $want) $match[] = $old;
+    }
+    foreach ($match as $m) { $params[] = $m; $types .= 's'; }
+    return count($match) === 1 ? "$column = ?" : "$column IN (" . implode(', ', array_fill(0, count($match), '?')) . ")";
+}
+
+/**
+ * Old paper-type codes that mean a current type, and are read as that type.
+ *
+ * "thesis" is the retired code for what the form now calls an Undergraduate
+ * Thesis, and the owner asked for the two to be one category (20 November 2026):
+ * a filter offering both, and a chart with a "Thesis" slice beside an
+ * "Undergraduate Thesis" one, were the same papers twice over. It is the same
+ * shape as staff_position_aliases(): read, never written (the upload form cannot
+ * choose it), and scripts/migrations/sql/2026-11-20_thesis_paper_type.sql renames
+ * what is on file. The alias is the tolerant path for a copy that has not run it.
+ */
+function paper_type_aliases(): array {
+    return ['thesis' => 'undergrad_thesis'];
+}
+
+/** The current code for a stored paper type: an alias becomes the type it stands for. */
+function paper_type_canonical(?string $paperType): string {
+    $key = strtolower(trim((string)$paperType));
+    return paper_type_aliases()[$key] ?? (string)$paperType;
+}
+
+/**
+ * The SQL for a paper's type with its aliases folded in, for grouping and listing
+ * types: `GROUP BY rp.paper_type` would put "thesis" and "undergrad_thesis" in two
+ * groups with one label. Group by this expression, never by an alias of it.
+ * Built from code only.
+ */
+function paper_type_sql(string $column): string {
+    $case = "CASE LOWER(TRIM($column))";
+    foreach (paper_type_aliases() as $old => $new) {
+        $case .= " WHEN '" . $old . "' THEN '" . $new . "'";
+    }
+    return $case . " ELSE $column END";
 }
 
 /**
@@ -4500,7 +4596,7 @@ function paper_type_label(?string $paperType): string {
     $other = paper_type_other_name($paperType);
     if ($other !== null) return $other !== '' ? $other : 'Other';
     $labels = paper_types() + paper_types_retired();
-    $key = strtolower(trim((string)$paperType));
+    $key = strtolower(paper_type_canonical($paperType));   // "thesis" reads as Undergraduate Thesis
     return $labels[$key] ?? ucwords(str_replace('_', ' ', (string)$paperType));
 }
 
@@ -5999,16 +6095,14 @@ function schema_gaps(): array
 }
 
 /**
- * Answers a POST whose body PHP discarded for exceeding post_max_size.
+ * Answers a form POST exceeding the application/host limit, including bodies
+ * PHP discarded for exceeding post_max_size.
  *
- * Only fires when the body really was dropped: a form content type with
- * nothing parsed out of it and a Content-Length that says there was
- * something to parse. A JSON body (the assistant posts one) leaves $_POST
- * empty too and is deliberately not matched.
+ * Rejects oversized form requests whether PHP parsed them or discarded them.
+ * JSON bodies (such as Corpus messages) are deliberately not matched.
  */
 function guard_discarded_post(): void {
     if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') { return; }
-    if (!empty($_POST) || !empty($_FILES)) { return; }
 
     $len = (int)($_SERVER['CONTENT_LENGTH'] ?? 0);
     if ($len <= 0) { return; }
@@ -6017,6 +6111,8 @@ function guard_discarded_post(): void {
     $isForm = strpos($ctype, 'multipart/form-data') !== false
            || strpos($ctype, 'application/x-www-form-urlencoded') !== false;
     if (!$isForm) { return; }
+    // Enforce the application limit even when PHP accepted a larger request.
+    if ($len <= max_post_bytes() && (!empty($_POST) || !empty($_FILES))) { return; }
 
     /* PHP's own warning is sitting in the output buffer at this point and
        would prefix whatever we send, which is the very thing that stops the
@@ -6024,9 +6120,8 @@ function guard_discarded_post(): void {
        buffers), so the response can still be made clean. */
     while (ob_get_level() > 0) { ob_end_clean(); }
 
-    $limit = function_exists('max_upload_label') ? max_upload_label() : ini_get('upload_max_filesize');
-    $message = 'That file is larger than this server accepts (limit ' . $limit . '). '
-             . 'Save the PDF at a smaller size, or ask for the server limit to be raised, and try again.';
+    $message = 'The system cannot accept this upload. The total upload limit is ' . max_post_label()
+             . ', including form details. Please compress your files first, then try again.';
 
     /* Sec-Fetch-Dest is the browser's own word for what asked, and unlike
        $_POST it survives a discarded body. require_role() reads the matching

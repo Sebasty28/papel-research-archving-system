@@ -7,7 +7,10 @@
  * repairs a snapshot after an out-of-band database edit.
  */
 
-const PUBLIC_REPOSITORY_FILTER_CACHE_KEY = 'public_repository_filters_v1';
+/* v2: the type list folds retired aliases in ("thesis" is Undergraduate Thesis,
+   paper_type_aliases()). A new key, so a snapshot built before that is not served
+   for up to an hour on every copy of the site. */
+const PUBLIC_REPOSITORY_FILTER_CACHE_KEY = 'public_repository_filters_v2';
 const PUBLIC_REPOSITORY_FILTER_CACHE_SECONDS = 3600;
 
 function public_repository_filter_data(mysqli $conn): array {
@@ -41,7 +44,8 @@ function public_repository_filter_cache_refresh(mysqli $conn): array {
     $years = $conn->query("SELECT DISTINCT COALESCE(YEAR(research_date), year) AS year
                              FROM research_papers WHERE current_status = 'approved' ORDER BY year DESC")
                   ->fetch_all(MYSQLI_ASSOC);
-    $types = $conn->query("SELECT DISTINCT paper_type FROM research_papers
+    $typeSql = paper_type_sql('paper_type');
+    $types = $conn->query("SELECT DISTINCT $typeSql AS paper_type FROM research_papers
                              WHERE current_status = 'approved' AND paper_type IS NOT NULL
                                AND paper_type != '' ORDER BY paper_type ASC")
                   ->fetch_all(MYSQLI_ASSOC);

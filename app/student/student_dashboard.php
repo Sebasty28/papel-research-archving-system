@@ -727,7 +727,7 @@ $VIEW_SHELF = true;
                     <label class="filter-radio">
                         <input type="radio" name="type" value="" <?= $filter_type === '' ? 'checked' : '' ?>> All Types
                     </label>
-                    <?php foreach (paper_type_filter_options() as $tv => $tl): ?>
+                    <?php foreach (paper_type_filter_options(true) as $tv => $tl): ?>
                         <label class="filter-radio">
                             <input type="radio" name="type" value="<?= e($tv) ?>" <?= $filter_type === $tv ? 'checked' : '' ?>>
                             <?= e($tl) ?>

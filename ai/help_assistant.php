@@ -1,7 +1,7 @@
 <?php
 require_once '../config/core.php';
 require_once __DIR__ . '/../config/groq_config.php'; // GROQ_MODEL + the dedicated chatbot keys
-require_once __DIR__ . '/prompt_guard.php';
+require_once __DIR__ . '/corpus_guard.php'; // requires prompt_guard.php
 require_once __DIR__ . '/rate_limiter.php';
 
 header('Content-Type: application/json');
@@ -25,7 +25,13 @@ if (!$rateCheck['allowed']) {
 
 // Get JSON input
 $input = json_decode(file_get_contents('php://input'), true);
-$message = $input['message'] ?? '';
+// The same token check as app/student/student_assistant.php: a page on another site cannot spend these keys.
+if (!is_array($input) || !hash_equals(csrf_token(), is_string($input['_token'] ?? null) ? $input['_token'] : '')) {
+    http_response_code(403);
+    echo json_encode(['reply' => 'This page has expired. Refresh it and try again.']);
+    exit;
+}
+$message = is_string($input['message'] ?? null) ? $input['message'] : '';
 
 if (empty($message)) {
     http_response_code(400);
@@ -33,14 +39,16 @@ if (empty($message)) {
     exit;
 }
 
-// ── Prompt Injection Protection: Sanitize user input ──
-$check = PromptGuard::sanitizeInput($message);
-if (!$check['safe']) {
-    // Block the request entirely: do NOT send to AI
-    echo json_encode(['reply' => $check['message']]);
+/* The same guard as the site's Corpus (ai/corpus_guard.php): a password, a
+   key, code, a link or gibberish goes no further than here. Nothing calls
+   this endpoint any more, but it is still a URL that spends AI keys, so it is
+   held to the same rules rather than left as the easier way in. */
+$check = CorpusGuard::checkInput($message);
+if (!$check['ok']) {
+    http_response_code(400);
+    echo json_encode(['reply' => $check['message'], 'blocked' => $check['reason']]);
     exit;
 }
-// Use the sanitized version from here on
 $message = $check['input'];
 
 $userName = $u['full_name'] ?? 'User';
@@ -50,7 +58,7 @@ $userRole = ucfirst($u['user_role'] ?? 'Guest');
 $maxUpload = max_upload_label();
 
 // System Prompt / Context for Help Center (hardened with security rules)
-$systemContext = "You are Corpus, the PAPEL Support AI. You are assisting a $userRole named $userName.
+$systemContext = "You are Corpus, the PAPEL Support AI. Provide general support guidance without accessing private records.
 Your specific role is to help users solve problems they encounter on the platform.
 
 Guidelines for helping:
@@ -62,7 +70,7 @@ Guidelines for helping:
   - System errors: Advise using the 'Contact Support' page.
 - **Be Direct:** Focus on the solution.
 
-This is the Help Center. You are NOT the research writing assistant. You are the technical support guide." . PromptGuard::getSecurityRules();
+This is the Help Center. You are NOT the research writing assistant. You are the technical support guide." . PromptGuard::getSecurityRules() . CorpusGuard::rules();
 
 // Groq API Configuration
 /* Not asked for any more: the session says which engine to start on, and the
@@ -83,7 +91,7 @@ $payload = [
         ['role' => 'system', 'content' => $systemContext],
         ['role' => 'user', 'content' => $message]  // kept separate from system
     ],
-    'temperature' => 0.7,
+    'temperature' => 0.1,
     'max_tokens' => 500,
     'top_p' => 1,
     'stream' => false
@@ -116,6 +124,6 @@ $data = json_decode($out['body'], true);
 $reply = $data['choices'][0]['message']['content'] ?? 'I am not sure how to respond to that.';
 
 // ── Prompt Injection Protection: Validate output before returning ──
-$reply = PromptGuard::validateOutput($reply);
+$reply = CorpusGuard::cleanOutput($reply);
 
 echo json_encode(['reply' => $reply, 'engine' => ai_engine_current()]);

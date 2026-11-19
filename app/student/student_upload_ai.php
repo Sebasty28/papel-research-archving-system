@@ -3,6 +3,7 @@ error_reporting(0);
 ini_set('display_errors', '0');
 require_once '../../config/core.php';
 require_once '../../includes/corpus_knowledge.php';
+require_once '../../ai/corpus_guard.php'; // the chat pane's credential check and input limit
 /* Anyone who writes a paper, which is everyone.
 
    Staff upload their own work here too, and their submissions are published the
@@ -1279,7 +1280,13 @@ $PAGE_SKELETON = 'panes';
 require_once ROOT_PATH.'/includes/site_head.php';
 ?>
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>"  src="../../assests/js/input-validation.js" defer></script>
+<script nonce="<?= csp_nonce() ?>" src="<?= e(asset_url('assests/js/papel-pdf-compressor.js')) ?>" data-worker="<?= e(asset_url('assests/js/pdf-compression/worker.js')) ?>" defer></script>
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
+.pdf-compression-status { display: block; flex-basis: 100%; margin-top: .35rem; font-size: .75rem; color: var(--muted, #666); }
+.pdf-compression-status[hidden] { display: none; }
+.docs-file:has(.pdf-compression-status:not([hidden])) { flex-wrap: wrap; }
+.pdf-compression-restore { border: 0; background: transparent; color: inherit; text-decoration: underline; padding: 0 .25rem; cursor: pointer; }
+
 /* Enhanced Smooth Animations */
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(20px); }
@@ -2978,6 +2985,18 @@ hr {
     transition: background .15s, color .15s;
 }
 #chatCloseBtn:hover { background: var(--white); color: var(--dark-maroon); }
+/* New chat: the close button's shape, and unlike it never hidden, since the tab
+   closes the pane but nothing else starts the conversation again. */
+#chatNewBtn { background: none; border: none; color: var(--maroon); cursor: pointer; padding: 0; width: 26px; height: 26px;
+    display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-control, 4px); }
+#chatNewBtn:hover { background: var(--white); color: var(--dark-maroon); }
+/* The ready questions a new conversation opens with (includes/corpus_faq.php). */
+.corpus-faq { display: flex; flex-direction: column; align-items: flex-start; gap: .375rem; padding-left: 2.5rem; }
+.corpus-faq-label { font-size: .6875rem; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; color: var(--grey); }
+.corpus-faq-chip { max-width: 100%; padding: .4375rem .75rem; border: 1px solid var(--border); border-radius: 999px; background: var(--white);
+    color: var(--maroon); font: 500 .8125rem/1.3 var(--font-body); text-align: left; cursor: pointer; }
+.corpus-faq-chip:hover { border-color: var(--maroon); }
+.corpus-faq-chip:focus-visible { outline: 2px solid var(--maroon); outline-offset: 2px; }
 
 /* Dock + move-side controls, mirroring the close button's treatment. */
 #chatDockBtn,
@@ -3965,6 +3984,20 @@ body.doc-expanded .pdf-dock.side-hidden { visibility: visible !important; pointe
    items, and nothing above the first block or below the last, which would
    double the bubble's own padding. */
 .message.bot { line-height: 1.55; }
+/* Corpus's replies are justified, as the site's pop-up messages are (the owner's
+   request). Hyphenated, because a bubble this narrow holds six or seven words a
+   line and justifying that without breaking a long word opens rivers. A line that
+   ends at a newline (a list item, a short paragraph) is a last line and is left
+   ranged left, so lists do not stretch. The reader's own messages are untouched. */
+.message.bot { text-align: justify; hyphens: auto; -webkit-hyphens: auto; }
+/* Justified text needs a measure. The pane is 353px by default, and a reply capped at
+   82% of a row that is itself 92% of the pane set about 185px of text, where justifying
+   opened gaps a word wide. The reply takes its whole row instead (the avatar already
+   says whose it is), and in a column that narrow a list item, being indented and
+   shortest of all, stays ranged left; paragraphs are still justified. */
+#chat-messages { container-type: inline-size; }
+.msg-row > .message.bot { max-width: 100%; min-width: 0; }
+@container (max-width: 380px) { .message.bot li { text-align: left; } }
 .message.bot > * { margin: 0; }
 .message.bot > * + * { margin-top: .6rem; }
 .message.bot ul,
@@ -5123,6 +5156,8 @@ html.side-locked .main-tabs:not([data-on="form"]) + .step-row { display: none; }
 .up-drop.has-file .up-drop-name { color: var(--ok-text); }
 .up-drop.has-file .up-drop-text { color: var(--grey); font-size: .75rem; }
 .up-drop-error { margin: .35rem 0 0; font-size: .75rem; color: var(--bad-text); }
+.up-drop.is-invalid .up-drop-zone { border-style: solid; border-color: var(--bad-text); }
+.up-drop.is-invalid .up-drop-name { color: var(--bad-text); }
 .up-drop-hint { margin: .85rem 0 0; font-size: .75rem; color: var(--grey); }
 
 .papel-dialog-backdrop {
@@ -5831,7 +5866,7 @@ body.pdf-docked > .site-footer {
                       <tfoot>
                         <tr>
                           <td colspan="2">
-                            <p class="pdf-slots-size">PDF only, <?= e(max_upload_label()) ?> at most.</p>
+                            <p class="pdf-slots-size">PDF only, <?= e(max_upload_label()) ?> at most. From 10 MB to under 36 MB: Smallest mode reduces image quality and resolution. Files of 36 MB or more must be compressed before selecting them. Preview before submitting; Use original restores the selected file.</p>
                             <?php /* Both files travel in one request, which PHP refuses outright
                                      when they pass post_max_size between them, however far each
                                      is under its own limit. */ ?>
@@ -6278,6 +6313,7 @@ body.pdf-docked > .site-footer {
                 </div>
             </div>
             <div class="d-flex align-items-center gap-2">
+                <button type="button" id="chatNewBtn" aria-label="New chat" title="New chat"><span class="material-symbols-outlined mi-20">edit_square</span></button>
                 <button type="button" id="chatCloseBtn"><span class="material-symbols-outlined mi-20">close</span></button>
             </div>
         </div>
@@ -6290,7 +6326,7 @@ body.pdf-docked > .site-footer {
         </div>
         <div id="chat-input-area">
             <form id="chatForm" class="chat-input-wrapper">
-                <input type="text" id="chat-input" placeholder="Type your message..." autocomplete="off">
+                <input type="text" id="chat-input" placeholder="Type your message..." autocomplete="off" maxlength="<?= CorpusGuard::MAX_INPUT ?>">
                 <button type="submit" class="send-btn"><span class="material-symbols-outlined mi-18">send</span></button>
             </form>
         </div>
@@ -9317,6 +9353,8 @@ const PDF_FORMATS = [
 // The most one request may carry, for adding the files up before they are sent. 0 means no limit.
 const POST_MAX       = <?= (int)max_post_bytes() ?>;
 const POST_MAX_LABEL = <?= json_encode(max_post_label()) ?>;
+const FILE_MAX       = <?= (int)max_upload_bytes() ?>;
+const FILE_MAX_LABEL = <?= json_encode(max_upload_label()) ?>;
 
 function pdfInput(key)     { return document.getElementById('pdfFile_' + key); }
 function pdfIndicator(key) { return document.getElementById('pdf-indicator-' + key); }
@@ -9337,6 +9375,7 @@ function clearPdf(key) {
     const input = pdfInput(key);
     if (!input) return;
     input.value = '';
+    if (window.papelPdfCompressor) window.papelPdfCompressor.clear(input);
     updatePdfIndicator(input);
 }
 
@@ -9390,15 +9429,25 @@ function extractionSource() {
    throws the whole request away, token and all, so the student is told here,
    before anything is sent. Returns the sentence to show, or '' when it fits. */
 function filesTooBig() {
-    if (!POST_MAX) return '';
+    if (window.papelPdfCompressor && window.papelPdfCompressor.pending()) return 'Your PDF is still being compressed. Please wait for it to finish.';
+    return selectedFileSizeError();
+}
+function selectedFileSizeError() {
     let total = 0;
+    let oversized = null;
     document.querySelectorAll('#uploadForm input[type="file"]').forEach(function (input) {
-        if (input.files && input.files[0]) total += input.files[0].size;
+        if (input.files && input.files[0]) {
+            const file = input.files[0];
+            total += file.size;
+            if (file.size > FILE_MAX && !oversized) oversized = file;
+        }
     });
+    if (oversized) return 'The system cannot accept "' + oversized.name + '" (' + fileSizeLabel(oversized.size)
+        + '). The maximum size per PDF is ' + FILE_MAX_LABEL + '. Please compress your file first, then select it again.';
     // Room for the form's own text: small beside a PDF, but the sections can carry tables.
-    if (total + 262144 <= POST_MAX) return '';
-    return 'Your files add up to ' + (total / 1048576).toFixed(1) + 'MB, and the server takes at most '
-         + POST_MAX_LABEL + ' in one go, with everything else on this form. Please use smaller files.';
+    if (!POST_MAX || total + 262144 <= POST_MAX) return '';
+    return 'The system cannot accept these files together (' + fileSizeLabel(total) + '). The total upload limit is '
+         + POST_MAX_LABEL + ', including form details. Please compress your files first, then select them again.';
 }
 
 // What step 4 says the PDF is, or the PDFs are.
@@ -10036,6 +10085,7 @@ function updateFileIndicator(input, indicatorId) {
    script, but it can be emptied, which is all this needs to do. */
 function clearFileInput(input, indicatorId) {
     input.value = '';
+    if (window.papelPdfCompressor) window.papelPdfCompressor.clear(input);
     updateFileIndicator(input, indicatorId);
     if (typeof syncExtraDocs === 'function') { syncExtraDocs(); }
 }
@@ -10870,9 +10920,10 @@ function uploadDropsHtml() {
             : 'Attach the PDF of your paper.')
       + '</p>'
       + '<div class="up-drops">' + zones + '</div>'
+      + '<p class="up-drop-error" id="uploadDropValidation" role="alert" hidden></p>'
       + '<p class="up-drop-hint">PDF only, and the server takes at most ' + escHtml(POST_MAX_LABEL)
       + ' for everything on this form in one go. You can also do this on the page afterwards,'
-      + ' and nothing is sent until you submit at Step 4.</p>';
+      + ' and nothing is sent until you submit at Step 4. PDFs from 10 MB to under 36 MB use Smallest mode: images lose quality and resolution to save space. Files of 36 MB or more are not compressed automatically; please compress them first. Preview the result before submitting, or choose Use original to keep the original PDF.</p>';
 }
 
 /* Shown on every arrival at Step 2, unlike the question that follows it, which is
@@ -10903,6 +10954,24 @@ function wireUploadDrops(promise) {
     const ok = document.getElementById('papelDialogOk');
     if (ok) ok.textContent = 'Continue';
     const undo = [];
+    const validation = body.querySelector('#uploadDropValidation');
+    function refresh() {
+        if (!validation || !validation.isConnected) return;
+        const busy = !!(window.papelPdfCompressor && window.papelPdfCompressor.pending());
+        const sizeError = selectedFileSizeError();
+        const why = sizeError
+            ? (busy ? sizeError.replace('Please compress your file first, then select it again.', 'Automatic compression is running. Please wait.')
+                .replace('Please compress your files first, then select them again.', 'Automatic compression is running. Please wait.') : sizeError)
+            : (busy ? 'Your PDF is being compressed. Please wait before continuing.' : '');
+        validation.textContent = why;
+        validation.hidden = !why;
+        if (ok) { ok.disabled = !!why; ok.textContent = busy ? 'Compressing...' : 'Continue'; }
+        body.querySelectorAll('.up-drop').forEach(function (drop) {
+            paint(drop);
+            drop.classList.toggle('is-invalid', !!sizeError);
+            if (sizeError || busy) drop.classList.remove('has-file');
+        });
+    }
 
     function paint(drop) {
         const input = pdfInput(drop.dataset.format);
@@ -10966,12 +11035,18 @@ function wireUploadDrops(promise) {
         });
 
         // Chosen through the picker, or cleared from the row behind the box.
-        const onChange = function () { paint(drop); say(drop, ''); };
+        const onChange = function () { say(drop, ''); refresh(); };
         input.addEventListener('change', onChange);
         undo.push(function () { input.removeEventListener('change', onChange); });
     });
 
-    promise.then(function () { undo.forEach(function (off) { off(); }); });
+    document.addEventListener('papel:pdf-compression', refresh);
+    undo.push(function () { document.removeEventListener('papel:pdf-compression', refresh); });
+    refresh();
+    promise.then(function () {
+        undo.forEach(function (off) { off(); });
+        if (ok && validation && validation.isConnected) ok.disabled = false;
+    });
 }
 
 /* What Step 2 opens with, in a fixed order and one at a time: where the paper is
@@ -11208,6 +11283,10 @@ async function papelExtractMetadata(pdfFile, fd) {
 
 // Extract AI button handler
 document.getElementById('btnExtract').addEventListener('click', function(){
+  if (window.papelPdfCompressor && window.papelPdfCompressor.pending()) {
+    papelAlert('Your PDF is still being compressed. Please wait before extracting its metadata.');
+    return;
+  }
   /* The IMRAD PDF when there is one, since the form's sections are IMRAD-shaped;
      otherwise the one that is attached. Said aloud when there are two, so nobody
      is left wondering which of their files the AI read. */
@@ -13241,6 +13320,19 @@ function flashPuppyState(state, ms) {
 const CHAT_TYPING_ID = 'chat-typing';
 let chatTypingJobs = 0;
 const corpusHistoryKey = <?= json_encode(corpus_history_key($u)) ?>;
+/* The ready questions for this page, answers included, so a press answers at
+   once. The same list the floating Corpus offers (includes/corpus_faq.php). */
+/* The page's own copy of CorpusGuard's credential check (ai/corpus_guard.php,
+   printed from the same list, so the two cannot drift). A message that looks
+   like a password, a key or a code is refused here, before it leaves the
+   device: never sent, never shown in a bubble, never saved in the browser's
+   copy of the conversation. The server checks again; this is only the first. */
+const corpusSecretShapes = <?= json_encode(CorpusGuard::credentialPatternsForJs(), JSON_HEX_TAG | JSON_HEX_AMP) ?>.map(function (p) {
+    try { return new RegExp(p.s, p.f); } catch (e) { return null; }
+}).filter(Boolean);
+function corpusLooksSecret(text) { return corpusSecretShapes.some(re => re.test(text)); }
+const corpusSecretNote = 'For your safety, Corpus never accepts passwords, codes or keys, so that message was **not sent or saved**.\n\nIf it was a real password, change it now in **Settings > Security**.';
+const corpusChips = <?= json_encode(corpus_faq_chips((string)($_SERVER['REQUEST_URI'] ?? ''), $u), JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>;
 let corpusHistory = [];
 try {
     const saved = JSON.parse(sessionStorage.getItem(corpusHistoryKey) || '[]');
@@ -13316,9 +13408,17 @@ async function sendMessage() {
     const msg = input.value.trim();
     if (!msg) return;
 
+    if (corpusLooksSecret(msg)) {
+        input.value = '';
+        addMessage(corpusSecretNote, 'bot', 'alert');
+        flashPuppyState('alert', 4000);
+        return;
+    }
     const prior = corpusHistory.slice(-6);
-    addMessage(msg, 'user');
-    rememberCorpus('user', msg);
+    dropCorpusChips();
+    /* Remembered only once the server has accepted it (below), so a message it
+       refuses is never written to the browser's copy of the conversation. */
+    const mineId = addMessage(msg, 'user');
     input.value = '';
 
     clearTimeout(puppyRevertTimer);          // a reaction still counting down must not
@@ -13364,6 +13464,10 @@ async function sendMessage() {
         }
         // A 200 carrying no reply is still a failure to the student, so the dog
         // reacts to what actually came back rather than to the status code.
+        if (data && data.blocked === 'credential') {
+            const mine = document.getElementById(mineId);
+            if (mine) mine.textContent = 'Message removed for your safety.';
+        }
         if (data && data.reply) {
             reply = data.reply;
         } else {
@@ -13380,7 +13484,7 @@ async function sendMessage() {
 
     hideChatTyping();
     addMessage(reply, 'bot', mood);
-    if (!mood) rememberCorpus('assistant', reply);
+    if (!mood) { rememberCorpus('user', msg); rememberCorpus('assistant', reply); }
     flashPuppyState(mood ? 'alert' : 'successful', mood ? 4000 : 3200);
 }
 
@@ -13468,6 +13572,63 @@ function formatBotReply(text) {
     return out.join('');
 }
 
+/* Tells the server about a turn the page has already shown, so the AI has it as
+   context next time. Nothing waits on it and a failure loses nothing. */
+function tellCorpus(body) {
+    body._token = <?= json_encode(csrf_token()) ?>;
+    body.page = location.pathname + location.search;
+    fetch('student_assistant.php', { method: 'POST', papelQuiet: true,
+        headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) }).catch(function () {});
+}
+
+function dropCorpusChips() {
+    const box = document.getElementById('corpusFaq');
+    if (box) box.remove();
+}
+
+/* Only on a new conversation: once anything has been asked they are in the way,
+   and New chat brings them back. A press is answered from the page at once,
+   which is the point of it, so it skips the typing floor an AI answer waits on. */
+function showCorpusChips() {
+    if (!corpusChips.length) return;
+    const box = document.createElement('div');
+    box.className = 'corpus-faq';
+    box.id = 'corpusFaq';
+    const label = document.createElement('span');
+    label.className = 'corpus-faq-label';
+    label.textContent = 'Common questions';
+    box.appendChild(label);
+    corpusChips.forEach(function (faq) {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'corpus-faq-chip';
+        chip.textContent = faq.q;
+        chip.addEventListener('click', function () {
+            dropCorpusChips();
+            addMessage(faq.q, 'user');
+            rememberCorpus('user', faq.q);
+            addMessage(faq.a, 'bot');
+            rememberCorpus('assistant', faq.a);
+            tellCorpus({ faq: faq.id });
+            flashPuppyState('successful', 3200);
+            document.getElementById('chat-input').focus();
+        });
+        box.appendChild(chip);
+    });
+    document.getElementById('chat-messages').appendChild(box);
+}
+
+/* The greeting row printed with the page is kept and everything after it goes. */
+function newCorpusChat() {
+    corpusHistory = [];
+    try { sessionStorage.removeItem(corpusHistoryKey); } catch (error) {}
+    const container = document.getElementById('chat-messages');
+    while (container.children.length > 1) container.lastElementChild.remove();
+    showCorpusChips();
+    tellCorpus({ reset: true });
+    document.getElementById('chat-input').focus();
+}
+
 function addMessage(text, sender, mood) {
     const div = document.createElement('div');
     div.className = `message ${sender}`;
@@ -13502,6 +13663,8 @@ function addMessage(text, sender, mood) {
 // Wire up all inline-handler replacements
 document.addEventListener('DOMContentLoaded', function() {
     corpusHistory.forEach(line => addMessage(line.content, line.role === 'assistant' ? 'bot' : 'user'));
+    if (!corpusHistory.length) showCorpusChips();
+    document.getElementById('chatNewBtn').addEventListener('click', newCorpusChat);
     // Status checkboxes
     document.getElementById('status_published').addEventListener('change', function() { handleStatusChange(this); });
     document.getElementById('status_unpublished').addEventListener('change', function() { handleStatusChange(this); });
@@ -14090,6 +14253,7 @@ document.addEventListener('DOMContentLoaded', () => {
         altBtn.hidden = true;
         xBtn.hidden = false;
         okBtn.textContent = 'OK';
+        okBtn.disabled = false;
         cancelBtn.textContent = 'Cancel';
     }
     var fadeTimer = null;
@@ -14891,7 +15055,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return isPrompt ? null : undefined;
     }
 
-    okBtn.addEventListener('click', function () { close(answer()); });
+    okBtn.addEventListener('click', function () { if (!okBtn.disabled) close(answer()); });
     cancelBtn.addEventListener('click', function () { close(isConfirm ? false : null); });
     altBtn.addEventListener('click', function () { close('alt'); });
     xBtn.addEventListener('click', function () { close(dismiss()); });
@@ -14913,7 +15077,7 @@ document.addEventListener('DOMContentLoaded', () => {
             var focused = document.activeElement;
             if (isChoose && focused && focused.tagName === 'BUTTON' && focused.closest && focused.closest('.scope-pick')) return;
             e.preventDefault();
-            close(answer());
+            if (!okBtn.disabled) close(answer());
         }
     });
 })();

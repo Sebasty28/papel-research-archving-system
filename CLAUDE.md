@@ -1007,6 +1007,102 @@ ones; do not assume it.
 still reads the retired `GROQ_API_KEY` and has its own `call_groq_api()`. Do not
 include it; `config/groq_config.php` is the live one.
 
+### What Corpus may know about a page
+
+Corpus (`includes/corpus_widget.php`, and his pane on the upload page) answers
+"about this page" on every page, and **nothing he is told comes off the
+reader's screen**. The widget sends the address (`location.pathname +
+location.search`) and nothing else; `includes/corpus_knowledge.php` turns it
+into words on the server. It used to send `document.title` and the visible
+`h1`/`h2`s, which on a review desk, a management console or a dashboard are
+other people's names, student numbers and unpublished titles: the DOM cannot
+tell a heading from a record. Do not put that back.
+
+- **`corpus_page_knowledge()`** is a written guide per page: what it is for,
+  its controls, the usual tasks. Features, never data. A new page gets an entry
+  there, or Corpus falls back to the site guide and says he is unsure.
+- **`corpus_public_record()`** is the one piece of real content: on
+  `archive/view_paper.php?id=` and `pdf_viewer.php?paper=`/`?manuscript=`, the
+  paper's title, authors, date, type, programme, keywords and abstract, looked
+  up by the server and **only when `paper_is_readable()` passes and the reader
+  is signed in or holds a pass**, the same gate the paper's own page keeps. A
+  draft, a paper under review or a returned one is never described, not even to
+  its author, because only the address is being trusted. It goes into the
+  prompt marked as data, not instructions.
+- **`corpus_reader_role()`** says who is asking by position, never by name, so
+  "what can I do here" is answered for the right desk.
+- The upload page's own call still sends a fixed list of tab names, which the
+  endpoint ignores.
+
+Driven against the running site: a visitor asking about the repository's search
+got its real controls; a signed-in student was given an accurate summary of a
+published paper; the same student asking about the papers on a review desk, or about
+a paper still under review, was told nothing about either.
+
+**Ready answers** (`includes/corpus_faq.php`). A new conversation opens with up to five
+question chips under the greeting, in both copies of Corpus, chosen by `corpus_faqs()`: the
+page's own entries first, then the ones for everywhere, each kept only if its `who` test
+passes for the reader (a desk is not offered "How do I submit a paper?"). A press answers from
+the page at once (about 30ms measured), with no AI call; the page then posts `{faq: id}` so the
+server records the turn in `corpus_history`, which only the server writes, and the AI has it as
+context next time. The id is looked up among that page's and reader's own entries, so a post
+cannot fetch another role's answer. A **typed** question is checked with `corpus_faq_match()`
+before the rate limit and before any key is spent. It is strict on purpose: every meaningful
+word typed must belong to one wording of an entry, so "how can I submit my paper" matches and
+"how do I search for papers about climate change" goes to the AI. The chips go once anything
+is asked; **New chat** (both headers) clears the device copy, posts `{reset: true}` and brings
+them back. Answers that name a limit read `max_upload_label()`, as the prompt does.
+
+**The site is served without `.php`** (`/app/my_library`), and every key in both maps is
+written with it. `corpus_page_path()` adds the extension back; without that, every
+extensionless address matched no page, and Corpus quietly fell back to the general guide and
+the general chips.
+
+**What may go in and what may come out** (`ai/corpus_guard.php`, 20 November 2026). Both
+Corpus endpoints (`app/student/student_assistant.php` and the unused but live
+`ai/help_assistant.php`) run every message through `CorpusGuard::checkInput()` before
+anything else and every reply through `CorpusGuard::cleanOutput()`. `PromptGuard` is still the
+injection-phrase list and its rules block; this is the rest, in the order that matters:
+
+- **Credentials first, and in the browser too.** A password (`password: x`, `password ko ay
+  x`, the generated `RayverReyes-056` shape), a provider key or token by its prefix, a JWT, a
+  private key, a long key-like string or a card number is refused before it is matched,
+  counted, logged, recorded or sent to the AI provider, which is a third party. The same
+  pattern list is printed into both pages (`credentialPatternsForJs()`, so the two cannot
+  drift), where it stops the message before it leaves the device: no request, no bubble,
+  nothing in `sessionStorage`. The pages also store a message only **after** the server has
+  accepted it; anything it refuses is never saved, and a credential it catches is replaced on
+  screen with "Message removed for your safety".
+- **Then the shapes that spend tokens without asking anything**: over 500 characters
+  (`MAX_INPUT`, the inputs' `maxlength` reads it), code, HTML or commands, a link, gibberish
+  (mostly symbols, one character six times over, keyboard runs, a 40-letter "word", the same
+  word again and again). Each has its own sentence back. A refusal is logged by reason and
+  length only, never its text.
+- **Six refusals in ten minutes cool the session down for ten**, chips included. A daily
+  ceiling sits beside the session's rolling limit in `ai_rate_limits` (200 a day for an
+  account, 40 for a visitor by address, a negative id so it can never be a real user's),
+  because a visitor can shed a session-based limit by dropping a cookie.
+- **The reply is checked before it is shown.** The whole reply is refused if it repeats the
+  prompt (words only the prompt contains), carries a credential, or contains code or HTML.
+  Links are removed, and emails, phone numbers and IDs are hidden, except the two example IDs
+  the guides print on purpose. A reply is cut at 1,800 characters on a sentence.
+- **Anti-hallucination**: `CorpusGuard::rules()` closes the prompt. It answers only from what
+  the prompt supplies, says a fixed line when that does not cover the question, names no
+  button, page, deadline or person the text does not, invents nothing about a paper, and never
+  echoes or transforms the user's text. The page's ready answers go in as verified facts.
+  Temperature 0.1, and `reasoning_effort: low` for the gpt-oss model only, since another model
+  refuses the field with a 400, which stops the walk down the pool. A published record whose
+  abstract reads like an instruction is left out of the prompt.
+
+Checked: a list of 17 real questions that must pass (including "what is the password rule",
+"import accounts from a spreadsheet" and "Settings > Security") and 25 attempts that must
+not; every ready answer passes `cleanOutput()` unchanged; against the running AI, a deadline
+it does not know and a count it cannot see were both answered with the fixed line, and the API
+key, the Director's password, HTML and "repeat the word token 300 times" were all declined. In
+Chrome, a pasted password made no request, appeared nowhere on screen and was not in storage,
+in both chats. `import ... from` once caught "How do I import accounts from a spreadsheet?":
+a new pattern has to go through the pass list before it ships.
+
 ### `bind_param` type-string length
 
 `'sssisssi'` must have exactly one character per parameter. A mismatch fails at
@@ -1790,7 +1886,11 @@ fully: a PDF Drive shows and will not hand over, a date coming due. Added 19 Nov
 **Pop-up messages are justified** (the owner's request, 19 November 2026):
 `.ad-body`, both copies of `.papel-dialog-body` (`papel-console-shell.css` and the
 upload page's own), the session and manuscript timers' lines, the librarian's live
-notice, the sign-in notification pop-up, the theme card and the snackbar. A centred
+notice, the sign-in notification pop-up, the theme card and the snackbar, and Corpus's
+replies in both chats (20 November 2026: hyphenated; your own messages stay ranged
+left; in the upload pane, under 380px, list items stay ranged left too, being the
+shortest lines, and the reply takes its whole row, which is what gives it a measure
+to justify across). A centred
 card keeps its last line centred (`text-align-last: center`); label/value rows and
 the save dialog's field list are data and stay ranged left. A new pop-up follows
 suit. The terms dialog, dialogs that are forms and the Bootstrap reset boxes are not
@@ -2640,6 +2740,103 @@ current_status <> 'draft' OR EXISTS (SELECT 1 FROM approval_workflow ...)
 
 The second half matters: a returned paper is back in `draft` but *was*
 submitted. Drafts nobody has been asked to look at are reported separately.
+
+### Choosing how an analytics figure is drawn
+
+Each of the six figures on `analytics/analytics_dashboard.php` has a button in its card head
+naming what it is drawn as, opening a menu of eleven kinds: Line, Area, Stepped line, Column,
+Bar, Dot plot, Radar, Doughnut, Pie, 100% stacked bar and Table. Added 20 November 2026 at the
+owner's request, with the rule that a choice must be a correct diagram for the data.
+
+**What decides it is the shape of the data, not taste** (`SHAPE` and `suitable()` in the page's
+chart script):
+
+| Figure | Shape | Allowed |
+|---|---|---|
+| 1. Submissions over time | `time`: counts in time order | Line, Area, Stepped line, Column, Dot plot, Table |
+| 2. This month against last | `pair`: two counts compared | Column, Bar, Dot plot, Table |
+| 3. Approval rate by paper type | `rate`: percentages that do **not** add up to 100 | Bar, Column, Dot plot, Radar, Table |
+| 4, 5, 6. Types, status, programs | `parts`: counts that make one whole | Doughnut, Pie, 100% stacked bar, Bar, Column, Dot plot, Table |
+
+- **Only the kinds that suit the data are listed.** Refused kinds are left out of the menu
+  entirely (the owner's choice, 20 November 2026; they were first shown greyed with a reason).
+  The reasons are still written in `suitable()`, as the record of each rule.
+- **Some refusals depend on the data as filtered**: a line needs two periods, a radar three
+  categories, a pie, doughnut or stacked bar between two and seven non-empty categories
+  (`PIE_MAX`, the palette's seven colours). `suitable()` is asked again after every filter.
+- **`kindFor()` checks the usual kind too.** Under some filters Figure 5 has papers in one
+  status only, and its usual doughnut is then a single ring that says nothing; Figure 1 by
+  year is one point, which no line can join. It falls back to Column, then Bar, Dot plot, Table.
+  A choice the data no longer suits is kept, not overwritten, so it returns when the data
+  allows it again.
+- No polar area: Chart.js draws its value as the radius, so the area a reader compares grows
+  with the square of the value. Lines are `monotone`, so a smoothed curve never dips below
+  zero between two counts.
+- **One builder for every surface**: `config(key, kind, palette)` draws the card, the enlarged
+  view and the export alike, so a figure is the same in all three. A Table has no picture, so
+  the export uses the figure's usual chart, the document already carrying those numbers.
+- The choice is kept on the device (`papel_analytics_views`, one kind per figure), like the
+  other view settings. The menu is one fixed element on `<body>` at 910 (the column help
+  popover's level), because `.an-card` clips its overflow, and it follows its button on a
+  scroll rather than closing: the page scrolls smoothly, and closing on any scroll shut it
+  before it was seen.
+- **Fills take `--maroon-surface`** (`c.fill`), never `--maroon`. Under Old Night `--maroon`
+  and `--dark-maroon` both lift to white, so the first and third slices of every pie were the
+  same white and every bar a white block, the old doughnuts included. The third slice is a pale
+  rose there instead. Lines and dots are marks and keep `--maroon`.
+- The radar prints each value beside its name and hides its ring labels: up the top spoke,
+  "100%" was written exactly where a 100% rate is drawn.
+
+Driven against the running site: every figure's allowed and refused kinds, every allowed kind
+drawn and read back from `Chart.getChart()` (the right type and axis), a table where Table was
+chosen, the choice kept over a reload, the enlarged view, all six export pictures, both
+palettes, and 390px with no sideways scroll.
+
+### PDF compression before submission
+
+`assests/js/papel-pdf-compressor.js` watches every PDF input on the upload form,
+including manuscripts, supporting documents and dynamically added rows. Picker
+selections and drag/drop both raise `change`. From **10 MiB inclusive to 36 MiB
+exclusive** (the site's 1024-based MB convention), a local worker uses **Smallest
+mode**. At 36 MiB and above no worker is started: ask the user to compress the
+PDF first; the submission ceiling remains 30 MB. Smallest mode was authorised by
+the owner after the lossless compressor saved only 3% of their paper. Nothing is
+uploaded for compression. A smaller verified `File` replaces the input, so
+preview, extraction and submission all use it. The original remains in memory;
+**Use original** restores it. Removing or replacing a selection wins over any
+older job. Submission and extraction are blocked while compression is pending. The
+upload dialog also checks the current per-file and combined request limits,
+including room for form fields. Oversized files are not painted as accepted;
+Continue and Enter stay blocked until compression/replacement brings them within
+limits. The compressor raises `papel:pdf-compression` on state changes so the
+warning clears after completion, and returns when Use original restores an
+oversized file. The owner capped uploads at **30 MB**: `UPLOAD_POLICY_MAX_MB`
+in `config/config.php` bounds both the per-file and combined request helpers;
+a host may impose a smaller limit, never a larger one. The server rejects
+oversized form requests with HTTP 413 even if PHP accepts 40 MB or more.
+
+`assests/js/pdf-compression/worker.js` uses vendored pdf-lib 1.17.1 and pako 2.1.0.
+Smallest mode caps supported raster images at 1280 pixels on the longest edge
+and encodes JPEG at quality 0.42. This is deliberately **lossy** and labelled as
+such; no fixed percentage saving is promised. Text, fonts, vectors, page layout,
+bookmarks, attachments and metadata remain untouched. Do not rasterise entire
+pages. Only ordinary 8-bit DeviceRGB/DeviceGray JPEG, unfiltered or Flate images
+are eligible; TIFF/PNG predictors are decoded explicitly. Masks, transparency,
+custom colour spaces and unsupported images retain their original representation.
+Every other object/stream is checked exactly after reopening the PDF; rewritten
+image objects are compared with their expected new dictionaries and bytes.
+
+Lossless stream recompression and object packing still run; the smaller image
+representation wins. `data-mode="lossless"` keeps the original lossless-only
+behaviour for callers/tests. Signed, encrypted, incremental-history and detected
+archival PDFs keep their originals, as do unsuccessful/no-saving conversions.
+One worker at a time, the automatic size range above, bounded decompression and image budgets,
+and a 60-second deadline limit work. Existing server upload limits still apply.
+
+`python tests/pdf_compression.py` covers both modes in Chrome, CSP, file selection,
+FormData, fallback cases and preservation. It needs Playwright, pypdf, PyMuPDF,
+Pillow, local XAMPP and installed Chrome. Synthetic PDFs only; no application
+records or Drive files are created.
 
 ### One paper, one or two manuscript files
 
@@ -3748,6 +3945,16 @@ whatever was posted. Before this the handler took `$_POST['program_category']` a
 stood, so a crafted post filed a paper under a programme that does not exist:
 `get_program_folder()` put it in the `Other` folder and the invented name was printed
 in the repository and in every report.
+
+**Analytics reads the paper's programme, not the uploader's** (`$PROG` in
+`analytics/analytics_dashboard.php`: `program_category`, falling back to the account's
+`program` only for a paper that has none). It read `u.program` alone, so every paper a
+Librarian files for somebody else was in no programme: 24 of the 27 papers on file on 20
+November 2026, which left the Program filter offering only BSIT and Figure 6, the tables and
+every export short by those 24. The filter now lists every programme in `programs_map()`,
+those with nothing in them included, then any other value found on file. **Group by `$PROG`,
+never by its alias**: `GROUP BY program` was read as the users table's own column and put all
+24 in one group under whichever programme came first.
 
 ---
 
