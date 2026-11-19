@@ -110,6 +110,11 @@ html.storage-pdf-full .crumb-bar, html.storage-pdf-full .site-footer, html.stora
 }
 .storage-file-info .storage-access { margin-top: .4rem; padding: .1rem .5rem .1rem .35rem; font-size: .7rem; }
 .storage-tally { padding: .05rem .4rem .05rem .3rem; font-size: .68rem; }
+/* The badge anchors its own screen-reader words (.storage-sr, absolutely placed).
+   Without a positioned box between them and the page, those 1px spans escaped the
+   PDF lists' scroll clip and stretched the page to wherever they fell down the
+   list: on a short window the page scrolled 167px past the footer into white. */
+.storage-tally { position: relative; }
 .storage-file-info .storage-access .material-symbols-outlined, .storage-tally .material-symbols-outlined {
     display: inline-block; margin: 0; font-size: 15px; color: inherit;
 }

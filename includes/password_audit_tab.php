@@ -129,7 +129,13 @@ function password_audit_pane(array $rows, string $who = 'accounts'): void {
                         $last  = strtotime((string)$r['last_changed']);
                         $first = strtotime((string)$r['first_changed']);
                         ?>
-                        <tr class="<?= (int)$r['is_active'] === 1 ? '' : 'mgmt-row-off' ?>">
+                        <?php /* The attributes the consoles' sort chips read their rows by:
+                                 data-full-name (Faculty, Admins) and data-program (Students,
+                                 empty here: this tab has no programme chips). Without them the
+                                 chips "drive every pane" but found no rows on this one, so A-Z
+                                 and Z-A left the tab as it was. */ ?>
+                        <tr class="<?= (int)$r['is_active'] === 1 ? '' : 'mgmt-row-off' ?>"
+                            data-full-name="<?= e($r['full_name']) ?>" data-program="">
                             <td class="mgmt-name">
                                 <?= e($r['full_name']) ?>
                                 <span class="mgmt-sub">

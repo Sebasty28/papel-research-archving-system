@@ -43,7 +43,16 @@ $paper = $ps->get_result()->fetch_assoc();
 $ps->close();
 
 if (!$paper) {
-    flash('error', 'That paper is not one of yours to review.');
+    /* Two different answers. A notification can still point at a paper that has since
+       been deleted (12 such notices were on file on 20 November 2026), and telling that
+       reader "not one of yours" reads as a permissions fault when the paper is gone. */
+    $gone = $conn->prepare("SELECT 1 FROM research_papers WHERE paper_id = ? UNION ALL SELECT 1 FROM papers_archive WHERE paper_id = ? LIMIT 1");
+    $gone->bind_param('ii', $paper_id, $paper_id);
+    $gone->execute();
+    $exists = (bool)$gone->get_result()->fetch_row();
+    $gone->close();
+    flash('error', $exists ? 'That paper is not one of yours to review.'
+                           : 'That paper is no longer on file. It may have been removed.');
     header('Location: ' . $deskUrl);
     exit;
 }

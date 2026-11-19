@@ -775,6 +775,12 @@ box under a flex parent is sized to its content and widened a phone to 448px.
 The subtitle is behind an info mark beside the heading (`#storageInfoBtn`,
 opened by hover, focus or a tap, readable to a screen reader while hidden),
 so the panes get its line. The button stands beside the `h1`, not in it.
+**A badge anchors its own screen-reader words** (`.storage-tally { position: relative }`,
+`assests/css/storage_folder.css`). The 1px `.storage-sr` spans are absolutely placed, and with no
+positioned box between them and the page they escaped the PDF lists' scroll clip and stretched
+the page to where they fell down the list: on a 585px window it scrolled 167px past the footer
+into white (20 November 2026). Anything visually hidden inside a scrolling pane needs a
+positioned ancestor inside that pane.
 Each verified owner gets a separate list, one per account however many there are
 (the owner's words: four accounts, four lists; five, five). A file's kind is
 labelled by `manuscript_format_label()` and `supporting_doc_label()`, never

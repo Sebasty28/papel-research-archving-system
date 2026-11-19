@@ -57,6 +57,14 @@ $line('memory_limit', ini_get('memory_limit'));
 $line('max_execution_time', ini_get('max_execution_time') . 's');
 $line('post_max_size', ini_get('post_max_size'));
 $line('upload_max_filesize', ini_get('upload_max_filesize'));
+/* Which of the three limits is the one the form enforces. The per-PDF figure is the
+   smallest of PAPEL's ceiling, UPLOAD_MAX_MB from this copy's .env, and PHP's two
+   above; without these lines a "20MB" on the form could not be traced to .env or
+   to the host. Only PHP's can be the host's: raising .env past them changes nothing. */
+$line('PAPEL ceiling', UPLOAD_POLICY_MAX_MB . 'MB');
+$line('UPLOAD_MAX_MB (.env)', isset($_ENV['UPLOAD_MAX_MB']) ? $_ENV['UPLOAD_MAX_MB'] . 'MB' : '(not set: the ceiling)');
+$line('limit per PDF (enforced)', max_upload_label());
+$line('limit per submission', max_post_label());
 $line('curl extension', $yn(function_exists('curl_init')));
 $line('Smalot PdfParser', $yn(class_exists('\Smalot\PdfParser\Parser')));
 $line('vendor/autoload', $yn(is_file(__DIR__ . '/../../vendor/autoload.php')));
