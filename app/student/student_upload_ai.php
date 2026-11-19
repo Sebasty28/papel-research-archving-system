@@ -13320,6 +13320,7 @@ function flashPuppyState(state, ms) {
 const CHAT_TYPING_ID = 'chat-typing';
 let chatTypingJobs = 0;
 const corpusHistoryKey = <?= json_encode(corpus_history_key($u)) ?>;
+<?php $_SESSION['corpus_history'] = []; // a new page is a new chat, on the server too ?>
 /* The ready questions for this page, answers included, so a press answers at
    once. The same list the floating Corpus offers (includes/corpus_faq.php). */
 /* The page's own copy of CorpusGuard's credential check (ai/corpus_guard.php,
@@ -13334,17 +13335,15 @@ function corpusLooksSecret(text) { return corpusSecretShapes.some(re => re.test(
 const corpusSecretNote = 'For your safety, Corpus never accepts passwords, codes or keys, so that message was **not sent or saved**.\n\nIf it was a real password, change it now in **Settings > Security**.';
 const corpusChips = <?= json_encode(corpus_faq_chips((string)($_SERVER['REQUEST_URI'] ?? ''), $u), JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE) ?>;
 let corpusHistory = [];
-try {
-    const saved = JSON.parse(sessionStorage.getItem(corpusHistoryKey) || '[]');
-    if (Array.isArray(saved)) corpusHistory = saved.filter(line =>
-        line && (line.role === 'user' || line.role === 'assistant') && typeof line.content === 'string' && line.content.length <= 2000
-    ).slice(-12);
-} catch (error) {}
+/* Every page load is a new chat (the owner's request, 20 November 2026): a refresh,
+   another page, signing out and in. The conversation lives in this page's memory
+   only; the copy older builds kept in sessionStorage is removed, and the server's
+   own history is emptied as the page is drawn, so the AI forgets it too. */
+try { sessionStorage.removeItem(corpusHistoryKey); } catch (error) {}
 
 function rememberCorpus(role, content) {
     corpusHistory.push({role, content: String(content)});
     corpusHistory = corpusHistory.slice(-12);
-    try { sessionStorage.setItem(corpusHistoryKey, JSON.stringify(corpusHistory)); } catch (error) {}
 }
 
 /* Held even when the reply is already in hand. An answer that lands in the same

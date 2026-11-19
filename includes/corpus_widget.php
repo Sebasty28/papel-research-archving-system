@@ -6,6 +6,8 @@ require_once __DIR__ . '/corpus_knowledge.php';
 require_once ROOT_PATH . '/ai/corpus_guard.php';
 $corpusViewer = current_user();
 $corpusStorageKey = corpus_history_key($corpusViewer);
+// A new page is a new chat: the server forgets the last one too (see the script below).
+$_SESSION['corpus_history'] = [];
 /* The ready questions for this page and reader, answers included, so a press
    answers at once with no round trip. They are the same for every reader of
    the page (corpus_faq.php), which is what makes them safe to print. */
@@ -96,12 +98,11 @@ $corpusChips = corpus_faq_chips((string)($_SERVER['REQUEST_URI'] ?? ''), $corpus
     var SECRET_NOTE = 'For your safety, Corpus never accepts passwords, codes or keys, so that message was **not sent or saved**.\n\nIf it was a real password, change it now in **Settings > Security**.';
     var history = [];
     var busy = false;
-    try {
-        var saved = JSON.parse(sessionStorage.getItem(storageKey) || '[]');
-        if (Array.isArray(saved)) history = saved.filter(function (line) {
-            return line && (line.role === 'user' || line.role === 'assistant') && typeof line.content === 'string' && line.content.length <= 2000;
-        }).slice(-12);
-    } catch (error) {}
+    /* Every page load is a new chat (the owner's request, 20 November 2026): a refresh,
+       another page, signing out and in. The conversation lives in this page's memory
+       only; the copy older builds kept in sessionStorage is removed, and the server's
+       own history is emptied as the page is drawn, so the AI forgets it too. */
+    try { sessionStorage.removeItem(storageKey); } catch (error) {}
 
     function add(content, role, save) {
         var bubble = document.createElement('div');
@@ -119,7 +120,6 @@ $corpusChips = corpus_faq_chips((string)($_SERVER['REQUEST_URI'] ?? ''), $corpus
         if (save) {
             history.push({ role: role, content: String(content) });
             history = history.slice(-12);
-            try { sessionStorage.setItem(storageKey, JSON.stringify(history)); } catch (error) {}
         }
         return bubble;
     }

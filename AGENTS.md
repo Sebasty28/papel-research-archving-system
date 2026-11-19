@@ -1052,6 +1052,10 @@ word typed must belong to one wording of an entry, so "how can I submit my paper
 "how do I search for papers about climate change" goes to the AI. The chips go once anything
 is asked; **New chat** (both headers) clears the device copy, posts `{reset: true}` and brings
 them back. Answers that name a limit read `max_upload_label()`, as the prompt does.
+**Every page load is a new chat** (the owner's request, 20 November 2026): a refresh, another
+page, signing out and in. The conversation is held in the page's memory only, the
+`sessionStorage` copy older builds kept is removed on load, and `corpus_widget.php` and the
+upload page empty `$_SESSION['corpus_history']` as they are drawn, so the AI forgets it too.
 
 **The site is served without `.php`** (`/app/my_library`), and every key in both maps is
 written with it. `corpus_page_path()` adds the extension back; without that, every
