@@ -25,7 +25,11 @@ if (isset($_GET['code'])) {
             } elseif ($email === '') {
                 flash('error', 'Google Drive connected, but Google did not provide the account email for the history.');
             }
-            flash('success', 'Google Drive connected. Check the storage folder below before students submit papers.');
+            /* Said by Storage Folder in a pop-up, not a banner: it can also say
+               whether the account just chosen can write to the folder. A banner
+               said "connected" to somebody who had picked an account with view
+               access only, and the first sign of it was a student's failed upload. */
+            $_SESSION['gdrive_connected_popup'] = true;
             $redirect = BASE_URL . '/app/admin/gdrive_settings.php';
         } else {
             throw new Exception('Google authentication failed: ' . ($token['error_description'] ?? $token['error']));

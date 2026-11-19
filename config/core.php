@@ -76,8 +76,8 @@ function csp_nonce(): string {
                "style-src 'self' 'nonce-{$nonce}' https://cdn.jsdelivr.net https://fonts.googleapis.com; " .
                "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; " .
                "img-src 'self' data: blob: https://lh3.googleusercontent.com; " .
-               "connect-src 'self' https://api.groq.com https://www.googleapis.com https://docs.google.com{$proxyOrigin}; " .
-               "frame-src 'self' https://drive.google.com https://docs.google.com{$rcFrame}; " .
+               "connect-src 'self' https://api.groq.com https://www.googleapis.com{$proxyOrigin}; " .
+               "frame-src 'self' https://drive.google.com{$rcFrame}; " .
                "frame-ancestors 'self'; " .
                "form-action 'self'; " .
                "base-uri 'self'; " .
@@ -5851,6 +5851,17 @@ function supporting_doc_type_for_storage(string $type): string
 function schema_gaps(): array
 {
     $gaps = [];
+
+    require_once __DIR__ . '/gdrive_inventory.php';
+    if (!gdrive_inventory_ready()) {
+        $gaps[] = [
+            'key' => 'gdrive_file_inventory',
+            'what' => 'gdrive_file_inventory does not exist',
+            'effect' => 'PDF owners cannot be remembered across Google account changes. Opening Storage Folder creates this table when permitted.',
+            'sql' => gdrive_inventory_schema_sql() . ';',
+            'file' => 'scripts/migrations/sql/2026-11-19_gdrive_file_inventory.sql',
+        ];
+    }
 
     $driveHistory = db()->query("SELECT COUNT(*) AS n FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'gdrive_setting_history'");
     if (!$driveHistory || (int)$driveHistory->fetch_assoc()['n'] === 0) {

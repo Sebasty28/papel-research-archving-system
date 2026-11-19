@@ -733,6 +733,15 @@ account can edit. Open the folder in that account's Drive to be sure before past
 A deploy leaves `.env` and `config/gdrive_token.json` alone (see
 `.github/workflows/deploy-staging.yml`), so they have to exist on the server already.
 
+**Coming back from Google is a pop-up, not a banner.** `pages/gdrive_callback.php`
+sets `$_SESSION['gdrive_connected_popup']` instead of a success flash, and Storage
+Folder reads and clears it, so it is said once. It names the account and says, from
+the live folder check, whether that account can add files to the folder: the banner
+said "connected" to somebody who had chosen an account with view access only, and the
+first sign was a student's failed upload (19 November 2026). With a folder that cannot
+be used, or none, it offers Change the folder, which opens the Connection tab and puts
+the cursor in the folder box. The two history error flashes are still banners.
+
 **Connection and folder history:** `app/admin/gdrive_settings.php` shows the
 Director and Research Coordinator who connected Drive, which Google account
 granted access, and which folder was selected at each change. The callback reads
@@ -757,6 +766,102 @@ date and a Google Cloud billing review date in `system_settings`; the page
 counts down from those dates. These are manually entered reminders, not dates
 returned or verified by Google's Drive API, and saving them does not renew a
 plan. No new database table is needed for these two settings.
+
+**PDFs by Google account:** Storage Folder uses two resizable panes: settings tabs
+on the left and searchable PDF lists on the right. On narrow screens they stack.
+The page runs the window's width with the upload page's gutters (the cream frame
+6px from the edge). `.storage-main.wrap` is `width: 100%`, never `auto`: an auto
+box under a flex parent is sized to its content and widened a phone to 448px.
+The subtitle is behind an info mark beside the heading (`#storageInfoBtn`,
+opened by hover, focus or a tap, readable to a screen reader while hidden),
+so the panes get its line. The button stands beside the `h1`, not in it.
+Each verified owner gets a separate list, one per account however many there are
+(the owner's words: four accounts, four lists; five, five). A file's kind is
+labelled by `manuscript_format_label()` and `supporting_doc_label()`, never
+printed as the stored code ("full", "copyright_doc"). The current
+account is identified live; an account is labelled previous only if connection
+history records it. Other owners and shared drives have their own labels. PDFs
+without a confirmed owner stay under "Account not confirmed". Never infer an
+owner from an upload date, a folder setting or a sharing permission.
+
+`config/gdrive_inventory.php` collects distinct Drive IDs from live and archived
+papers, manuscripts and supporting documents. It reads only PDFs referenced by
+this installation, never all files in a person's Drive. `gdrive_file_inventory`
+remembers owners, parent folders and the account/date used for access checks.
+The guarded Storage Folder page creates the table; uploads only check for its
+existence, because DDL during an upload would commit its transaction. Uploads
+capture owner metadata in the existing Drive create response, best effort, and
+old records are checked in CSRF-protected batches of four. A failed lookup retains
+the last owner, and a 404 is labelled inaccessible or absent, never "deleted".
+New connections make earlier access results stale until checked again. Ownership
+transfers are reflected on the next successful check. Account checks read metadata;
+they do not move files, restore access or prove a PDF renders. The fallback SQL is
+`scripts/migrations/sql/2026-11-19_gdrive_file_inventory.sql`; schema.sql and
+schema_gaps() include it. No old OAuth tokens are retained for switching accounts.
+
+**Access, expanding and the export** (19 November 2026). Every PDF carries one
+badge from `gdrive_inventory_access()`: Accessible, View only, Not accessible, In
+Drive trash, Not checked, or Not confirmed when Google cannot say who is connected.
+Only a check by the account connected now counts, and View only is not accessible to
+PAPEL, which streams a file's contents (`alt=media`). Each list, and the whole set,
+carries a tally. The expand mark fills the window under the navbar, not the monitor
+(`html.storage-pdf-full`, level 800 like the upload page's full view, the page held
+on `<html>`). It measures the Accessibility tab and keeps clear of it, hides the
+strip, the footer and `.nav-photo`, and its frame is an opaque ground with the cream
+over it, since `--cream` is a 6% wash under Old Night. Export PDF lists, on the
+heading's line, posts to `app/admin/storage_pdfs_export.php` (the page's own gate,
+POST and token) in Excel, PDF, CSV or Word through the shared writers. It is chosen
+by kind of account rather than by account, because a check can rebuild the lists
+after the dialog was printed. The formats are radios: `select_skin.php` draws a
+select's menu in `<body>`, under a top-layer `<dialog>`.
+
+`includes/pdf_writer.php` now writes Latin-1 as WinAnsi a character at a time. It
+used to map the n-tilde and then replace every byte above 127, the mapped one
+included, so "Biñan" printed as "Bi?an" and every export title's middle dot as "??"
+in all the site's PDF exports.
+
+**A removed PDF is moved to Trash, not destroyed** (19 November 2026). When a
+paper is returned to its student, and when the student files it again over an
+earlier attempt, `purge_paper_drive_files()` now calls
+`gdrive_move_to_trash_folder()` instead of `delete_from_gdrive()`. `files.delete`
+is final - it does not go through Drive's own trash - so an adviser who returned
+a paper by mistake destroyed the student's only filed copy, with nothing to
+recover. The file keeps its id and its name and moves to a **`Trash` folder
+inside the storage folder** (`gdrive_trash_folder_id()`, made on first use,
+asked for afresh each request so a folder somebody deleted is simply made
+again). Nothing empties it: the Director or the Coordinator opens it in Drive
+and clears it, which is what it is for, and the Storage Folder page counts what
+is waiting under **Removed PDFs** with a link to it.
+
+- **An ordinary folder, not Drive's own trash** (`trashed=true`), which empties
+  itself after 30 days and mixes PAPEL's files in with everything else that
+  account has thrown away.
+- **False from the move means nothing happened.** The file is still where it
+  was and the row is left pointing at it, so a Drive that cannot be reached
+  loses nothing. A 404 reads as true, there being nothing left to move.
+- **No storage folder, no Trash folder.** `get_or_create_folder()` with no
+  parent would make a stray `Trash` in the root of whichever account is
+  connected, so `gdrive_trash_folder_id()` returns '' instead and the file is
+  left alone.
+- **The rollback of a failed submission still deletes outright**
+  (`student_upload_ai.php`'s catch): those files were made seconds earlier in
+  the same request, nothing references them and nobody has seen them, so
+  parking them would fill the folder with rubbish nobody could identify.
+
+**Open PDF carries Google's own Drive mark**, not a hand-drawn stand-in: the six
+paths in `gdrive_drive_mark_svg()` (`config/gdrive_inventory.php`) are copied
+byte for byte from Wikimedia Commons' `File:Google_Drive_icon_(2020).svg`
+(viewBox `0 0 87.3 78`, Author Google LLC, tagged public domain there as too
+simple to copyright - Drive's name and mark can still be a trademark, and this
+claims no right beyond showing where the link goes). An earlier three-polygon
+approximation was replaced once a real copy of the file could be read.
+**Open folder repeats the pager's own alignment fix** (`assests/css/paper-pager.css`,
+documented under the public repository's pager above): a decoration on a flex
+container is drawn by each flex item from its own baseline, so an underline on
+`.storage-folder-link` itself left the icon sitting visibly above the word. The
+word alone (`.storage-folder-word`) carries the underline, and the icon takes
+`line-height: 1; display: block`, which is what puts the two on one line
+(0.01px apart, measured, same as the pager's).
 
 ### A copy of the database can be behind the code
 
@@ -1383,14 +1488,13 @@ it bar the hooks listed below. Added 14 November 2026.
 
 **What goes**: the breadcrumb strip, the photo strip behind the navbar
 (`.nav-photo`), the footer, the accessibility tab, the scroll-to-top button,
-Corpus's floating button, his greeting and the upload pane shortcut, the survey
-invitation, the "Make it yours" card, the
-repository's banner, and the console side panel, which folds to its rail rather
-than going, so the filters are still a press away. **What stays**: the navbar,
-because the switch that turns this off is in it and a mode with no way out is a
-trap; the bell, the manuscript countdown, the flash messages and the loading
-bar, because a grant running out and a paper being returned are news rather
-than furniture. Nothing is widened and no type is changed: this is a quieting,
+Corpus's floating button, his greeting and the upload pane shortcut, the
+"Make it yours" card, the repository's banner, and the console side panel,
+which folds to its rail rather than going, so the filters are still a press
+away. **What stays**: the navbar, because the switch that turns this off is
+in it and a mode with no way out is a trap; the bell, the manuscript
+countdown, the flash messages and the loading bar, because a grant running
+out and a paper being returned are news rather than furniture. Nothing is widened and no type is changed: this is a quieting,
 not a reading mode.
 
 - **Read before the first paint**, beside the sidebar's own pre-paint block.
@@ -1677,6 +1781,20 @@ never `--white`, or it shows as a faint rectangle on a dark page and nowhere
 else. It is stated beside each `body` rule in `includes/theme.php`, so the token
 and the thing it describes cannot drift. The repository's View All Keywords
 overlay is the first reader of it.
+
+**`--warn-text`, `--warn-bg` and `--warn-border`** sit between `--ok-*` and
+`--bad-*` in both palettes (`includes/theme.php`), for something that works but not
+fully: a PDF Drive shows and will not hand over, a date coming due. Added 19 November
+2026 in place of a hardcoded amber on the Storage Folder's reminders.
+
+**Pop-up messages are justified** (the owner's request, 19 November 2026):
+`.ad-body`, both copies of `.papel-dialog-body` (`papel-console-shell.css` and the
+upload page's own), the session and manuscript timers' lines, the librarian's live
+notice, the sign-in notification pop-up, the theme card and the snackbar. A centred
+card keeps its last line centred (`text-align-last: center`); label/value rows and
+the save dialog's field list are data and stay ranged left. A new pop-up follows
+suit. The terms dialog, dialogs that are forms and the Bootstrap reset boxes are not
+messages and were left alone.
 
 Chart.js colours must be **read from the tokens at draw time** and rebuilt when
 the theme changes - see `analytics/analytics_dashboard.php` for the pattern.
@@ -3690,6 +3808,33 @@ Papers deleted from `research_papers` leave rows behind in `approval_workflow`,
 `paper_checklist`, `supporting_documents` and `paper_manuscripts`. `papers_archive` is *meant* to
 outlive its papers — never treat its rows as orphans.
 
+### What archiving a paper does, and what it does not
+
+`ArchiveService::archivePaper()` moves the row out of `research_papers` and into
+`papers_archive`, in one transaction, and refreshes the repository's filter
+cache. That is the whole of it.
+
+- **The paper leaves the public repository.** `archive/index.php` reads
+  `research_papers` alone, so an archived paper is no longer browsable or
+  searchable there. It is still readable by its own link
+  (`archive/view_paper.php` falls back to `papers_archive`), still served by
+  `app/paper_file.php`, and still listed on the Director's Archived tab and in
+  a reader's My Library.
+- **Google Drive is not touched at all.** The PDFs stay exactly where they are
+  in the storage folder, under the same ids; archiving is a database move, not
+  a file one. Nothing anywhere deletes an archived paper's files, and the Trash
+  folder above is only for a *returned* paper's.
+- **Manual and automatic archiving are the same act.** The Director's button
+  (`super_admin_review_dashboard.php`, `archive/view_paper.php`) and
+  `notifications/cron/auto_archive_papers.php` both call `archive_paper()`; the
+  only difference is `archived_by`, which the cron passes as 0 for "the
+  system". The cron's rule is `current_status='approved'` and
+  `DATEDIFF(NOW(), upload_date) >= 1825`, which is the five-year line.
+- **Restoring is the exact reverse** (`restorePaper()`), and puts the paper back
+  in the public repository.
+- See **Known gaps**: nothing schedules that cron, so the five-year rule has
+  never fired, and the script is a guardless public URL on the deployed copies.
+
 ---
 
 ## Testing
@@ -3833,6 +3978,16 @@ describe the dev box, not the cloud checkout.
   `gen_usecase.php` was renamed), and `docs/field_guide.html` (one, from
   `scripts/field_guide_content.py`). Each is one command away from correct;
   rebuild before handing any of them to a reader.
+- **The two scripts under `notifications/cron/` are deployed and have no
+  guard.** `deploy-staging.yml` excludes `scripts/**` but not these, so
+  `auto_archive_papers.php` and `send_notifications.php` are ordinary URLs on
+  staging and production that anybody who knows the path can run: the first
+  archives every approved paper over five years old, the second sends the
+  reminder mail. Neither checks a role, a CLI context or a token. They want
+  `if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }` and a secret in
+  the URL if a web cron has to reach them, or adding to the deploy's exclude
+  list if nothing runs them at all. **Nothing currently schedules either one**,
+  here or on the host, so the five-year rule below has never actually fired.
 - **`includes/progress_tracker.php` draws the retired four-stage tracker** and
   nothing requires it. It is the code twin of the documents deleted above: the
   wrong answer in the place somebody would look it up. Delete it or rewrite it

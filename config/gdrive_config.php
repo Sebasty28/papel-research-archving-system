@@ -24,6 +24,7 @@ function gdrive_library_ready(): bool
 }
 if (!function_exists('db'))
     require_once __DIR__ . '/core.php';
+require_once __DIR__ . '/gdrive_inventory.php';
 
 if (!function_exists('load_env')) {
     function load_env($file = __DIR__ . '/../.env')
@@ -653,13 +654,14 @@ function upload_to_gdrive(string $filePath, string $fileName, ?string $folderId 
             'data'       => file_get_contents($filePath),
             'mimeType'   => 'application/pdf',
             'uploadType' => 'multipart',
-            'fields'     => 'id'
+            'fields'     => gdrive_inventory_fields()
         ]);
 
         $service->permissions->create($file->id, new Google_Service_Drive_Permission([
             'type' => 'anyone', 'role' => 'reader'
         ]));
 
+        gdrive_inventory_record_file($file);
         return $file->id;
     } catch (Exception $e) {
         error_log('GDrive upload error: ' . $e->getMessage());
@@ -692,13 +694,14 @@ function upload_paper_to_gdrive(string $filePath, string $fileName, string $prog
             'data'       => file_get_contents($filePath),
             'mimeType'   => 'application/pdf',
             'uploadType' => 'multipart',
-            'fields'     => 'id'
+            'fields'     => gdrive_inventory_fields()
         ]);
 
         $service->permissions->create($file->id, new Google_Service_Drive_Permission([
             'type' => 'anyone', 'role' => 'reader'
         ]));
 
+        gdrive_inventory_record_file($file);
         return $file->id;
     } catch (Exception $e) {
         error_log('GDrive paper upload error: ' . $e->getMessage());
@@ -732,13 +735,14 @@ function upload_supporting_doc_to_gdrive(string $filePath, string $fileName, str
             'data'       => file_get_contents($filePath),
             'mimeType'   => 'application/pdf',
             'uploadType' => 'multipart',
-            'fields'     => 'id'
+            'fields'     => gdrive_inventory_fields()
         ]);
 
         $service->permissions->create($file->id, new Google_Service_Drive_Permission([
             'type' => 'anyone', 'role' => 'reader'
         ]));
 
+        gdrive_inventory_record_file($file);
         return $file->id;
     } catch (Exception $e) {
         error_log('GDrive supporting doc error: ' . $e->getMessage());
@@ -1034,8 +1038,141 @@ function gdrive_force_refresh(): bool
     }
 }
 
+/** The folder removed PDFs are parked in, inside the storage folder. */
+const GDRIVE_TRASH_FOLDER_NAME = 'Trash';
+
+/**
+ * The id of the Trash folder inside the storage folder, made on first use.
+ *
+ * Not Drive's own trash (`trashed=true`), which empties itself after 30 days
+ * and mixes PAPEL's files in with everything else that account has thrown
+ * away: this is an ordinary folder somebody can open, look through and empty
+ * by hand, which is what it is for.
+ *
+ * Asked for afresh each request rather than remembered in system_settings: it
+ * is one `files.list` per purge, and a folder somebody deleted in Drive is
+ * then simply made again, where a remembered id would point at nothing. '' is
+ * returned when there is no storage folder to put it in or Drive cannot be
+ * asked, and the caller must then leave the file alone rather than destroy it.
+ */
+function gdrive_trash_folder_id(?Google_Service_Drive $service = null): string
+{
+    static $id = null;
+    if ($id !== null) return $id;
+
+    $id = '';
+    $parent = get_gdrive_parent_folder_id();
+    // Never without a parent: get_or_create_folder() would otherwise make a
+    // stray "Trash" in the root of whichever account happens to be connected.
+    if ($parent === '' || !is_gdrive_connected()) return $id;
+
+    try {
+        $service = $service ?: new Google_Service_Drive(get_gdrive_client());
+        $id = get_or_create_folder($service, GDRIVE_TRASH_FOLDER_NAME, $parent);
+    } catch (Throwable $e) {
+        error_log('GDrive trash folder unavailable: ' . $e->getMessage());
+        $id = '';
+    }
+    return $id;
+}
+
+/**
+ * Moves one file into that Trash folder, instead of destroying it.
+ *
+ * `files.delete` is final: it does not go through Drive's own trash, so a
+ * returned paper's PDFs were gone the moment the adviser pressed the button,
+ * with nothing to recover if that was a mistake. The file keeps its name and
+ * its id, so a link already in circulation still resolves, and the Storage
+ * Folder page says how many are waiting to be cleared.
+ *
+ * Never throws. **False means nothing happened**: the file is still where it
+ * was and the caller must leave its row alone, so a Drive that cannot be
+ * reached loses nothing.
+ */
+function gdrive_move_to_trash_folder(string $fileId): bool
+{
+    $fileId = trim($fileId);
+    if ($fileId === '') return false;
+
+    if (!is_gdrive_connected()) {
+        error_log('GDrive trash skipped (not connected) for file ' . $fileId);
+        return false;
+    }
+
+    try {
+        $service = new Google_Service_Drive(get_gdrive_client());
+        $trashId = gdrive_trash_folder_id($service);
+        if ($trashId === '') {
+            error_log('GDrive trash skipped (no Trash folder) for file ' . $fileId);
+            return false;
+        }
+
+        // Its parents have to be read before they can be taken away, and a file
+        // can sit in more than one folder.
+        $file = $service->files->get($fileId, ['fields' => 'parents', 'supportsAllDrives' => true]);
+        $parents = $file->getParents() ?: [];
+        if (in_array($trashId, $parents, true) && count($parents) === 1) return true;   // already there
+
+        $service->files->update($fileId, new Google_Service_Drive_DriveFile(), [
+            'addParents'       => $trashId,
+            'removeParents'    => implode(',', $parents),
+            'fields'           => 'id,parents',
+            'supportsAllDrives' => true,
+        ]);
+        return true;
+    } catch (Exception $e) {
+        // Already gone is nothing to move, and the caller may clear its row.
+        if (strpos($e->getMessage(), '404') !== false || stripos($e->getMessage(), 'notFound') !== false) {
+            return true;
+        }
+        error_log('GDrive trash error for file ' . $fileId . ': ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * How many files are sitting in the Trash folder, and the folder's own id.
+ * Read by the Storage Folder page so the Director can see there is something
+ * to clear. Counts at most $cap, since the figure is only there to prompt.
+ */
+function gdrive_trash_contents(int $cap = 200): array
+{
+    $out = ['folder_id' => '', 'count' => 0, 'capped' => false];
+    try {
+        if (!is_gdrive_connected()) return $out;
+        $service = new Google_Service_Drive(get_gdrive_client());
+        $out['folder_id'] = gdrive_trash_folder_id($service);
+        if ($out['folder_id'] === '') return $out;
+
+        $pageToken = null;
+        do {
+            $page = $service->files->listFiles([
+                'q'        => "'" . $out['folder_id'] . "' in parents and trashed=false",
+                'fields'   => 'nextPageToken, files(id)',
+                'pageSize' => 100,
+                'pageToken' => $pageToken,
+                'supportsAllDrives' => true,
+                'includeItemsFromAllDrives' => true,
+            ]);
+            $out['count'] += count($page->getFiles());
+            $pageToken = $page->getNextPageToken();
+            if ($out['count'] >= $cap) { $out['capped'] = (bool)$pageToken; break; }
+        } while ($pageToken);
+    } catch (Throwable $e) {
+        error_log('GDrive trash count failed: ' . $e->getMessage());
+    }
+    return $out;
+}
+
 /**
  * Permanently deletes a single file from Google Drive by its file ID.
+ *
+ * Final, and not what a paper's own files go through any more: those are moved
+ * to the Trash folder by gdrive_move_to_trash_folder() so somebody can look at
+ * them first. What is left here is the rollback of a submission that failed
+ * part-way, where the file was made seconds earlier in the same request, is
+ * referenced by nothing and was never seen by anybody.
+ *
  * Never throws: returns false and logs on failure so callers (e.g. the decline
  * flow) are not interrupted when Drive is unreachable.
  */
@@ -1106,11 +1243,18 @@ function paper_drive_file_ids(int $paperId): array
 }
 
 /**
- * Removes a paper's manuscript file or files (IMRAD, Full Manuscript, or both)
- * and all of its supporting documents from Google Drive, then clears their
- * gdrive_file_id references in the database. Used when a submission is declined
- * so rejected files stop consuming Drive storage. Returns the number of Drive
- * files successfully deleted.
+ * Takes a paper's manuscript file or files (IMRAD, Full Manuscript, or both)
+ * and all of its supporting documents out of the storage folder, then clears
+ * their gdrive_file_id references in the database. Used when a submission is
+ * returned, so the student's next attempt starts clean.
+ *
+ * **They are moved to the Trash folder, not destroyed** (14 November 2026 ->
+ * 19 November 2026): this used to call delete_from_gdrive(), which is final,
+ * so an adviser returning a paper by mistake destroyed the student's only
+ * filed copy. A row is cleared only when its file really has been moved, so a
+ * Drive that cannot be reached leaves both the file and the reference alone.
+ *
+ * Returns the number of Drive files moved.
  */
 function purge_paper_drive_files(int $paperId): int
 {
@@ -1132,7 +1276,7 @@ function purge_paper_drive_files(int $paperId): int
             $ms->execute();
             $msRes = $ms->get_result();
             while ($m = $msRes->fetch_assoc()) {
-                if (delete_from_gdrive($m['gdrive_file_id'])) {
+                if (gdrive_move_to_trash_folder($m['gdrive_file_id'])) {
                     $deleted++;
                     $gone[$m['gdrive_file_id']] = true;
                     $mu = $conn->prepare("UPDATE paper_manuscripts SET gdrive_file_id=NULL WHERE manuscript_id=?");
@@ -1149,7 +1293,7 @@ function purge_paper_drive_files(int $paperId): int
         $row = $stmt->get_result()->fetch_assoc();
         if ($row && !empty($row['gdrive_file_id'])) {
             $already = isset($gone[$row['gdrive_file_id']]);
-            if ($already || delete_from_gdrive($row['gdrive_file_id'])) {
+            if ($already || gdrive_move_to_trash_folder($row['gdrive_file_id'])) {
                 if (!$already) $deleted++;
                 $upd = $conn->prepare("UPDATE research_papers SET gdrive_file_id=NULL WHERE paper_id=?");
                 $upd->bind_param('i', $paperId);
@@ -1163,7 +1307,7 @@ function purge_paper_drive_files(int $paperId): int
         $docs->execute();
         $docRes = $docs->get_result();
         while ($doc = $docRes->fetch_assoc()) {
-            if (delete_from_gdrive($doc['gdrive_file_id'])) {
+            if (gdrive_move_to_trash_folder($doc['gdrive_file_id'])) {
                 $deleted++;
                 $du = $conn->prepare("UPDATE supporting_documents SET gdrive_file_id=NULL WHERE doc_id=?");
                 $du->bind_param('i', $doc['doc_id']);

@@ -1,0 +1,190 @@
+/* The upload page's gutters: the cream frame 6px from the window, its page 6px inside that. */
+/* width: 100%, never auto: a flex parent would size an auto box to its content and widen the page on a phone. */
+.storage-main.wrap { width: 100%; box-sizing: border-box; max-width: none; padding-left: 6px; padding-right: 6px; }
+.storage-main .set-wrap { max-width: none; padding: 1.25rem 0; }
+.storage-main .set-head { padding: 0 6px; position: relative; margin-bottom: .75rem; }
+.storage-head-row { display: flex; align-items: center; gap: .35rem; }
+.storage-main .storage-head h1 { margin: 0; }
+.storage-info {
+    flex: 0 0 auto; width: 28px; height: 28px; padding: 0;
+    border: 0; border-radius: 50%; background: none; color: var(--grey);
+    display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.storage-info .material-symbols-outlined { font-size: 20px; }
+.storage-info:hover, .storage-info[aria-expanded="true"] { color: var(--maroon); }
+.storage-info:focus-visible { outline: 2px solid var(--maroon); outline-offset: 2px; }
+/* Hidden to the eye, not to a screen reader: the button is described by it. */
+.storage-main .set-head .storage-info-tip {
+    position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0;
+    overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%);
+}
+/* Absolute in the heading, not fixed: it rides with the page and cannot leave the window. */
+.storage-main .set-head .storage-info-tip.is-open {
+    top: calc(100% + 4px); left: 6px; z-index: 30;
+    width: auto; height: auto; max-width: min(28rem, calc(100% - 12px));
+    margin: 0; padding: .55rem .7rem;
+    overflow: visible; clip: auto; clip-path: none;
+    background: var(--white); color: var(--ink);
+    border: 1px solid var(--border); border-radius: var(--r-card, 8px);
+    box-shadow: 0 6px 20px rgb(0 0 0 / .14);
+    font-size: .75rem; line-height: 1.5; text-align: justify;
+}
+.storage-layout { display: grid; grid-template-columns: minmax(320px, var(--storage-left, 40%)) 12px minmax(0, 1fr); align-items: stretch; }
+.storage-settings { grid-column: 1; }
+.storage-pdfs { grid-column: 3; }
+.storage-pane { min-width: 0; background: var(--cream); padding: 6px; border-radius: var(--r-card, 8px); height: var(--storage-height, 70vh); display: flex; flex-direction: column; }
+.storage-tabs { display: flex; gap: 3px; flex: 0 0 auto; overflow-x: auto; padding-top: 2px; }
+.storage-tab { border: 0; background: rgba(177,125,125,.08); color: var(--grey); border-radius: 8px 8px 0 0; padding: .7rem .8rem; font: inherit; font-size: .78rem; white-space: nowrap; cursor: pointer; }
+.storage-tab[aria-selected="true"], .storage-pane-title { background: var(--white); color: var(--maroon); font-weight: 600; }
+.storage-tab:focus-visible { outline: 2px solid var(--maroon); outline-offset: -3px; }
+.storage-pane-title { border-radius: 8px 8px 0 0; margin: 0; padding: .7rem .85rem; font-size: .9rem; display: flex; align-items: center; gap: .5rem; }
+.storage-pane-title .material-symbols-outlined { font-size: 20px; }
+.storage-pane-title h2 { margin: 0; flex: 1; min-width: 0; display: flex; align-items: center; gap: .5rem;
+    font-size: inherit; font-weight: inherit; color: inherit; }
+.storage-expand {
+    flex: 0 0 auto; width: 30px; height: 30px; margin: -4px -4px -4px auto; padding: 0;
+    border: 0; border-radius: 6px; background: none; color: var(--grey);
+    display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.storage-expand:hover, .storage-expand[aria-pressed="true"] { color: var(--maroon); background: var(--cream); }
+.storage-expand:focus-visible { outline: 2px solid var(--maroon); outline-offset: -2px; }
+/* Expanded: the window under the navbar, never the monitor. Level 800, the upload
+   page's full view's, so every bar on the ladder stays in front; the strip and the
+   footer go (visibility, so the held page keeps its height), and the page is held
+   on <html>, never <body>, or the sticky navbar scrolls away under it. */
+html.storage-pdf-full { overflow: hidden; }
+html.storage-pdf-full .storage-pdfs {
+    position: fixed; z-index: 800;
+    top: calc(var(--nav-h, 0px) + 6px); bottom: 6px; height: auto;
+    left: var(--storage-full-left, 6px); right: var(--storage-full-right, 6px);
+    /* The page's own ground over everything round it, so the gaps are not windows onto the page. */
+    box-shadow: 0 0 0 100vmax var(--page-bg);
+    /* Opaque ground, the cream laid over it as an image: --cream is a 6% white wash
+       under Old Night, and the page behind showed through the frame. */
+    background-color: var(--page-bg); background-image: linear-gradient(var(--cream), var(--cream));
+}
+html.storage-pdf-full .storage-pdfs .storage-pane-body { overflow: auto; }
+/* The photo behind the navbar runs on behind the strip, so it goes with it, as in Zen Mode. */
+html.storage-pdf-full .crumb-bar, html.storage-pdf-full .site-footer, html.storage-pdf-full .nav-photo { visibility: hidden; }
+.storage-pane-body { min-height: 0; overflow: auto; overscroll-behavior: contain; background: var(--white); border-radius: 0 0 6px 6px; padding: 12px; flex: 1; scrollbar-gutter: stable; }
+.storage-main .set-card { padding: .9rem; margin: 0 0 .75rem; }
+.storage-main .set-card:last-child { margin-bottom: 0; }
+.storage-main .set-status > div { min-width: 0; }
+.storage-main .set-status-note strong, .storage-main .set-status-id { overflow-wrap: anywhere; }
+.storage-main .set-date-fields, .storage-main .set-reminders { grid-template-columns: 1fr; }
+.storage-grip { grid-column: 2; cursor: col-resize; touch-action: none; display: grid; place-items: center; }
+.storage-grip::after { content: ''; width: 3px; height: 38px; border-radius: 2px; background: var(--border); }
+.storage-grip:hover::after, .storage-grip:focus-visible::after { background: var(--maroon); }
+.storage-tools { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin-bottom: .65rem; }
+.storage-filter { border: 1px solid var(--border); background: var(--white); color: var(--ink); border-radius: 20px; font: inherit; font-size: .75rem; padding: .4rem .65rem; cursor: pointer; }
+/* A fill, so --maroon-surface: --maroon is white under Old Night and the label would vanish. */
+.storage-filter[aria-pressed="true"] { background: var(--maroon-surface); border-color: var(--maroon-surface); color: #fff; }
+.storage-search { display: block; margin: .75rem 0; }
+.storage-search span { display: block; font-size: .75rem; margin-bottom: .3rem; color: var(--grey); }
+.storage-search input { width: 100%; box-sizing: border-box; padding: .6rem .75rem; border: 1px solid var(--border); border-radius: 6px; font: inherit; font-size: .8125rem; }
+.storage-hint, .storage-list-total, .storage-empty { font-size: .75rem; line-height: 1.6; color: var(--grey); margin: .5rem 0 .75rem; }
+.storage-check-status { font-size: .75rem; line-height: 1.5; color: var(--maroon); }
+.storage-account { border: 1px solid var(--border); border-radius: 8px; margin: .7rem 0; overflow: hidden; }
+.storage-account > summary { display: flex; align-items: center; gap: .65rem; cursor: pointer; padding: .85rem; background: var(--cream); list-style: none; }
+.storage-account > summary::-webkit-details-marker { display: none; }
+.storage-account > summary::after { content: '+'; color: var(--maroon); font-size: 1.1rem; }
+.storage-account[open] > summary::after { content: '−'; }
+.storage-account > summary > .material-symbols-outlined { color: var(--maroon); font-size: 22px; }
+.storage-account-name { min-width: 0; flex: 1; }
+.storage-account-name small { display: block; color: var(--grey); font-size: .7rem; margin-bottom: .2rem; }
+.storage-account-name strong { display: block; color: var(--ink); font-size: .84rem; overflow-wrap: anywhere; }
+.storage-count { font-size: .7rem; white-space: nowrap; color: var(--maroon); }
+.storage-account-body { padding: 0 .85rem; }
+.storage-file { display: flex; gap: .75rem; justify-content: space-between; padding: .85rem 0; border-bottom: 1px solid var(--border); }
+.storage-file:last-child { border-bottom: 0; }
+.storage-file-info { min-width: 0; }
+.storage-file-info strong, .storage-file-info span, .storage-file-info small { display: block; overflow-wrap: anywhere; }
+.storage-file-info strong { font-size: .82rem; line-height: 1.5; color: var(--ink); }
+.storage-file-info span { font-size: .72rem; color: var(--grey); margin-top: .25rem; }
+.storage-file-info small { font-size: .67rem; color: var(--grey); margin-top: .2rem; }
+/* Can PAPEL still open it: one badge per PDF, and a tally per list and for all of them.
+   Two classes deep, to outrank .storage-file-info span, which makes every span a block. */
+.storage-file-info .storage-access, .storage-tally {
+    display: inline-flex; align-items: center; gap: .25rem; width: fit-content;
+    border: 1px solid; border-radius: 999px; font-weight: 600; line-height: 1.4; white-space: nowrap;
+}
+.storage-file-info .storage-access { margin-top: .4rem; padding: .1rem .5rem .1rem .35rem; font-size: .7rem; }
+.storage-tally { padding: .05rem .4rem .05rem .3rem; font-size: .68rem; }
+.storage-file-info .storage-access .material-symbols-outlined, .storage-tally .material-symbols-outlined {
+    display: inline-block; margin: 0; font-size: 15px; color: inherit;
+}
+.storage-file-info .storage-access.is-ok, .storage-tally.is-ok { color: var(--ok-text); background: var(--ok-bg); border-color: var(--ok-border); }
+.storage-file-info .storage-access.is-limited, .storage-tally.is-limited { color: var(--warn-text); background: var(--warn-bg); border-color: var(--warn-border); }
+.storage-file-info .storage-access.is-gone, .storage-tally.is-gone { color: var(--bad-text); background: var(--bad-bg); border-color: var(--bad-border); }
+.storage-file-info .storage-access.is-unknown, .storage-tally.is-unknown { color: var(--grey); background: var(--cream); border-color: var(--border); }
+.storage-file-info .storage-access-detail { margin-top: .3rem; font-size: .7rem; line-height: 1.45; }
+.storage-tallies { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; margin: -.35rem 0 .75rem; font-size: .75rem; color: var(--grey); }
+.storage-account-tallies { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: .25rem; }
+.storage-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0;
+    overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+/* Export: at the end of the heading's line, in the white the subtitle left. */
+.storage-export-open {
+    margin-left: auto; display: inline-flex; align-items: center; gap: .35rem; flex: none;
+    min-height: 2rem; padding: .35rem .75rem; border: 1px solid var(--border);
+    border-radius: var(--r-control, 4px); background: var(--white); color: var(--maroon);
+    font: inherit; font-size: .8125rem; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.storage-export-open:hover, .storage-export-open:focus-visible { border-color: var(--maroon); background: var(--cream); }
+.storage-export-open .material-symbols-outlined { font-size: 18px; }
+/* A <dialog> states margin: auto, or the site's reset leaves it in the top left corner. */
+.storage-export {
+    width: min(30rem, calc(100vw - 2rem)); max-width: none; max-height: min(42rem, 88dvh);
+    margin: auto; padding: 0; border: 1px solid var(--border); border-radius: var(--r-card, 8px);
+    background: var(--white); color: var(--ink); box-shadow: 0 18px 48px rgba(51, 0, 0, .28); overflow: auto;
+}
+.storage-export::backdrop { background: rgba(51, 0, 0, .45); }
+.storage-export-head { display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+    padding: .9rem 1.25rem; border-bottom: 1px solid var(--maroon); }
+.storage-export-head h2 { margin: 0; font-family: var(--font-head); font-size: 1rem; font-weight: 500; color: var(--maroon); }
+.storage-export-close { display: grid; place-items: center; flex: none; width: 2rem; height: 2rem; padding: 0;
+    border: 0; border-radius: var(--r-control, 4px); background: transparent; color: var(--maroon); cursor: pointer; }
+.storage-export-close:hover { background: var(--cream); }
+.storage-export form { padding: 1rem 1.25rem 1.25rem; }
+.storage-export fieldset { display: grid; gap: .45rem; min-width: 0; margin: 0 0 1rem; padding: 0; border: 0; }
+.storage-export legend { margin-bottom: .5rem; padding: 0; font-size: .8125rem; font-weight: 600; color: var(--maroon); }
+.storage-export label { display: flex; align-items: flex-start; gap: .5rem; font-size: .8125rem; line-height: 1.45; cursor: pointer; }
+.storage-export input { flex: none; margin: .15rem 0 0; accent-color: var(--maroon-surface); }
+/* The radios in a box of their own: a legend is not a grid item, and in a grid fieldset it took the first cell. */
+.storage-export-formats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .45rem; }
+.storage-export-error { margin: 0 0 .75rem; font-size: .8125rem; color: var(--bad-text); }
+.storage-export-actions { display: flex; justify-content: flex-end; gap: .5rem; }
+.storage-file-links { display: flex; flex-direction: column; align-items: center; flex: 0 0 auto; gap: .5rem; font-size: .7rem; }
+.storage-file-links .btn-sm-outline { padding: .4rem .65rem; font-size: .72rem; }
+.storage-drive-link, .storage-folder-link { display: inline-flex; align-items: center; gap: .35rem; text-decoration: none; }
+.storage-drive-mark { flex: none; display: block; }
+/* The pager's own fix (includes/paper_pager.php): a decoration on a flex
+   container is drawn by each flex item for itself, from its own baseline, so
+   the underline and the icon drifted apart instead of sitting on one line.
+   The word alone carries the underline, and the icon gets line-height: 1,
+   which is what brings the two to the same row. Without this it is the
+   browser's own blue, which is nearly unreadable on Old Night. */
+.storage-folder-link { color: var(--maroon); }
+.storage-folder-link .storage-folder-word { text-decoration: underline; text-underline-offset: 2px; }
+.storage-folder-link .material-symbols-outlined { flex: none; font-size: 16px; line-height: 1; display: block; color: var(--maroon); }
+.storage-file-pages { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .7rem 0; font-size: .72rem; }
+.storage-main [hidden] { display: none !important; }
+.storage-connected .papel-dialog-body p { margin: 0 0 .75rem; }
+.storage-connected .papel-dialog-body p:last-child { margin-bottom: 0; }
+/* The pane runs to the window's edge, under Corpus's round button: room enough for the last row to scroll clear of it. */
+@media not all and (max-width: 1000px) {
+    .storage-pdfs .storage-pane-body { padding-bottom: 72px; }
+}
+@media (max-width: 1000px) {
+    .storage-layout { display: flex; flex-direction: column; gap: 1rem; }
+    .storage-pane { height: auto; }
+    .storage-pane-body { overflow: visible; }
+    .storage-grip { display: none; }
+    .storage-main .set-reminders, .storage-main .set-date-fields { grid-template-columns: repeat(2, minmax(0,1fr)); }
+}
+@media (max-width: 600px) {
+    .storage-main .set-reminders, .storage-main .set-date-fields { grid-template-columns: 1fr; }
+    .storage-file { flex-direction: column; }
+    .storage-file-links { flex-direction: row; }
+    .storage-account > summary { padding: .65rem; gap: .4rem; }
+    .storage-pane-body { padding: 8px; }
+}

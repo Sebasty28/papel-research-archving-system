@@ -935,6 +935,7 @@ html.nav-open .nav-burger .burger-open { display: inline-flex; }
     line-height: 1.45; margin-bottom: .2rem;
 }
 .notif-item.unread .notif-text { font-weight: 500; }
+.notif-popup-card .notif-text { text-align: justify; }
 .notif-item small { font-size: .6875rem; color: var(--grey); }
 .notif-empty { padding: 2rem 1rem; text-align: center; color: var(--grey); font-size: .75rem; }
 .notif-view-all {

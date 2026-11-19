@@ -40,15 +40,16 @@
 }
 .ad-body {
     padding: 1.25rem; font-size: .875rem; color: var(--ink); line-height: 1.6;
-    font-family: var(--font-body);
+    font-family: var(--font-body); text-align: justify;
 }
 /* papelShow(): a line of prose, and label/value pairs for the things that were
    changed. The value takes the monospaced face for the same reason the emails
    do: a password has to be read one character at a time. */
 .ad-line { margin: 0 0 .75rem; }
 .ad-line:last-child { margin-bottom: 0; }
+/* A label and a value are data, not prose: ranged left, never stretched. */
 .ad-kv {
-    display: flex; gap: .75rem; align-items: baseline;
+    display: flex; gap: .75rem; align-items: baseline; text-align: left;
     padding: .375rem 0; border-top: 1px solid var(--border);
 }
 .ad-kv-key {

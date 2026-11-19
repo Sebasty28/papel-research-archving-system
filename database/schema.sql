@@ -385,6 +385,21 @@ CREATE TABLE IF NOT EXISTS `system_settings` (
   PRIMARY KEY (`setting_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- Last verified Google Drive owners and access checks for PDFs referenced by PAPEL.
+CREATE TABLE IF NOT EXISTS gdrive_file_inventory (
+        file_id VARCHAR(255) NOT NULL,
+        owner_email VARCHAR(255) NOT NULL DEFAULT '',
+        owner_name VARCHAR(255) NOT NULL DEFAULT '',
+        drive_id VARCHAR(255) NOT NULL DEFAULT '',
+        parent_id VARCHAR(255) NOT NULL DEFAULT '',
+        file_name VARCHAR(500) NOT NULL DEFAULT '',
+        access_state VARCHAR(20) NOT NULL DEFAULT 'unchecked',
+        checked_by_email VARCHAR(255) NOT NULL DEFAULT '',
+        checked_at DATETIME NULL,
+        owner_checked_at DATETIME NULL,
+        PRIMARY KEY (file_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 -- Google Drive connection and storage folder changes. OAuth tokens stay in system_settings.
 CREATE TABLE IF NOT EXISTS `gdrive_setting_history` (
   `history_id` int(11) unsigned NOT NULL AUTO_INCREMENT,

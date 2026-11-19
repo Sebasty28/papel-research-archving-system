@@ -27,7 +27,7 @@ if (!user_has_role(current_user(), 'librarian') || defined('PAPEL_PAPER_PREVIEW'
 .mr-live-head button { display: grid; place-items: center; flex: none; width: 2rem; height: 2rem;
     border: 0; border-radius: var(--r-control, 4px); background: transparent; color: inherit; cursor: pointer; }
 .mr-live-head button:hover { background: var(--cream); }
-.mr-live-summary { margin: 0; padding: .75rem 1rem .25rem; font-size: .8125rem; }
+.mr-live-summary { margin: 0; padding: .75rem 1rem .25rem; font-size: .8125rem; text-align: justify; }
 .mr-live-list { overflow-y: auto; min-height: 0; padding: .25rem 1rem .75rem; }
 .mr-live-item { display: block; padding: .625rem 0; border-bottom: 1px solid var(--border);
     color: var(--ink); text-decoration: none; font-size: .8125rem; }

@@ -1187,10 +1187,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
            returned, comes back to draft with its Drive files intact and has just been
            filed again with new ones; without this the old ones stayed on Drive for
            good, reachable by nobody. A returned paper has nothing to find here, its
-           files were purged when it was returned. Best effort: delete_from_gdrive()
-           never throws. */
+           files were moved when it was returned. They go to the Trash folder rather
+           than being destroyed, as a returned paper's do, since this is the student's
+           own earlier draft of the same work. Best effort: it never throws. */
         foreach ($oldDriveIds as $oldId) {
-            delete_from_gdrive($oldId);
+            gdrive_move_to_trash_folder($oldId);
         }
         // And the copy an older draft kept on this server, but only from this student's own draft folder.
         if ($oldDraftPdf !== '') {
@@ -1241,7 +1242,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
     if ($inTx) { $conn->rollback(); }
     /* Taken back, as the note at the top says: nothing this request put on Drive
        or on disk is left behind, and the paper's own row went with the rollback.
-       Both are best effort, and neither throws. */
+       Both are best effort, and neither throws.
+
+       Destroyed outright, and not moved to the Trash folder the way a returned
+       paper's files are: these were made seconds ago by a submission that then
+       failed, nothing references them and nobody has seen them, so parking them
+       would fill that folder with rubbish nobody could identify. */
     foreach ($driveMade as $made)     { delete_from_gdrive($made); }
     foreach ($stagedFiles as $staged) { if (is_file($staged)) { @unlink($staged); } }
     foreach (array_reverse($stagingDirs) as $dir) { if (is_dir($dir)) { @rmdir($dir); } }
@@ -5181,6 +5187,7 @@ html.side-locked .main-tabs:not([data-on="form"]) + .step-row { display: none; }
     font-size: .875rem;
     color: var(--ink);
     line-height: 1.6;
+    text-align: justify;
 }
 #papelDialogMessage {
     flex: 1 1 auto;

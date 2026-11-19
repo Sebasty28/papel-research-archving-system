@@ -22,6 +22,63 @@ require_once '../../config/gdrive_config.php';
 $conn = db();
 $u    = current_user();
 $SELF = 'gdrive_settings.php';
+$inventoryReady = gdrive_inventory_ready(true);
+
+// Small requests keep the first page usable even when there are hundreds of PDFs.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'check_pdf_accounts') {
+    csrf_verify();
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    try {
+        if (!$inventoryReady) throw new RuntimeException('The PDF account list cannot be saved yet.');
+        $ids = $_POST['file_ids'] ?? [];
+        if (!is_array($ids) || count($ids) < 1 || count($ids) > 4) {
+            http_response_code(400);
+            throw new RuntimeException('Choose up to four PDFs per check.');
+        }
+        $allowed = gdrive_pdf_references();
+        foreach ($ids as $id) {
+            if (!is_string($id) || !isset($allowed[$id])) {
+                http_response_code(400);
+                throw new RuntimeException('This PDF is not in this site’s records.');
+            }
+        }
+        $client = get_gdrive_client();
+        $client->setHttpClient(new GuzzleHttp\Client(['timeout' => 6, 'connect_timeout' => 3]));
+        $identity = gdrive_connected_identity($client);
+        if (!$identity['verified']) throw new RuntimeException('Google could not confirm the connected account. Reconnect or try again.');
+        $service = new Google_Service_Drive($client);
+        foreach (array_unique($ids) as $id) {
+            try {
+                $file = $service->files->get($id, ['fields' => gdrive_inventory_fields(), 'supportsAllDrives' => true]);
+            } catch (Throwable $e) {
+                $code = (int)$e->getCode();
+                $errors = $e instanceof Google_Service_Exception ? $e->getErrors() : [];
+                $reason = $errors[0]['reason'] ?? '';
+                $unavailable = $code === 404 || ($code === 403 && in_array($reason, ['forbidden', 'insufficientFilePermissions'], true));
+                gdrive_inventory_record_failure($id, $unavailable ? 'unavailable' : 'error', $identity['email']);
+                if (!$unavailable) throw $e;
+                continue;
+            }
+            if (!gdrive_inventory_record_file($file, $identity['email'])) throw new RuntimeException('The PDF check could not be saved. Try again.');
+        }
+        echo json_encode(['success' => true]);
+    } catch (Throwable $e) {
+        if (http_response_code() < 400) http_response_code(503);
+        error_log('Drive PDF account check: ' . $e->getMessage());
+        echo json_encode(['success' => false, 'message' => 'The PDF account check could not finish. Check the Drive connection and try again.']);
+    }
+    exit;
+}
+
+if (isset($_GET['pdf_inventory'])) {
+    header('Content-Type: text/html; charset=utf-8');
+    header('Cache-Control: no-store');
+    $identity = gdrive_connected_identity();
+    $pdfInventory = gdrive_inventory_view($identity['verified'] ? $identity['email'] : '');
+    require ROOT_PATH . '/includes/storage_pdf_lists.php';
+    exit;
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
@@ -68,6 +125,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit;
 }
 
+// Set by pages/gdrive_callback.php, and said once: on the page Google sends the reader back to.
+$justConnected = !empty($_SESSION['gdrive_connected_popup']);
+unset($_SESSION['gdrive_connected_popup']);
+
 $current   = get_gdrive_parent_folder_id();
 $connected = is_gdrive_connected();
 $authUrl   = get_gdrive_auth_url();
@@ -90,6 +151,7 @@ function storage_reminder_status(string $value): array
 }
 $storageReminder = storage_reminder_status($continuityDates['gdrive_storage_renewal_date']);
 $cloudReminder = storage_reminder_status($continuityDates['gcloud_billing_review_date']);
+$pdfInventory = gdrive_inventory_view($liveAccount['verified'] ? $liveAccount['email'] : '');
 
 /* The folder as Google sees it, not just as it is written down. "Connected" says
    the account is let in; it says nothing about whether this folder is somewhere
@@ -104,6 +166,11 @@ $folderWideAccess = false;
 foreach ($folderAccess['permissions'] as $permission) {
     if (in_array($permission['type'], ['anyone', 'domain'], true)) $folderWideAccess = true;
 }
+/* What is waiting to be cleared. Asked for only where there is a folder it
+   could be in, so a page with no storage folder makes no Drive call for it. */
+$trash = ($connected && $current && !$folderBad)
+    ? gdrive_trash_contents()
+    : ['folder_id' => '', 'count' => 0, 'capped' => false];
 $accessRoleNames = [
     'owner' => 'Owner', 'organizer' => 'Manager', 'fileOrganizer' => 'Content manager',
     'writer' => 'Editor', 'commenter' => 'Commenter', 'reader' => 'Viewer',
@@ -231,7 +298,7 @@ if ($historyReady) {
 .set-reminder strong, .set-reminder span { display: block; }
 .set-reminder strong { font-size: .8125rem; color: var(--ink); }
 .set-reminder span { font-size: .75rem; margin-top: .3rem; color: var(--grey); }
-.set-reminder.is-soon { border-color: #c39029; }
+.set-reminder.is-soon { border-color: var(--warn-text); }
 .set-reminder.is-past { border-color: var(--bad-text); }
 .set-reminder.is-soon span, .set-reminder.is-past span { font-weight: 600; color: var(--maroon); }
 .set-date-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
@@ -244,6 +311,8 @@ if ($historyReady) {
     .set-reminders, .set-date-fields { grid-template-columns: 1fr; }
 }
 </style>
+<link rel="stylesheet" href="<?= e(asset_url('assests/css/storage_folder.css')) ?>">
+<script src="<?= e(asset_url('assests/js/storage_folder.js')) ?>" defer></script>
 </head>
 <body>
 
@@ -263,7 +332,7 @@ if ($historyReady) {
     </div>
 </div>
 
-<main class="wrap">
+<main class="wrap storage-main">
     <div class="set-wrap">
 
         <?php if ($msg = flash('success')): ?>
@@ -273,13 +342,26 @@ if ($historyReady) {
             <div class="set-flash bad"><?= e($msg) ?></div>
         <?php endif; ?>
 
-        <div class="set-head">
-            <h1>Storage folder</h1>
-            <p>
-                Every paper a student submits is uploaded to one folder in the university's
-                Google Drive. This page says which folder that is. Reviewers open papers from
-                there, and the public repository links to it, so the setting decides where the
-                files live, not what anyone can see.
+        <?php /* The subtitle sits behind an info mark, as a field's hint does on the
+                 account consoles: the panes below get its line. The button is beside
+                 the h1, not in it, or the heading would be read as "Storage folder
+                 About this page". */ ?>
+        <div class="set-head storage-head">
+            <div class="storage-head-row">
+                <h1>Storage folder</h1>
+                <button type="button" class="storage-info" id="storageInfoBtn" aria-label="About this page"
+                        aria-expanded="false" aria-describedby="storageInfo">
+                    <span class="material-symbols-outlined" aria-hidden="true">info</span>
+                </button>
+                <button type="button" class="storage-export-open" id="storageExportOpen"
+                        aria-haspopup="dialog" aria-controls="storageExportDialog">
+                    <span class="material-symbols-outlined" aria-hidden="true">download</span>
+                    Export PDF lists
+                </button>
+            </div>
+            <p class="storage-info-tip" id="storageInfo" role="tooltip">
+                Manage the Google connection, the storage folder and the renewal reminders, and
+                find the PDFs kept in the current Google account and in earlier ones.
             </p>
         </div>
 
@@ -293,9 +375,17 @@ if ($historyReady) {
             </div>
         <?php endif; ?>
 
-        <?php /* Connection first: a folder ID is meaningless if the account it
-                 lives in cannot be reached, and this is the only place in the
-                 site where the connection can be re-established. */ ?>
+        <div class="storage-layout" id="storageLayout">
+            <section class="storage-pane storage-settings" aria-label="Storage settings">
+                <div class="storage-tabs" role="tablist" aria-label="Storage settings sections">
+                    <button type="button" class="storage-tab" role="tab" id="storage-tab-connection" aria-controls="storage-panel-connection" aria-selected="true" tabindex="0">Connection</button>
+                    <button type="button" class="storage-tab" role="tab" id="storage-tab-reminders" aria-controls="storage-panel-reminders" aria-selected="false" tabindex="-1">Reminders</button>
+                    <button type="button" class="storage-tab" role="tab" id="storage-tab-access" aria-controls="storage-panel-access" aria-selected="false" tabindex="-1">Folder access</button>
+                    <button type="button" class="storage-tab" role="tab" id="storage-tab-history" aria-controls="storage-panel-history" aria-selected="false" tabindex="-1">History</button>
+                    <button type="button" class="storage-tab" role="tab" id="storage-tab-help" aria-controls="storage-panel-help" aria-selected="false" tabindex="-1">Help</button>
+                </div>
+                <div class="storage-pane-body" id="storageSettingsBody">
+                    <div role="tabpanel" id="storage-panel-connection" aria-labelledby="storage-tab-connection" tabindex="0">
         <div class="set-card">
             <h2>Connection</h2>
             <div class="set-status <?= $connected ? '' : 'is-unset' ?>">
@@ -343,34 +433,6 @@ if ($historyReady) {
                 </div>
             </div>
         </div>
-
-        <div class="set-card" id="continuityReminders">
-            <h2>Google service reminders</h2>
-            <p>Record the next date you need to check or renew each service. PAPEL cannot read subscription or billing dates from the Drive connection. These dates are reminders entered by staff; they do not renew a plan or confirm that payment succeeded.</p>
-            <div class="set-reminders">
-                <div class="set-reminder <?= e($storageReminder['class']) ?>">
-                    <strong>Drive or Workspace storage plan</strong>
-                    <span><?= $continuityDates['gdrive_storage_renewal_date'] && gdrive_valid_continuity_date($continuityDates['gdrive_storage_renewal_date']) ? e(date('M j, Y', strtotime($continuityDates['gdrive_storage_renewal_date']))) . ' · ' : '' ?><?= e($storageReminder['text']) ?></span>
-                </div>
-                <div class="set-reminder <?= e($cloudReminder['class']) ?>">
-                    <strong>Google Cloud billing review</strong>
-                    <span><?= $continuityDates['gcloud_billing_review_date'] && gdrive_valid_continuity_date($continuityDates['gcloud_billing_review_date']) ? e(date('M j, Y', strtotime($continuityDates['gcloud_billing_review_date']))) . ' · ' : '' ?><?= e($cloudReminder['text']) ?></span>
-                </div>
-            </div>
-            <form method="post" action="<?= e($SELF) ?>">
-                <?= csrf_field() ?>
-                <input type="hidden" name="action" value="save_gdrive_continuity">
-                <div class="set-date-fields">
-                    <label class="set-field"><span>Storage plan renewal or check date</span>
-                        <input type="date" name="gdrive_storage_renewal_date" value="<?= e($continuityDates['gdrive_storage_renewal_date']) ?>"></label>
-                    <label class="set-field"><span>Cloud billing review date</span>
-                        <input type="date" name="gcloud_billing_review_date" value="<?= e($continuityDates['gcloud_billing_review_date']) ?>"></label>
-                </div>
-                <div class="set-actions"><button type="submit" class="btn-sm-maroon">Save reminder dates</button>
-                    <span class="set-hint">Leave a date empty if the service has no fixed renewal date.</span></div>
-            </form>
-        </div>
-
         <div class="set-card">
             <h2>Storage folder in use</h2>
             <div class="set-status <?= ($current && !$folderBad) ? '' : 'is-unset' ?>">
@@ -408,7 +470,89 @@ if ($historyReady) {
                 </div>
             </div>
         </div>
-
+        <?php /* Where a returned paper's PDFs go. Nothing empties it: somebody
+                 opens it in Drive and clears it, which is the whole point of it
+                 being a folder rather than a deletion. */ ?>
+        <div class="set-card">
+            <h2>Removed PDFs</h2>
+            <div class="set-status <?= $trash['count'] > 0 ? '' : 'is-unset' ?>">
+                <span class="set-status-ico"><span class="material-symbols-outlined">delete_sweep</span></span>
+                <div>
+                    <?php if ($trash['folder_id'] !== ''): ?>
+                        <strong><?= $trash['capped'] ? 'More than ' . $trash['count'] : $trash['count'] ?>
+                            PDF<?= $trash['count'] === 1 && !$trash['capped'] ? '' : 's' ?> waiting in Trash.</strong>
+                        <p class="set-status-note">
+                            When a paper is returned to its student, or the student files it again, its old
+                            PDFs are moved to a <strong>Trash</strong> folder inside the storage folder rather
+                            than deleted. Nothing clears that folder by itself, so open it in Drive and empty
+                            it when you are sure none of it is wanted.
+                        </p>
+                        <p class="set-status-note">
+                            <a class="set-status-id" target="_blank" rel="noopener noreferrer"
+                               href="https://drive.google.com/drive/folders/<?= e(rawurlencode($trash['folder_id'])) ?>">Open the Trash folder in Drive</a>
+                        </p>
+                    <?php elseif (!$connected): ?>
+                        <strong>Connect Google Drive to see this.</strong>
+                        <p class="set-status-note">Returned papers' PDFs are moved to a Trash folder inside the
+                            storage folder rather than deleted.</p>
+                    <?php else: ?>
+                        <strong>No Trash folder yet.</strong>
+                        <p class="set-status-note">
+                            One is made inside the storage folder the first time a paper is returned, and the
+                            PDFs it replaced are moved there rather than deleted. A storage folder has to be
+                            saved and usable first.
+                        </p>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+        <div class="set-card">
+            <h2>Change the folder</h2>
+            <form method="post" action="<?= e($SELF) ?>" id="folderForm">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="update_gdrive_folder">
+                <label class="set-field">
+                    <span>Folder link or ID</span>
+                    <input type="text" name="gdrive_folder_id" id="folderInput" maxlength="500"
+                           value="<?= e($current) ?>"
+                           placeholder="https://drive.google.com/drive/folders/… or the bare ID">
+                </label>
+                <div class="set-actions">
+                    <button type="submit" class="btn-sm-maroon">Save folder</button>
+                    <span class="set-hint">Paste the whole sharing URL if you like. The ID is read out of it.</span>
+                </div>
+            </form>
+        </div>
+                    </div>
+                    <div role="tabpanel" id="storage-panel-reminders" aria-labelledby="storage-tab-reminders" tabindex="0" hidden>
+        <div class="set-card" id="continuityReminders">
+            <h2>Google service reminders</h2>
+            <p>Record the next date you need to check or renew each service. PAPEL cannot read subscription or billing dates from the Drive connection. These dates are reminders entered by staff; they do not renew a plan or confirm that payment succeeded.</p>
+            <div class="set-reminders">
+                <div class="set-reminder <?= e($storageReminder['class']) ?>">
+                    <strong>Drive or Workspace storage plan</strong>
+                    <span><?= $continuityDates['gdrive_storage_renewal_date'] && gdrive_valid_continuity_date($continuityDates['gdrive_storage_renewal_date']) ? e(date('M j, Y', strtotime($continuityDates['gdrive_storage_renewal_date']))) . ' · ' : '' ?><?= e($storageReminder['text']) ?></span>
+                </div>
+                <div class="set-reminder <?= e($cloudReminder['class']) ?>">
+                    <strong>Google Cloud billing review</strong>
+                    <span><?= $continuityDates['gcloud_billing_review_date'] && gdrive_valid_continuity_date($continuityDates['gcloud_billing_review_date']) ? e(date('M j, Y', strtotime($continuityDates['gcloud_billing_review_date']))) . ' · ' : '' ?><?= e($cloudReminder['text']) ?></span>
+                </div>
+            </div>
+            <form method="post" action="<?= e($SELF) ?>">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="save_gdrive_continuity">
+                <div class="set-date-fields">
+                    <label class="set-field"><span>Storage plan renewal or check date</span>
+                        <input type="date" name="gdrive_storage_renewal_date" value="<?= e($continuityDates['gdrive_storage_renewal_date']) ?>"></label>
+                    <label class="set-field"><span>Cloud billing review date</span>
+                        <input type="date" name="gcloud_billing_review_date" value="<?= e($continuityDates['gcloud_billing_review_date']) ?>"></label>
+                </div>
+                <div class="set-actions"><button type="submit" class="btn-sm-maroon">Save reminder dates</button>
+                    <span class="set-hint">Leave a date empty if the service has no fixed renewal date.</span></div>
+            </form>
+        </div>
+                    </div>
+                    <div role="tabpanel" id="storage-panel-access" aria-labelledby="storage-tab-access" tabindex="0" hidden>
         <div class="set-card" id="folderAccess">
             <h2>Who can access this folder</h2>
             <p>This is the sharing list Google reports for the selected folder right now. It may include people, groups, a whole domain, or anyone with the link.</p>
@@ -451,25 +595,8 @@ if ($historyReady) {
                 <p>Group members and people covered by domain sharing are not listed one by one. Individual PDFs can also have separate sharing permissions. Google Cloud Console project access is separate from this Drive folder list.</p>
             <?php endif; ?>
         </div>
-
-        <div class="set-card">
-            <h2>Change the folder</h2>
-            <form method="post" action="<?= e($SELF) ?>" id="folderForm">
-                <?= csrf_field() ?>
-                <input type="hidden" name="action" value="update_gdrive_folder">
-                <label class="set-field">
-                    <span>Folder link or ID</span>
-                    <input type="text" name="gdrive_folder_id" id="folderInput" maxlength="500"
-                           value="<?= e($current) ?>"
-                           placeholder="https://drive.google.com/drive/folders/… or the bare ID">
-                </label>
-                <div class="set-actions">
-                    <button type="submit" class="btn-sm-maroon">Save folder</button>
-                    <span class="set-hint">Paste the whole sharing URL if you like. The ID is read out of it.</span>
-                </div>
-            </form>
-        </div>
-
+                    </div>
+                    <div role="tabpanel" id="storage-panel-history" aria-labelledby="storage-tab-history" tabindex="0" hidden>
         <div class="set-card" id="storageHistory">
             <h2>Connection and folder history</h2>
             <p>Each row records a Google Drive connection or a change to the storage folder. The folder link shows where new uploads were set to go at that time. Papers already uploaded stay in their original folder. Changes made before this history was added are not included.</p>
@@ -511,7 +638,8 @@ if ($historyReady) {
                 <?php endif; ?>
             <?php endif; ?>
         </div>
-
+                    </div>
+                    <div role="tabpanel" id="storage-panel-help" aria-labelledby="storage-tab-help" tabindex="0" hidden>
         <div class="set-card">
             <h2>Finding the folder ID</h2>
             <ol>
@@ -520,7 +648,6 @@ if ($historyReady) {
                 <li>Copy that last part (or the whole address) and paste it above.</li>
             </ol>
         </div>
-
         <div class="set-card">
             <h2>Before you change it</h2>
             <ul>
@@ -531,6 +658,48 @@ if ($historyReady) {
                 <li><strong>Keep the folder private.</strong> Papers sit there before they are approved,
                     and a folder shared with "anyone with the link" would put unpublished work in reach.</li>
             </ul>
+        </div>
+                    </div>
+                </div>
+            </section>
+            <div class="storage-grip" id="storageGrip" role="separator" aria-label="Resize storage panels" aria-orientation="vertical" aria-controls="storageSettingsBody" aria-valuemin="25" aria-valuemax="65" aria-valuenow="40" tabindex="0"></div>
+            <section class="storage-pane storage-pdfs" aria-labelledby="storagePdfTitle">
+                <?php /* Expand fills the window under the navbar, not the monitor: the
+                         browser's own full screen would take the navbar and the tabs
+                         away, and nothing here needs the screen's last few pixels. */ ?>
+                <div class="storage-pane-title">
+                    <h2 id="storagePdfTitle"><span class="material-symbols-outlined" aria-hidden="true">picture_as_pdf</span> PDFs by Google account</h2>
+                    <button type="button" class="storage-expand" id="storagePdfExpand" aria-pressed="false"
+                            aria-label="Expand the PDF lists to fill the page" title="Expand to fill the page">
+                        <span class="material-symbols-outlined" aria-hidden="true">open_in_full</span>
+                    </button>
+                </div>
+                <div class="storage-pane-body">
+                    <p class="storage-hint">See PDFs owned by the current account and by previous accounts. Each account has its own list. Open PDF uses the Google account signed in to your browser.</p>
+                    <div class="storage-tools" aria-label="Choose PDF accounts">
+                        <button type="button" class="storage-filter" data-filter="all" aria-pressed="true">All accounts</button>
+                        <button type="button" class="storage-filter" data-filter="current" aria-pressed="false">Show current account PDFs</button>
+                        <button type="button" class="storage-filter" data-filter="previous" aria-pressed="false">Show previous / other account PDFs</button>
+                    </div>
+                    <label class="storage-search"><span>Find a paper, PDF or Google account</span><input type="search" id="storagePdfSearch" placeholder="Search these lists" autocomplete="off"></label>
+                    <div class="storage-tools">
+                        <button type="button" class="btn-sm-outline" id="checkPdfAccounts" <?= !$inventoryReady || !$liveAccount['verified'] ? 'disabled' : '' ?>>Check PDF accounts</button>
+                        <button type="button" class="btn-sm-outline" id="stopPdfCheck" hidden>Stop checking</button>
+                        <span class="storage-check-status" id="pdfCheckStatus" role="status" aria-live="polite"></span>
+                    </div>
+                    <?php if (!$inventoryReady): ?>
+                        <p class="storage-hint">The PDF account table could not be created. Run <code>scripts/migrations/sql/2026-11-19_gdrive_file_inventory.sql</code> in this site's phpMyAdmin database, then reload.</p>
+                    <?php elseif (!$liveAccount['verified'] && $connected): ?>
+                        <p class="storage-hint">Google could not confirm the connected account just now, so PDF access cannot be checked. Reload the page to try again. Saved ownership information is shown below.</p>
+                    <?php elseif (!$liveAccount['verified']): ?>
+                        <p class="storage-hint">Connect Google Drive to identify the current account and check PDF access. Saved ownership information is shown below.</p>
+                    <?php endif; ?>
+                    <p class="storage-hint">Ownership and access reflect the last check. Checking reads file details; it does not move PDFs or change sharing.</p>
+                    <div id="storagePdfGroups" data-token="<?= e(csrf_token()) ?>" data-auto-check="<?= $inventoryReady && $liveAccount['verified'] ? '1' : '0' ?>">
+                        <?php require ROOT_PATH . '/includes/storage_pdf_lists.php'; ?>
+                    </div>
+                </div>
+            </section>
         </div>
 
     </div>
@@ -554,6 +723,102 @@ if ($historyReady) {
     </div>
   </div>
 </div>
+
+<?php /* Formats as radios, not a <select>: select_skin.php draws a select's menu
+         in <body>, which a top-layer <dialog> would cover. The download goes to a
+         hidden frame, so the page does not start a navigation for it. */ ?>
+<dialog class="storage-export" id="storageExportDialog" aria-labelledby="storageExportTitle">
+    <div class="storage-export-head">
+        <h2 id="storageExportTitle">Export PDF lists</h2>
+        <button type="button" class="storage-export-close" data-export-close aria-label="Close export options">
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+    </div>
+    <form action="<?= e(BASE_URL) ?>/app/admin/storage_pdfs_export.php" method="post"
+          target="storageExportDownload" data-no-loading data-no-pill id="storageExportForm">
+        <?= csrf_field() ?>
+        <fieldset>
+            <legend>Accounts</legend>
+            <label><input type="checkbox" name="scopes[]" value="current" checked> Current account</label>
+            <label><input type="checkbox" name="scopes[]" value="previous" checked> Previous and other accounts</label>
+            <label><input type="checkbox" name="scopes[]" value="unconfirmed" checked> Shared drives and PDFs with no confirmed account</label>
+        </fieldset>
+        <fieldset>
+            <legend>PDFs</legend>
+            <label><input type="radio" name="only" value="all" checked> Every PDF</label>
+            <label><input type="radio" name="only" value="attention"> Only PDFs that are not accessible (view only, not accessible or not checked)</label>
+        </fieldset>
+        <fieldset>
+            <legend>Format</legend>
+            <div class="storage-export-formats">
+                <label><input type="radio" name="format" value="xlsx" checked> Excel (.xlsx)</label>
+                <label><input type="radio" name="format" value="pdf"> PDF</label>
+                <label><input type="radio" name="format" value="csv"> CSV</label>
+                <label><input type="radio" name="format" value="docx"> Word (.docx)</label>
+            </div>
+        </fieldset>
+        <p class="storage-export-error" id="storageExportError" role="alert" hidden>Choose at least one kind of account.</p>
+        <div class="storage-export-actions">
+            <button type="button" class="btn-sm-outline" data-export-close>Cancel</button>
+            <button type="submit" class="btn-sm-maroon">Download</button>
+        </div>
+    </form>
+</dialog>
+<iframe name="storageExportDownload" title="PDF list export download" hidden></iframe>
+
+<?php if ($justConnected && $connected):
+    /* What the reader has just done, and whether it is enough: "connected" says the
+       account is let in, not that it can write to the folder papers go into. The
+       folder was checked above against the new token, so this is Google's answer. */
+    $popupEmail = $liveAccount['verified'] ? $liveAccount['email'] : $recordedAccount['email'];
+    $popupState = $current === '' ? 'unset' : ($folderCheck['state'] ?? 'unknown');
+    $popupFix   = $folderBad || $popupState === 'unset';
+    $popupOlder = false;
+    foreach ($pdfInventory['groups'] as $group) {
+        if (in_array($group['category'], ['previous', 'other'], true) && $group['files']) $popupOlder = true;
+    }
+?>
+<div class="papel-dialog-backdrop storage-connected" id="connectedDialog" role="dialog" aria-modal="true"
+     aria-labelledby="connectedTitle" aria-describedby="connectedBody">
+  <div class="papel-dialog">
+    <div class="papel-dialog-head">
+      <span class="material-symbols-outlined" aria-hidden="true"><?= $folderBad ? 'warning' : 'cloud_done' ?></span>
+      <h2 id="connectedTitle"><?= $folderBad ? 'Connected, but the folder cannot be used' : 'Google Drive is connected' ?></h2>
+    </div>
+    <div class="papel-dialog-body" id="connectedBody">
+      <?php if ($popupEmail !== ''): ?>
+        <p>PAPEL now uploads papers with the Google account <strong><?= e($popupEmail) ?></strong>.</p>
+      <?php else: ?>
+        <p>PAPEL is connected to Google Drive, but Google did not say which account was chosen.</p>
+      <?php endif; ?>
+      <?php if ($folderBad): ?>
+        <p><?= e(gdrive_folder_explain($folderCheck)) ?></p>
+        <p>No paper can be submitted until this is fixed. Share the folder with this account as an Editor,
+           reconnect with the account that owns the folder, or save a folder this account can edit.</p>
+      <?php elseif ($popupState === 'ok'): ?>
+        <p>This account can add files to the storage folder<?= $folderCheck['name'] !== '' ? ' <strong>' . e($folderCheck['name']) . '</strong>' : '' ?>,
+           so students can submit papers.</p>
+      <?php elseif ($popupState === 'unset'): ?>
+        <p>No storage folder is saved yet. Save one under Change the folder before students submit papers.</p>
+      <?php else: ?>
+        <p>Google could not be asked about the storage folder just now. Check Storage folder in use before
+           students submit papers.</p>
+      <?php endif; ?>
+      <?php if ($popupOlder): ?>
+        <p>PDFs uploaded with an earlier account stay in that account. PDFs by Google account lists them.</p>
+      <?php endif; ?>
+    </div>
+    <div class="papel-dialog-foot">
+      <?php if ($popupFix): ?>
+        <button type="button" class="btn-sm-outline" data-connected-close>Close</button>
+        <button type="button" class="btn-sm-maroon" data-connected-folder>Change the folder</button>
+      <?php else: ?>
+        <button type="button" class="btn-sm-maroon" data-connected-close>OK</button>
+      <?php endif; ?>
+    </div>
+  </div>
+</div>
+<?php endif; ?>
 
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 document.addEventListener('DOMContentLoaded', function () {

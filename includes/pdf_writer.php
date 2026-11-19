@@ -329,17 +329,26 @@ class PdfWriter
     /** Text to PDF string: WinAnsi, with the usual typography folded to ASCII. */
     private function esc(string $s): string
     {
-        $s = strtr($s, [
+        static $fold = [
             "\xE2\x80\x94" => '-', "\xE2\x80\x93" => '-',      // em and en dash
             "\xE2\x80\x98" => "'", "\xE2\x80\x99" => "'",
             "\xE2\x80\x9C" => '"', "\xE2\x80\x9D" => '"',
             "\xE2\x80\xA6" => '...', "\xC2\xA0" => ' ',
-            "\xC3\xB1" => "\xF1",                              // n-tilde, for Binan
-        ]);
-        // Anything still multibyte is not in WinAnsi; drop to a question mark
-        // rather than emitting a byte the reader will mis-render.
-        $s = preg_replace('/[\x80-\xFF]/', '?', $s) ?? $s;
-        return str_replace(['\\', '(', ')', "\r", "\n"], ['\\\\', '\\(', '\\)', ' ', ' '], $s);
+        ];
+        /* One character at a time, as UTF-8. Latin-1 (U+00A0 to U+00FF: the n of
+           Binan in either case, an accented name, the middle dot in every export
+           title) is in WinAnsi at the same number; anything else is a question
+           mark rather than a byte the reader would mis-render. This used to map
+           the n-tilde first and then replace every byte above 127, which took
+           the mapped byte too: "Binan" printed as "Bi?an" in every PDF export. */
+        $out = preg_replace_callback('/[^\x00-\x7F]/u', function ($m) use ($fold) {
+            if (isset($fold[$m[0]])) return $fold[$m[0]];
+            $cp = mb_ord($m[0], 'UTF-8');
+            return ($cp >= 0xA0 && $cp <= 0xFF) ? chr($cp) : '?';
+        }, $s);
+        // Not UTF-8 at all, so nothing above ASCII can be trusted.
+        if ($out === null) $out = preg_replace('/[\x80-\xFF]/', '?', $s) ?? '';
+        return str_replace(['\\', '(', ')', "\r", "\n"], ['\\\\', '\\(', '\\)', ' ', ' '], $out);
     }
 
     /** Approximate sans-serif advance widths, per 1000 units, for ASCII 32-126. */

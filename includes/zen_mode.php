@@ -12,9 +12,9 @@
  * What stays is deliberate. **The navbar stays**, because the switch that
  * turns this off lives in it: a mode with no way out is a trap, and a mode
  * whose way out is a keystroke nobody was told about is the same trap with a
- * secret. The notification bell, the manuscript countdown, the flash messages,
- * the survey invitation and the loading bar stay too; a grant running out and
- * a paper being returned are news, and the survey remains available.
+ * secret. The notification bell, the manuscript countdown, the flash messages
+ * and the loading bar stay too; a grant running out and a paper being
+ * returned are news rather than furniture.
  *
  * It is kept **on the device** (localStorage, `papel_zen`), like the palette,
  * the sidebar's side and the accessibility tab, and read here before the first

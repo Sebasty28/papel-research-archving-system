@@ -36,7 +36,7 @@
 
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 /* What is about to change, field by field. */
-.sd-list { list-style: none; margin: .6rem 0 0; padding: 0; }
+.sd-list { list-style: none; margin: .6rem 0 0; padding: 0; text-align: left; }
 .sd-list li { padding: .3rem 0; border-top: 1px solid var(--border); font-size: .8125rem; }
 .sd-list li:first-child { border-top: none; }
 .sd-field { color: var(--grey); display: block; font-size: .6875rem;

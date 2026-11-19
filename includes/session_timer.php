@@ -108,7 +108,8 @@ if (!defined('SESSION_WARN_SECONDS')) { define('SESSION_WARN_SECONDS', 300); }
     color: var(--maroon);
 }
 .sx-dlg.is-over .sx-title { color: var(--bad-text); }
-.sx-line { margin: 0 0 .5rem; font-size: .8125rem; color: var(--grey); line-height: 1.5; }
+/* Justified like every pop-up message; the last line stays centred, as the card is. */
+.sx-line { margin: 0 0 .5rem; font-size: .8125rem; color: var(--grey); line-height: 1.5; text-align: justify; text-align-last: center; }
 
 /* The figure. Tabular numerals, or the whole line shuffles sideways every
    second as the digits change width. */

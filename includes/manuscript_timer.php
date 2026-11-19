@@ -351,7 +351,8 @@ a.ms-panel-title:focus-visible { outline: 2px solid var(--maroon); outline-offse
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
-.ms-alarm-line  { margin: 0 0 .9rem; font-size: .75rem; color: var(--grey); line-height: 1.45; }
+/* Justified like every pop-up message; the last line stays centred, as the card is. */
+.ms-alarm-line  { margin: 0 0 .9rem; font-size: .75rem; color: var(--grey); line-height: 1.45; text-align: justify; text-align-last: center; }
 .ms-alarm-clock {
     display: inline-block;
     margin: 0 0 .9rem;

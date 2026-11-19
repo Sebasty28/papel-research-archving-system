@@ -151,7 +151,7 @@ html.papel-snacks-on .js-flash-snack { display: none; }
 .papel-snack.is-good .papel-snack-icon,
 .papel-snack.is-info .papel-snack-icon { color: var(--maroon); }
 .papel-snack.is-bad  .papel-snack-icon { color: var(--bad-text); }
-.papel-snack-text { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.papel-snack-text { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; text-align: justify; }
 .papel-snack-text a { color: var(--maroon); text-decoration: underline; }
 .papel-snack .papel-dismiss { top: .5rem; right: .5rem; color: var(--ink); opacity: .55; }
 .papel-snack .papel-dismiss:hover { opacity: 1; background: var(--cream); }

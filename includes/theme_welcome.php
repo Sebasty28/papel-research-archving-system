@@ -32,7 +32,7 @@
     font-family: var(--font-head); font-size: .9375rem; font-weight: 600;
     color: var(--maroon); margin: 0 0 .25rem;
 }
-.tw-card p { font-size: .75rem; color: var(--grey); line-height: 1.6; margin: 0 0 .875rem; }
+.tw-card p { font-size: .75rem; color: var(--grey); line-height: 1.6; margin: 0 0 .875rem; text-align: justify; }
 .tw-label {
     display: block; font-size: .6875rem; text-transform: uppercase;
     letter-spacing: .04em; color: var(--grey); margin: 0 0 .4rem;

@@ -192,6 +192,11 @@ html[data-color="old-night"] {
     --bad-text:   var(--accent-dark);
     --bad-bg:     #FDEAEA;
     --bad-border: var(--accent-soft);
+    /* Between the two: works, but not fully (a PDF Drive shows and will not
+       hand over, a date coming due). About 7.4:1 on its own background. */
+    --warn-text:   #6B4A00;
+    --warn-bg:     #FFF4DC;
+    --warn-border: #E8C77F;
 
     /* ---- Corner radius ----------------------------------------------
        One scale, four steps, because a repository is read as a document
@@ -266,6 +271,9 @@ html[data-mode="dark"] {
     --bad-text:   #F0A2A2;
     --bad-bg:     rgba(240, 162, 162, .12);
     --bad-border: rgba(240, 162, 162, .32);
+    --warn-text:   #E6C27A;
+    --warn-bg:     rgba(230, 194, 122, .12);
+    --warn-border: rgba(230, 194, 122, .32);
 
     /* The same frosted header, in the dark surface rather than white. */
     --header-frost:        rgba(26, 30, 38, .72);

@@ -1,5 +1,5 @@
 {
- "built": "2026-11-19 19:08",
+ "built": "2026-11-19 22:50",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -44,7 +44,10 @@
    "lines": 143
   },
   "app/admin/gdrive_settings.php": {
-   "lines": 602
+   "lines": 867
+  },
+  "app/admin/storage_pdfs_export.php": {
+   "lines": 146
   },
   "app/admin/super_admin_manage_admins.php": {
    "lines": 576
@@ -155,7 +158,7 @@
    "lines": 435
   },
   "app/student/student_upload_ai.php": {
-   "lines": 14942
+   "lines": 14949
   },
   "app/student/upload_diagnostics.php": {
    "lines": 245
@@ -188,13 +191,16 @@
    "lines": 265
   },
   "config/core.php": {
-   "lines": 6035
+   "lines": 6046
   },
   "config/error_handler.php": {
    "lines": 228
   },
   "config/gdrive_config.php": {
-   "lines": 1185
+   "lines": 1329
+  },
+  "config/gdrive_inventory.php": {
+   "lines": 292
   },
   "config/groq_config.php": {
    "lines": 1007
@@ -218,7 +224,7 @@
    "lines": 95
   },
   "includes/action_dialogs.php": {
-   "lines": 341
+   "lines": 342
   },
   "includes/back_button.php": {
    "lines": 5
@@ -302,7 +308,7 @@
    "lines": 458
   },
   "includes/manuscript_timer.php": {
-   "lines": 967
+   "lines": 968
   },
   "includes/notif_actions.php": {
    "lines": 224
@@ -335,7 +341,7 @@
    "lines": 1515
   },
   "includes/pdf_writer.php": {
-   "lines": 429
+   "lines": 438
   },
   "includes/progress_tracker.php": {
    "lines": 163
@@ -362,13 +368,13 @@
    "lines": 47
   },
   "includes/session_timer.php": {
-   "lines": 384
+   "lines": 385
   },
   "includes/shelf_view.php": {
    "lines": 179
   },
   "includes/site_footer.php": {
-   "lines": 779
+   "lines": 776
   },
   "includes/site_head.php": {
    "lines": 111
@@ -382,14 +388,14 @@
   "includes/splash.php": {
    "lines": 83
   },
-  "includes/survey_invite.php": {
-   "lines": 411
+  "includes/storage_pdf_lists.php": {
+   "lines": 75
   },
   "includes/terms_modal.php": {
    "lines": 92
   },
   "includes/theme.php": {
-   "lines": 394
+   "lines": 402
   },
   "includes/theme_welcome.php": {
    "lines": 140
@@ -440,7 +446,7 @@
    "lines": 228
   },
   "pages/gdrive_callback.php": {
-   "lines": 40
+   "lines": 44
   },
   "pages/help_center.php": {
    "lines": 325
@@ -636,6 +642,9 @@
   },
   "tests/_scope_unit.php": {
    "lines": 349
+  },
+  "tests/_storage_inventory_unit.php": {
+   "lines": 66
   },
   "tests/fixtures.py": {
    "lines": 202
