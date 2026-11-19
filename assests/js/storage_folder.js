@@ -123,9 +123,6 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('.set-reminder-banner a').forEach(function (link) {
         link.addEventListener('click', function () { showTab(document.getElementById('storage-tab-reminders'), false); });
     });
-    // Keep post/redirect and history pagination on the section the reader was using.
-    document.querySelectorAll('#storage-panel-reminders form').forEach(function (form) { form.action += '#continuityReminders'; });
-
     const grip = document.getElementById('storageGrip');
     let width = 40;
     try { width = Number(localStorage.getItem('papel.storagePanelWidth')) || 40; } catch (_) {}

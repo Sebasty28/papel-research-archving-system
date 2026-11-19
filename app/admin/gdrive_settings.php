@@ -121,7 +121,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash('error', 'The reminder dates could not be saved. Please try again.');
         }
     }
-    header("Location: $SELF");
+    // Return to the reminder tab after saving; URL fragments are not sent with POSTs.
+    $returnTab = ($_POST['action'] ?? '') === 'save_gdrive_continuity' ? '#continuityReminders' : '';
+    header("Location: $SELF$returnTab");
     exit;
 }
 
