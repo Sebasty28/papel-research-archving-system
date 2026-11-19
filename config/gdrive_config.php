@@ -123,6 +123,110 @@ function gdrive_current_account(): array
     return $account;
 }
 
+/** Ask Google which account this token belongs to. A stored email can be stale. */
+function gdrive_connected_identity(?Google_Client $client = null): array
+{
+    try {
+        $about = (new Google_Service_Drive($client ?? get_gdrive_client()))->about
+            ->get(['fields' => 'user(displayName,emailAddress)']);
+        $user = $about->getUser();
+        $email = $user ? trim((string)$user->getEmailAddress()) : '';
+        return [
+            'verified' => $email !== '',
+            'email' => $email,
+            'name' => $user ? (string)$user->getDisplayName() : '',
+        ];
+    } catch (Throwable $e) {
+        error_log('GDrive connected account could not be identified: ' . $e->getMessage());
+        return ['verified' => false, 'email' => '', 'name' => ''];
+    }
+}
+
+/** Permissions Google reports for this folder, including group and link grants. */
+function gdrive_folder_access(string $folderId): array
+{
+    $folderId = extract_gdrive_folder_id($folderId);
+    if ($folderId === '') return ['state' => 'unset', 'permissions' => [], 'truncated' => false];
+
+    try {
+        $service = new Google_Service_Drive(get_gdrive_client());
+        $permissions = [];
+        $pageToken = null;
+        $pageCount = 0;
+        do {
+            $options = [
+                'fields' => 'nextPageToken,permissions(type,role,emailAddress,displayName,domain,allowFileDiscovery,expirationTime)',
+                'pageSize' => 100,
+                'supportsAllDrives' => true,
+            ];
+            if ($pageToken) $options['pageToken'] = $pageToken;
+            $result = $service->permissions->listPermissions($folderId, $options);
+            foreach ($result->getPermissions() ?: [] as $permission) {
+                $permissions[] = [
+                    'type' => (string)$permission->getType(),
+                    'role' => (string)$permission->getRole(),
+                    'email' => (string)$permission->getEmailAddress(),
+                    'name' => (string)$permission->getDisplayName(),
+                    'domain' => (string)$permission->getDomain(),
+                    'discoverable' => $permission->getAllowFileDiscovery() === true,
+                    'expires' => (string)$permission->getExpirationTime(),
+                ];
+            }
+            $pageToken = $result->getNextPageToken();
+            $pageCount++;
+        } while ($pageToken && $pageCount < 10);
+
+        usort($permissions, static function (array $a, array $b): int {
+            return strcmp($a['email'] ?: ($a['domain'] ?: $a['name']), $b['email'] ?: ($b['domain'] ?: $b['name']));
+        });
+        return ['state' => 'ok', 'permissions' => $permissions, 'truncated' => (bool)$pageToken];
+    } catch (Throwable $e) {
+        error_log('GDrive folder permissions could not be listed: ' . $e->getMessage());
+        return ['state' => 'unavailable', 'permissions' => [], 'truncated' => false];
+    }
+}
+
+/** Dates are reminders entered by staff, not dates reported by Google. */
+function gdrive_continuity_dates(): array
+{
+    $dates = ['gdrive_storage_renewal_date' => '', 'gcloud_billing_review_date' => ''];
+    $res = db()->query("SELECT setting_key, setting_value FROM system_settings WHERE setting_key IN ('gdrive_storage_renewal_date', 'gcloud_billing_review_date')");
+    if ($res) {
+        while ($row = $res->fetch_assoc()) $dates[$row['setting_key']] = (string)$row['setting_value'];
+    }
+    return $dates;
+}
+
+function gdrive_valid_continuity_date(string $value): bool
+{
+    if ($value === '') return true;
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) return false;
+    $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+    return $date !== false && $date->format('Y-m-d') === $value;
+}
+
+function gdrive_save_continuity_dates(array $dates, int $userId): bool
+{
+    $conn = db();
+    try {
+        if (!$conn->begin_transaction()) throw new RuntimeException($conn->error);
+        $stmt = $conn->prepare("INSERT INTO system_settings (setting_key, setting_value, updated_by) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value), updated_by=VALUES(updated_by)");
+        foreach (['gdrive_storage_renewal_date', 'gcloud_billing_review_date'] as $key) {
+            $value = (string)($dates[$key] ?? '');
+            if (!gdrive_valid_continuity_date($value)) throw new InvalidArgumentException('Invalid continuity date');
+            $stmt->bind_param('ssi', $key, $value, $userId);
+            if (!$stmt->execute()) throw new RuntimeException($stmt->error);
+        }
+        $stmt->close();
+        if (!$conn->commit()) throw new RuntimeException($conn->error);
+        return true;
+    } catch (Throwable $e) {
+        $conn->rollback();
+        error_log('GDrive continuity dates could not be saved: ' . $e->getMessage());
+        return false;
+    }
+}
+
 /** Older staging and production databases can still use Drive before the migration. */
 function gdrive_history_ready(): bool
 {
@@ -195,6 +299,7 @@ function update_gdrive_parent_folder_id(string $folderId, int $userId, string $f
     $folderId = extract_gdrive_folder_id($folderId);
     if ($folderId === get_gdrive_parent_folder_id()) return true;
     $historyReady = gdrive_history_ready();
+    $liveAccount = gdrive_connected_identity();
     try {
         if (!$conn->begin_transaction()) throw new RuntimeException($conn->error);
         $stmt = $conn->prepare("INSERT INTO system_settings (setting_key, setting_value, updated_by) VALUES ('gdrive_parent_folder_id', ?, ?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value), updated_by=VALUES(updated_by)");
@@ -203,7 +308,7 @@ function update_gdrive_parent_folder_id(string $folderId, int $userId, string $f
         $stmt->close();
 
         if ($historyReady) {
-            $account = gdrive_current_account();
+            $account = $liveAccount['verified'] ? $liveAccount : gdrive_current_account();
             $email = $account['email'];
             $name = $account['name'];
             $changedAt = date('Y-m-d H:i:s');

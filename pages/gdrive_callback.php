@@ -16,17 +16,9 @@ if (isset($_GET['code'])) {
 
         if (!isset($token['error'])) {
             $client->setAccessToken($token);
-            $email = '';
-            $name = '';
-            try {
-                $about = (new Google_Service_Drive($client))->about->get(['fields' => 'user(displayName,emailAddress)']);
-                if ($about->getUser()) {
-                    $email = (string)$about->getUser()->getEmailAddress();
-                    $name = (string)$about->getUser()->getDisplayName();
-                }
-            } catch (Throwable $e) {
-                error_log('GDrive connected account could not be identified: ' . $e->getMessage());
-            }
+            $account = gdrive_connected_identity($client);
+            $email = $account['email'];
+            $name = $account['name'];
             save_system_gdrive_token($token);
             if (!gdrive_record_connection($email, $name, (int)$u['user_id'])) {
                 flash('error', 'Google Drive connected, but its account history could not be saved.');

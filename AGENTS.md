@@ -743,7 +743,20 @@ setting change. The guarded Storage Folder page creates the table on first use
 of each staging/production copy; `gdrive_history_ready()` does it before any
 setting transaction. If that fails, the page shows the phpMyAdmin fallback:
 `scripts/migrations/sql/2026-11-19_gdrive_setting_history.sql`. Older changes
-cannot be reconstructed; the current account email appears after reconnection.
+cannot be reconstructed; the current account email is checked live when this
+page opens, while history records new reconnections and folder changes.
+
+The Storage Folder page also asks Drive `about.get` for the **account currently
+used by the system token** and `permissions.list` for the selected folder's
+visible sharing entries. The saved account email is only a fallback labelled
+"last recorded" if Google cannot be asked. The permissions list includes user,
+group, domain and link grants; it cannot expand a group's members or prove who
+can read every individual PDF. It is read-only and shown only to the Director
+and Research Coordinator. Staff can record a Drive/Workspace storage renewal
+date and a Google Cloud billing review date in `system_settings`; the page
+counts down from those dates. These are manually entered reminders, not dates
+returned or verified by Google's Drive API, and saving them does not renew a
+plan. No new database table is needed for these two settings.
 
 ### A copy of the database can be behind the code
 

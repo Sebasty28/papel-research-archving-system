@@ -50,6 +50,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 flash('error', 'That folder could not be saved. Check the link or ID and try again.');
             }
         }
+    } elseif (($_POST['action'] ?? '') === 'save_gdrive_continuity') {
+        $dates = [
+            'gdrive_storage_renewal_date' => trim((string)($_POST['gdrive_storage_renewal_date'] ?? '')),
+            'gcloud_billing_review_date' => trim((string)($_POST['gcloud_billing_review_date'] ?? '')),
+        ];
+        if (!gdrive_valid_continuity_date($dates['gdrive_storage_renewal_date'])
+            || !gdrive_valid_continuity_date($dates['gcloud_billing_review_date'])) {
+            flash('error', 'Enter valid dates, or leave a date empty if it is not known yet.');
+        } elseif (gdrive_save_continuity_dates($dates, (int)$u['user_id'])) {
+            flash('success', 'Reminder dates saved. Update them after each renewal or billing review.');
+        } else {
+            flash('error', 'The reminder dates could not be saved. Please try again.');
+        }
     }
     header("Location: $SELF");
     exit;
@@ -58,7 +71,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $current   = get_gdrive_parent_folder_id();
 $connected = is_gdrive_connected();
 $authUrl   = get_gdrive_auth_url();
-$account   = gdrive_current_account();
+$recordedAccount = gdrive_current_account();
+$liveAccount = $connected ? gdrive_connected_identity() : ['verified' => false, 'email' => '', 'name' => ''];
+$continuityDates = gdrive_continuity_dates();
+
+function storage_reminder_status(string $value): array
+{
+    if ($value === '' || !gdrive_valid_continuity_date($value)) {
+        return ['class' => 'is-missing', 'text' => 'No date recorded'];
+    }
+    $today = new DateTimeImmutable('today');
+    $due = new DateTimeImmutable($value);
+    $days = (int)$today->diff($due)->format('%r%a');
+    if ($days < 0) return ['class' => 'is-past', 'text' => 'Date passed ' . abs($days) . ' day' . (abs($days) === 1 ? '' : 's') . ' ago'];
+    if ($days === 0) return ['class' => 'is-soon', 'text' => 'Due today'];
+    return ['class' => $days <= 30 ? 'is-soon' : 'is-good',
+        'text' => $days . ' day' . ($days === 1 ? '' : 's') . ' away'];
+}
+$storageReminder = storage_reminder_status($continuityDates['gdrive_storage_renewal_date']);
+$cloudReminder = storage_reminder_status($continuityDates['gcloud_billing_review_date']);
 
 /* The folder as Google sees it, not just as it is written down. "Connected" says
    the account is let in; it says nothing about whether this folder is somewhere
@@ -66,6 +97,17 @@ $account   = gdrive_current_account();
    be submitted. Asked only when there is a connection to ask with. */
 $folderCheck = $connected ? gdrive_check_folder($current) : null;
 $folderBad   = $folderCheck && gdrive_folder_is_unusable($folderCheck);
+$folderAccess = ($connected && $current && $folderCheck && $folderCheck['state'] === 'ok')
+    ? gdrive_folder_access($current)
+    : ['state' => $current ? 'unavailable' : 'unset', 'permissions' => [], 'truncated' => false];
+$folderWideAccess = false;
+foreach ($folderAccess['permissions'] as $permission) {
+    if (in_array($permission['type'], ['anyone', 'domain'], true)) $folderWideAccess = true;
+}
+$accessRoleNames = [
+    'owner' => 'Owner', 'organizer' => 'Manager', 'fileOrganizer' => 'Content manager',
+    'writer' => 'Editor', 'commenter' => 'Commenter', 'reader' => 'Viewer',
+];
 
 // Who set it, and when: a setting this consequential should say who touched it.
 $meta = null;
@@ -184,9 +226,22 @@ if ($historyReady) {
 .set-history small { display: block; color: var(--grey); font-size: .7rem; }
 .set-history-pages { display: flex; align-items: center; gap: .75rem; margin-top: 1rem; font-size: .75rem; }
 
+.set-reminders { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin: .75rem 0 1rem; }
+.set-reminder { border: 1px solid var(--border); border-radius: var(--r-card, 8px); padding: .875rem 1rem; background: var(--cream); }
+.set-reminder strong, .set-reminder span { display: block; }
+.set-reminder strong { font-size: .8125rem; color: var(--ink); }
+.set-reminder span { font-size: .75rem; margin-top: .3rem; color: var(--grey); }
+.set-reminder.is-soon { border-color: #c39029; }
+.set-reminder.is-past { border-color: var(--bad-text); }
+.set-reminder.is-soon span, .set-reminder.is-past span { font-weight: 600; color: var(--maroon); }
+.set-date-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+.set-date-fields input { font-family: inherit; }
+.set-reminder-banner { background: var(--cream); border: 1px solid var(--border); border-left: 4px solid var(--maroon); border-radius: var(--r-card, 8px); padding: .75rem 1rem; margin: 0 0 1.25rem; font-size: .8125rem; line-height: 1.6; }
+
 @media (max-width: 600px) {
     .set-wrap { padding: 1.25rem 0 2rem; }
     .set-card { padding: 1.125rem; }
+    .set-reminders, .set-date-fields { grid-template-columns: 1fr; }
 }
 </style>
 </head>
@@ -228,6 +283,16 @@ if ($historyReady) {
             </p>
         </div>
 
+        <?php if (in_array($storageReminder['class'], ['is-soon', 'is-past'], true)
+            || in_array($cloudReminder['class'], ['is-soon', 'is-past'], true)): ?>
+            <div class="set-reminder-banner">
+                <strong>Google service reminder:</strong>
+                Storage plan — <?= e($storageReminder['text']) ?>;
+                Cloud billing — <?= e($cloudReminder['text']) ?>.
+                <a href="#continuityReminders">Check or update the dates</a>.
+            </div>
+        <?php endif; ?>
+
         <?php /* Connection first: a folder ID is meaningless if the account it
                  lives in cannot be reached, and this is the only place in the
                  site where the connection can be re-established. */ ?>
@@ -240,17 +305,22 @@ if ($historyReady) {
                 <div>
                     <?php if ($connected): ?>
                         <strong>Google Drive is connected.</strong>
-                        <?php if ($account['email'] !== ''): ?>
-                            <p class="set-status-note">Connected account: <strong><?= e($account['email']) ?></strong>.</p>
+                        <?php if ($liveAccount['verified']): ?>
+                            <p class="set-status-note">Google account PAPEL is using now: <strong><?= e($liveAccount['email']) ?></strong> (checked with Google).</p>
+                        <?php elseif ($recordedAccount['email'] !== ''): ?>
+                            <p class="set-status-note">Last recorded Gmail: <strong><?= e($recordedAccount['email']) ?></strong>. Google could not confirm the current account just now.</p>
                         <?php else: ?>
-                            <p class="set-status-note">The connected account email will appear after the next reconnection.</p>
+                            <p class="set-status-note">Google could not confirm the connected Gmail just now. Reconnect and check the account shown here.</p>
                         <?php endif; ?>
+                        <p class="set-status-note">This is PAPEL's saved Google connection, which may differ from the Gmail open in your browser.</p>
                         <p class="set-status-note">
                             <?php if ($folderBad): ?>
                                 The connection works, but <strong>the storage folder below cannot be used</strong>,
                                 so papers still cannot be submitted.
+                            <?php elseif ($folderCheck && $folderCheck['state'] === 'ok'): ?>
+                                The connected account can add files to the selected folder. Check an older PDF separately to confirm that it can still be opened.
                             <?php else: ?>
-                                Students can submit papers, and reviewers can open them.
+                                The connection works, but Google could not confirm the storage folder just now.
                             <?php endif; ?>
                         </p>
                     <?php else: ?>
@@ -267,11 +337,38 @@ if ($historyReady) {
                         </a>
                     </p>
                     <p class="set-status-note" style="margin-top:.5rem;">
-                        You will be sent to Google to sign in with the account that owns the storage folder,
-                        then brought back here.
+                        You will be sent to Google to choose an account that can add files to the storage folder,
+                        then brought back here. If you choose another account, check that it can also open older PDFs.
                     </p>
                 </div>
             </div>
+        </div>
+
+        <div class="set-card" id="continuityReminders">
+            <h2>Google service reminders</h2>
+            <p>Record the next date you need to check or renew each service. PAPEL cannot read subscription or billing dates from the Drive connection. These dates are reminders entered by staff; they do not renew a plan or confirm that payment succeeded.</p>
+            <div class="set-reminders">
+                <div class="set-reminder <?= e($storageReminder['class']) ?>">
+                    <strong>Drive or Workspace storage plan</strong>
+                    <span><?= $continuityDates['gdrive_storage_renewal_date'] && gdrive_valid_continuity_date($continuityDates['gdrive_storage_renewal_date']) ? e(date('M j, Y', strtotime($continuityDates['gdrive_storage_renewal_date']))) . ' · ' : '' ?><?= e($storageReminder['text']) ?></span>
+                </div>
+                <div class="set-reminder <?= e($cloudReminder['class']) ?>">
+                    <strong>Google Cloud billing review</strong>
+                    <span><?= $continuityDates['gcloud_billing_review_date'] && gdrive_valid_continuity_date($continuityDates['gcloud_billing_review_date']) ? e(date('M j, Y', strtotime($continuityDates['gcloud_billing_review_date']))) . ' · ' : '' ?><?= e($cloudReminder['text']) ?></span>
+                </div>
+            </div>
+            <form method="post" action="<?= e($SELF) ?>">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="save_gdrive_continuity">
+                <div class="set-date-fields">
+                    <label class="set-field"><span>Storage plan renewal or check date</span>
+                        <input type="date" name="gdrive_storage_renewal_date" value="<?= e($continuityDates['gdrive_storage_renewal_date']) ?>"></label>
+                    <label class="set-field"><span>Cloud billing review date</span>
+                        <input type="date" name="gcloud_billing_review_date" value="<?= e($continuityDates['gcloud_billing_review_date']) ?>"></label>
+                </div>
+                <div class="set-actions"><button type="submit" class="btn-sm-maroon">Save reminder dates</button>
+                    <span class="set-hint">Leave a date empty if the service has no fixed renewal date.</span></div>
+            </form>
         </div>
 
         <div class="set-card">
@@ -310,6 +407,49 @@ if ($historyReady) {
                     <?php endif; ?>
                 </div>
             </div>
+        </div>
+
+        <div class="set-card" id="folderAccess">
+            <h2>Who can access this folder</h2>
+            <p>This is the sharing list Google reports for the selected folder right now. It may include people, groups, a whole domain, or anyone with the link.</p>
+            <?php if (!$connected): ?>
+                <p>Connect Google Drive to check the folder's sharing list.</p>
+            <?php elseif (!$current): ?>
+                <p>Set a storage folder first.</p>
+            <?php elseif ($folderAccess['state'] !== 'ok'): ?>
+                <p>Google could not show the sharing list. Open the folder in Google Drive and choose <strong>Share</strong> to check it there.</p>
+            <?php elseif (!$folderAccess['permissions']): ?>
+                <p>Google returned no visible sharing entries. Check the folder's <strong>Share</strong> panel in Google Drive.</p>
+            <?php else: ?>
+                <?php if ($folderWideAccess): ?><p><strong>Broad access is listed below.</strong> Check whether domain or link sharing is appropriate for unpublished papers.</p><?php endif; ?>
+                <div class="set-history-scroll">
+                    <table class="set-history">
+                        <thead><tr><th scope="col">Account or audience</th><th scope="col">Type</th><th scope="col">Access</th></tr></thead>
+                        <tbody>
+                        <?php foreach ($folderAccess['permissions'] as $permission): ?>
+                            <tr>
+                                <td>
+                                    <?php if ($permission['type'] === 'anyone'): ?>
+                                        <?= $permission['discoverable'] ? 'Anyone on the web' : 'Anyone with the link' ?>
+                                    <?php elseif ($permission['type'] === 'domain'): ?>
+                                        <?= e($permission['domain'] ?: 'A Google Workspace domain') ?>
+                                    <?php else: ?>
+                                        <?= e($permission['email'] ?: ($permission['name'] ?: 'Email not shown by Google')) ?>
+                                        <?php if ($permission['name'] !== '' && $permission['email'] !== ''): ?><small><?= e($permission['name']) ?></small><?php endif; ?>
+                                    <?php endif; ?>
+                                </td>
+                                <td><?= e(ucfirst($permission['type'])) ?></td>
+                                <td><?= e($accessRoleNames[$permission['role']] ?? ucfirst($permission['role'])) ?>
+                                    <?php if ($permission['expires'] !== ''): ?><small>Until <?= e(date('M j, Y', strtotime($permission['expires']))) ?></small><?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <?php if ($folderAccess['truncated']): ?><p>Google returned more permissions than this page can show. Check the full list in Drive.</p><?php endif; ?>
+                <p>Group members and people covered by domain sharing are not listed one by one. Individual PDFs can also have separate sharing permissions. Google Cloud Console project access is separate from this Drive folder list.</p>
+            <?php endif; ?>
         </div>
 
         <div class="set-card">
