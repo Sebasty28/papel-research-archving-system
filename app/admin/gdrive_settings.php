@@ -42,7 +42,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $check = gdrive_check_folder($folder_id);
             if ($check['state'] !== 'ok') {
                 flash('error', 'That folder was not saved. ' . gdrive_folder_explain($check));
-            } elseif (update_gdrive_parent_folder_id($folder_id, $u['user_id'])) {
+            } elseif (extract_gdrive_folder_id($folder_id) === get_gdrive_parent_folder_id()) {
+                flash('success', 'That folder is already in use. Nothing changed.');
+            } elseif (update_gdrive_parent_folder_id($folder_id, $u['user_id'], $check['name'])) {
                 flash('success', 'Storage folder updated to "' . $check['name'] . '". New uploads will go here.');
             } else {
                 flash('error', 'That folder could not be saved. Check the link or ID and try again.');
@@ -56,6 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $current   = get_gdrive_parent_folder_id();
 $connected = is_gdrive_connected();
 $authUrl   = get_gdrive_auth_url();
+$account   = gdrive_current_account();
 
 /* The folder as Google sees it, not just as it is written down. "Connected" says
    the account is let in; it says nothing about whether this folder is somewhere
@@ -79,6 +82,28 @@ $ms->close();
 $stored = 0;
 $sc = $conn->query("SELECT COUNT(*) AS n FROM research_papers WHERE gdrive_file_id IS NOT NULL AND gdrive_file_id <> ''");
 if ($sc) $stored = (int)($sc->fetch_assoc()['n'] ?? 0);
+
+$historyReady = gdrive_history_ready();
+$history = [];
+$historyPage = max(1, (int)($_GET['history_page'] ?? 1));
+$historyPages = 1;
+if ($historyReady) {
+    $count = $conn->query('SELECT COUNT(*) AS n FROM gdrive_setting_history');
+    $total = (int)$count->fetch_assoc()['n'];
+    $historyPages = max(1, (int)ceil($total / 20));
+    $historyPage = min($historyPage, $historyPages);
+    $offset = ($historyPage - 1) * 20;
+    $hs = $conn->prepare(
+        'SELECT h.event_type, h.account_email, h.account_name, h.folder_id, h.folder_name, '
+        . 'h.changed_at, us.full_name AS staff_name '
+        . 'FROM gdrive_setting_history h LEFT JOIN users us ON us.user_id = h.changed_by '
+        . 'ORDER BY h.history_id DESC LIMIT 20 OFFSET ?'
+    );
+    $hs->bind_param('i', $offset);
+    $hs->execute();
+    $history = $hs->get_result()->fetch_all(MYSQLI_ASSOC);
+    $hs->close();
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -149,6 +174,16 @@ if ($sc) $stored = (int)($sc->fetch_assoc()['n'] ?? 0);
 .set-flash.ok  { background: var(--ok-bg);  color: var(--ok-text); }
 .set-flash.bad { background: var(--bad-bg); color: var(--bad-text); }
 
+.set-history-scroll { overflow-x: auto; }
+.set-history { width: 100%; border-collapse: collapse; font-size: .75rem; }
+.set-history th, .set-history td { text-align: left; vertical-align: top; padding: .65rem .5rem; border-bottom: 1px solid var(--border); }
+.set-history th { color: var(--maroon); font-weight: 600; white-space: nowrap; }
+.set-history td { color: var(--ink); line-height: 1.5; }
+.set-history tbody tr:last-child td { border-bottom: 0; }
+.set-history a { overflow-wrap: anywhere; }
+.set-history small { display: block; color: var(--grey); font-size: .7rem; }
+.set-history-pages { display: flex; align-items: center; gap: .75rem; margin-top: 1rem; font-size: .75rem; }
+
 @media (max-width: 600px) {
     .set-wrap { padding: 1.25rem 0 2rem; }
     .set-card { padding: 1.125rem; }
@@ -205,6 +240,11 @@ if ($sc) $stored = (int)($sc->fetch_assoc()['n'] ?? 0);
                 <div>
                     <?php if ($connected): ?>
                         <strong>Google Drive is connected.</strong>
+                        <?php if ($account['email'] !== ''): ?>
+                            <p class="set-status-note">Connected account: <strong><?= e($account['email']) ?></strong>.</p>
+                        <?php else: ?>
+                            <p class="set-status-note">The connected account email will appear after the next reconnection.</p>
+                        <?php endif; ?>
                         <p class="set-status-note">
                             <?php if ($folderBad): ?>
                                 The connection works, but <strong>the storage folder below cannot be used</strong>,
@@ -288,6 +328,48 @@ if ($sc) $stored = (int)($sc->fetch_assoc()['n'] ?? 0);
                     <span class="set-hint">Paste the whole sharing URL if you like. The ID is read out of it.</span>
                 </div>
             </form>
+        </div>
+
+        <div class="set-card" id="storageHistory">
+            <h2>Connection and folder history</h2>
+            <p>Each row records a Google Drive connection or a change to the storage folder. The folder link shows where new uploads were set to go at that time. Papers already uploaded stay in their original folder. Changes made before this history was added are not included.</p>
+            <?php if (!$historyReady): ?>
+                <p><strong>History is not available yet.</strong> The database could not create its history table automatically. Run <code>scripts/migrations/sql/2026-11-19_gdrive_setting_history.sql</code> in this site's phpMyAdmin database. The current connection and folder still work.</p>
+            <?php elseif (!$history): ?>
+                <p>No changes have been recorded yet. History starts when the first connection or folder change is made after the database update; older changes cannot be recovered.</p>
+            <?php else: ?>
+                <div class="set-history-scroll">
+                    <table class="set-history">
+                        <thead><tr><th scope="col">When (PHT)</th><th scope="col">Change</th><th scope="col">Google account</th><th scope="col">Folder at that time</th><th scope="col">Changed by</th></tr></thead>
+                        <tbody>
+                        <?php foreach ($history as $row): ?>
+                            <tr>
+                                <td><?= e(date('M j, Y g:i A', strtotime($row['changed_at']))) ?></td>
+                                <td><?= $row['event_type'] === 'connected' ? 'Connected Drive' : 'Changed folder' ?></td>
+                                <td>
+                                    <?= $row['account_email'] !== '' ? e($row['account_email']) : 'Account email unavailable' ?>
+                                    <?php if ($row['account_name'] !== ''): ?><small><?= e($row['account_name']) ?></small><?php endif; ?>
+                                </td>
+                                <td>
+                                    <?php if ($row['folder_id'] !== ''): ?>
+                                        <?php if ($row['folder_name'] !== ''): ?><strong><?= e($row['folder_name']) ?></strong><br><?php endif; ?>
+                                        <a href="https://drive.google.com/drive/folders/<?= e($row['folder_id']) ?>" target="_blank" rel="noopener noreferrer"><?= e($row['folder_id']) ?></a>
+                                    <?php else: ?>No folder set<?php endif; ?>
+                                </td>
+                                <td><?= e($row['staff_name'] ?: 'Former staff account') ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <?php if ($historyPages > 1): ?>
+                    <nav class="set-history-pages" aria-label="Storage history pages">
+                        <?php if ($historyPage > 1): ?><a href="?history_page=<?= $historyPage - 1 ?>#storageHistory">Newer</a><?php endif; ?>
+                        <span>Page <?= $historyPage ?> of <?= $historyPages ?></span>
+                        <?php if ($historyPage < $historyPages): ?><a href="?history_page=<?= $historyPage + 1 ?>#storageHistory">Older</a><?php endif; ?>
+                    </nav>
+                <?php endif; ?>
+            <?php endif; ?>
         </div>
 
         <div class="set-card">

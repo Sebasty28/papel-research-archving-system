@@ -385,6 +385,19 @@ CREATE TABLE IF NOT EXISTS `system_settings` (
   PRIMARY KEY (`setting_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+-- Google Drive connection and storage folder changes. OAuth tokens stay in system_settings.
+CREATE TABLE IF NOT EXISTS `gdrive_setting_history` (
+  `history_id` int(11) unsigned NOT NULL AUTO_INCREMENT,
+  `event_type` varchar(20) NOT NULL,
+  `account_email` varchar(255) NOT NULL DEFAULT '',
+  `account_name` varchar(255) NOT NULL DEFAULT '',
+  `folder_id` varchar(255) NOT NULL DEFAULT '',
+  `folder_name` varchar(255) NOT NULL DEFAULT '',
+  `changed_by` int(11) DEFAULT NULL,
+  `changed_at` datetime NOT NULL,
+  PRIMARY KEY (`history_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 --
 -- users
 --

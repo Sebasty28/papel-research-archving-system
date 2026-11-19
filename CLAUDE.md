@@ -733,6 +733,18 @@ account can edit. Open the folder in that account's Drive to be sure before past
 A deploy leaves `.env` and `config/gdrive_token.json` alone (see
 `.github/workflows/deploy-staging.yml`), so they have to exist on the server already.
 
+**Connection and folder history:** `app/admin/gdrive_settings.php` shows the
+Director and Research Coordinator who connected Drive, which Google account
+granted access, and which folder was selected at each change. The callback reads
+the account email from Google's Drive `about` response; it never puts OAuth
+tokens in `gdrive_setting_history`. Folder saves record the currently connected
+account and the checked folder ID/name in the same database transaction as the
+setting change. The guarded Storage Folder page creates the table on first use
+of each staging/production copy; `gdrive_history_ready()` does it before any
+setting transaction. If that fails, the page shows the phpMyAdmin fallback:
+`scripts/migrations/sql/2026-11-19_gdrive_setting_history.sql`. Older changes
+cannot be reconstructed; the current account email appears after reconnection.
+
 ### A copy of the database can be behind the code
 
 Staging was built from a database export on 14 October. Two schema changes came a

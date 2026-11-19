@@ -1,5 +1,5 @@
 {
- "built": "2026-11-18 19:40",
+ "built": "2026-11-19 18:48",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -44,7 +44,7 @@
    "lines": 143
   },
   "app/admin/gdrive_settings.php": {
-   "lines": 380
+   "lines": 462
   },
   "app/admin/super_admin_manage_admins.php": {
    "lines": 576
@@ -188,13 +188,13 @@
    "lines": 265
   },
   "config/core.php": {
-   "lines": 6014
+   "lines": 6035
   },
   "config/error_handler.php": {
    "lines": 228
   },
   "config/gdrive_config.php": {
-   "lines": 978
+   "lines": 1080
   },
   "config/groq_config.php": {
    "lines": 1007
@@ -440,7 +440,7 @@
    "lines": 228
   },
   "pages/gdrive_callback.php": {
-   "lines": 41
+   "lines": 48
   },
   "pages/help_center.php": {
    "lines": 325
@@ -459,6 +459,9 @@
   },
   "reset_system_data.php": {
    "lines": 161
+  },
+  "scripts/backup_database.php": {
+   "lines": 91
   },
   "scripts/build_field_guide.py": {
    "lines": 909

@@ -4,34 +4,41 @@ require_once '../config/gdrive_config.php';
 
 require_login();
 $u    = current_user();
-$conn = db();
 $redirect = role_home($u['user_role']);
 
 if (isset($_GET['code'])) {
     try {
+        if (!can_manage_research_operations($u)) {
+            throw new RuntimeException('Only the Director or Research Coordinator can connect Google Drive.');
+        }
         $client = get_gdrive_client();
         $token  = $client->fetchAccessTokenWithAuthCode($_GET['code']);
 
         if (!isset($token['error'])) {
-            if (in_array($u['user_role'], ['admin', 'super_admin'])) {
-                save_system_gdrive_token($token);
-                flash('success', 'Google Drive connected. Students can submit papers again.');
-                // Back to the page the connect button lives on, so the new
-                // status is visible rather than only asserted.
-                /* Both of the accounts that own that page come back to it, so the
-                   new status is visible rather than only asserted. It used to be
-                   the Director alone, so a Coordinator who connected Drive was
-                   returned to a page that says nothing about Drive. */
-                if (can_manage_research_operations($u)) {
-                    $redirect = BASE_URL . '/app/admin/gdrive_settings.php';
+            $client->setAccessToken($token);
+            $email = '';
+            $name = '';
+            try {
+                $about = (new Google_Service_Drive($client))->about->get(['fields' => 'user(displayName,emailAddress)']);
+                if ($about->getUser()) {
+                    $email = (string)$about->getUser()->getEmailAddress();
+                    $name = (string)$about->getUser()->getDisplayName();
                 }
-            } else {
-                flash('error', 'Only administrators can connect Google Drive.');
+            } catch (Throwable $e) {
+                error_log('GDrive connected account could not be identified: ' . $e->getMessage());
             }
+            save_system_gdrive_token($token);
+            if (!gdrive_record_connection($email, $name, (int)$u['user_id'])) {
+                flash('error', 'Google Drive connected, but its account history could not be saved.');
+            } elseif ($email === '') {
+                flash('error', 'Google Drive connected, but Google did not provide the account email for the history.');
+            }
+            flash('success', 'Google Drive connected. Check the storage folder below before students submit papers.');
+            $redirect = BASE_URL . '/app/admin/gdrive_settings.php';
         } else {
             throw new Exception('Google authentication failed: ' . ($token['error_description'] ?? $token['error']));
         }
-    } catch (Exception $e) {
+    } catch (Throwable $e) {
         flash('error', 'Failed to connect Google Drive: ' . $e->getMessage());
     }
 }

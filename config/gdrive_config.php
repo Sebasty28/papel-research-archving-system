@@ -110,13 +110,115 @@ function extract_gdrive_folder_id(string $input): string
     return $input;
 }
 
-function update_gdrive_parent_folder_id(string $folderId, int $userId): bool
+/** The email shown on the Storage Folder page is read from Google, not typed here. */
+function gdrive_current_account(): array
+{
+    $account = ['email' => '', 'name' => ''];
+    $res = db()->query("SELECT setting_key, setting_value FROM system_settings WHERE setting_key IN ('gdrive_account_email', 'gdrive_account_name')");
+    if ($res) {
+        while ($row = $res->fetch_assoc()) {
+            $account[$row['setting_key'] === 'gdrive_account_email' ? 'email' : 'name'] = (string)$row['setting_value'];
+        }
+    }
+    return $account;
+}
+
+/** Older staging and production databases can still use Drive before the migration. */
+function gdrive_history_ready(): bool
+{
+    static $ready = null;
+    if ($ready === null) {
+        try {
+            $stmt = db()->prepare("SELECT COUNT(*) AS n FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'gdrive_setting_history'");
+            if (!$stmt->execute()) throw new RuntimeException($stmt->error);
+            $ready = (int)$stmt->get_result()->fetch_assoc()['n'] > 0;
+            $stmt->close();
+            if (!$ready) {
+                // This is called only from the guarded Storage Folder page or its
+                // authorised save/callback. InfinityFree has no deployment shell,
+                // so create the small history table on first use of each copy.
+                $ready = db()->query("CREATE TABLE IF NOT EXISTS gdrive_setting_history (
+                    history_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                    event_type VARCHAR(20) NOT NULL,
+                    account_email VARCHAR(255) NOT NULL DEFAULT '',
+                    account_name VARCHAR(255) NOT NULL DEFAULT '',
+                    folder_id VARCHAR(255) NOT NULL DEFAULT '',
+                    folder_name VARCHAR(255) NOT NULL DEFAULT '',
+                    changed_by INT NULL,
+                    changed_at DATETIME NOT NULL,
+                    PRIMARY KEY (history_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci") === true;
+                if (!$ready) error_log('GDrive history table could not be created: ' . db()->error);
+            }
+        } catch (Throwable $e) {
+            error_log('GDrive history table could not be checked or created: ' . $e->getMessage());
+            $ready = false;
+        }
+    }
+    return $ready;
+}
+
+/** Save the Google account that actually granted access and one history snapshot. */
+function gdrive_record_connection(string $email, string $name, int $userId): bool
+{
+    $conn = db();
+    $historyReady = gdrive_history_ready();
+    try {
+        if (!$conn->begin_transaction()) throw new RuntimeException($conn->error);
+        $stmt = $conn->prepare("INSERT INTO system_settings (setting_key, setting_value, updated_by) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value), updated_by=VALUES(updated_by)");
+        foreach (['gdrive_account_email' => $email, 'gdrive_account_name' => $name] as $key => $value) {
+            $stmt->bind_param('ssi', $key, $value, $userId);
+            if (!$stmt->execute()) throw new RuntimeException($stmt->error);
+        }
+        $stmt->close();
+
+        if ($historyReady) {
+            $folderId = get_gdrive_parent_folder_id();
+            $changedAt = date('Y-m-d H:i:s');
+            $stmt = $conn->prepare("INSERT INTO gdrive_setting_history (event_type, account_email, account_name, folder_id, changed_by, changed_at) VALUES ('connected', ?, ?, ?, ?, ?)");
+            $stmt->bind_param('sssis', $email, $name, $folderId, $userId, $changedAt);
+            if (!$stmt->execute()) throw new RuntimeException($stmt->error);
+            $stmt->close();
+        }
+        if (!$conn->commit()) throw new RuntimeException($conn->error);
+        return true;
+    } catch (Throwable $e) {
+        $conn->rollback();
+        error_log('GDrive connection history could not be saved: ' . $e->getMessage());
+        return false;
+    }
+}
+
+function update_gdrive_parent_folder_id(string $folderId, int $userId, string $folderName = ''): bool
 {
     $conn = db();
     $folderId = extract_gdrive_folder_id($folderId);
-    $stmt = $conn->prepare("INSERT INTO system_settings (setting_key, setting_value, updated_by) VALUES ('gdrive_parent_folder_id', ?, ?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value), updated_by=VALUES(updated_by)");
-    $stmt->bind_param('si', $folderId, $userId);
-    return $stmt->execute();
+    if ($folderId === get_gdrive_parent_folder_id()) return true;
+    $historyReady = gdrive_history_ready();
+    try {
+        if (!$conn->begin_transaction()) throw new RuntimeException($conn->error);
+        $stmt = $conn->prepare("INSERT INTO system_settings (setting_key, setting_value, updated_by) VALUES ('gdrive_parent_folder_id', ?, ?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value), updated_by=VALUES(updated_by)");
+        $stmt->bind_param('si', $folderId, $userId);
+        if (!$stmt->execute()) throw new RuntimeException($stmt->error);
+        $stmt->close();
+
+        if ($historyReady) {
+            $account = gdrive_current_account();
+            $email = $account['email'];
+            $name = $account['name'];
+            $changedAt = date('Y-m-d H:i:s');
+            $stmt = $conn->prepare("INSERT INTO gdrive_setting_history (event_type, account_email, account_name, folder_id, folder_name, changed_by, changed_at) VALUES ('folder_changed', ?, ?, ?, ?, ?, ?)");
+            $stmt->bind_param('ssssis', $email, $name, $folderId, $folderName, $userId, $changedAt);
+            if (!$stmt->execute()) throw new RuntimeException($stmt->error);
+            $stmt->close();
+        }
+        if (!$conn->commit()) throw new RuntimeException($conn->error);
+        return true;
+    } catch (Throwable $e) {
+        $conn->rollback();
+        error_log('GDrive folder setting could not be saved: ' . $e->getMessage());
+        return false;
+    }
 }
 
 /**

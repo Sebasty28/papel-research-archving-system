@@ -5852,6 +5852,27 @@ function schema_gaps(): array
 {
     $gaps = [];
 
+    $driveHistory = db()->query("SELECT COUNT(*) AS n FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'gdrive_setting_history'");
+    if (!$driveHistory || (int)$driveHistory->fetch_assoc()['n'] === 0) {
+        $gaps[] = [
+            'key'    => 'gdrive_setting_history',
+            'what'   => 'gdrive_setting_history does not exist',
+            'effect' => 'The Storage Folder page still works, but it cannot show earlier Google account connections or folder changes. History starts after the table is added.',
+            'sql'    => "CREATE TABLE IF NOT EXISTS gdrive_setting_history (\n"
+                      . "  history_id INT UNSIGNED NOT NULL AUTO_INCREMENT,\n"
+                      . "  event_type VARCHAR(20) NOT NULL,\n"
+                      . "  account_email VARCHAR(255) NOT NULL DEFAULT '',\n"
+                      . "  account_name VARCHAR(255) NOT NULL DEFAULT '',\n"
+                      . "  folder_id VARCHAR(255) NOT NULL DEFAULT '',\n"
+                      . "  folder_name VARCHAR(255) NOT NULL DEFAULT '',\n"
+                      . "  changed_by INT NULL,\n"
+                      . "  changed_at DATETIME NOT NULL,\n"
+                      . "  PRIMARY KEY (history_id)\n"
+                      . ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;",
+            'file'   => 'scripts/migrations/sql/2026-11-19_gdrive_setting_history.sql',
+        ];
+    }
+
     if (!users_have_secondary_position()) {
         $gaps[] = [
             'key'    => 'secondary_position',
