@@ -1,5 +1,5 @@
 {
- "built": "2026-11-19 22:50",
+ "built": "2026-11-19 22:56",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -259,6 +259,9 @@
   "includes/corpus_widget.php": {
    "lines": 151
   },
+  "includes/cron_guard.php": {
+   "lines": 61
+  },
   "includes/docx_writer.php": {
    "lines": 356
   },
@@ -422,10 +425,10 @@
    "lines": 12
   },
   "notifications/cron/auto_archive_papers.php": {
-   "lines": 23
+   "lines": 27
   },
   "notifications/cron/send_notifications.php": {
-   "lines": 34
+   "lines": 39
   },
   "notifications/notification_center.php": {
    "lines": 491

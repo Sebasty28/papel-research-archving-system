@@ -3,6 +3,10 @@
 // Run this script daily via cron job: 0 0 * * * php /path/to/auto_archive_papers.php
 
 require_once __DIR__.'/../../config/core.php';
+// A shell, or a web cron carrying CRON_KEY. Before anything is read or written:
+// this archives real papers, which takes them out of the public repository.
+require_once __DIR__.'/../../includes/cron_guard.php';
+require_cron_access('auto_archive_papers');
 require_once __DIR__.'/../../archive/archive_handler.php';
 $conn = db();
 

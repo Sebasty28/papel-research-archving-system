@@ -1,6 +1,11 @@
 <?php
 // cron/send_notifications.php (run via Task Scheduler or cron every 15 mins)
-require_once __DIR__.'/../../config/core.php'; $conn=db();
+require_once __DIR__.'/../../config/core.php';
+// A shell, or a web cron carrying CRON_KEY. Before anything is sent: every run
+// of this puts mail in real inboxes.
+require_once __DIR__.'/../../includes/cron_guard.php';
+require_cron_access('send_notifications');
+$conn=db();
 $now = date('H:i'); // e.g., "10:00"
 $targets = ['10:00', '15:30'];
 if(!in_array($now, $targets, true)){ exit('Off-window'); }

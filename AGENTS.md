@@ -3833,7 +3833,44 @@ cache. That is the whole of it.
 - **Restoring is the exact reverse** (`restorePaper()`), and puts the paper back
   in the public repository.
 - See **Known gaps**: nothing schedules that cron, so the five-year rule has
-  never fired, and the script is a guardless public URL on the deployed copies.
+  never fired by itself, though it was driven by hand on 2026-11-19 and does
+  what it says.
+
+### Who may run a scheduled job
+
+`includes/cron_guard.php`, required by both scripts under `notifications/cron/`
+straight after `core.php` and before either reads or writes anything. Added
+2026-11-19.
+
+`deploy-staging.yml` excludes `scripts/**` but not that folder, so both were
+ordinary URLs on staging and production that anybody who knew the path could
+run: `auto_archive_papers.php` takes every approved paper over five years old
+out of the public repository, and `send_notifications.php` puts reminder mail
+in real inboxes. Neither asked who was calling.
+
+- **A shell needs no key**, because having one is already more access than this
+  grants. That is how the dev box runs them.
+- **A web request needs `CRON_KEY`** from `.env`, in `?key=` or an
+  `X-Papel-Cron` header, compared with `hash_equals()`. The hosts have no
+  shell, so a web cron has to be able to get in somehow.
+- **It fails closed.** No `CRON_KEY` set means no web way in at all, which is
+  the state every copy is in until somebody sets one, so the file cannot have
+  left anything more open than it found it. `CRON_KEY` is empty in
+  `.env.example` on purpose.
+- **404, not 403**, so a job nobody may run does not confirm it is there. Every
+  refusal is logged with the caller's address and the reason, since that log
+  line is how anybody would notice the path being probed.
+- **`cron_access_allowed()` is the decision alone**, reading nothing from the
+  request or the environment, so every branch can be driven from a test without
+  a key in `.env`. `require_cron_access()` is the wrapper that reads both.
+- The key travels in the URL and so lands in the host's access log. It opens
+  those two jobs and nothing else.
+
+Driven against the running site: a seeded six-year-old paper, which the web
+could not archive (404, empty body, paper untouched, a guessed key refused too)
+and a shell run then archived correctly with `archived_by` 0. The mail script
+answered 404 rather than its own "Off-window", which is what proves the guard
+runs before the script's clock does.
 
 ---
 
@@ -3978,16 +4015,13 @@ describe the dev box, not the cloud checkout.
   `gen_usecase.php` was renamed), and `docs/field_guide.html` (one, from
   `scripts/field_guide_content.py`). Each is one command away from correct;
   rebuild before handing any of them to a reader.
-- **The two scripts under `notifications/cron/` are deployed and have no
-  guard.** `deploy-staging.yml` excludes `scripts/**` but not these, so
-  `auto_archive_papers.php` and `send_notifications.php` are ordinary URLs on
-  staging and production that anybody who knows the path can run: the first
-  archives every approved paper over five years old, the second sends the
-  reminder mail. Neither checks a role, a CLI context or a token. They want
-  `if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }` and a secret in
-  the URL if a web cron has to reach them, or adding to the deploy's exclude
-  list if nothing runs them at all. **Nothing currently schedules either one**,
-  here or on the host, so the five-year rule below has never actually fired.
+- **Nothing schedules either script under `notifications/cron/`**, here or on
+  the host, so the five-year archive rule has never fired on its own. The rule
+  itself works: it was driven on 2026-11-19 against a seeded six-year-old
+  paper, which it archived correctly. To start it, put `CRON_KEY` in that
+  copy's `.env` and point a web cron at
+  `notifications/cron/auto_archive_papers.php?key=<it>` daily. They are no
+  longer open URLs: see "Who may run a scheduled job" above.
 - **`includes/progress_tracker.php` draws the retired four-stage tracker** and
   nothing requires it. It is the code twin of the documents deleted above: the
   wrong answer in the place somebody would look it up. Delete it or rewrite it
