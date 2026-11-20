@@ -2804,6 +2804,27 @@ palettes, and 390px with no sideways scroll.
 
 ### PDF compression before submission
 
+**Switched off for now** (the owner's request, 20 November 2026). The script tag that loads
+`papel-pdf-compressor.js` in `student_upload_ai.php` is commented out, with a note above it;
+its files and every call to it stay, each call asking `window.papelPdfCompressor &&` first, so
+nothing runs. **The size limits still hold**: they never depended on it (`selectedFileSizeError()`,
+`filesTooBig()` and the server's 413). A file over the limit is refused and the student is asked
+to compress it themselves; a file inside it is sent exactly as chosen. The wording that promised
+compression (the form's size line, the Step 2 dialog, Corpus's "What files can I upload?" and
+his upload-page guide) is replaced, the old text kept in a comment beside each. To switch it back
+on, restore those four and the tag. `tests/pdf_compression.py` fails while it is off. Checked in
+Chrome as a student: no script fetched, a 15 MB PDF kept byte for byte, a 31 MB one refused.
+Everything below describes the compressor as it works when it is on.
+
+**A PDF over the limit is refused outright** (the owner's request, 20 November 2026), whatever
+way it arrives: `updatePdfIndicator()` empties its box the moment it is chosen, so it is never in
+the box, the viewer or the Step 2 dialog's zone. It used to stay in the row with its 60MB size and
+open in the viewer behind the notice refusing it. The reason is said once: in the Step 2 dialog's
+own error line when that dialog is open (a second `papelAlert` would replace the dialog), as a
+"File too large" notice otherwise. The dialog listens to the input after the page does, so the
+reason is kept in `pdfRefusal`, which it reads; Continue stays enabled, nothing invalid being
+attached. `papelPdfPreview` also refuses a file over the limit, as a second guard.
+
 `assests/js/papel-pdf-compressor.js` watches every PDF input on the upload form,
 including manuscripts, supporting documents and dynamically added rows. Picker
 selections and drag/drop both raise `change`. From **10 MiB inclusive to 36 MiB

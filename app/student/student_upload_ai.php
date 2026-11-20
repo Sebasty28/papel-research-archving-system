@@ -1280,7 +1280,17 @@ $PAGE_SKELETON = 'panes';
 require_once ROOT_PATH.'/includes/site_head.php';
 ?>
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>"  src="../../assests/js/input-validation.js" defer></script>
+<?php /* The in-browser PDF compressor is DISABLED for now (the owner's request, 20 November
+   2026). Its files are kept (assests/js/papel-pdf-compressor.js and assests/js/pdf-compression/),
+   and so is every call to it on this page: each one asks `window.papelPdfCompressor &&` first,
+   so with the script not loaded they do nothing. The size limits are a separate check
+   (selectedFileSizeError(), and the server's own 413) and still refuse a file over the limit;
+   the student is asked to compress it themselves. To switch the compressor back on, restore
+   this tag, and the three pieces of wording marked "compressor disabled" below and in
+   includes/corpus_faq.php and includes/corpus_knowledge.php.
+
 <script nonce="<?= csp_nonce() ?>" src="<?= e(asset_url('assests/js/papel-pdf-compressor.js')) ?>" data-worker="<?= e(asset_url('assests/js/pdf-compression/worker.js')) ?>" defer></script>
+*/ ?>
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 .pdf-compression-status { display: block; flex-basis: 100%; margin-top: .35rem; font-size: .75rem; color: var(--muted, #666); }
 .pdf-compression-status[hidden] { display: none; }
@@ -5866,7 +5876,10 @@ body.pdf-docked > .site-footer {
                       <tfoot>
                         <tr>
                           <td colspan="2">
+                            <p class="pdf-slots-size">PDF only, <?= e(max_upload_label()) ?> at most. A larger file must be compressed before you select it.</p>
+                            <?php /* Compressor disabled (see the note above its script tag). The wording while it ran:
                             <p class="pdf-slots-size">PDF only, <?= e(max_upload_label()) ?> at most. From 10 MB to under 36 MB: Smallest mode reduces image quality and resolution. Files of 36 MB or more must be compressed before selecting them. Preview before submitting; Use original restores the selected file.</p>
+                            */ ?>
                             <?php /* Both files travel in one request, which PHP refuses outright
                                      when they pass post_max_size between them, however far each
                                      is under its own limit. */ ?>
@@ -9355,6 +9368,18 @@ const POST_MAX       = <?= (int)max_post_bytes() ?>;
 const POST_MAX_LABEL = <?= json_encode(max_post_label()) ?>;
 const FILE_MAX       = <?= (int)max_upload_bytes() ?>;
 const FILE_MAX_LABEL = <?= json_encode(max_upload_label()) ?>;
+/* The last PDF refused for being over FILE_MAX, as { key, text }, or null. A file over the
+   limit is never kept: updatePdfIndicator() empties its box the moment it is chosen, so it is
+   in neither the box, the viewer nor the Step 2 dialog's zone (the owner's request, 20 November
+   2026: the refused 60MB file sat in the row and in the viewer behind the notice). Kept here
+   because the box no longer holds the file to say why, and the Step 2 dialog, whose own
+   listener runs after the page's, reads the reason from this instead. */
+let pdfRefusal = null;
+function uploadDropsOpen() {
+    const v = document.getElementById('uploadDropValidation');
+    const box = document.getElementById('papelDialog');
+    return !!(v && v.isConnected && box && box.classList.contains('open'));
+}
 
 function pdfInput(key)     { return document.getElementById('pdfFile_' + key); }
 function pdfIndicator(key) { return document.getElementById('pdf-indicator-' + key); }
@@ -9479,17 +9504,24 @@ const papelPdfPreview = (function () {
         return (pdfActive().length > 1 ? pdfLabelOf(key) + ': ' : '') + pdfFileOf(key).name;
     }
     function dock() { return window.papelPdfDock || null; }
+    /* A file over the per-PDF limit is never shown. It cannot be submitted, and opened in the
+       viewer it sat behind the very notice refusing it (a 60MB thesis on view under "The
+       system cannot accept..."), which reads as half accepted; reading a file that size into
+       the viewer is also the slowest thing this page can do, for nothing. */
+    function tooBig(file) { return !!(file && FILE_MAX && file.size > FILE_MAX); }
 
     return {
         /* On every change of the chosen file. Picking a PDF shows it straight
            away, so the student can check they grabbed the right one before
            spending time on the rest of the form; clearing the choice takes the
-           panel, and the tab that brings it back, away with it. */
+           panel, and the tab that brings it back, away with it. So does a file
+           over the limit: the slot no longer holds the one that was on view. */
         reset: function (key) {
             const d = dock();
             if (!d) return;
-            if (currentFile(key)) {
-                d.openFile(currentFile(key), title(key));
+            const file = currentFile(key);
+            if (file && !tooBig(file)) {
+                d.openFile(file, title(key));
                 shown = key;
             } else if (shown === key) {
                 d.forget();
@@ -9500,7 +9532,7 @@ const papelPdfPreview = (function () {
         toggle: function (key) {
             const d = dock();
             const file = currentFile(key);
-            if (!d || !file) return;
+            if (!d || !file || tooBig(file)) return;
             if (d.isOpen() && shown === key) {
                 /* Open but behind another tab: brought to the front. Only one already on view
                    is put away; the click used to close a PDF that could not even be seen. */
@@ -9983,6 +10015,21 @@ function updatePdfIndicator(input) {
     const key = input.dataset.format;
     const indicator = pdfIndicator(key);
     if (!indicator) return;
+    const chosen = (input.files && input.files[0]) ? input.files[0] : null;
+    /* Over the per-PDF limit: refused outright. The box is emptied before anything else
+       reads it, so the file is never shown here, in the viewer (papelPdfPreview.reset()
+       below finds no file and puts away whatever this box had on view) or in the Step 2
+       dialog's zone. The reason is said once: in that dialog's own error line when it is
+       open, since a second notice would replace the dialog itself, and as a notice otherwise. */
+    if (chosen && FILE_MAX && chosen.size > FILE_MAX) {
+        const text = 'The system cannot accept "' + chosen.name + '" (' + fileSizeLabel(chosen.size)
+            + '). The maximum size per PDF is ' + FILE_MAX_LABEL + '. Please compress your file first, then select it again.';
+        input.value = '';
+        pdfRefusal = { key: key, text: text };
+        if (!uploadDropsOpen()) papelAlert(text, { title: 'File too large', icon: 'error', field: indicator });
+    } else {
+        pdfRefusal = null;
+    }
     const file = (input.files && input.files[0]) ? input.files[0] : null;
     papelPdfPreview.reset(key);
     indicator.textContent = '';
@@ -10923,7 +10970,9 @@ function uploadDropsHtml() {
       + '<p class="up-drop-error" id="uploadDropValidation" role="alert" hidden></p>'
       + '<p class="up-drop-hint">PDF only, and the server takes at most ' + escHtml(POST_MAX_LABEL)
       + ' for everything on this form in one go. You can also do this on the page afterwards,'
-      + ' and nothing is sent until you submit at Step 4. PDFs from 10 MB to under 36 MB use Smallest mode: images lose quality and resolution to save space. Files of 36 MB or more are not compressed automatically; please compress them first. Preview the result before submitting, or choose Use original to keep the original PDF.</p>';
+      + ' and nothing is sent until you submit at Step 4. A PDF over the size limit must be compressed before you select it.</p>';
+      /* Compressor disabled (see the note above its script tag). The last sentence while it ran:
+         ' and nothing is sent until you submit at Step 4. PDFs from 10 MB to under 36 MB use Smallest mode: images lose quality and resolution to save space. Files of 36 MB or more are not compressed automatically; please compress them first. Preview the result before submitting, or choose Use original to keep the original PDF.</p>' */
 }
 
 /* Shown on every arrival at Step 2, unlike the question that follows it, which is
@@ -10959,12 +11008,16 @@ function wireUploadDrops(promise) {
         if (!validation || !validation.isConnected) return;
         const busy = !!(window.papelPdfCompressor && window.papelPdfCompressor.pending());
         const sizeError = selectedFileSizeError();
+        /* A file refused for its size is already out of its zone (updatePdfIndicator()),
+           so it is said here from pdfRefusal. Nothing invalid is attached any more, so
+           it does not hold Continue back: the PDF can still be attached on the page. */
+        const refused = (!sizeError && pdfRefusal) ? pdfRefusal.text : '';
         const why = sizeError
             ? (busy ? sizeError.replace('Please compress your file first, then select it again.', 'Automatic compression is running. Please wait.')
                 .replace('Please compress your files first, then select them again.', 'Automatic compression is running. Please wait.') : sizeError)
             : (busy ? 'Your PDF is being compressed. Please wait before continuing.' : '');
-        validation.textContent = why;
-        validation.hidden = !why;
+        validation.textContent = why || refused;
+        validation.hidden = !(why || refused);
         if (ok) { ok.disabled = !!why; ok.textContent = busy ? 'Compressing...' : 'Continue'; }
         body.querySelectorAll('.up-drop').forEach(function (drop) {
             paint(drop);

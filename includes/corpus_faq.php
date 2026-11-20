@@ -58,7 +58,10 @@ function corpus_faq_bank(): array {
         ['id' => 'files', 'page' => ['app/student/student_upload_ai.php', 'app/student/student_upload.php'], 'who' => $any,
          'q' => 'What files can I upload?',
          'also' => ['file size limit', 'how big can my pdf be', 'maximum file size', 'what is the upload limit'],
-         'a' => "**PDF files only**, at most **$maxUpload** each, and **$maxPost** for everything in one submission.\n\n- Larger PDFs are compressed in your browser before upload; **Use original** undoes it.\n- Very large files must be compressed before you attach them.\n- Ticking both IMRAD and Full Manuscript needs one PDF for each."],
+         'a' => "**PDF files only**, at most **$maxUpload** each, and **$maxPost** for everything in one submission.\n\n- A larger PDF must be compressed before you attach it; the form refuses it until then.\n- Ticking both IMRAD and Full Manuscript needs one PDF for each."],
+         /* Compressor disabled 20 November 2026 (see student_upload_ai.php, above its script tag).
+            The middle of this answer while it ran:
+            "- Larger PDFs are compressed in your browser before upload; **Use original** undoes it.\n- Very large files must be compressed before you attach them.\n" */
         ['id' => 'approve', 'page' => ['app/faculty/faculty_review_dashboard.php', 'app/review_paper.php'], 'who' => $adviser,
          'q' => 'How do I approve a paper?',
          'also' => ['approve a submission', 'forward a paper to the coordinator', 'how to approve'],
