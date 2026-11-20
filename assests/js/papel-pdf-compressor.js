@@ -3,6 +3,10 @@
     'use strict';
     const workerUrl = new URL(document.currentScript.dataset.worker || 'pdf-compression/worker.js', document.currentScript.src);
     const mode = document.currentScript.dataset.mode === 'lossless' ? 'lossless' : 'smallest';
+    /* What this server will actually accept, printed by the page from
+       max_upload_label(). The host's own ceiling is lower than the
+       application's on the live site, so the figure cannot be written here. */
+    const uploadLimit = document.currentScript.dataset.limit || '';
     const states = new Map();
     const completed = new WeakSet();
     const threshold = 10 * 1024 * 1024;
@@ -51,7 +55,8 @@
             return;
         }
         if (file.size >= automaticLimit) {
-            note(input, 'Automatic compression is not available for files of 36 MB or more. Please compress this PDF first, then select it again. The upload limit is 30 MB.');
+            note(input, 'Automatic compression is not available for files of 36 MB or more. Please compress this PDF first, then select it again.'
+                + (uploadLimit ? ' The upload limit is ' + uploadLimit + '.' : ''));
             return;
         }
         if (completed.has(file)) return;

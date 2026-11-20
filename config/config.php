@@ -216,8 +216,14 @@ define('COOKIE_SECURE', filter_var($_ENV['COOKIE_SECURE'] ?? 'false', FILTER_VAL
  * that host ceiling. max_upload_bytes() in core.php takes whichever of the
  * three is smallest, and every page and validator quotes it, so the figure a
  * student is promised is the figure the server will actually accept. */
-// The application ceiling stays at 30 MB even when PHP or the host allows more.
-define('UPLOAD_POLICY_MAX_MB', 30);
+/* The application ceiling, which stands even where PHP or the host allows more.
+ *
+ * 20 MB because that is what production really accepts: its host caps PHP at
+ * 20M, so the live site was already refusing anything larger while the ceiling
+ * said 30 and the dev box promised it. One figure on every copy means a paper
+ * that uploads here uploads there, and a limit quoted in testing is the limit
+ * a student meets. Measured from the live Help Center on 2026-11-20. */
+define('UPLOAD_POLICY_MAX_MB', 20);
 define('UPLOAD_MAX_MB', min(UPLOAD_POLICY_MAX_MB, (int)($_ENV['UPLOAD_MAX_MB'] ?? UPLOAD_POLICY_MAX_MB)));
 
 /* Where the browser sends a paper's text to have its metadata read.

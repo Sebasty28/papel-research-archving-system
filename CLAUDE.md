@@ -2830,7 +2830,7 @@ including manuscripts, supporting documents and dynamically added rows. Picker
 selections and drag/drop both raise `change`. From **10 MiB inclusive to 36 MiB
 exclusive** (the site's 1024-based MB convention), a local worker uses **Smallest
 mode**. At 36 MiB and above no worker is started: ask the user to compress the
-PDF first; the submission ceiling remains 30 MB. Smallest mode was authorised by
+PDF first; the submission ceiling remains 20 MB. Smallest mode was authorised by
 the owner after the lossless compressor saved only 3% of their paper. Nothing is
 uploaded for compression. A smaller verified `File` replaces the input, so
 preview, extraction and submission all use it. The original remains in memory;
@@ -2841,10 +2841,31 @@ including room for form fields. Oversized files are not painted as accepted;
 Continue and Enter stay blocked until compression/replacement brings them within
 limits. The compressor raises `papel:pdf-compression` on state changes so the
 warning clears after completion, and returns when Use original restores an
-oversized file. The owner capped uploads at **30 MB**: `UPLOAD_POLICY_MAX_MB`
+oversized file. The ceiling is **20 MB**: `UPLOAD_POLICY_MAX_MB`
 in `config/config.php` bounds both the per-file and combined request helpers;
 a host may impose a smaller limit, never a larger one. The server rejects
 oversized form requests with HTTP 413 even if PHP accepts 40 MB or more.
+
+**20 is production's own figure, not a policy guess.** The owner's cap was 30 MB
+while production's host caps PHP at 20M, so the live site already refused anything
+over 20MB and only the dev box ever promised 30: a paper that uploaded in testing
+could be refused by the real site. Measured on 20 November 2026 by fetching the
+live Help Center, which prints `max_upload_label()` and read **20MB**
+(`pages/help_center.php` is public, so this needs no account; the InfinityFree
+fetch notes cover the `__test` cookie and the missing TLS intermediates). Lowered
+at the owner's instruction the same day, so dev, staging and production quote and
+enforce one figure. **Re-measure rather than assume** if the host's limits change,
+and raise the ceiling only once production really accepts more: a figure above
+what the host takes is a promise the site breaks.
+
+**No user-facing text may carry the number.** Every page, validator and message
+asks `max_upload_label()` or `max_post_label()`, because the figure was once
+written into eight places and a host change made all eight a lie at once. The
+compressor's own "too large to compress here" note was the last hard-coded
+`30 MB`, and said so on a host that stops at 20; it reads `data-limit` off its
+own `<script>` tag now, which `student_upload_ai.php` prints from
+`max_upload_label()`. A JavaScript file cannot ask PHP, so a limit named in a
+script goes the same way rather than being typed in.
 
 `assests/js/pdf-compression/worker.js` uses vendored pdf-lib 1.17.1 and pako 2.1.0.
 Smallest mode caps supported raster images at 1280 pixels on the longest edge

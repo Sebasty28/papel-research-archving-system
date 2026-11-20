@@ -1,23 +1,26 @@
 {
- "built": "2026-11-19 23:29",
+ "built": "2026-11-20 23:30",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
+  },
+  "ai/corpus_guard.php": {
+   "lines": 254
   },
   "ai/groq_config.php": {
    "lines": 306
   },
   "ai/help_assistant.php": {
-   "lines": 122
+   "lines": 130
   },
   "ai/prompt_guard.php": {
-   "lines": 188
+   "lines": 195
   },
   "ai/rate_limiter.php": {
    "lines": 133
   },
   "analytics/analytics_dashboard.php": {
-   "lines": 2529
+   "lines": 2904
   },
   "analytics/dashboard.php": {
    "lines": 19
@@ -122,7 +125,7 @@
    "lines": 199
   },
   "app/review_paper.php": {
-   "lines": 812
+   "lines": 821
   },
   "app/save_paper.php": {
    "lines": 52
@@ -140,7 +143,7 @@
    "lines": 391
   },
   "app/student/student_assistant.php": {
-   "lines": 180
+   "lines": 288
   },
   "app/student/student_cancel_submission.php": {
    "lines": 104
@@ -158,10 +161,10 @@
    "lines": 435
   },
   "app/student/student_upload_ai.php": {
-   "lines": 14949
+   "lines": 15172
   },
   "app/student/upload_diagnostics.php": {
-   "lines": 245
+   "lines": 253
   },
   "app/support_requests.php": {
    "lines": 299
@@ -188,10 +191,10 @@
    "lines": 854
   },
   "config/config.php": {
-   "lines": 265
+   "lines": 273
   },
   "config/core.php": {
-   "lines": 6046
+   "lines": 6141
   },
   "config/error_handler.php": {
    "lines": 228
@@ -253,11 +256,14 @@
   "includes/console_shell.php": {
    "lines": 17
   },
+  "includes/corpus_faq.php": {
+   "lines": 189
+  },
   "includes/corpus_knowledge.php": {
-   "lines": 51
+   "lines": 161
   },
   "includes/corpus_widget.php": {
-   "lines": 151
+   "lines": 250
   },
   "includes/cron_guard.php": {
    "lines": 61
@@ -329,7 +335,7 @@
    "lines": 805
   },
   "includes/password_audit_tab.php": {
-   "lines": 201
+   "lines": 207
   },
   "includes/password_form.php": {
    "lines": 129
@@ -350,7 +356,7 @@
    "lines": 163
   },
   "includes/public_repository_filters.php": {
-   "lines": 123
+   "lines": 127
   },
   "includes/recaptcha.php": {
    "lines": 349
@@ -359,7 +365,7 @@
    "lines": 486
   },
   "includes/review_console.php": {
-   "lines": 1552
+   "lines": 1557
   },
   "includes/save_paper.php": {
    "lines": 290
@@ -580,6 +586,9 @@
   "scripts/migrations/run_supporting_doc_type_repair.php": {
    "lines": 114
   },
+  "scripts/migrations/run_thesis_paper_type_migration.php": {
+   "lines": 39
+  },
   "scripts/migrations/run_upload_update_migration.php": {
    "lines": 32
   },
@@ -699,6 +708,9 @@
   },
   "tests/make_artifact.py": {
    "lines": 558
+  },
+  "tests/pdf_compression.py": {
+   "lines": 142
   },
   "tests/report.py": {
    "lines": 150

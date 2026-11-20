@@ -1280,6 +1280,7 @@ $PAGE_SKELETON = 'panes';
 require_once ROOT_PATH.'/includes/site_head.php';
 ?>
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>"  src="../../assests/js/input-validation.js" defer></script>
+<<<<<<< Updated upstream
 <?php /* The in-browser PDF compressor is DISABLED for now (the owner's request, 20 November
    2026). Its files are kept (assests/js/papel-pdf-compressor.js and assests/js/pdf-compression/),
    and so is every call to it on this page: each one asks `window.papelPdfCompressor &&` first,
@@ -1291,6 +1292,12 @@ require_once ROOT_PATH.'/includes/site_head.php';
 
 <script nonce="<?= csp_nonce() ?>" src="<?= e(asset_url('assests/js/papel-pdf-compressor.js')) ?>" data-worker="<?= e(asset_url('assests/js/pdf-compression/worker.js')) ?>" defer></script>
 */ ?>
+=======
+<?php /* data-limit carries the figure this server will really accept, so the
+   compressor's "too large to compress here" note quotes the same limit as the
+   rest of the page. Hard-coded, it said 30MB on a host that stops at 20. */ ?>
+<script nonce="<?= csp_nonce() ?>" src="<?= e(asset_url('assests/js/papel-pdf-compressor.js')) ?>" data-worker="<?= e(asset_url('assests/js/pdf-compression/worker.js')) ?>" data-limit="<?= e(max_upload_label()) ?>" defer></script>
+>>>>>>> Stashed changes
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 .pdf-compression-status { display: block; flex-basis: 100%; margin-top: .35rem; font-size: .75rem; color: var(--muted, #666); }
 .pdf-compression-status[hidden] { display: none; }

@@ -2542,7 +2542,7 @@ function max_upload_label(): string {
 }
 
 /**
- * The most one request may carry: the 30 MB application ceiling, or PHP's
+ * The most one request may carry: the 20 MB application ceiling, or PHP's
  * post_max_size if the host's limit is lower.
  *
  * max_upload_bytes() is the ceiling for a single file. A paper handed in as
@@ -2563,7 +2563,7 @@ function max_post_bytes(): int {
     return $n > 0 ? min($ceiling, $n) : $ceiling;
 }
 
-/** The same limit as a label for a reader: "30MB". */
+/** The same limit as a label for a reader: "20MB". */
 function max_post_label(): string {
     return floor(max_post_bytes() / 1048576) . 'MB';
 }
