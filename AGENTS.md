@@ -456,6 +456,96 @@ sets `body.style.overflow` while it is open, so the full view also forces `<body
 only sections being submitted have one: a tab for a section left out "expanded" a hidden box,
 which looked like the full view closing itself.
 
+### A skinned `<select>` is a `<button>`, and a `<dialog>` is above everything
+
+Three faults on the Librarian's Manuscript Requests desk, reported together on
+22 November 2026 as "the dropdown". All three are about `select_skin.php`
+drawing every `<select>` as a `<button>` with its list in a `<div>`.
+
+**`form.querySelector('button')` finds the dropdown, not the action.** The
+skin puts its button where the select stood, so in the bulk bar it comes
+*before* Grant selected. `syncBulk()` wrote the confirmation onto that first
+button, which meant pressing the duration dropdown asked "Grant 1 selected
+request for 2 hours?" instead of opening its list, while the real Grant button
+kept the fixed sentence in the markup. It is not merely the wrong element: a
+`[data-confirm]` is answered by `action_dialogs.php` **in the capture phase,
+with `stopImmediatePropagation()`**, so the skin's own click listener never
+ran and the press reached nothing at all - a document-level capture probe saw
+no click either, which is what made it look like a dead control rather than a
+misdirected one. Ask for `button[type="submit"]`, never the first button in a
+form that can hold a select. `notification_center.php` had the same lookup
+with no select in that form yet, and was made explicit at the same time.
+
+**A menu for a control inside a `<dialog>` must live inside that dialog.** An
+open modal dialog is in the browser's top layer, which is above every z-index
+on the page, so the menu `select_skin.php` parks on `<body>` is painted behind
+it however large its number is: the export dialog's Format list opened
+invisibly under the card that asked for it. `open()` now re-parents the menu
+to `state.btn.closest('dialog[open]')`, asked at every open rather than once
+when the control is built, since a dialog opens and closes long after that.
+The menu is `position: fixed`, so moving it between parents changes what it is
+painted over and not where it lands. This is the general answer to the
+workaround recorded under the Storage Folder's export, where the formats were
+made radios for exactly this reason; those radios still work and need not
+change.
+
+**A modal `<dialog>` needs `margin: auto` stated.** The site's reset takes
+away the margin a dialog centres itself with, so `.mr-export-dialog` opened in
+the top left corner of the window. The book viewer's dialog carries the same
+line for the same reason; any new `<dialog>` wants it too.
+
+Driven against the running desk as the Librarian: the export dialog's centre
+is the window's centre (736 against 741 across, the scrollbar's width, and 427
+against 427 down), its Format list opens inside the dialog and answers
+`elementFromPoint` at its own rows, the duration dropdown opens its 24 rows
+with nothing else happening, and Grant selected still asks "Grant 1 selected
+request for 2 hours?" with the live count and hours. Nothing was granted in
+the doing: the pending, granted and denied counts are what they were.
+
+### A conflict marker is text on the page, and `<body>` is a flex column
+
+`f14a560` committed a half-resolved `git stash pop` into
+`app/student/student_upload_ai.php`: `<<<<<<< Updated upstream`, `=======`
+and `>>>>>>> Stashed changes` stood in the markup around the PDF compressor's
+`<script>` tag. Found 22 November 2026, reported as "a UI bug in the navbar".
+
+Two things came of it, and the one that showed was the lesser:
+
+- **The navbar was pushed 22px down the page**, with a band of the campus
+  photo showing above it, because `<body>` is `display: flex` and the marker
+  lines are a run of text: a text run inside a flex container becomes an
+  **anonymous flex item**, one line tall, and it is laid out before the header
+  like any other item. Everything after it moved with it (the breadcrumb strip
+  to 59px), while the manuscript countdown, which is fixed at
+  `--nav-h` plus `--crumb-h`, stayed where those two said it should be and so
+  came out 14px *inside* the strip. The pill was not wrong; the page under it
+  was. Measured, not guessed: `.site-header` had `top: 0` and a computed
+  `offsetTop` of 22, which is what said the space was in the flow rather than
+  in the rule.
+- **The compressor was switched back on.** The upstream side of the conflict
+  had the tag inside a `/* ... */`, as the owner's 20 November decision
+  requires; the stashed side had a live tag with `data-limit`. With both sides
+  emitted, the live one won, so the page loaded a script the documentation
+  says is off. A conflict marker in PHP is not only noise on the page: both
+  sides run.
+
+Resolved by keeping the disabled form and carrying `data-limit` into the
+commented tag, so switching the compressor back on brings the limit with it.
+
+- **Grep for markers before trusting a page** (`^<<<<<<<`, `^>>>>>>>`), and
+  remember `php -l` passes happily: a marker outside `<?php` is valid HTML
+  text, and the parser never sees it. The three `=======` in `vendor/`
+  READMEs are Markdown underlines, not conflicts.
+- **A 22px gap above the navbar is a flow problem, not a `top` problem.**
+  Reach for `offsetTop` and the body's child *nodes* (text nodes included,
+  with their character codes) rather than reading stylesheets: the rule said
+  `top: 0` throughout.
+
+Checked afterwards at 1920px on the upload page, the dashboard, My Library, a
+paper page, the public repository and Settings: the header starts at 0 on
+every one of them, the strip sits directly under it, and the countdown keeps
+its 8px gap below the strip.
+
 ### `order` sorts the children that exist, and the page arrives in pieces
 
 **Place grid children on named tracks, not with `order`.** `order` is resolved
@@ -818,8 +908,10 @@ over it, since `--cream` is a 6% wash under Old Night. Export PDF lists, on the
 heading's line, posts to `app/admin/storage_pdfs_export.php` (the page's own gate,
 POST and token) in Excel, PDF, CSV or Word through the shared writers. It is chosen
 by kind of account rather than by account, because a check can rebuild the lists
-after the dialog was printed. The formats are radios: `select_skin.php` draws a
-select's menu in `<body>`, under a top-layer `<dialog>`.
+after the dialog was printed. The formats are radios, which was once the only way:
+`select_skin.php` drew a select's menu in `<body>`, under a top-layer
+`<dialog>`. That is mended (see "A skinned `<select>` is a `<button>`" under
+Traps), and these radios are left as they are.
 
 `includes/pdf_writer.php` now writes Latin-1 as WinAnsi a character at a time. It
 used to map the n-tilde and then replace every byte above 127, the mapped one
@@ -1220,6 +1312,29 @@ returns early when `papel-splash` is already on `<html>`.
   `papel.pdfDockWidth` (with `papel.sideSide` and `papel.sideCollapsed`), since
   a guessed width still shifts the page sideways when the skeleton lifts, which
   is the jump being covered.
+- **The page is held still while it is up** (`html.papel-skel-lock`, on `<html>`
+  and never on `<body>`, for the reason the upload page's full view is).
+  The layer is fixed and the document is not, so a wheel notch, a swipe or a
+  Page Down slid the real page out from under the blocks and left the preview
+  hanging over a half-scrolled page. Hiding the overflow takes the scrollbar
+  away, which is itself a layout change, so the width it was holding is kept as
+  `padding-right` on `<html>`. That width is measured from a throwaway box in
+  the first animation frame, which runs before that frame is painted:
+  `scrollbar-gutter: stable` reserves nothing on a box whose overflow is hidden
+  (measured, 1262px either way), and measuring in `<head>` answers the
+  browser's own 15px rather than the 10px `focus_ring.php` gives every
+  scrollbar from further down the page. Two pages want no such width: one
+  shorter than the window, which never had a scrollbar (asked at
+  `DOMContentLoaded`, the first moment the document is whole), and the upload
+  page, whose settled form does not scroll at all. The lock is given back as
+  the fade begins, and by a 6s timer scheduled when it goes on, in case the
+  lift never runs at all: that is the twin of the CSS failsafe which fades the
+  layer at the same 6s, and a page left unscrollable would be worse than a
+  cover left on. Driven against the running site at 1280px and at phone width:
+  a wheel, Page Down, End and a swipe all leave the scroll at 0 while it is up;
+  the content is the same width locked and settled (1252px on the repository
+  and the dashboard, 1262 on the upload page); and CLS is unchanged, 0.0058
+  against 0.0050 on the repository and 0.178 against 0.177 on the upload page.
 - **It lifts at the later of the page's ready signal and 300ms.** The minimum is
   deliberate: a cached page is ready in well under a tenth of a second, and a
   skeleton that appears and vanishes inside one is a blink of its own. A page
@@ -3234,6 +3349,98 @@ Socio-Economic Aspects, References, Appendices: the chapters of the BSIE studies
 - **A server without the column** (`paper_checklist_json_ready()`; see "A copy of the database can
   be behind the code") still works: three lists, no editing, a notice saying why, and the old
   columns as before.
+
+### The protected view of a paper's PDF
+
+Asked for as "make a screenshot or a screen recording come out black, the way
+Netflix does". **That cannot be done on the web, and nothing here claims to do
+it.** Netflix's black frame is not something its page does: the video is
+decrypted and decoded inside a hardware-protected path (Widevine L1 on
+Windows and Android, FairPlay on Apple) whose frames the compositor refuses to
+hand to any capture API, and it substitutes black where the video is. That
+path is open to EME video and to nothing else; drop the same stream to
+software decoding and the blackout goes with it. No browser offers a page the
+equivalent of Android's `FLAG_SECURE` (`navigator.protectedView` is an
+unimplemented Chromium proposal), and no page can be told that it is being
+captured: `getDisplayMedia()` reports only a capture the page itself started.
+A PrintScreen, Snipping Tool, OBS, a phone camera and a second monitor are all
+invisible to JavaScript. Added 22 November 2026, with the owner choosing
+watermark plus blanking over the alternatives.
+
+So two real things, decided in one place, `pdf_view_protection()`
+(`config/core.php`), which every surface asks:
+
+- **The reader's name is burnt into the page as it is drawn.** `stamp()` in
+  `assests/js/papel-pdf-view.js` writes the two lines from
+  `pdf_watermark_lines()` (name and ID or Library Pass, then the time the page
+  was opened and the site's name) diagonally across the canvas, tiled, before
+  the page counts as drawn, so there is no frame of an unmarked paper on
+  screen. It is in the pixels, not an element over them: an element is two
+  keystrokes away in the inspector and never appears in what the compositor
+  hands a screenshot. Every capture there is, a photograph of the monitor
+  included, therefore names the account it was taken from. Prevention is not
+  available; traceability is.
+- **The pages are covered whenever this window is not the one in front**
+  (`.papel-pdf-guard`), on `blur`, on `visibilitychange`, on a PrintScreen
+  keyup (which Windows sends without a keydown, so it is past tense and the
+  cover is an answer rather than a block), and on `beforeprint` and the
+  `print` media query. The print rule is in the stylesheet as well as in the
+  script, because a browser that renders the sheet before `beforeprint` runs
+  would otherwise put the paper on paper.
+
+**Say what it does not do.** A recorder running while the reader reads sees
+everything; Windows freezes the screen as its own snipping overlay opens,
+which is faster than any script can be; and the raw PDF still reaches the
+browser, so it can be saved from the network panel. The watermark is what
+covers all three.
+
+| | |
+|---|---|
+| Who is protected | everybody but staff. `pdf_protection_exempt_roles()` is `faculty`, `admin`, `head_academic`, `super_admin`, `librarian`, asked through `user_has_role()` so a second post counts |
+| Why staff are not | an adviser reads a paper to mark it against a checklist beside it, and a document that blanked every time they looked at the form would obstruct the work |
+| Who that leaves | a student with a librarian's grant (the repository opens the manuscript to nobody else: see `$can_view_file` in `archive/view_paper.php`), a student on their own paper's page, and a Library Pass |
+| Where | the file panel on the three paper pages (`includes/pdf_dock.php`) and the full-window viewer (`app/student/pdf_viewer.php`) |
+| Where not | the upload page, which passes `$PDF_DOCK_PROTECT = false`: that file is the student's own, chosen a moment ago, has never left their browser, and watermarking a paper somebody is still writing is in the way of its only reader |
+
+**The text layer goes with it.** A protected view draws the canvas and no
+selectable layer (`textLayer: false`), so a published paper cannot be lifted
+whole with one Ctrl+A. The cost is real and was accepted deliberately: there
+is no in-page text search, and **a screen reader gets nothing but the canvas's
+"Page 1 of 109"**. The flag is one line in `pdf_view_protection()` if that
+trade is ever reconsidered. Everything that promised selection follows it: the
+mode button is not drawn, H and T do nothing, Escape does not offer "select
+mode", and the intro hint reads "Drag the page to move it".
+
+Four things that cost a build each:
+
+- **Size the stamp in the reader's pixels, not the canvas's.** The backing
+  store is up to twice the box at a high device ratio, so `min(w, h) / 38`
+  came out about 35px on screen and read as a poster laid over the paper.
+  `stamp(canvas, pixels)` takes the ratio the renderer chose and asks for
+  13px to the eye, which stays the same size at every zoom because the mark
+  belongs to the view and not to the page.
+- **The cover fades out and never in.** 200ms of fade on the way in is 200ms
+  of the paper still on screen after the window has gone, which is the whole
+  of what a snipping tool needs.
+- **`getElementById` on a control that is no longer printed returns null.**
+  Hiding the full-window viewer's mode button took the page's own
+  `addEventListener` down with it and killed every control on the bar. Both
+  readers of `#viewerPanMode` are guarded now.
+- **A harness can open the panel before it has a width.** Clicking the hidden
+  `a.pd-file` link directly opens the dock inside a folded card, where the
+  scroller is 0 wide and nothing is ever drawn; pressing the card's own
+  chevron, which is what a reader does, draws it. Neither is a bug in the
+  viewer, and the first one looked exactly like one.
+
+Driven against the running site with a seeded librarian's grant, since that is
+the only way a student may open a manuscript at all: the student's view
+carries the stamp (measured as ink in a strip of page the paper leaves blank,
+2.5% of it against 0% for staff), has no text layer at all (0 spans against
+38), covers on blur in near-black and uncovers on focus, covers on a real
+PrintScreen keyup and clears itself a moment later, and prints its notice
+instead of its pages; the librarian's view of the same file is unmarked,
+selectable and never covered; and the upload page's own panel reports
+protection off. The grant and the minted sessions were removed afterwards.
 
 ### My Library: saved papers, and a student's manuscript requests
 

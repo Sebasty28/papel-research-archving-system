@@ -88,6 +88,32 @@ html[data-mode="dark"].papel-skel .papel-skel-layer {
 html.zen-on.papel-skel .papel-skel-layer {
     top: var(--papel-skel-top, var(--nav-h, 56px));
 }
+/* The preview is a still picture of the page that is coming, so the page
+   behind it must not move while it is up. The layer is fixed and the document
+   is not, so a wheel notch, a swipe or a Page Down slid the real content out
+   from under the blocks and left the preview hanging over a half-scrolled
+   page, which reads as the loading screen having broken loose.
+
+   Locked on <html> and never on <body>, for the reason written at the upload
+   page's full view: a body with its own overflow becomes a scroll box, and
+   the navbar, which is sticky, scrolls away under it.
+
+   Hiding the overflow takes the scrollbar away, and that is itself a layout
+   change: the page would widen by the scrollbar's width for as long as the
+   preview stood and narrow again as it lifted, which is the sideways jump
+   this layer exists to cover, caused by the cover. So the width it was
+   holding is held open as padding, measured in the script below.
+   scrollbar-gutter: stable will not do it: Chrome reserves no gutter on a box
+   whose overflow is hidden (measured, 1262px either way). */
+html.papel-skel-lock {
+    overflow: hidden;
+    padding-right: var(--papel-skel-sb, 0px);
+}
+/* The layer is fixed, so it is placed against a viewport that has no scrollbar
+   in it just now and would otherwise reach the scrollbar's width further right
+   than the page it is covering, carrying its blocks off the shapes they stand
+   for. */
+html.papel-skel-lock .papel-skel-layer { right: var(--papel-skel-sb, 0px); }
 html.papel-skel-out .papel-skel-layer {
     opacity: 0;
     pointer-events: none;
@@ -495,13 +521,71 @@ html.papel-skel-rail .skel-tab { width: auto; height: 30px; border-radius: 8px; 
 
     root.classList.add('papel-skel');
 
+    function unlock() {
+        root.classList.remove('papel-skel-lock');
+        root.style.removeProperty('--papel-skel-sb');
+    }
+
+    /* How wide the scrollbar is, asked of a throwaway box rather than of the
+       page, which has none just now because this has hidden it. The box is put
+       on <html> rather than on <body>, which does not exist while <head> is
+       being parsed, and taken away in the same breath; the parser carries on
+       into the body as before (checked).
+
+       Measured in the first animation frame and not here, where it would be
+       wrong by 5px: focus_ring.php narrows every scrollbar on the site to
+       10px and its stylesheet is further down <head> than this script, so a
+       box measured now is the browser's own 15px. A requestAnimationFrame
+       callback runs before the frame it belongs to is painted, so the padding
+       is written before anything has been drawn to be moved by it. Written
+       once, like --skel-side-w above: the warning against custom properties
+       on :root is about writing them on every scroll step, which restyles the
+       whole page each time. */
+    function scrollbarWidth() {
+        try {
+            var box = document.createElement('div');
+            box.style.cssText = 'position:absolute;top:-9999px;left:-9999px;' +
+                                'width:100px;height:100px;overflow:scroll;visibility:hidden';
+            root.appendChild(box);
+            var w = box.offsetWidth - box.clientWidth;
+            root.removeChild(box);
+            return w > 0 ? w : 0;
+        } catch (err) { return 0; }
+    }
+
+    /* The upload page is the one shape whose settled page does not scroll at
+       all: papelSide holds the form in place (html.side-locked) and the window
+       keeps still, so there is no scrollbar there to hold a width open for,
+       and holding one would be the 10px jump this is written to avoid, the
+       other way about. */
+    var panes = <?= $GLOBALS['PAPEL_SKEL_SHAPE'] === 'panes' ? 'true' : 'false' ?>;
+
+    function holdGutter() {
+        if (panes) { return; }
+        var sb = scrollbarWidth();
+        if (sb) { root.style.setProperty('--papel-skel-sb', sb + 'px'); }
+    }
+
+    /* The page is held still for as long as the preview stands over it. The
+       hard release is scheduled here rather than left to lift(), so a page
+       whose load event never arrives, with a hold that is never let go, can
+       never be left unscrollable: it is the twin of the CSS failsafe that
+       fades the layer out at the same 6s. */
+    root.classList.add('papel-skel-lock');
+    requestAnimationFrame(holdGutter);
+    setTimeout(unlock, 6000);
+
     function lift() {
         if (gone) { return; }
         gone = true;
+        /* Given back as the fade begins, not after it: the real page is in
+           place by then and the layer no longer answers the pointer. */
+        unlock();
         root.classList.add('papel-skel-out');
         setTimeout(function () {
             root.classList.remove('papel-skel', 'papel-skel-out', 'papel-skel-still',
-                                  'papel-skel-right', 'papel-skel-rail');
+                                  'papel-skel-right', 'papel-skel-rail',
+                                  'papel-skel-lock');
             root.style.removeProperty('--skel-side-w');
             var el = document.getElementById('papelSkel');
             if (el && el.parentNode) { el.parentNode.removeChild(el); }
@@ -555,6 +639,16 @@ html.papel-skel-rail .skel-tab { width: auto; height: 30px; border-radius: 8px; 
     document.addEventListener('papel-ready', function () { window.papelSkeleton.done(); });
 
     document.addEventListener('DOMContentLoaded', function () {
+        /* A page shorter than the window has no scrollbar of its own, so the
+           width held open for one is width it will not get back. The document
+           is whole by now, which is the first moment this can be asked; a
+           frame in a hidden tab never runs, so the width is also taken here if
+           that is still to do. */
+        if (root.scrollHeight <= window.innerHeight) {
+            root.style.removeProperty('--papel-skel-sb');
+        } else if (!root.style.getPropertyValue('--papel-skel-sb')) {
+            holdGutter();
+        }
         place();
         /* Two frames, not one: the first lets the page's own DOMContentLoaded
            work run, the second lets the browser lay out what it changed. */

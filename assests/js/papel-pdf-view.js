@@ -25,6 +25,14 @@
  *       loadingText: 'said while loading'                 (optional; '' for none)
  *       onBusy:      function (loading) {…}               (optional; for a spinner)
  *       onFail:      function (message) {…}               (optional)
+ *       watermark:   ['line one', 'line two']              (optional; burnt into
+ *                                                           every page as it is drawn)
+ *       textLayer:   false                                 (optional; no selectable
+ *                                                           text over the canvas)
+ *       protect:     true                                  (optional; the pages are
+ *                                                           covered while this window
+ *                                                           is not the one in front)
+ *       protectMessage: 'said on the cover'                (optional)
  *   });
  *
  * onFail is given the failure instead of the status element, for a host that
@@ -66,6 +74,202 @@
         function say(msg) {
             if (statusEl) statusEl.textContent = msg || '';
         }
+
+        /* ----- The protected view -----
+
+           Two halves of one answer to "stop people screenshotting the paper",
+           which no web page can do: see pdf_view_protection() in
+           config/core.php for why Netflix's black frame is not available here.
+
+           The watermark is drawn into the canvas itself, not laid over it as
+           an element: an element can be deleted from the inspector in two
+           keystrokes and never appears in the pixels an OS screenshot takes
+           from the compositor. Burnt in, it is in every capture there is,
+           including a photograph of the monitor.
+
+           The cover is the visible half. It goes over the pages the moment
+           this window is no longer the one in front, so a capture taken from
+           another window, or a recording of a tab left in the background,
+           gets the notice rather than the paper. It is honest theatre: a
+           recorder running while the reader reads sees everything. */
+        var mark = Array.isArray(options.watermark) ? options.watermark.filter(Boolean) : [];
+        var textOn = options.textLayer !== false;
+        var guardOn = !!options.protect;
+        var guardEl = null, guardHeld = false, guardTimer = null;
+        if (!textOn) { panMode = true; }
+
+        /* Stamped after the page is drawn and before it is shown, so there is
+           no frame in which the paper stands there unmarked. Every zoom
+           re-renders, and this runs again with it.
+
+           Everything here is in the canvas's own pixels, which are the CSS
+           size times the device ratio the renderer chose, so `ratio` is what
+           turns a size meant for the eye into one for the backing store.
+           Sized from the canvas instead (min(w, h) / 38, as this was first
+           written) the lettering came out about 35px on screen and read as a
+           poster laid over the paper rather than a mark on it. */
+        function stamp(canvas, ratio) {
+            if (!mark.length) return;
+            var ctx;
+            try { ctx = canvas.getContext('2d'); } catch (err) { return; }
+            if (!ctx) return;
+
+            var scaled = ratio > 0 ? ratio : 1;
+            var w = canvas.width, h = canvas.height;
+            /* 13px to the reader, whatever the zoom: the mark belongs to the
+               view and not to the page, so it does not grow with it. */
+            var size = Math.max(11, 13 * scaled);
+            var line = mark.join('   ·   ');
+
+            ctx.save();
+            /* 600 rather than bold: at this opacity a heavy face reads as a
+               smudge over the paper's own text, and a light one disappears
+               in a JPEG screenshot. */
+            ctx.font = '600 ' + size + 'px Inter, "Segoe UI", system-ui, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            /* Ink, not maroon: the mark has to survive a greyscale print and
+               a screenshot put through a filter, and it must not read as part
+               of the paper. 11% is the figure measured against the papers on
+               file: legible in a capture, and not in the way of reading. */
+            ctx.fillStyle = 'rgba(20, 20, 20, 0.13)';
+
+            var step = ctx.measureText(line).width + size * 9;
+            var rows = size * 12;
+            var reach = Math.sqrt(w * w + h * h) / 2;
+            ctx.translate(w / 2, h / 2);
+            ctx.rotate(-Math.PI / 7);
+            for (var y = -reach; y <= reach; y += rows) {
+                /* Every other row is offset by half a tile, so the stamp does
+                   not form clean columns a crop can be taken between. */
+                var shift = (Math.round((y + reach) / rows) % 2) ? step / 2 : 0;
+                for (var x = -reach - shift; x <= reach; x += step) {
+                    ctx.fillText(line, x + shift, y);
+                }
+            }
+            ctx.restore();
+        }
+
+        /* The cover, built the first time it is needed. It lives in the
+           scroller's parent, the positioned stage in both layouts, which is
+           where the hint toast already goes: inside the scroller it would
+           scroll away from the pages it is covering. */
+        function guard() {
+            if (guardEl || !guardOn) return guardEl;
+            guardEl = document.createElement('div');
+            guardEl.className = 'papel-pdf-guard';
+            guardEl.setAttribute('role', 'status');
+            var word = document.createElement('div');
+            word.className = 'papel-pdf-guard-word';
+            word.innerHTML = '<span class="material-symbols-outlined" aria-hidden="true">visibility_off</span>';
+            var say1 = document.createElement('strong');
+            say1.textContent = 'The document is hidden';
+            var say2 = document.createElement('span');
+            say2.textContent = options.protectMessage ||
+                'PAPEL covers a paper while its window is not in front. Come back to this window to read on.';
+            word.appendChild(say1);
+            word.appendChild(say2);
+            guardEl.appendChild(word);
+            (scroller.parentNode || scroller).appendChild(guardEl);
+            return guardEl;
+        }
+
+        function cover(why) {
+            if (!guardOn) return;
+            var el = guard();
+            if (!el) return;
+            clearTimeout(guardTimer);
+            el.classList.add('is-on');
+            scroller.setAttribute('aria-hidden', 'true');
+            /* A cover put up by a key press has nothing to wait for: the
+                window never lost focus, so nothing will give it back. */
+            if (why === 'key') {
+                guardTimer = setTimeout(uncover, 1200);
+            }
+        }
+
+        function uncover() {
+            if (!guardEl) return;
+            clearTimeout(guardTimer);
+            guardEl.classList.remove('is-on');
+            scroller.removeAttribute('aria-hidden');
+        }
+
+        /* PrintScreen is past tense: the picture was taken before this runs,
+           and no page can stop it. What can be done is to take the copy back
+           out of the clipboard, which Chrome allows a focused page to do, and
+           to say that the capture is marked. Both are best effort. */
+        function printScreenTaken() {
+            cover('key');
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText('').catch(function () {});
+                }
+            } catch (err) { /* no clipboard permission: the stamp still names them */ }
+            hint('This document is watermarked with your name and the time.', 4000);
+        }
+
+        var guardHandlers = [];
+        function watch(target, type, fn) {
+            target.addEventListener(type, fn, false);
+            guardHandlers.push([target, type, fn]);
+        }
+
+        if (guardOn) {
+            /* The stylesheet's print rule finds the stage by this, so a
+               protected viewer prints its notice rather than its pages even
+               if the sheet is rendered before beforeprint has run. */
+            (scroller.parentNode || scroller).classList.add('is-protected');
+            /* blur rather than focusout: the window losing the focus is the
+               event, not an element inside it losing it, and focusout fires
+               every time the reader clicks from the scroller to a toolbar
+               button, which would blank the paper on every zoom. */
+            watch(global, 'blur', function () { cover('blur'); });
+            watch(global, 'focus', function () { if (!guardHeld) uncover(); });
+            watch(document, 'visibilitychange', function () {
+                if (document.visibilityState === 'hidden') cover('hidden');
+                else if (document.hasFocus && document.hasFocus()) uncover();
+            });
+            /* Windows fires keyup alone for this key and no keydown, so there
+               is nothing to prevent and nothing to catch it before the fact. */
+            watch(document, 'keyup', function (e) {
+                if (e.key === 'PrintScreen') printScreenTaken();
+            });
+            /* Print is a capture with a file at the end of it. The stylesheet
+               hides the pages as well (papel-pdf-view.css), for a browser that
+               renders the sheet before this runs. */
+            watch(global, 'beforeprint', function () { guardHeld = true; cover('print'); });
+            watch(global, 'afterprint', function () {
+                guardHeld = false;
+                if (document.hasFocus && document.hasFocus()) uncover();
+            });
+            if (global.matchMedia) {
+                var printQuery = global.matchMedia('print');
+                var onPrintQuery = function (e) {
+                    guardHeld = !!e.matches;
+                    if (e.matches) cover('print');
+                    else if (document.hasFocus && document.hasFocus()) uncover();
+                };
+                if (printQuery.addEventListener) {
+                    printQuery.addEventListener('change', onPrintQuery);
+                    guardHandlers.push([printQuery, 'change', onPrintQuery]);
+                }
+            }
+            /* The window may already be in the background when the viewer is
+               built: a file opened in a tab the reader has since left. */
+            if (document.visibilityState === 'hidden') cover('hidden');
+        }
+
+        function releaseGuard() {
+            clearTimeout(guardTimer);
+            guardHandlers.forEach(function (h) {
+                try { h[0].removeEventListener(h[1], h[2], false); } catch (err) {}
+            });
+            guardHandlers = [];
+            if (guardEl && guardEl.parentNode) { guardEl.parentNode.removeChild(guardEl); }
+            guardEl = null;
+        }
+
 
         /* A failure, as opposed to anything else say() carries. The host is
            offered it first: say() writes textContent, which would wipe out a
@@ -219,22 +423,32 @@
                     Math.sqrt(8000000 / Math.max(1, viewport.width * viewport.height)));
                 canvas.width = Math.max(1, Math.floor(viewport.width * pixels));
                 canvas.height = Math.max(1, Math.floor(viewport.height * pixels));
-                var layer = document.createElement('div');
-                layer.className = 'papel-pdf-textlayer';
-                layer.style.setProperty('--scale-factor', scale);
+                /* No text layer in a protected view: the canvas alone is
+                   pixels, so a published paper cannot be lifted whole with
+                   one Ctrl+A. */
+                var layer = null;
+                if (textOn) {
+                    layer = document.createElement('div');
+                    layer.className = 'papel-pdf-textlayer';
+                    layer.style.setProperty('--scale-factor', scale);
+                }
                 wrap.textContent = '';
                 wrap.appendChild(canvas);
-                wrap.appendChild(layer);
+                if (layer) wrap.appendChild(layer);
                 activeTask = p.render({
                     canvasContext: canvas.getContext('2d'), viewport: viewport,
                     transform: pixels !== 1 ? [pixels, 0, 0, pixels, 0, 0] : null
                 });
                 return activeTask.promise.then(function () {
                     if (token !== renderToken) return;
+                    // Before the page is counted as drawn, so no frame of it
+                    // is ever on screen without the reader's name on it.
+                    stamp(canvas, pixels);
                     drawn[page] = true;
                     busy(false);
                     while (readyWaiters.length) readyWaiters.shift()();
                     failWaiters = [];
+                    if (!layer) return;
                     // A usable page appears before the text layer is built.
                     return p.getTextContent().then(function (textContent) {
                         if (token !== renderToken || !wrap.isConnected) return;
@@ -700,7 +914,10 @@
         }
 
         function setMode(mode, announce) {
-            var next = (mode === 'pan');
+            /* With no text layer there is nothing to select, so the view is
+               always the hand: offering a mode that does nothing would be a
+               control that looks broken. */
+            var next = textOn ? (mode === 'pan') : true;
             var changed = (next !== panMode);
             panMode = next;
             scroller.classList.toggle('is-pan-mode', panMode);
@@ -741,7 +958,7 @@
 
             var k = e.key.toLowerCase();
             if (k === 'h') { e.preventDefault(); setMode('pan', true); }
-            else if (k === 't') { e.preventDefault(); setMode('select', true); }
+            else if (k === 't' && textOn) { e.preventDefault(); setMode('select', true); }
         });
 
         /* ----- Dragging the pages around -----
@@ -917,7 +1134,9 @@
                         ? (options.introTouch !== undefined ? options.introTouch
                             : 'Drag to move. Pinch to zoom.')
                         : (options.intro !== undefined ? options.intro
-                            : 'Press H to drag the page, T or Esc to select and copy text');
+                            : (textOn
+                                ? 'Press H to drag the page, T or Esc to select and copy text'
+                                : 'Drag the page to move it. Ctrl + scroll zooms.'));
                     if (!introShown && intro) {
                         introShown = true;
                         // Ten seconds: it is the one hint that teaches the keys,
@@ -942,6 +1161,8 @@
             getMode:   function () { return panMode ? 'pan' : 'select'; },
             toggleMode: function () { setMode(panMode ? 'select' : 'pan', true); },
             hint:      hint,
+            hasText:   function () { return textOn; },
+            protected: function () { return guardOn; },
             redraw:    render,
             clear: function () {
                 settleWaiters();
@@ -954,6 +1175,7 @@
             destroy: function () {
                 settleWaiters();
                 stopRendering();
+                releaseGuard();
                 loadToken++;
                 if (pdfDoc) { try { pdfDoc.destroy(); } catch (err) {} pdfDoc = null; }
                 scroller.textContent = '';

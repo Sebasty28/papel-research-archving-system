@@ -71,6 +71,14 @@ $PDF_DOCK_SIDES     = array_values(array_intersect(['left', 'right'], (array)($P
    Printed into a rule, so it is checked rather than trusted: anything but the
    handful of characters a length is made of would be a way to close the rule
    and write others. */
+/* $PDF_DOCK_PROTECT: false where the file in this panel is the reader's own
+   and has not been filed yet, which is the upload page and nowhere else.
+   Left alone, pdf_view_protection() decides by who is reading: see the note
+   on it in config/core.php for what the protected view is and is not. */
+$pdfDockProtect = (isset($PDF_DOCK_PROTECT) && $PDF_DOCK_PROTECT === false)
+    ? ['on' => false, 'lines' => [], 'text_layer' => true]
+    : pdf_view_protection();
+
 $PDF_DOCK_WIDTH = (string)($PDF_DOCK_WIDTH ?? 'min(46vw, 46rem)');
 if (!preg_match('/^[0-9a-zA-Z%.,()\/*+ -]{1,80}$/', $PDF_DOCK_WIDTH)) {
     $PDF_DOCK_WIDTH = 'min(46vw, 46rem)';
@@ -606,6 +614,11 @@ document.addEventListener('DOMContentLoaded', function () {
     function setBusy(on) { stage.classList.toggle('is-busy', on); }
 
     /* ----- The renderer, fetched the first time a file is opened ----- */
+    /* The protected view (config/core.php, pdf_view_protection): the lines
+       burnt into every page, whether the text layer is drawn at all, and
+       whether the pages are covered while this window is not in front. */
+    var PROTECT = <?= json_encode($pdfDockProtect, JSON_UNESCAPED_SLASHES) ?>;
+
     var ASSETS = <?= json_encode([
         'pdfjs'  => asset_url('assests/js/pdfjs/pdf.min.js'),
         'worker' => asset_url('assests/js/pdfjs/pdf.worker.min.js'),
@@ -647,7 +660,12 @@ document.addEventListener('DOMContentLoaded', function () {
                     status: status,
                     workerSrc: ASSETS.worker,
                     failMessage: FAIL_SERVER,
-                    intro: 'Press H to drag the page, T to select text. Ctrl + scroll zooms.',
+                    intro: PROTECT.text_layer
+                        ? 'Press H to drag the page, T to select text. Ctrl + scroll zooms.'
+                        : 'Drag the page to move it. Ctrl + scroll zooms.',
+                    watermark: PROTECT.on ? PROTECT.lines : null,
+                    textLayer: PROTECT.text_layer,
+                    protect: PROTECT.on,
                     introTouch: 'Drag to move. Pinch to zoom.',
                     loadingText: '',                  // the ring says it
                     onBusy: setBusy,

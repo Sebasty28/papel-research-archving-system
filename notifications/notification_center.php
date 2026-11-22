@@ -435,7 +435,11 @@ document.addEventListener('DOMContentLoaded', function () {
         var bar        = list.querySelector('.nc-bulk-bar');
         var countEl    = bar ? bar.querySelector('.js-sel-count') : null;
         var deleteForm = bar ? bar.querySelector('.js-delete-form') : null;
-        var deleteBtn  = deleteForm ? deleteForm.querySelector('button') : null;
+        /* button[type="submit"], for the reason written out in
+           app/librarian/manuscript_requests.php: a skinned <select> is a
+           <button> too (select_skin.php), so the first button in a form is
+           not reliably its action. This form holds no select today. */
+        var deleteBtn  = deleteForm ? deleteForm.querySelector('button[type="submit"]') : null;
 
         function rowChecks() { return list.querySelectorAll('.js-row-check'); }
         function visibleChecks() {

@@ -1,5 +1,5 @@
 {
- "built": "2026-11-20 23:30",
+ "built": "2026-11-22 23:06",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -86,7 +86,7 @@
    "lines": 465
   },
   "app/librarian/manuscript_requests.php": {
-   "lines": 981
+   "lines": 994
   },
   "app/librarian/manuscript_requests_export.php": {
    "lines": 141
@@ -125,7 +125,7 @@
    "lines": 199
   },
   "app/review_paper.php": {
-   "lines": 821
+   "lines": 824
   },
   "app/save_paper.php": {
    "lines": 52
@@ -140,7 +140,7 @@
    "lines": 97
   },
   "app/student/pdf_viewer.php": {
-   "lines": 391
+   "lines": 413
   },
   "app/student/student_assistant.php": {
    "lines": 288
@@ -161,7 +161,7 @@
    "lines": 435
   },
   "app/student/student_upload_ai.php": {
-   "lines": 15172
+   "lines": 15175
   },
   "app/student/upload_diagnostics.php": {
    "lines": 253
@@ -194,7 +194,7 @@
    "lines": 273
   },
   "config/core.php": {
-   "lines": 6141
+   "lines": 6218
   },
   "config/error_handler.php": {
    "lines": 228
@@ -347,7 +347,7 @@
    "lines": 124
   },
   "includes/pdf_dock.php": {
-   "lines": 1515
+   "lines": 1533
   },
   "includes/pdf_writer.php": {
    "lines": 438
@@ -365,7 +365,7 @@
    "lines": 486
   },
   "includes/review_console.php": {
-   "lines": 1557
+   "lines": 1564
   },
   "includes/save_paper.php": {
    "lines": 290
@@ -392,7 +392,7 @@
    "lines": 788
   },
   "includes/skeleton.php": {
-   "lines": 760
+   "lines": 854
   },
   "includes/splash.php": {
    "lines": 83
@@ -437,7 +437,7 @@
    "lines": 39
   },
   "notifications/notification_center.php": {
-   "lines": 491
+   "lines": 495
   },
   "notifications/notifications_handler.php": {
    "lines": 109

@@ -413,7 +413,11 @@ $PAGE_SKELETON = 'table';
     font: inherit; font-size: .8125rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .mr-export-open:hover, .mr-export-open:focus-visible { border-color: var(--maroon); background: var(--cream); }
 .mr-export-open .material-symbols-outlined { font-size: 18px; }
-.mr-export-dialog { width: min(29rem, calc(100vw - 2rem)); max-width: none;
+/* margin: auto, stated: the site's reset takes away the margin a modal
+   <dialog> centres itself with, so without this it opens in the top left
+   corner of the window. The book viewer's dialog carries the same line for
+   the same reason. */
+.mr-export-dialog { margin: auto; width: min(29rem, calc(100vw - 2rem)); max-width: none;
     max-height: calc(100vh - 2rem); max-height: min(36rem, 85dvh);
     padding: 0; border: 1px solid var(--border); border-radius: var(--r-card, 8px);
     background: var(--white); color: var(--ink); box-shadow: 0 18px 48px rgba(51,0,0,.28); overflow: auto; }
@@ -872,10 +876,19 @@ document.addEventListener('DOMContentLoaded', function () {
            Revoke on Granted, none at all in History, which has no bar and no
            tick boxes. Everything below that touches either form is guarded, so
            this is the pane's own bar or nothing. */
+        /* button[type="submit"], never the first button in the form:
+           select_skin.php draws every <select> as a <button> and puts it where
+           the select stood, which here is *before* the real action. So
+           querySelector('button') returned the duration dropdown, and the
+           confirm text was written onto it: pressing the dropdown asked
+           "Grant 1 selected request for 2 hours?" instead of opening its list,
+           because action_dialogs.php answers a [data-confirm] in the capture
+           phase and stops the event dead, and the real Grant button was left
+           asking the fixed question in the markup. Found 22 November 2026. */
         var killForm   = bar ? bar.querySelector('.js-revoke-form') : null;
-        var killBtn    = killForm ? killForm.querySelector('button') : null;
+        var killBtn    = killForm ? killForm.querySelector('button[type="submit"]') : null;
         var grantForm  = bar ? bar.querySelector('.js-grant-form') : null;
-        var grantBtn   = grantForm ? grantForm.querySelector('button') : null;
+        var grantBtn   = grantForm ? grantForm.querySelector('button[type="submit"]') : null;
         var grantHours = grantForm ? grantForm.querySelector('.js-bulk-duration') : null;
         if (!bar) return;
 

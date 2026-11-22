@@ -136,6 +136,21 @@
         close(state);
     }
 
+    /* A menu for a control inside a <dialog> has to live inside that dialog.
+       An open modal dialog is in the browser's top layer, which is above every
+       z-index on the page: a menu parked on <body> is painted behind it
+       whatever number it carries, so the list opened invisibly under the box
+       that asked for it (the Librarian's export dialog, 22 November 2026).
+       Asked at every open, not once when the control is built, because a
+       dialog opens and closes long after that and the same control can be
+       used in either state. The menu is position: fixed, so moving it between
+       parents does not change where it lands; it only changes what it is
+       painted over. */
+    function host(state) {
+        var want = (state.btn.closest && state.btn.closest('dialog[open]')) || document.body;
+        if (state.menu.parentNode !== want) want.appendChild(state.menu);
+    }
+
     function open(state) {
         if (state.btn.disabled) return;
         if (openOne && openOne !== state) close(openOne);
@@ -143,6 +158,7 @@
         state.paint(state);
         state.menu.hidden = false;
         state.btn.setAttribute('aria-expanded', 'true');
+        host(state);
         place(state);
         openOne = state;
         var rows = options(state);

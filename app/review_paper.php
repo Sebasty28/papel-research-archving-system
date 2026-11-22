@@ -384,7 +384,10 @@ $PAGE_SKELETON = 'reader';
                     <?php endforeach; ?>
                 </div>
                 <div class="pd-people">
-                    <div>Student: <span class="who"><?= e($paper['author_name']) ?></span></div>
+                    <?php /* "Uploaded by", as the desk's cards say: the name is the
+                             account that filed the paper, and a Librarian files other
+                             people's work. Renamed 22 November 2026. */ ?>
+                    <div>Uploaded by: <span class="who"><?= e($paper['author_name']) ?></span></div>
                     <?php if ($paper['author_program']): ?>
                         <div>Program: <span class="who"><?= e($paper['author_program']) ?></span></div>
                     <?php endif; ?>

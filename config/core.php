@@ -2879,6 +2879,83 @@ function paper_is_readable(int $paperId): bool {
     return $found;
 }
 
+/**
+ * The protected view of a paper's PDF: who gets one, and what is written across it.
+ *
+ * There is no way to stop a screenshot or a screen recording of a web page.
+ * Netflix's black frame is not something its page does: the video is decoded
+ * inside a hardware-protected path (Widevine L1, FairPlay) whose frames the
+ * compositor refuses to hand to any capture API, and that path is open to EME
+ * video and to nothing else. No browser gives the web the equivalent of
+ * Android's FLAG_SECURE; navigator.protectedView is an unimplemented Chromium
+ * proposal. So this does the two things that are real:
+ *
+ *   - **the reader's name is burnt into the page** as it is drawn, so a
+ *     screenshot, a photograph of the monitor and a recording all carry
+ *     whoever made them. Traceability, where prevention cannot exist.
+ *   - **the pages are covered whenever this window is not the one in front**,
+ *     which blackens a capture taken from another window and says plainly
+ *     that the document is protected. It is not a lock: a recorder running
+ *     while the reader reads sees everything, and Windows freezes the screen
+ *     as its own snipping overlay opens, which is faster than any script.
+ *
+ * Staff are exempt. An adviser reads a paper to mark it against a checklist
+ * and a librarian to answer for it; a document that blanked every time they
+ * looked at the form beside it would obstruct the work the site exists for.
+ * Everybody else is covered: a student, their own paper included, so the rule
+ * cannot be stepped round by reading a paper you filed yourself, and a
+ * Library Pass.
+ *
+ * text_layer is the selectable layer over the canvas. Off, a published paper
+ * is pixels, and its whole text cannot be lifted with one Ctrl+A. That costs
+ * the reader in-page text search and costs a screen reader the text
+ * altogether, which is why it is one flag here rather than a rule spread
+ * through the viewer.
+ */
+function pdf_view_protection(?array $u = null, bool $explicit = false): array {
+    if (!$explicit) { $u = current_user(); }
+    $open = ['on' => false, 'lines' => [], 'text_layer' => true];
+    /* Nobody signed in: app/paper_file.php refuses the bytes before this
+       matters, and a page with no reader has no name to write on it. */
+    if (!$u) { return $open; }
+
+    foreach (pdf_protection_exempt_roles() as $role) {
+        if (user_has_role($u, $role)) { return $open; }
+    }
+
+    return ['on' => true, 'lines' => pdf_watermark_lines($u), 'text_layer' => false];
+}
+
+/** Read by pdf_view_protection(): the desks that read papers as their work.
+ *  Asked with user_has_role(), never the bare user_role, so a second post counts. */
+function pdf_protection_exempt_roles(): array {
+    return ['faculty', 'admin', 'head_academic', 'super_admin', 'librarian'];
+}
+
+/**
+ * The two lines stamped across every page: who is reading, and when.
+ *
+ * The ID is the point of the first line. A name can be shared and a
+ * screenshot argued about; the number beside it is the account the file was
+ * opened with, and it is what a Library Pass carries in place of a name of
+ * its own. The time is when the page was opened rather than when the stamp
+ * was drawn, so a view left open all afternoon carries the hour it began.
+ */
+function pdf_watermark_lines(array $u): array {
+    $who = trim((string)($u['full_name'] ?? ''));
+    $id  = trim((string)($u['student_id'] ?? $u['faculty_id'] ?? ''));
+    if (($u['user_role'] ?? '') === 'guest') {
+        $who = 'Library Pass';
+        $id  = trim((string)($u['username'] ?? ''));
+    }
+    if ($who === '') { $who = 'PAPEL reader'; }
+
+    return [
+        $id !== '' ? $who . ' · ' . $id : $who,
+        date('d M Y, g:i a') . ' · PAPEL, PUP Biñan',
+    ];
+}
+
 /** The ids of every paper this reader has saved, as [id => true]: one query for a whole list. */
 function saved_paper_ids(int $userId): array {
     if (!paper_favorites_ready()) return [];

@@ -270,3 +270,75 @@
 @media (prefers-reduced-motion: reduce) {
     .pdf-retry.is-spinning .pdf-retry-icon { animation: none; }
 }
+
+/* ----- The protected view's cover -----
+
+   Over the pages whenever this window is not the one in front, so a capture
+   taken from another window carries the notice rather than the paper. Why
+   there is no Netflix-style blackout to be had here is written at
+   pdf_view_protection() in config/core.php.
+
+   Near-black rather than the stage's own grey, and opaque: --cream and the
+   rest of the palette's surfaces are translucent under Old Night, and a veil
+   the paper shows through is not a cover. It sits above the toast (6) and
+   the pages, and below nothing else in the stage. */
+.papel-pdf-guard {
+    position: absolute;
+    inset: 0;
+    z-index: 8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    background: #0c0c0d;
+    color: #f3f1f1;
+    opacity: 0;
+    visibility: hidden;
+    /* No fade on the way in: a cover that takes 200ms to arrive is 200ms of
+       the paper on screen after the window has gone, which is the whole of
+       what a snipping tool needs. It fades only on the way out. */
+    transition: opacity 0.18s ease 0s, visibility 0s linear 0.18s;
+}
+.papel-pdf-guard.is-on {
+    opacity: 1;
+    visibility: visible;
+    transition: none;
+}
+.papel-pdf-guard-word {
+    max-width: 24rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    text-align: center;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+}
+.papel-pdf-guard-word strong { font-size: 0.95rem; font-weight: 600; }
+.papel-pdf-guard-word .material-symbols-outlined {
+    font-size: 2rem;
+    opacity: 0.75;
+    margin-bottom: 0.15rem;
+}
+@media (max-width: 600px) {
+    .papel-pdf-guard-word { font-size: 0.75rem; }
+    .papel-pdf-guard-word .material-symbols-outlined { font-size: 1.6rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .papel-pdf-guard { transition: none; }
+}
+
+/* Printing is a capture with a file at the end of it, so a protected viewer
+   prints its notice and not its pages. The stylesheet does it as well as the
+   script, because a browser that renders the sheet before beforeprint has
+   run would otherwise put the paper on paper. */
+@media print {
+    .papel-pdf-stage.is-protected .papel-pdf-scroll { display: none; }
+    .papel-pdf-stage.is-protected .papel-pdf-guard {
+        position: static;
+        opacity: 1;
+        visibility: visible;
+        background: #fff;
+        color: #000;
+    }
+}

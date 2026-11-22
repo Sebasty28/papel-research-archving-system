@@ -1280,7 +1280,6 @@ $PAGE_SKELETON = 'panes';
 require_once ROOT_PATH.'/includes/site_head.php';
 ?>
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>"  src="../../assests/js/input-validation.js" defer></script>
-<<<<<<< Updated upstream
 <?php /* The in-browser PDF compressor is DISABLED for now (the owner's request, 20 November
    2026). Its files are kept (assests/js/papel-pdf-compressor.js and assests/js/pdf-compression/),
    and so is every call to it on this page: each one asks `window.papelPdfCompressor &&` first,
@@ -1290,14 +1289,12 @@ require_once ROOT_PATH.'/includes/site_head.php';
    this tag, and the three pieces of wording marked "compressor disabled" below and in
    includes/corpus_faq.php and includes/corpus_knowledge.php.
 
-<script nonce="<?= csp_nonce() ?>" src="<?= e(asset_url('assests/js/papel-pdf-compressor.js')) ?>" data-worker="<?= e(asset_url('assests/js/pdf-compression/worker.js')) ?>" defer></script>
-*/ ?>
-=======
-<?php /* data-limit carries the figure this server will really accept, so the
-   compressor's "too large to compress here" note quotes the same limit as the
-   rest of the page. Hard-coded, it said 30MB on a host that stops at 20. */ ?>
+   data-limit rides on the tag so that it comes back with it: it carries the figure this
+   server will really accept, so the compressor's own "too large to compress here" note quotes
+   the same limit as the rest of the page. Hard-coded, it said 30MB on a host that stops at 20.
+
 <script nonce="<?= csp_nonce() ?>" src="<?= e(asset_url('assests/js/papel-pdf-compressor.js')) ?>" data-worker="<?= e(asset_url('assests/js/pdf-compression/worker.js')) ?>" data-limit="<?= e(max_upload_label()) ?>" defer></script>
->>>>>>> Stashed changes
+*/ ?>
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 .pdf-compression-status { display: block; flex-basis: 100%; margin-top: .35rem; font-size: .75rem; color: var(--muted, #666); }
 .pdf-compression-status[hidden] { display: none; }
@@ -15164,6 +15161,12 @@ $PDF_DOCK_CARD      = '.col-lg-11.upload-shell';
    the PDF opens at whatever that is. includes/skeleton.php repeats the
    expression, so the shape it covers the page with is the shape it will be. */
 $PDF_DOCK_WIDTH     = 'clamp(280px, 23vw, 23rem)';
+/* No protected view here. The file in this panel is the student's own, chosen
+   a moment ago and not yet handed in: it has never left their browser, there
+   is nobody to trace it to but themselves, and a watermark across a paper
+   they are still writing would be in the way of the one reader who is meant
+   to read it. See pdf_view_protection() in config/core.php. */
+$PDF_DOCK_PROTECT   = false;
 require ROOT_PATH.'/includes/pdf_dock.php';
 ?>
 <?php require ROOT_PATH.'/includes/site_footer.php'; ?>

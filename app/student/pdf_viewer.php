@@ -83,6 +83,14 @@ if ($qPaper > 0 || $qDoc > 0 || $qMs > 0) {
         $srcError = 'You do not have access to this file.';
     }
 }
+
+/* The protected view, for a paper fetched from the server. A file handed
+   across from the upload page is the student's own and not yet filed, so it
+   is shown plain: see pdf_view_protection() in config/core.php for what the
+   protected view is, and what no web page can do. */
+$pdfProtect = $src
+    ? pdf_view_protection()
+    : ['on' => false, 'lines' => [], 'text_layer' => true];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -195,9 +203,14 @@ body {
     <span class="material-symbols-outlined mi-20">picture_as_pdf</span>
     <span class="viewer-name" id="viewer-name"><?= e($srcName ?? 'PDF Preview') ?></span>
     <div class="viewer-tools">
+        <?php /* With no text layer there is nothing to select, so the view is
+                 always the hand and a mode button would be a control with one
+                 state. The keys (H, T) answer the same way. */ ?>
+        <?php if ($pdfProtect['text_layer']): ?>
         <button type="button" id="viewerPanMode" title="Drag to move the page" aria-label="Drag to move the page" aria-pressed="false">
             <span class="material-symbols-outlined mi-20">pan_tool</span>
         </button>
+        <?php endif; ?>
         <button type="button" id="viewerZoomOut" title="Zoom out (Ctrl + mouse wheel)" aria-label="Zoom out">
             <span class="material-symbols-outlined mi-20">zoom_out</span>
         </button>
@@ -232,6 +245,7 @@ body {
     var WORKER = <?= json_encode(asset_url('assests/js/pdfjs/pdf.worker.min.js'), JSON_UNESCAPED_SLASHES) ?>;
     // Set when this tab was opened for a paper; see the header.
     var SRC       = <?= json_encode($src, JSON_UNESCAPED_SLASHES) ?>;
+    var PROTECT   = <?= json_encode($pdfProtect, JSON_UNESCAPED_SLASHES) ?>;
     var SRC_ERROR = <?= json_encode($srcError) ?>;
     var statusEl  = document.getElementById('viewer-status');
     var scrollEl  = document.getElementById('viewer-scroll');
@@ -245,6 +259,9 @@ body {
         failMessage: SRC ? 'This file could not be shown. Please try again.' : undefined,
         loadingText: '',          // the ring says it (papel-pdf-view.css)
         onBusy:    setBusy,
+        watermark: PROTECT.on ? PROTECT.lines : null,
+        textLayer: PROTECT.text_layer,
+        protect:   PROTECT.on,
         /* A paper that arrived but would not draw may have arrived short, so
            it is worth fetching again. A file handed over from the upload page
            is already in this tab's memory: there is nothing to fetch, and
@@ -254,7 +271,9 @@ body {
             document.getElementById('viewerZoomLevel').textContent = Math.round(z * 100) + '%';
         },
         onMode: function (mode) {
+            // Not drawn in a protected view, where the hand is the only mode.
             var btn = document.getElementById('viewerPanMode');
+            if (!btn) return;
             var panning = (mode === 'pan');
             btn.classList.toggle('active', panning);
             btn.setAttribute('aria-pressed', panning ? 'true' : 'false');
@@ -269,13 +288,16 @@ body {
     document.getElementById('viewerZoomIn').addEventListener('click', function () { view.zoomIn(); });
     document.getElementById('viewerZoomOut').addEventListener('click', function () { view.zoomOut(); });
     document.getElementById('viewerZoomLevel').addEventListener('click', function () { view.resetZoom(); });
-    document.getElementById('viewerPanMode').addEventListener('click', function () { view.toggleMode(); });
+    var panBtn = document.getElementById('viewerPanMode');
+    if (panBtn) { panBtn.addEventListener('click', function () { view.toggleMode(); }); }
     view.setMode('select');   // paint the button's initial state
 
     // Escape leaves drag mode and returns to selecting text, matching the
     // preview panel. There is no panel to close here, so that is all it does.
     document.addEventListener('keydown', function (e) {
         if (e.key !== 'Escape') return;
+        // A protected view has no text to come back to; the hand is all there is.
+        if (!view.hasText()) return;
         if (view.getMode() !== 'pan') return;
         e.preventDefault();
         view.setMode('select');

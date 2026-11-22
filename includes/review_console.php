@@ -290,7 +290,9 @@ if (in_array($rcExportFormat, ['csv', 'xlsx', 'docx', 'pdf'], true)) {
             ucwords(str_replace('_', ' ', (string)$r['current_status'])),
         ];
     }, $exportRows);
-    $tableHead = ['Submitted', 'Title', 'Student', 'Course', 'Grade and Section', 'Academic Year', 'Status'];
+    /* "Uploaded by", as the cards say: the name is the account that filed the
+       paper, which for a digitised thesis is a Librarian and not its author. */
+    $tableHead = ['Submitted', 'Title', 'Uploaded by', 'Course', 'Grade and Section', 'Academic Year', 'Status'];
 
     if ($rcExportFormat === 'csv') {
         while (ob_get_level() > 0) { ob_end_clean(); }
@@ -338,7 +340,7 @@ if (in_array($rcExportFormat, ['csv', 'xlsx', 'docx', 'pdf'], true)) {
         $d->table([['Status', 3, 'left'], ['Papers', 1, 'right']], $summaryRows);
         $d->heading('Papers');
         $d->table([
-            ['Submitted', 2, 'left'], ['Title', 6, 'left'], ['Student', 3, 'left'],
+            ['Submitted', 2, 'left'], ['Title', 6, 'left'], ['Uploaded by', 3, 'left'],
             ['Course', 2, 'left'], ['Section', 2, 'left'], ['A.Y.', 2, 'left'], ['Status', 2, 'left'],
         ], $tableRows);
         $bytes = $d->output();
@@ -356,7 +358,7 @@ if (in_array($rcExportFormat, ['csv', 'xlsx', 'docx', 'pdf'], true)) {
     $pdf->table([['Status', 320, 'l'], ['Papers', 179, 'r']], $summaryRows);
     $pdf->heading('Papers');
     $pdf->table([
-        ['Submitted', 60, 'l'], ['Title', 160, 'l'], ['Student', 90, 'l'],
+        ['Submitted', 60, 'l'], ['Title', 160, 'l'], ['Uploaded by', 90, 'l'],
         ['Course', 55, 'l'], ['Section', 45, 'l'], ['A.Y.', 40, 'l'], ['Status', 49, 'l'],
     ], $tableRows);
     $bytes = $pdf->output();
@@ -1054,7 +1056,12 @@ html[data-view="rows"] .paper-list .card-status .paper-action { display: none; }
                                 <?php endforeach; ?>
                             </div>
                             <div class="card-people">
-                                <div>Student: <span class="who"><?= e($r['author_name']) ?></span></div>
+                                <?php /* "Uploaded by", not "Student": the name is the account
+                                         that filed the paper (u.user_id = rp.uploaded_by above),
+                                         and a Librarian files other people's work, so a digitised
+                                         thesis showed a librarian's name under the word Student.
+                                         Renamed 22 November 2026 at the owner's request. */ ?>
+                                <div>Uploaded by: <span class="who"><?= e($r['author_name']) ?></span></div>
                                 <?php if (!empty($rv['faculty'])): ?>
                                     <div>Subject Adviser: <span class="who"><?= e($rv['faculty']) ?></span></div>
                                 <?php endif; ?>
