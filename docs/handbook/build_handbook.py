@@ -163,7 +163,7 @@ def start_about():
         'papers. Teachers check them. Approved papers are shared with the public. Later, old papers can be '
         'archived.</p>'
         '<h2>Who should read it</h2>'
-        '<p>Students, Research Advisers, the Research Coordinator, the Head of Academic Programs, the Director, '
+        '<p>Students, Subject Advisers, the Research Coordinator, the Head of Academic Programs, the Director, '
         'Librarians and guests. Also the people who look after the system: they will find notes for them in '
         'Appendix D.</p>'
         '<h2>How each workflow is arranged</h2>'
@@ -202,10 +202,10 @@ def start_people():
         '<p class="lead">Seven kinds of people use PAPEL. Each one has a home page and a job.</p>'
         + table(['Who', 'What they do', 'Their home page'], K.ROLES)
         + box('tip', 'Good to know',
-              '<p>Your Research Adviser is the faculty member who made your account. Your papers always go to '
+              '<p>Your Subject Adviser is the faculty member who made your account. Your papers always go to '
               'that person first.</p>')
         + '<h2>Approval ends at the Research Coordinator</h2>'
-        '<p>Only two people approve a paper: the Research Adviser, then the Research Coordinator. The Head of '
+        '<p>Only two people approve a paper: the Subject Adviser, then the Research Coordinator. The Head of '
         'Academic Programs and the Director <strong>read</strong> the published papers. They do not approve them.</p>'
         '<h2>Outside services</h2>'
         '<p>PAPEL uses four services from other companies. In the diagrams they are blue boxes marked '
@@ -263,16 +263,21 @@ def start_big_picture():
     journey = D.flow('The journey of a paper through PAPEL', j['nodes'], j['edges'], j['H'], lanes=j['lanes'])
     s = K.STATES
     states = D.flow('The status of a paper', s['nodes'], s['edges'], s['H'])
+    a = K.APPFLOW
+    appflow = D.appflow('PAPEL paper flow', a['title'], a['stations'], a['arrows'], note=a['note'])
     inner = (
         '<p class="lead">A paper moves through PAPEL in five stages.</p>'
-        '<ol class="steps">'
+        + figure('0.0', 'Flow Diagram', 'The whole journey in one picture', appflow,
+                 'Read it from left to right. Each mark is a person or a place; the words above each arrow '
+                 'are what moves the paper on. Approval ends at the Research Coordinator.')
+        + '<ol class="steps">'
         '<li>The <strong>student</strong> writes the paper and uploads it.</li>'
-        '<li>The <strong>Research Adviser</strong> checks it.</li>'
+        '<li>The <strong>Subject Adviser</strong> checks it.</li>'
         '<li>The <strong>Research Coordinator</strong> checks it again and approves it.</li>'
         '<li>The paper is <strong>published</strong> in the Public Repository. Everyone can find it.</li>'
         '<li>Later, the <strong>Director</strong> can move it to the archive.</li></ol>'
         '<p>At stage 2 or stage 3, the reviewer can <strong>return</strong> the paper. The student fixes it and '
-        'sends it again. It then starts again at the Research Adviser.</p>'
+        'sends it again. It then starts again at the Subject Adviser.</p>'
         + figure('0.1', 'Activity Diagram', 'The journey of a paper', journey,
                  'Each column is one person or place. Follow the arrows from the black dot at the top. '
                  'A diamond is a question. "Yes" moves the paper on. "No" sends it back to the student.')
@@ -308,9 +313,17 @@ def chapter_html(ch):
     uc = D.usecase('Use case diagram: ' + ch['title'], **ch['uc'])
     sq = D.sequence('Sequence diagram: ' + ch['title'], **ch['seq'])
     er = D.erd('ERD: ' + ch['title'], **ch['erd'])
+    # The flow picture opens the set, as Figure 0.0 opens the handbook: the shape
+    # of the journey first, in a form that needs no key, then the three UML
+    # drawings that say who, when and where.
+    f = K.FLOWS[n]
+    fl = D.appflow('Flow: ' + ch['title'], f['title'], f['stations'], f['arrows'], note=f.get('note'))
     figs = (
         '<div class="diagrams"><div class="diagrams-keep">'
         '<h2 class="diagrams-head">The diagrams for Workflow %d</h2>' % n
+        + figure('%d.0' % n, 'Flow Diagram', 'The shape of this workflow', fl,
+                 'Read it from left to right. Each mark is a person or a place, and the words above each '
+                 'arrow are what moves the work on.')
         + figure('%d.1' % n, 'Use Case Diagram', 'Who does what', uc, ch['uc_note']) + '</div>'
         + figure('%d.2' % n, 'Sequence Diagram', 'What happens, step by step', sq, ch['seq_note'])
         + figure('%d.3' % n, 'Entity Relationship Diagram (ERD)', 'Where the information is saved', er,

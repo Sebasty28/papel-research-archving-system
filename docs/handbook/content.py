@@ -24,7 +24,8 @@ SCHEMA = {
         ('gdrive_token', 'TEXT', ''), ('reset_token', 'VARCHAR', ''),
         ('reset_expires', 'DATETIME', ''), ('title', 'VARCHAR', ''), ('faculty_id', 'VARCHAR', ''),
         ('program', 'VARCHAR', ''), ('academic_year', 'VARCHAR', ''), ('section', 'VARCHAR', ''),
-        ('expires_on', 'DATE', ''), ('student_id', 'VARCHAR', ''), ('admin_level', 'TINYINT', '')]),
+        ('expires_on', 'DATE', ''), ('student_id', 'VARCHAR', ''), ('admin_level', 'TINYINT', ''),
+        ('secondary_position', 'VARCHAR', '')]),
     'research_papers': dict(sub='every paper not archived', desc='Every paper that is not archived: drafts, papers under review and published papers.', cols=[
         ('paper_id', 'INT', 'PK'), ('title', 'VARCHAR', ''), ('author_names', 'TEXT', ''),
         ('year', 'INT', ''), ('research_date', 'DATE', ''), ('abstract', 'TEXT', ''),
@@ -42,20 +43,35 @@ SCHEMA = {
         ('workflow_id', 'INT', 'PK'), ('paper_id', 'INT', 'FK'), ('reviewer_id', 'INT', 'FK'),
         ('review_level', 'ENUM', ''), ('status', 'ENUM', ''), ('feedback', 'TEXT', ''),
         ('reviewed_at', 'TIMESTAMP', ''), ('submitted_at', 'TIMESTAMP', ''), ('admin_level', 'TINYINT', '')]),
-    'paper_checklist': dict(sub="the Adviser's checklist", desc='The parts of the paper the Research Adviser ticked when approving.', cols=[
+    'paper_checklist': dict(sub="the Adviser's checklist", desc='The parts of the paper the Subject Adviser ticked when approving.', cols=[
         ('checklist_id', 'INT', 'PK'), ('paper_id', 'INT', 'FK'), ('imrad_intro', 'TINYINT', ''),
         ('imrad_method', 'TINYINT', ''), ('imrad_result', 'TINYINT', ''), ('imrad_discussion', 'TINYINT', ''),
         ('imrad_references', 'TINYINT', ''), ('full_ch1', 'TINYINT', ''), ('full_ch2', 'TINYINT', ''),
         ('full_ch3', 'TINYINT', ''), ('full_ch4', 'TINYINT', ''), ('full_ch5', 'TINYINT', ''),
-        ('full_references', 'TINYINT', ''), ('created_at', 'TIMESTAMP', '')]),
+        ('full_references', 'TINYINT', ''), ('created_at', 'TIMESTAMP', ''),
+        ('items_json', 'LONGTEXT', '')]),
     'imrad_checklist': dict(sub='older checklist (unused)', desc='An older section checklist. No page uses it now.', cols=[
         ('checklist_id', 'INT', 'PK'), ('paper_id', 'INT', 'FK'), ('has_introduction', 'TINYINT', ''),
         ('has_methods', 'TINYINT', ''), ('has_results', 'TINYINT', ''), ('has_discussion', 'TINYINT', ''),
         ('has_abstract', 'TINYINT', ''), ('has_references', 'TINYINT', ''), ('checked_by', 'INT', 'FK'),
         ('checked_at', 'TIMESTAMP', '')]),
     'supporting_documents': dict(sub='files sent with a paper', desc='Ethics clearance, consent form and the other files sent with a paper.', cols=[
-        ('doc_id', 'INT', 'PK'), ('paper_id', 'INT', 'FK'), ('document_type', 'ENUM', ''),
+        ('doc_id', 'INT', 'PK'), ('paper_id', 'INT', 'FK'), ('document_type', 'VARCHAR', ''),
+        ('document_name', 'VARCHAR', ''),
         ('file_path', 'VARCHAR', ''), ('gdrive_file_id', 'VARCHAR', ''), ('uploaded_at', 'TIMESTAMP', '')]),
+    'paper_manuscripts': dict(sub='the PDF files of a paper', desc='One row per manuscript PDF. A paper handed in as both IMRAD and Full Manuscript is one paper with two rows here.', cols=[
+        ('manuscript_id', 'INT', 'PK'), ('paper_id', 'INT', 'FK'), ('format', 'VARCHAR', ''),
+        ('file_path', 'VARCHAR', ''), ('gdrive_file_id', 'VARCHAR', ''), ('file_size', 'BIGINT', ''),
+        ('file_hash', 'CHAR', ''), ('uploaded_at', 'TIMESTAMP', '')]),
+    'gdrive_file_inventory': dict(sub='who owns each PDF on Drive', desc='What Google Drive last said about each PDF: which account owns it, and whether PAPEL can still open it.', cols=[
+        ('file_id', 'VARCHAR', 'PK'), ('owner_email', 'VARCHAR', ''), ('owner_name', 'VARCHAR', ''),
+        ('drive_id', 'VARCHAR', ''), ('parent_id', 'VARCHAR', ''), ('file_name', 'VARCHAR', ''),
+        ('access_state', 'VARCHAR', ''), ('checked_by_email', 'VARCHAR', ''),
+        ('checked_at', 'DATETIME', ''), ('owner_checked_at', 'DATETIME', '')]),
+    'gdrive_setting_history': dict(sub='changes to the Drive settings', desc='Each time somebody connected Google Drive or changed the storage folder.', cols=[
+        ('history_id', 'INT', 'PK'), ('event_type', 'VARCHAR', ''), ('account_email', 'VARCHAR', ''),
+        ('account_name', 'VARCHAR', ''), ('folder_id', 'VARCHAR', ''), ('folder_name', 'VARCHAR', ''),
+        ('changed_by', 'INT', 'FK'), ('changed_at', 'DATETIME', '')]),
     'analytics': dict(sub='numbers about a paper', desc='Numbers about a paper. Only time_to_approval (days from upload to approval) is written today.', cols=[
         ('analytics_id', 'INT', 'PK'), ('paper_id', 'INT', 'FK'), ('view_count', 'INT', ''),
         ('download_count', 'INT', ''), ('citation_count', 'INT', ''), ('approval_date', 'TIMESTAMP', ''),
@@ -90,7 +106,7 @@ SCHEMA = {
         ('request_id', 'INT', 'PK'), ('paper_id', 'INT', 'FK'), ('student_user_id', 'INT', 'FK'),
         ('status', 'ENUM', ''), ('duration_hours', 'TINYINT', ''), ('granted_by', 'INT', 'FK'),
         ('granted_at', 'DATETIME', ''), ('expires_at', 'DATETIME', ''), ('denied_by', 'INT', 'FK'),
-        ('denied_at', 'DATETIME', ''), ('created_at', 'DATETIME', '')]),
+        ('denied_at', 'DATETIME', ''), ('created_at', 'DATETIME', ''), ('student_hidden_at', 'DATETIME', '')]),
     'paper_favorites': dict(sub='favourites (unused)', desc='Meant for favourite papers. No page uses it yet.', cols=[
         ('favorite_id', 'INT', 'PK'), ('user_id', 'INT', 'FK'), ('paper_id', 'INT', 'FK'),
         ('created_at', 'TIMESTAMP', '')]),
@@ -143,13 +159,23 @@ def note(x, y, w, text):
 
 # =========================================================== front matter
 ROLES = [
-    ('Student', 'Writes a paper and uploads it. Fixes it if it is returned.', 'My Dashboard'),
-    ('Research Adviser', 'Checks the papers of their own students first. Makes student accounts.', 'Review Desk'),
-    ('Research Coordinator', 'Gives the final approval. Approving a paper publishes it. Makes Research Adviser and Librarian accounts.', 'Review Desk'),
+    ('Student', 'Writes a paper and uploads it. Fixes it if it is returned. Saves papers to My Library.', 'My Dashboard'),
+    ('Subject Adviser', 'Checks the papers of their own students first. Makes student accounts, one at a time or from a spreadsheet.', 'Review Desk'),
+    ('Research Coordinator', 'Gives the final approval. Approving a paper publishes it. Makes Subject Adviser and Librarian accounts. Shares the Google Drive settings and the support queue with the Director.', 'Review Desk'),
     ('Head of Academic Programs', 'Reads all published papers and the reports. Does not approve.', 'My Dashboard'),
-    ('Director', 'Reads all published papers. Archives papers. Makes staff accounts. Chooses the Google Drive folder.', 'My Dashboard'),
-    ('Librarian', 'Makes guest passes. Answers requests to open a full manuscript.', 'Guest Passes'),
+    ('Director', 'Reads all published papers. Archives papers. Makes staff accounts. Shares the Google Drive settings with the Research Coordinator.', 'My Dashboard'),
+    ('Librarian', 'Makes guest passes. Answers requests to open a full manuscript, and can end a grant early.', 'Manuscript Requests'),
     ('Guest', 'A visitor with a pass that works for a few hours. Can read paper details.', 'Public Repository'),
+]
+
+# One member of staff may hold two of the posts above at once: the account keeps
+# one role, and the second post is a position name beside it. After signing in,
+# such a person chooses which desk to open, and the menu offers a way back.
+TWO_POSTS = [
+    ('What it is', 'One person, two jobs. A Research Coordinator who also advises is the case that led to it.'),
+    ('How you sign in', 'The same way. After signing in you see two cards, one for each post. Choose one.'),
+    ('Changing desks', 'Use **Switch desk** in your profile menu. You do not sign out and in again.'),
+    ('Who can give one', 'The Director can give any second post. The Research Coordinator can give only the posts that console itself creates: Subject Adviser and Librarian.'),
 ]
 
 SERVICES = [
@@ -161,15 +187,31 @@ SERVICES = [
 
 STATUS_ROWS = [
     ['DRAFT', 'Not sent yet. Only you can see it.', '`draft`'],
-    ['ON PROCESS', 'Waiting for the Research Adviser.', '`pending_faculty`'],
+    ['ON PROCESS', 'Waiting for the Subject Adviser.', '`pending_faculty`'],
     ['ON PROCESS', 'The Adviser approved it. Waiting for the Research Coordinator.', '`pending_admin`'],
     ['DECLINED', 'A reviewer returned it. Read the feedback and fix it.', '`draft` plus feedback'],
     ['APPROVED', 'Published. Everyone can find it in the Public Repository.', '`approved`'],
     ['(not shown)', 'Archived. Taken out of the Public Repository.', 'moved to `papers_archive`'],
 ]
 
+# The whole journey in one picture, in the shape service-flow diagrams are
+# usually drawn in: left to right, one station per step, dotted arrows between.
+# It opens The Big Picture, before the UML, so a reader meets the chain once in
+# a form that needs no key explained first.
+APPFLOW = dict(
+    title='PAPEL Paper Flow',
+    stations=[
+        ('upload', 'Student', 'writes and uploads'),
+        ('check', 'Subject Adviser', 'reads and approves'),
+        ('stamp', 'Research Coordinator', 'approves and publishes'),
+        ('shelf', 'Public Repository', 'everyone can read it'),
+    ],
+    arrows=['Submit', 'Forward', 'Publish'],
+    note='The PDF itself is kept in Google Drive at every step.',
+)
+
 # The journey of a paper, as a swimlane activity diagram.
-LANES = [('Student', 0, 136), ('Research Adviser', 136, 272), ('Research Coordinator', 272, 408),
+LANES = [('Student', 0, 136), ('Subject Adviser', 136, 272), ('Research Coordinator', 272, 408),
          ('Public Repository', 408, 544), ('Director', 544, 680)]
 JOURNEY = dict(H=560, lanes=LANES, nodes={
     'start': dict(x=68, y=56, kind='start'),
@@ -203,7 +245,7 @@ JOURNEY = dict(H=560, lanes=LANES, nodes={
 STATES = dict(H=600, nodes={
     's1': dict(x=34, y=96, kind='start'),
     'draft': dict(x=150, y=96, kind='state', w=128, text='Draft', sub='draft'),
-    'wfa': dict(x=372, y=96, kind='state', w=152, text='Waiting for the Research Adviser', sub='pending_faculty'),
+    'wfa': dict(x=372, y=96, kind='state', w=152, text='Waiting for the Subject Adviser', sub='pending_faculty'),
     'wfc': dict(x=586, y=96, kind='state', w=152, text='Waiting for the Research Coordinator', sub='pending_admin'),
     'ret': dict(x=372, y=286, kind='state', w=152, text='Returned (Needs Revision)', sub='draft + feedback'),
     'pub': dict(x=586, y=396, kind='good', w=152, text='Published', sub='approved'),
@@ -254,6 +296,111 @@ LEGEND_ERD = dict(
 
 
 # =========================================================== the chapters
+# One flow picture per workflow, drawn by diagrams.appflow() and printed as
+# Figure N.0 at the top of each chapter's diagrams. Keep them to four stations:
+# the point is the shape of the journey, not every branch of it.
+FLOWS = {
+    1: dict(title='Signing In', stations=[
+        ('key', 'You', 'type your ID and password'),
+        ('check', 'PAPEL', 'robot check, then the lock'),
+        ('person', 'Your desk', 'the home page for your role'),
+    ], arrows=['Send', 'If it matches'],
+       note='Five wrong passwords lock that account for 15 minutes.'),
+
+    2: dict(title='Creating User Accounts', stations=[
+        ('person', 'A member of staff', 'fills in the form'),
+        ('key', 'PAPEL', 'makes the account and a password'),
+        ('mail', 'The new user', 'gets both by email'),
+        ('check', 'First sign-in', 'they choose their own password'),
+    ], arrows=['Create', 'Email', 'Held until'],
+       note='Nothing else on the site opens until that first password is changed.'),
+
+    3: dict(title='Uploading a Paper', stations=[
+        ('upload', 'Student', 'four steps, then Submit'),
+        ('check', 'PAPEL checks', 'every part, and not already on file'),
+        ('drive', 'Google Drive', 'the PDFs are kept here'),
+        ('person', 'Subject Adviser', 'it lands on their desk'),
+    ], arrows=['Submit', 'Store', 'Notice'],
+       note='Nothing is sent to Drive until every check has passed.'),
+
+    4: dict(title='Saving a Draft', stations=[
+        ('upload', 'You write', 'on the upload page'),
+        ('draft', 'Your computer', 'an automatic copy, as you type'),
+        ('check', 'Save as Draft', 'a draft kept on the server'),
+    ], arrows=['As you type', 'When you press it'],
+       note='A draft never keeps a PDF. Attach the files again before you submit.'),
+
+    5: dict(title='Cancelling a Submission', stations=[
+        ('clock', 'Your paper', 'waiting with a reviewer'),
+        ('back', 'Withdraw', 'only inside the window'),
+        ('draft', 'Drafts', 'yours to change again'),
+    ], arrows=['Press it', 'Goes back to'],
+       note='The window closes once a reviewer has acted on the paper.'),
+
+    6: dict(title='Review by the Subject Adviser', stations=[
+        ('upload', 'A paper arrives', 'on the Review Desk'),
+        ('check', 'The Adviser reads it', 'and ticks the checklist'),
+        ('stamp', 'Research Coordinator', 'the last desk'),
+    ], arrows=['Opens it', 'Approve'],
+       note='Or Return it with feedback, and the paper goes back to the student as a draft.'),
+
+    7: dict(title='Final Review and Publishing', stations=[
+        ('person', 'Research Coordinator', 'reads it again'),
+        ('stamp', 'Approve', 'the status becomes approved'),
+        ('shelf', 'Public Repository', 'everyone can find it'),
+    ], arrows=['Opens it', 'Publishes'],
+       note='Approval ends here. The Director and the Head of Academic Programs read, they do not approve.'),
+
+    8: dict(title='Fixing a Returned Paper', stations=[
+        ('back', 'Returned', 'it is a draft again, with feedback'),
+        ('upload', 'You fix it', 'and attach the PDFs again'),
+        ('person', 'Subject Adviser', 'it starts again here'),
+    ], arrows=['Read it', 'Submit'],
+       note='The files were taken out when it was returned, so the new version needs a new upload.'),
+
+    9: dict(title='Finding and Reading Published Papers', stations=[
+        ('search', 'Search or browse', 'title, author or keyword'),
+        ('shelf', "The paper's page", 'abstract and the written sections'),
+        ('draft', 'My Library', 'your own shelf, if you save it'),
+    ], arrows=['Open', 'Bookmark'],
+       note='Only approved papers are here. The full PDF is a separate request.'),
+
+    10: dict(title='Guest Passes', stations=[
+        ('person', 'Librarian', 'makes a pass'),
+        ('mail', 'The visitor', 'gets a username and password'),
+        ('clock', 'A few hours', 'then it stops working'),
+    ], arrows=['Create', 'Signs in for'],
+       note='From 1 to 24 hours. The Librarian chooses how long.'),
+
+    11: dict(title='Asking to Open a Full Manuscript', stations=[
+        ('help', 'Student asks', "from the paper's page"),
+        ('person', 'Librarian', 'grants it, or says no'),
+        ('clock', 'A countdown', 'runs in the corner of the page'),
+    ], arrows=['Request', 'Granted'],
+       note='A Librarian can also revoke a grant early. The record of it is kept either way.'),
+
+    12: dict(title='Archiving a Paper', stations=[
+        ('shelf', 'An approved paper', 'five years old, or chosen'),
+        ('box', 'The archive', 'the whole record is kept'),
+        ('search', 'Public Repository', 'no longer listed there'),
+    ], arrows=['Archive', 'Taken out of'],
+       note='Nothing is deleted. The PDFs on Google Drive are not touched at all.'),
+
+    13: dict(title='Notifications and Emails', stations=[
+        ('stamp', 'Something happens', 'a paper moves, or a grant is given'),
+        ('bell', 'The bell', 'a notice on the site'),
+        ('mail', 'Your inbox', 'the same words, by email'),
+    ], arrows=['Writes', 'Sends'],
+       note='The subject of the email is also the heading printed inside it.'),
+
+    14: dict(title='Getting Help with an Account', stations=[
+        ('help', 'You write', 'what went wrong'),
+        ('person', 'Staff', 'see it on their queue'),
+        ('mail', 'Your email', 'the answer arrives'),
+    ], arrows=['Send', 'Answer'],
+       note='It needs no account, which is the point: use it when you cannot sign in.'),
+}
+
 PARTS = [
     ('A', 'Accounts and Signing In'),
     ('B', 'Submitting a Paper'),
@@ -278,7 +425,7 @@ chapter(
         ('p', 'The **Sign In** button is at the top of every page. It opens a sign-in panel. The panel has three tabs.'),
         ('table', ['Tab', 'Who uses it', 'What to type as your ID'], [
             ['**Student**', 'Students', 'Your Student ID'],
-            ['**Faculty**', 'Research Advisers, the Research Coordinator, the Head of Academic Programs, the Director and Librarians', 'Your Employee ID, or your email'],
+            ['**Faculty**', 'Subject Advisers, the Research Coordinator, the Head of Academic Programs, the Director and Librarians', 'Your Employee ID, or your email'],
             ['**Guest**', 'Visitors with a guest pass', 'The guest username from your email'],
         ]),
         ('h', 'Steps'),
@@ -295,7 +442,7 @@ chapter(
             '**Five wrong passwords lock the account for 15 minutes.** This stops people who try to guess passwords. Wait 15 minutes, then try again.',
             'Twenty wrong tries from one computer lock that computer for 15 minutes, for every account.',
             'Choose the right tab. A staff account cannot sign in on the **Student** tab.',
-            'A student account has an end date. After that date it stops working. Ask your Research Adviser to renew it.',
+            'A student account has an end date. After that date it stops working. Ask your Subject Adviser to renew it.',
             'Forgot your password? Use **Contact Support**. See Workflow 14.',
         ]),
         ('h', 'How long a student account lasts'),
@@ -307,7 +454,7 @@ chapter(
             ['4th year (4-1, 4-2, ...)', '2 school years'],
             ['Ladderized', '2 school years'],
         ]),
-        ('p', 'To renew an account, the Research Adviser moves the student up a year. PAPEL then works out a new end date.'),
+        ('p', 'To renew an account, the Subject Adviser moves the student up a year. PAPEL then works out a new end date.'),
         ('words', [('ID', 'The number the school gave you, like a Student ID or Employee ID.'),
                    ('Lock', 'PAPEL stops accepting tries for a short time.'),
                    ('Expire', 'To reach the end date and stop working.')]),
@@ -362,16 +509,16 @@ chapter(
 chapter(
     key='ch02', num=2, part='A', title='Creating User Accounts',
     short='Accounts are made from the top down. Each person makes the accounts of the people below them.',
-    who=['Director', 'Research Coordinator', 'Research Adviser'], outside=['Gmail'],
+    who=['Director', 'Research Coordinator', 'Subject Adviser'], outside=['Gmail'],
     body=[
         ('p', 'Nobody can make their own account. Someone above you makes it.'),
         ('table', ['Who makes it', 'Which accounts', 'Page'], [
             ['Director', 'Research Coordinator, Head of Academic Programs, Librarian', '**Manage Admins**'],
-            ['Research Coordinator', 'Research Advisers and Librarians', '**Manage Faculty** (the page is called **Advisers & Librarians**)'],
-            ['Research Adviser', 'Students', '**My Students**'],
+            ['Research Coordinator', 'Subject Advisers and Librarians', '**Manage Faculty** (the page is called **Advisers & Librarians**)'],
+            ['Subject Adviser', 'Students', '**My Students**'],
         ]),
-        ('tip', 'The person who makes a student account becomes that student\'s Research Adviser. The student\'s papers always go to that person first.'),
-        ('h', 'Steps: a Research Adviser makes a student account'),
+        ('tip', 'The person who makes a student account becomes that student\'s Subject Adviser. The student\'s papers always go to that person first.'),
+        ('h', 'Steps: a Subject Adviser makes a student account'),
         ('steps', [
             'Open **My Students**.',
             'Fill in the form: full name, Student ID, email, program, section and academic year.',
@@ -383,6 +530,19 @@ chapter(
             'The password shows on your screen **one time only**. Write it down if the email fails.',
         ]),
         ('p', 'Staff accounts are made in the same way, on **Manage Admins** or **Manage Faculty**. PAPEL emails the sign-in details to the new staff member.'),
+        ('h', 'Making many accounts at once'),
+        ('p', 'All three consoles take a **CSV or .xlsx** file of **ID, Name, Email** (and **Position** for staff). Press **Import** beside the search box. The name may be in one column or in three; PAPEL reads the heading to tell which, and says above the table what it built the Name from.'),
+        ('bullets', [
+            'Every row is checked by the **same rules** as typing one in, so a file is refused for exactly the reasons the form would refuse it.',
+            'Every cell can be corrected on screen, and **Undo** and **Redo** sit beside **Discard**.',
+            'A row that is already an account is greyed out and cannot be created again.',
+            '**Email is off unless you tick it.** The passwords are shown once afterwards instead.',
+        ]),
+        ('h', 'The first password is temporary'),
+        ('p', 'The password you give is emailed to the person, so it has been written down and seen by somebody else. The first time they sign in, PAPEL holds them on one page until they choose their own. Nothing else on the site opens until they do. The same happens again if a manager later resets it.'),
+        ('h', 'One person, two posts'),
+        ('p', 'A member of staff may hold **two** posts at once, for example Research Coordinator and Subject Adviser. The account keeps one role; the second post is chosen in the **Another Position** box. After signing in, such a person picks which desk to open, and **Switch desk** moves between them.'),
+        ('p', 'Who may hand one out is a rule about authority, not a list: the **Director** may give any second post, the **Research Coordinator** only the posts its own console creates (Subject Adviser and Librarian). Otherwise somebody could mint a second Coordinator without being the Director.'),
         ('remember', [
             'A password needs **at least 6 characters**, **one capital letter** and **one number**.',
             'Tell new users to change their password after they sign in for the first time.',
@@ -399,7 +559,7 @@ chapter(
                'own': 'Change my own password'},
         grid=[('create', 'gen'), (None, 'mail'), ('edit', 'renew'), 'own'],
         left=[('dir', 'Director', 'person'), ('coord', 'Research Coordinator', 'person'),
-              ('adv', 'Research Adviser', 'person')],
+              ('adv', 'Subject Adviser', 'person')],
         right=[('gmail', 'Gmail', 'system'), ('new', 'New user', 'person')],
         links=[('dir', 'create'), ('coord', 'create'), ('adv', 'create'), ('dir', 'edit'), ('coord', 'edit'),
                ('adv', 'edit'), ('adv', 'own'), ('coord', 'own'), ('dir', 'own'), ('gmail', 'mail'),
@@ -407,7 +567,7 @@ chapter(
         rels=[('create', 'gen', 'include'), ('create', 'mail', 'include'), ('renew', 'edit', 'extend')]),
     uc_note='Three people can create accounts, each for the people below them. Every new account gets a password and an email. Renewing a student is a special kind of edit.',
     seq=dict(
-        parts=[('a', 'Research Adviser', 'person'), ('w', 'PAPEL', 'system'), ('d', 'Database', 'db'),
+        parts=[('a', 'Subject Adviser', 'person'), ('w', 'PAPEL', 'system'), ('d', 'Database', 'db'),
                ('g', 'Gmail', 'ext'), ('s', 'Student', 'person')],
         steps=[
             ('msg', 'a', 'w', 'Open My Students. Fill in the form.'),
@@ -440,62 +600,71 @@ chapter(
 # ----------------------------------------------------------- 3 Upload
 chapter(
     key='ch03', num=3, part='B', title='Uploading a Paper',
-    short='The student fills in four steps and submits the paper. It goes to their Research Adviser.',
-    who=['Student', 'Research Adviser (gets a notice)'], outside=['Groq AI', 'Google Drive', 'Gmail'],
+    short='The student fills in four steps and submits the paper. It goes to their Subject Adviser.',
+    who=['Student', 'Subject Adviser (gets a notice)'], outside=['Groq AI', 'Google Drive', 'Gmail'],
     body=[
         ('p', 'Open **Upload Paper** from your dashboard. The upload page has four steps. You can go back to an earlier step at any time.'),
         ('h', 'Step 1: Paper Details'),
         ('bullets', [
             'Choose your academic program, the paper type and the other basic facts.',
-            'Paper types: **Capstone Project**, **Undergraduate Thesis** and **Feasibility Study**.',
+            'Paper types: **Capstone Project**, **Undergraduate Thesis**, **Feasibility Study** and **Other**. Choose **Other** and type what your paper really is, for example "Case Study".',
+            'Choose how you are handing the paper in: **IMRAD**, **Full Manuscript**, or both. Both means **one paper with two PDF files**, not two papers.',
+            '**Other** as a manuscript type stands alone: it cannot be ticked with the other two. It is one PDF, named in your own words.',
         ]),
         ('h', 'Step 2: Upload & Details'),
         ('bullets', [
-            'Attach your paper as a **PDF** file. The page accepts files up to 50 MB.',
+            'Attach your paper as a **PDF** file. The size limit is printed on the form itself; it is **20 MB** today. A larger file is refused as soon as you choose it, so compress it first.',
+            'With both manuscript types ticked, there is one box for each. **Each needs its own file.**',
             'Choose how to fill in the details:',
             '**Extract Metadata with AI**: PAPEL reads your PDF. It fills in the title, authors, year, keywords and abstract. If the AI is busy, wait a minute and press it again, or fill the details in yourself.',
             '**Fill Manually**: you type the details yourself.',
             '**Always check what the AI wrote.** Fix any mistakes.',
-            'Write or paste each section of your paper: Abstract, Introduction, Methodology, Results and Discussion, Conclusion, References.',
+            'PAPEL asks **which written sections** go on your paper\'s page: the Abstract on its own, or any combination of the six. The Abstract is normally always included.',
+            'Write or paste each section you chose: Abstract, Introduction, Methodology, Results and Discussion, Conclusion, References.',
+            'Instead of the six, you may write **sections of your own name**, up to twelve, in any order you like. A ready-made list can start you off: thesis chapters, or the parts of a feasibility study.',
             'You can paste pictures into a section. Each picture can be up to 5 MB.',
         ]),
         ('h', 'Step 3: Supporting Docs'),
         ('p', 'A **Capstone Project** needs all four documents below. For the other paper types, they are optional. Every document must be a PDF.'),
+        ('p', 'You can also **add rows of your own** and name them, for a document PAPEL does not list, such as a Certificate of Originality. Six is the most.'),
         ('bullets', ['Ethics Clearance', 'Consent Form', 'Data Collection Tool', 'Copyright / IP Document']),
         ('h', 'Step 4: Review & Submit'),
         ('p', 'Check everything one last time. Then click **Submit Paper**.'),
         ('h', 'What happens after you click Submit Paper'),
         ('steps', [
             'PAPEL checks that every required part is there.',
+            'PAPEL checks that the paper is **not already on file**: the same PDF, or the same title. This happens before anything is sent, so a refusal costs you no waiting.',
             'PAPEL sends your PDF and your documents to Google Drive. Submitted papers are kept there.',
             'PAPEL saves the paper. The badge on your card says **ON PROCESS**.',
-            'Your Research Adviser gets a notice and an email.',
+            'Your Subject Adviser gets a notice and an email.',
             'You go back to your dashboard. The paper is in the **Under Review** tab.',
         ]),
         ('remember', [
-            'Your paper always goes first to **your** Research Adviser: the faculty member who made your account.',
+            'Your paper always goes first to **your** Subject Adviser: the faculty member who made your account.',
             'If the upload to Google Drive fails, the paper is **not** submitted. Try again later.',
+            '**The same paper cannot be filed twice.** PAPEL knows a PDF by what is inside it, so renaming the file changes nothing. Submitting a returned paper again with the same PDF is fine: that is not a duplicate.',
             'You can save your work before you submit. See Workflow 4.',
             'You can cancel a submission for a short time. See Workflow 5.',
             'Staff can upload their own papers too. A staff paper is **published at once**, with no review.',
         ]),
-        ('words', [('PDF', 'A file type for documents. It looks the same on every computer.'),
+        ('words', [('IMRAD', 'A way of laying a paper out: Introduction, Methods, Results and Discussion.'),
+                   ('PDF', 'A file type for documents. It looks the same on every computer.'),
                    ('Metadata', 'Basic facts about a paper, like the title, authors and year.'),
                    ('Submit', 'Send your paper for review.')]),
     ],
     uc=dict(
         cases={'upload': 'Upload a paper', 'ai': 'Read details with AI', 'docs': 'Attach supporting documents',
                'draft': 'Save a draft', 'submit': 'Submit the paper', 'store': 'Save files to Google Drive',
-               'notify': 'Notify the Research Adviser'},
+               'notify': 'Notify the Subject Adviser'},
         grid=[('upload', 'ai'), ('docs', None), ('draft', None), ('submit', 'store'), (None, 'notify')],
         left=[('stu', 'Student', 'person'), ('staff', 'Staff member', 'person')],
         right=[('groq', 'Groq AI', 'system'), ('drive', 'Google Drive', 'system'),
-               ('adv', 'Research Adviser', 'person')],
+               ('adv', 'Subject Adviser', 'person')],
         links=[('stu', 'upload'), ('stu', 'docs'), ('stu', 'draft'), ('stu', 'submit'), ('staff', 'upload'),
                ('staff', 'submit'), ('groq', 'ai'), ('drive', 'store'), ('adv', 'notify')],
         rels=[('ai', 'upload', 'extend'), ('upload', 'docs', 'include'), ('draft', 'upload', 'extend'),
               ('submit', 'store', 'include'), ('submit', 'notify', 'include')]),
-    uc_note='The student uploads and submits the paper. Using the AI and saving a draft are optional. Every submission saves its files to Google Drive and tells the Research Adviser.',
+    uc_note='The student uploads and submits the paper. Using the AI and saving a draft are optional. Every submission saves its files to Google Drive and tells the Subject Adviser.',
     seq=dict(
         parts=[('s', 'Student', 'person'), ('w', 'PAPEL', 'system'), ('g', 'Groq AI', 'ext'),
                ('v', 'Google Drive', 'ext'), ('d', 'Database', 'db')],
@@ -628,11 +797,11 @@ chapter(
 chapter(
     key='ch05', num=5, part='B', title='Cancelling a Submission',
     short='You can take back a submitted paper, but only at certain times.',
-    who=['Student', 'Research Adviser and Research Coordinator (get a notice)'], outside=[],
+    who=['Student', 'Subject Adviser and Research Coordinator (get a notice)'], outside=[],
     body=[
         ('p', 'After you submit, your paper card shows a **Cancel submission** button when it is allowed. Cancelling brings the paper back to you as a draft.'),
         ('table', ['Where is your paper?', 'When can you cancel?'], [
-            ['With your Research Adviser', 'Only in the **first 24 hours** after you submit.'],
+            ['With your Subject Adviser', 'Only in the **first 24 hours** after you submit.'],
             ['With the Research Coordinator', 'Only **after** the Coordinator has had it for 24 hours with no decision.'],
             ['Published', 'You cannot cancel.'],
         ]),
@@ -648,9 +817,9 @@ chapter(
         ]),
         ('remember', [
             'Approvals that were already given stay on record.',
-            'If the time has passed, the card tells you why. Ask your Research Adviser for help.',
+            'If the time has passed, the card tells you why. Ask your Subject Adviser for help.',
             'If a reviewer acts at the same moment as you, the reviewer\'s decision wins.',
-            'To send the paper again, open the draft and submit it. It starts again with your Research Adviser.',
+            'To send the paper again, open the draft and submit it. It starts again with your Subject Adviser.',
         ]),
         ('words', [('Cancel / Withdraw', 'Take back something you sent.'),
                    ('Window', 'The time when something is allowed.')]),
@@ -660,7 +829,7 @@ chapter(
                'back': 'Put the paper back in Drafts', 'notify': 'Notify the reviewers'},
         grid=[('cancel', 'window'), ('resend', 'back'), (None, 'notify')],
         left=[('stu', 'Student', 'person')],
-        right=[('adv', 'Research Adviser', 'person'), ('coord', 'Research Coordinator', 'person')],
+        right=[('adv', 'Subject Adviser', 'person'), ('coord', 'Research Coordinator', 'person')],
         links=[('stu', 'cancel'), ('stu', 'resend'), ('adv', 'notify'), ('coord', 'notify')],
         rels=[('cancel', 'window', 'include'), ('cancel', 'back', 'include'), ('cancel', 'notify', 'include')]),
     uc_note='Cancelling always checks the time window first. If it is allowed, the paper goes back to Drafts and the reviewers are told.',
@@ -697,11 +866,11 @@ chapter(
 
 # ----------------------------------------------------------- 6 Adviser
 chapter(
-    key='ch06', num=6, part='C', title='Review by the Research Adviser',
-    short='The Research Adviser checks the paper first. They approve it or return it.',
-    who=['Research Adviser', 'Student', 'Research Coordinator (gets a notice)'], outside=['Google Drive', 'Gmail'],
+    key='ch06', num=6, part='C', title='Review by the Subject Adviser',
+    short='The Subject Adviser checks the paper first. They approve it or return it.',
+    who=['Subject Adviser', 'Student', 'Research Coordinator (gets a notice)'], outside=['Google Drive', 'Gmail'],
     body=[
-        ('p', 'The Research Adviser works on the **Review Desk**. It has four tabs.'),
+        ('p', 'The Subject Adviser works on the **Review Desk**. It has four tabs.'),
         ('table', ['Tab', 'What is in it'], [
             ['**Waiting for you**', 'Papers you must review now.'],
             ['**With Coordinator**', 'Papers you approved. They wait for the Research Coordinator.'],
@@ -743,7 +912,7 @@ chapter(
                'ret': 'Return with feedback', 'nots': 'Notify the student', 'purge': 'Delete the files from Google Drive'},
         grid=[('view', None), ('review', None), ('approve', 'check'), (None, 'notc'), ('ret', 'nots'),
               (None, 'purge')],
-        left=[('adv', 'Research Adviser', 'person')],
+        left=[('adv', 'Subject Adviser', 'person')],
         right=[('coord', 'Research Coordinator', 'person'), ('stu', 'Student', 'person'),
                ('drive', 'Google Drive', 'system')],
         links=[('adv', 'view'), ('adv', 'review'), ('adv', 'approve'), ('adv', 'ret'), ('coord', 'notc'),
@@ -752,7 +921,7 @@ chapter(
               ('ret', 'purge', 'include')]),
     uc_note='The Adviser makes one of two decisions. Approving always saves a checklist and tells the Coordinator. Returning always tells the student and deletes the files from Google Drive.',
     seq=dict(
-        parts=[('a', 'Research Adviser', 'person'), ('w', 'PAPEL', 'system'), ('d', 'Database', 'db'),
+        parts=[('a', 'Subject Adviser', 'person'), ('w', 'PAPEL', 'system'), ('d', 'Database', 'db'),
                ('v', 'Google Drive', 'ext')],
         steps=[
             ('msg', 'a', 'w', 'Open the Review Desk'),
@@ -814,12 +983,12 @@ chapter(
             'The student gets a notice: the paper is approved and public.',
         ]),
         ('h', 'Steps: return a paper'),
-        ('p', 'This works the same way as for the Adviser (Workflow 6). Click **Return with feedback**, write **What needs to change**, then click **Return to student**. The files are deleted from Google Drive. The student gets a notice. When the student sends it again, it starts again at the **Research Adviser**.'),
+        ('p', 'This works the same way as for the Adviser (Workflow 6). Click **Return with feedback**, write **What needs to change**, then click **Return to student**. The files are deleted from Google Drive. The student gets a notice. When the student sends it again, it starts again at the **Subject Adviser**.'),
         ('h', 'After publishing: who reads the paper'),
         ('table', ['Who', 'What they can do with published papers'], [
             ['Head of Academic Programs', 'Read all published papers. See the **Analytics** reports. Cannot approve or return.'],
             ['Director', 'Read all published papers. Archive a paper (Workflow 12).'],
-            ['Research Adviser', 'See their own students\' published papers.'],
+            ['Subject Adviser', 'See their own students\' published papers.'],
             ['Everyone', 'Find the paper in the Public Repository (Workflow 9).'],
         ]),
         ('remember', [
@@ -890,7 +1059,7 @@ chapter(
 chapter(
     key='ch08', num=8, part='C', title='Fixing a Returned Paper',
     short='If a reviewer returns your paper, read the feedback, fix the paper and submit it again.',
-    who=['Student', 'Research Adviser (gets it again)'], outside=['Google Drive'],
+    who=['Student', 'Subject Adviser (gets it again)'], outside=['Google Drive'],
     body=[
         ('p', 'A returned paper shows in the **Needs Revision** tab of your dashboard. Its badge says **DECLINED**. The card shows **Revision feedback**: the reviewer\'s words.'),
         ('tip', '"Returned" does not mean "rejected forever". It means: please fix it and send it again.'),
@@ -903,7 +1072,7 @@ chapter(
             'Attach your PDF again. The old files were deleted from Google Drive when the paper was returned.',
             'Attach the supporting documents again, if your paper type needs them.',
             'Click **Submit Paper**.',
-            'The paper goes to your **Research Adviser** again, even if the Research Coordinator was the one who returned it.',
+            'The paper goes to your **Subject Adviser** again, even if the Research Coordinator was the one who returned it.',
         ]),
         ('remember', [
             'Old feedback stays on record. Reviewers can see the history.',
@@ -916,14 +1085,14 @@ chapter(
     uc=dict(
         cases={'see': 'See returned papers', 'read': 'Read the feedback', 'edit': 'Edit and re-submit',
                'pdf': 'Attach the PDF again', 'docs': 'Attach the documents again', 'del': 'Delete the returned paper',
-               'notify': 'Notify the Research Adviser'},
+               'notify': 'Notify the Subject Adviser'},
         grid=[('see', 'read'), ('edit', 'pdf'), (None, 'docs'), ('del', 'notify')],
         left=[('stu', 'Student', 'person')],
-        right=[('adv', 'Research Adviser', 'person'), ('drive', 'Google Drive', 'system')],
+        right=[('adv', 'Subject Adviser', 'person'), ('drive', 'Google Drive', 'system')],
         links=[('stu', 'see'), ('stu', 'edit'), ('stu', 'del'), ('adv', 'notify'), ('drive', 'pdf')],
         rels=[('see', 'read', 'include'), ('edit', 'pdf', 'include'), ('docs', 'edit', 'extend'),
               ('edit', 'notify', 'include')]),
-    uc_note='Fixing a returned paper always means attaching the PDF again. The documents are needed only for some paper types. Sending it again tells the Research Adviser.',
+    uc_note='Fixing a returned paper always means attaching the PDF again. The documents are needed only for some paper types. Sending it again tells the Subject Adviser.',
     seq=dict(
         parts=[('s', 'Student', 'person'), ('w', 'PAPEL', 'system'), ('d', 'Database', 'db'), ('v', 'Google Drive', 'ext')],
         steps=[
@@ -937,7 +1106,7 @@ chapter(
             ('msg', 'w', 'v', 'Upload the new files'),
             ('ret', 'v', 'w', 'File IDs'),
             ('msg', 'w', 'd', 'Save the paper (status: pending_faculty)'),
-            ('msg', 'w', 'd', 'Notice for the Research Adviser, and email it'),
+            ('msg', 'w', 'd', 'Notice for the Subject Adviser, and email it'),
             ('ret', 'w', 's', 'The paper is Under Review again'),
         ]),
     seq_note='A returned paper is a draft that has feedback. PAPEL shows it in Needs Revision, not in Drafts, because of that feedback.',
@@ -980,6 +1149,12 @@ chapter(
             'On the details page, read the abstract, the sections and the AI summary.',
         ]),
         ('p', 'The **AI summary** gives the methodology, sample size, statistical methods, variables and research field. If a paper has no summary yet, PAPEL makes one with Groq AI the first time someone opens it.'),
+        ('h', 'Saving a paper: My Library'),
+        ('p', 'Press the **bookmark** on any paper to save it to **My Library**, the second link in the menu. It keeps your saved papers, your manuscript requests and their history. A saved book carries a maroon ribbon on the shelf.'),
+        ('h', 'Four ways to show a list of papers'),
+        ('p', 'In your profile menu, under **How papers are shown**: **Cards**, **Rows**, **Hardbounds** and **Bookshelf**. The last two draw each paper as a bound book, coloured by its programme; pressing one opens it. **Zen Mode**, in the same menu, puts the page furniture away. All of these are kept on your own device, not on the server.'),
+        ('h', 'Reading a PDF you have been granted'),
+        ('p', 'Your name and the time are written across every page as it is drawn. It is in the picture itself, so any copy, even a photograph of the screen, says which account opened it. The pages are also covered whenever PAPEL is not the window in front. Staff reading a paper see neither.'),
         ('remember', [
             'Only **approved** papers are in the Public Repository. Drafts and papers under review are never public.',
             'An archived paper leaves the public list (Workflow 12).',
@@ -1140,6 +1315,9 @@ chapter(
             'To refuse it: click **Deny**.',
             'The student gets a notice either way.',
         ]),
+        ('h', 'The countdown, and ending a grant early'),
+        ('p', 'While a grant is running, a **countdown** sits in the top corner of every page and counts it down by the second. PAPEL announces a grant when it starts and again when it ends.'),
+        ('p', 'A Librarian can also **revoke** a grant before its time is up. The record is kept: revoking ends the access, it does not rub out the fact that access was given. PAPEL tells the student **revoked** rather than that the time is up, because those are different things, and they may ask again straight away.'),
         ('remember', [
             'Access ends by itself when the time is up.',
             'A student can have **up to 3** manuscripts open at the same time.',
@@ -1283,7 +1461,7 @@ chapter(
     body=[
         ('p', 'The bell at the top of the page shows your new notices. **Notifications** opens the full list.'),
         ('table', ['When this happens', 'Who gets a notice'], [
-            ['A student submits a paper', 'Their Research Adviser'],
+            ['A student submits a paper', 'Their Subject Adviser'],
             ['The Adviser approves it', 'The Research Coordinator'],
             ['The Coordinator approves and publishes it', 'The student'],
             ['A reviewer returns a paper', 'The student, with the feedback'],
@@ -1357,7 +1535,7 @@ chapter(
 chapter(
     key='ch14', num=14, part='E', title='Getting Help with an Account',
     short='If you forgot your password or your account is wrong, send a request. It goes to the person who made your account.',
-    who=['Anyone', 'Research Adviser, Research Coordinator or Director (handle requests)'], outside=['Gmail'],
+    who=['Anyone', 'Subject Adviser, Research Coordinator or Director (handle requests)'], outside=['Gmail'],
     body=[
         ('p', 'Open **Contact Support**. Choose a topic.'),
         ('table', ['Topic', 'What happens'], [
@@ -1366,8 +1544,8 @@ chapter(
             ['Other topics', 'The message goes to the PAPEL support mailbox.'],
         ]),
         ('table', ['If you are a...', 'Your request goes to...'], [
-            ['Student', 'Your Research Adviser'],
-            ['Research Adviser or Librarian', 'The Research Coordinator or the Director'],
+            ['Student', 'Your Subject Adviser'],
+            ['Subject Adviser or Librarian', 'The Research Coordinator or the Director'],
             ['Research Coordinator or Head of Academic Programs', 'The Director'],
         ]),
         ('h', 'Steps: ask for help'),
@@ -1402,7 +1580,7 @@ chapter(
                'done': 'Mark a request as done'},
         grid=[('send', 'route'), (None, 'see'), ('notify', 'reset'), (None, 'fix'), (None, 'done')],
         left=[('p', 'Person who needs help', 'person')],
-        right=[('adv', 'Research Adviser', 'person'), ('coord', 'Research Coordinator', 'person'),
+        right=[('adv', 'Subject Adviser', 'person'), ('coord', 'Research Coordinator', 'person'),
                ('dir', 'Director', 'person')],
         links=[('p', 'send'), ('p', 'notify'), ('adv', 'see'), ('adv', 'reset'), ('adv', 'fix'), ('adv', 'done'),
                ('coord', 'see'), ('coord', 'reset'), ('coord', 'fix'), ('coord', 'done'), ('dir', 'see'),
@@ -1492,30 +1670,87 @@ APPENDIX_ERD_2 = dict(
                              'storage_usage are not drawn: nothing uses them.')])
 
 FAQ = [
+    # ---- Signing in and your account ---------------------------------------
+    ('I cannot sign in. What can I do?',
+     'Check that you chose the right tab. Wait 15 minutes if you tried too many times. If your student account expired, ask your Subject Adviser. If you forgot your password, use **Contact Support** (Workflow 14).'),
+    ('Why must I change my password the first time I sign in?',
+     'Because somebody else chose it for you and sent it by email. Until you pick your own, that password has been written down and seen by whoever made your account. PAPEL holds you on one page until you change it, and nothing else opens until you do.'),
+    ('I was asked to change my password again. Why?',
+     'Somebody who manages accounts reset it for you. The same rule applies: a password another person set is held until you replace it.'),
+    ('My session ended while I was typing. Did I lose my work?',
+     'PAPEL warns you five minutes before, with a **Stay signed in** button. A session ends after 30 minutes with nothing sent to the server. Your typing on the upload form is also kept on your own computer as you go.'),
+    ('Can one person have two jobs in PAPEL?',
+     'Yes. A member of staff can hold two posts, for example Research Coordinator and Subject Adviser. After signing in you choose which desk to open, and **Switch desk** in the profile menu takes you to the other one.'),
+    ('Can I correct my own name or email?',
+     "Staff can, in **Settings**. Students cannot: a student name and email are what an adviser's roll is checked against, so ask the person who made your account. When an email is changed, whoever created the account is told, because an email address is how a password is recovered."),
+
+    # ---- Writing and uploading ---------------------------------------------
+    ('Do I have to fill in every section?',
+     "No. On Step 2 you choose which written sections go on your paper's page. The Abstract is normally always included. You can also write sections of your own name instead, up to twelve, and put them in any order."),
+    ('My paper is not a thesis. What do I choose?',
+     'Both lists on Step 1 end in **Other**. Pick it and type what your paper really is, for example "Case Study" or "Policy Brief". Keep it short: PAPEL refuses a greeting, a whole sentence or random letters.'),
+    ('Can I hand in IMRAD and a Full Manuscript?',
+     'Yes. Tick both on Step 1 and attach one PDF for each. It stays **one paper with two files**, not two papers. **Other** stands alone: it cannot be combined with the other two.'),
+    ('PAPEL says my PDF is already on file. Why?',
+     'The same paper cannot be filed twice. PAPEL recognises a PDF by what is inside it, so renaming the file changes nothing. If you are revising a returned paper, attach the same PDF again and submit as usual: that is allowed. If your study really is a different one, give it a title of its own.'),
+    ('It says the same PDF is in both boxes.',
+     'You attached one file to both IMRAD and Full Manuscript. Each needs its own file. Attach the right one, or untick the manuscript type you do not have.'),
+    ('How big can my PDF be?',
+     'The limit is shown on the form itself, and it is the same number everywhere PAPEL mentions it. A file over the limit is refused as soon as you choose it, so compress it first.'),
+    ('What does Extract with AI do?',
+     'It reads your attached PDF and fills in the title, authors, year and keywords. It copies the Abstract only when it can find it exactly; otherwise your own text is kept. Check every box afterwards.'),
+    ('I saved my work, but my PDF is gone. Why?',
+     'A draft never keeps a PDF, on purpose: nothing is stored for work nobody has handed in. Your typing comes back; attach the files again before you submit.'),
+    ('Why must I attach my PDF again after a return?',
+     'When a paper is returned, its files are taken out of the storage folder, so the new version needs a new upload. Nothing is destroyed: they are moved to a **Trash** folder, not deleted.'),
+    ('I signed out and my draft is gone from this computer.',
+     "Signing out removes the saved copy from the browser, because on a shared campus computer that browser is somebody else's next. A draft you kept with **Save as Draft** is on the server and is still there."),
+    ('Can I change my paper after I submit it?',
+     'Only by withdrawing it, and only inside the allowed window (Workflow 5). Otherwise wait for the review. If it is returned, you can change it then.'),
+
+    # ---- Review and approval -----------------------------------------------
     ('Where is my paper now?',
-     'Open your dashboard. The tab tells you. **Under Review** means a reviewer has it. The progress tracker on the card shows who: the Research Adviser or the Research Coordinator.'),
+     'Open your dashboard. The tab tells you. **Under Review** means a reviewer has it. The tracker on the card shows who: the Subject Adviser or the Research Coordinator.'),
     ('Why was my paper returned?',
      'Open **Needs Revision**. The card shows the **Revision feedback**. It says what to change.'),
-    ('Why must I attach my PDF again after a return?',
-     'When a paper is returned, PAPEL deletes its files from Google Drive to save space. So the new version needs a new upload.'),
-    ('I saved my work, but my PDF is gone. Why?',
-     'You probably have only the automatic copy. It keeps your typing, but not the PDF. Use **Save as Draft** to keep the PDF too.'),
-    ('Can I change my paper after I submit it?',
-     'Only by cancelling it, and only at the allowed times (Workflow 5). Otherwise, wait for the review. If it is returned, you can change it then.'),
-    ('I cannot sign in. What can I do?',
-     'Check that you chose the right tab. Wait 15 minutes if you tried too many times. If your student account expired, ask your Research Adviser. If you forgot your password, use **Contact Support** (Workflow 14).'),
     ('Who approves my paper?',
-     'Two people: first your Research Adviser, then the Research Coordinator. After the Coordinator approves it, it is published.'),
+     'Two people: first your Subject Adviser, then the Research Coordinator. After the Coordinator approves it, it is published.'),
     ('Does the Director or the Head of Academic Programs approve papers?',
      'No. They read the published papers. The approval ends at the Research Coordinator.'),
-    ('Why can I not open the full PDF of a published paper?',
-     'The full PDF is for staff. Students can ask a Librarian for access for up to 24 hours (Workflow 11).'),
+    ('What is the checklist the Adviser ticks?',
+     'A list of the parts your paper should have. The Adviser can change that list for your paper, and starts from a ready-made one that fits: IMRaD, thesis chapters, a feasibility study, or a blank list. The Research Coordinator reads it but does not change it.'),
+    ('My adviser is also the Research Coordinator. Do they approve twice?',
+     'Yes, and that is allowed on purpose. For those papers the second step adds nothing, because one person signs off their own review.'),
     ('Is my draft public?',
      'No. Only you can see a draft. Nobody reviews it until you submit it.'),
+
+    # ---- Reading papers ----------------------------------------------------
+    ('Why can I not open the full PDF of a published paper?',
+     "The full PDF is for staff. Students can ask a Librarian for access (Workflow 11). You can always read the paper's page: title, authors, abstract and the written sections."),
+    ('Why is my name written across the PDF?',
+     'Every page you open is marked with your name and the time, so that a copy can be traced back to the account it was opened from. Staff do not see it on their own copies.'),
+    ('The paper went blank when I clicked another window.',
+     'That is deliberate. A protected paper is covered whenever PAPEL is not the window in front. Click back and it returns at once.'),
+    ('How long does a manuscript grant last?',
+     'The Librarian chooses, up to 24 hours. A countdown appears in the corner of the page while it runs, and PAPEL tells you when it starts and when it ends.'),
+    ('My access stopped before the time was up.',
+     'A Librarian can end a grant early. PAPEL says **revoked** rather than "your time is up", because those are different things. You may ask again straight away.'),
+    ('What is My Library?',
+     'Your own shelf. Press the bookmark on any paper to save it. **My Library** in the menu keeps your saved papers, your manuscript requests and their history.'),
+    ('Can I change how the papers look?',
+     'Yes. Cards, Rows, Hardbounds and Bookshelf, in the profile menu under **How papers are shown**. Zen Mode puts the page furniture away. These are kept on your own device.'),
     ('How long does a guest pass last?',
      'From 1 to 24 hours. The Librarian chooses when making it.'),
+
+    # ---- Records and housekeeping ------------------------------------------
     ('Is an archived paper deleted?',
-     'No. It is kept in the archive record. It is only taken out of the Public Repository.'),
+     'No. It is kept in the archive record and can still be opened by its own link. It is only taken out of the Public Repository, and its PDFs on Google Drive are not touched at all.'),
+    ('Can accounts be made from a spreadsheet?',
+     'Yes. All three consoles take a CSV or .xlsx of ID, Name, Email, and Position for staff. Every row is checked and can be corrected on screen before anything is created. Email is off unless you tick it.'),
+    ('Where are the PDF files actually kept?',
+     'In one Google Drive folder, chosen by the Director or the Research Coordinator. PAPEL never keeps a submitted PDF on its own server.'),
+    ('Does PAPEL use cookies?',
+     'One, and only to keep you signed in. There is no advertising and no analytics of any kind. Your view and theme choices are kept on your own device and never sent to the server.'),
 ]
 
 GLOSSARY = [
@@ -1535,7 +1770,10 @@ GLOSSARY = [
     ('Guest pass', 'A username and password that work for a few hours.'),
     ('«include»', 'In a use case diagram: this step always happens as part of the other one.'),
     ('Lifeline', 'In a sequence diagram: the dashed line under each part. Time goes down it.'),
+    ('Fingerprint', 'A short code worked out from the contents of a file. Two files with the same fingerprint are the same file, whatever they are named.'),
+    ('IMRAD', 'A way of laying a paper out: Introduction, Methods, Results and Discussion.'),
     ('Manuscript', 'The full text of a paper, as a PDF file.'),
+    ('My Library', 'Your own shelf: the papers you saved, and your manuscript requests.'),
     ('Metadata', 'Basic facts about a paper: title, authors, year, keywords.'),
     ('Notice (notification)', 'A short message from PAPEL, shown in the bell and sent by email.'),
     ('opt (frame)', 'In a sequence diagram: a box of steps that happen only sometimes.'),
@@ -1544,6 +1782,9 @@ GLOSSARY = [
     ('Publish', 'Make a paper public in the Public Repository.'),
     ('Public Repository', 'The part of PAPEL where anyone can find approved papers.'),
     ('Return', 'Send a paper back to the student to fix.'),
+    ('Revoke', 'End a grant before its time is up. The record of the grant is kept.'),
+    ('Second post', 'A second job held by the same member of staff, beside their main one.'),
+    ('Storage folder', 'The one Google Drive folder every submitted PDF is kept in.'),
     ('Row', 'In a table: one record, like one paper or one user.'),
     ('Sequence diagram', 'A picture of the steps behind the screen, in time order, from top to bottom.'),
     ('Status', 'Where a paper is in the process, like "draft" or "approved".'),
@@ -1551,13 +1792,15 @@ GLOSSARY = [
     ('Table', 'In a database: a list of rows with the same columns, like a spreadsheet.'),
     ('Use case', 'In a use case diagram: one thing a person can do with the system.'),
     ('Use case diagram', 'A picture of who uses a part of the system and what they can do there.'),
+    ('Watermark', 'Faint words drawn across a page, here the name of whoever opened it.'),
+    ('Zen Mode', 'A setting that hides the page furniture and leaves the reading.'),
 ]
 
 # Which file does the work, for the system team.
 CODE_MAP = [
     ('1 Signing In', '`app/auth/login.php`, `config/core.php` (login throttle, account expiry)'),
     ('2 Creating Accounts', '`app/faculty/faculty_manage_students.php`, `app/admin/admin_manage_faculty.php`, `app/admin/super_admin_manage_admins.php`, `includes/password_generator.php`'),
-    ('3 Uploading a Paper', '`app/student/student_upload_ai.php` (action `upload_paper`), `config/gdrive_config.php`'),
+    ('3 Uploading a Paper', '`app/student/student_upload_ai.php` (action `upload_paper`), `config/gdrive_config.php`; the duplicate check is `paper_duplicate_problem()` in `config/core.php`'),
     ('4 Saving a Draft', '`app/student/student_upload_ai.php` (action `save_draft`), `app/student/student_draft_delete.php`'),
     ('5 Cancelling', '`app/student/student_cancel_submission.php`, `config/workflow.php` (`submission_cancel_state`)'),
     ('6 Adviser Review', '`app/faculty/faculty_review_dashboard.php`, `includes/review_console.php`'),
@@ -1565,12 +1808,19 @@ CODE_MAP = [
     ('8 Returned Papers', '`app/student/student_dashboard.php` (Needs Revision tab), `config/gdrive_config.php` (`purge_paper_drive_files`)'),
     ('9 Public Repository', '`archive/index.php`, `archive/view_paper.php`; files are shown by `includes/pdf_dock.php` and `assests/js/papel-pdf-view.js`, from `app/paper_file.php`'),
     ('10 Guest Passes', '`app/librarian/librarian_manage_guests.php`, `app/auth/login.php` (Guest tab)'),
-    ('11 Manuscripts', '`archive/view_paper.php` (request), `app/librarian/manuscript_requests.php`'),
+    ('11 Manuscripts', '`archive/view_paper.php` (request), `app/librarian/manuscript_requests.php`, `includes/manuscript_timer.php` (the countdown)'),
+    ('My Library', '`app/my_library.php`, `includes/save_paper.php`, `app/save_paper.php`, `includes/shelf_view.php` and `includes/book_viewer.php` (Hardbounds and Bookshelf)'),
+    ('Importing accounts', '`config/account_import.php`, `includes/manage_import.php`'),
+    ('The password gate', '`pages/change_password.php`, `password_gate()` in `config/core.php`'),
+    ('The storage folder', '`app/admin/gdrive_settings.php`, `config/gdrive_inventory.php`'),
     ('12 Archiving', '`app/admin/super_admin_review_dashboard.php`, `app/models/ArchiveService.php`, `notifications/cron/auto_archive_papers.php`'),
     ('13 Notifications', '`config/core.php` (`create_notification`), `notifications/notification_center.php`, `notifications/cron/send_notifications.php`'),
     ('14 Support', '`pages/contact_support.php`, `app/support_requests.php`'),
 ]
 
+# Both jobs under notifications/cron/ now refuse a web request carrying no
+# CRON_KEY, and answer 404 rather than 403, so an unguessed path says nothing.
+# A shell needs no key. Nothing schedules either of them yet.
 TASKS = [
     ('`notifications/cron/auto_archive_papers.php`', 'Every day', 'Archives approved papers more than 1,825 days old (Workflow 12).'),
     ('`notifications/cron/send_notifications.php`', 'Every 15 minutes', 'Sends reminders at 10:00 and 15:30 to people with a reminder time (Workflow 13).'),

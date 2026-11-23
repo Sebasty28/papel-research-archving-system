@@ -1,0 +1,654 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>PAPEL Demo Day Runbook</title><link rel="stylesheet" href="file:///C:/xampp/htdocs/capstone/assests/fonts/papel-fonts.css"><style>
+@page { size: A4; margin: 17mm 15mm 16mm;
+  @bottom-left { content: "PAPEL  \2022  Demo Day Runbook"; color: #7d6666; font: 8pt Arial, sans-serif; }
+  @bottom-right { content: counter(page); color: #7d6666; font: 8pt Arial, sans-serif; } }
+* { box-sizing: border-box; }
+html { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+body { font-family: 'Inter', Arial, 'Segoe UI', sans-serif; color: #29272a; font-size: 10.3pt;
+       line-height: 1.5; margin: 0; }
+h1 { font-size: 20pt; color: #820707; margin: 0 0 6pt; line-height: 1.2; letter-spacing: -.2pt; }
+/* Part headings open a page: each part is read on its own, often by a different
+   person on the team. */
+h1:not(:first-of-type) { page-break-before: always; padding-top: 2pt; }
+h2 { font-size: 13pt; color: #820707; margin: 16pt 0 5pt; page-break-after: avoid;
+     border-bottom: 1px solid #e6d4d4; padding-bottom: 3pt; }
+h3 { font-size: 11pt; margin: 11pt 0 4pt; page-break-after: avoid; }
+p, li { margin: 0 0 5pt; }
+ul, ol { margin: 0 0 7pt; padding-left: 15pt; }
+li { page-break-inside: avoid; }
+code { font-family: 'JetBrains Mono', Consolas, monospace; font-size: 9pt;
+       background: #f8ecec; padding: 1pt 3pt; border-radius: 3px; color: #630000; }
+pre { background: #f8ecec; border-left: 3px solid #820707; padding: 7pt 9pt; border-radius: 4px;
+      page-break-inside: avoid; margin: 0 0 8pt; }
+pre code { background: none; padding: 0; }
+table { border-collapse: collapse; width: 100%; margin: 0 0 9pt; font-size: 9.4pt;
+        page-break-inside: avoid; }
+th { background: #820707; color: #fff; text-align: left; padding: 4pt 6pt; font-weight: 700; }
+td { border: 1px solid #e6d4d4; padding: 4pt 6pt; vertical-align: top; }
+tr:nth-child(even) td { background: #fdf9f9; }
+/* A blockquote is a warning in this document, never an aside. */
+blockquote { margin: 0 0 9pt; padding: 7pt 10pt; background: #fdf4dc; border-left: 4px solid #dca92c;
+             border-radius: 4px; page-break-inside: avoid; }
+blockquote p { margin: 0; }
+blockquote p + p { margin-top: 4pt; }
+hr { border: 0; border-top: 1px solid #e6d4d4; margin: 12pt 0; }
+strong { color: #29272a; }
+h2 + table, h3 + table { margin-top: 2pt; }
+.cover { text-align: center; padding: 40pt 0 16pt; border-bottom: 2px solid #820707; margin-bottom: 14pt; }
+.cover img { width: 86px; margin-bottom: 10pt; }
+.cover .t { font-family: 'Plus Jakarta Sans', Arial, sans-serif; font-size: 25pt; font-weight: 800;
+            color: #820707; letter-spacing: -.4pt; }
+.cover .s { color: #6b5a5a; font-size: 10.5pt; margin-top: 5pt; }
+</style></head><body><div class="cover"><img src="file:///C:/xampp/htdocs/capstone/assests/images/Logo-Papel.png" alt=""><div class="t">Demo Day Runbook</div><div class="s">PAPEL &middot; Research Archiving System &middot; PUP Bi&ntilde;an Campus</div><div class="s">What to prepare before the defence, and how to show each workflow</div></div><p><strong>For the capstone defence · demonstrated on the live site, pupbcpapel.com</strong></p>
+<p>This is the preparation list, not the handbook. It answers one question: <em>what has
+to exist before we stand up, so that every workflow can be shown without waiting,
+apologising, or typing something that fails in front of the panel.</em></p>
+<p>Read Part 1 the day before. Everything in it takes time that you will not have on
+the day.</p>
+<hr />
+<h2>How to use this document</h2>
+<p>Every workflow in Part 3 is written the same way:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Needs</strong></td>
+<td>What must already exist. If this is missing, the demo stops.</td>
+</tr>
+<tr>
+<td><strong>Show</strong></td>
+<td>What to click, in order.</td>
+</tr>
+<tr>
+<td><strong>They see</strong></td>
+<td>What should appear, so you know it worked.</td>
+</tr>
+<tr>
+<td><strong>Say</strong></td>
+<td>The sentence that explains why it is built that way. A panel asks <em>why</em>, not <em>what</em>.</td>
+</tr>
+<tr>
+<td><strong>Again</strong></td>
+<td>How to put it back, to run the same demo twice.</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>This is the live site.</strong> Every account you create sends a real email. Every
+notice a workflow raises reaches a real inbox. Use addresses you own, keep to
+papers whose titles start with <code>DEMO</code>, and never demonstrate on a real
+student's work.</p>
+</blockquote>
+<hr />
+<h1>Part 1 · The day before</h1>
+<h2>1.1 Run the two database updates</h2>
+<p>Without these, two things in the demo simply do not work.</p>
+<p>Open <strong>phpMyAdmin</strong> on the production hosting, select the site's database on the
+left, open the <strong>SQL</strong> tab, paste each file whole, and press <strong>Go</strong>. Run them in
+this order. Each one prints a line saying what it did, and each is safe to run
+twice.</p>
+<table>
+<thead>
+<tr>
+<th>Order</th>
+<th>File</th>
+<th>If you skip it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>scripts/migrations/sql/2026-11-15_request_history_visibility.sql</code></td>
+<td>A student cannot clear their request history; My Library may error.</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>scripts/migrations/sql/2026-11-23_manuscript_file_hash.sql</code></td>
+<td><strong>Workflow 3b cannot be demonstrated at all.</strong> The duplicate check has nothing to compare a PDF against.</td>
+</tr>
+</tbody>
+</table>
+<p>These files are <strong>not on the server</strong>. They are in the project folder on your own
+computer, under <code>scripts/migrations/sql/</code>. Open each in Notepad, select all, copy.</p>
+<p><strong>Then check it worked.</strong> Sign in as the Research Coordinator or the Director and
+open:</p>
+<pre><code>pupbcpapel.com/app/student/upload_diagnostics.php
+</code></pre>
+<p>The <strong>Database</strong> section must read <strong>"No gaps"</strong>. If it lists anything, the paste
+did not take. Do not proceed until it is clean.</p>
+<h2>1.2 Check Google Drive</h2>
+<p>Sign in as the <strong>Director</strong> or the <strong>Research Coordinator</strong> and open <strong>Storage
+Folder</strong>. Confirm all three:</p>
+<ul>
+<li>Drive says <strong>connected</strong>, and names the Google account.</li>
+<li>The storage folder is <strong>usable</strong> by that account, in so many words.</li>
+<li>The folder opens in Drive when you press <strong>Open folder</strong>.</li>
+</ul>
+<p>If the folder is not usable, <strong>no paper can be submitted at all</strong> and Workflows 3,
+6, 7 and 8 are dead. This is the single most common cause of a failed demo: the
+connection and the folder are two separate settings and they fail separately.</p>
+<h2>1.3 The accounts you will use</h2>
+<p><strong>Use the accounts that already exist on the live site.</strong> Do not create a set of
+demo accounts: every account made here is real, is emailed a password, and stays
+on the roll afterwards.</p>
+<p>Fill this in the day before, and keep it beside the laptop. Write the passwords
+on paper, not in a file you would have to open on the projector.</p>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Account on the live site</th>
+<th>ID to type</th>
+<th>Tab</th>
+<th>Lands on</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Student</td>
+<td><em>your own student account</em></td>
+<td><code>2023-00056-BN-0</code></td>
+<td>Student</td>
+<td>My Dashboard</td>
+</tr>
+<tr>
+<td>Subject Adviser</td>
+<td>Kris Rommel Ramos</td>
+<td><code>FA0004BN2026</code></td>
+<td>Faculty</td>
+<td>Review Desk</td>
+</tr>
+<tr>
+<td>Research Coordinator</td>
+<td>Michael Anjelo O. Miguel</td>
+<td><code>FA0001BN2026</code></td>
+<td>Faculty</td>
+<td>Review Desk</td>
+</tr>
+<tr>
+<td>Librarian</td>
+<td>Franchesca Bernardo</td>
+<td><code>FA0002BN2026</code></td>
+<td>Faculty</td>
+<td>Manuscript Requests</td>
+</tr>
+<tr>
+<td>Director</td>
+<td>Director</td>
+<td><code>DIR-0001</code></td>
+<td>Faculty</td>
+<td>My Dashboard</td>
+</tr>
+</tbody>
+</table>
+<p>Staff, librarians and the Director all sign in on the <strong>Faculty</strong> tab. Only the
+student uses the Student tab. Write each password on the card; they are not here.</p>
+<p><strong>There is exactly one Subject Adviser account on the live site</strong>, so every
+student paper goes to Kris Rommel Ramos. That makes Workflow 6 simple, and it
+also means there is no second desk to fall back on if that password is not to
+hand. Settle it tonight.</p>
+<p>The student row is yours to choose: any of the fifteen student accounts will do,
+<strong>provided it is on that adviser's roll</strong> (see below). <code>2023-00056-BN-0</code> is
+filled in because it is the account the project's own test fixtures already use.
+Every student account expires <strong>31 July 2028</strong>, so none of them is near expiry.</p>
+<p>The Head of Academic Programs (Archie C. Arevalo, <code>FA0003BN2026</code>) is not in the
+table because no workflow needs him. Mention the role when the chain is
+explained: he reads, he does not approve.</p>
+<h3>Three things to check about them, not assume</h3>
+<p><strong>1. The student must be on that adviser's roll.</strong> This is the one thing that
+can quietly break the review demo. A paper does not go to "an adviser"; the desk
+lists the students whose accounts <strong>that</strong> adviser created (<code>users.created_by</code>),
+and a paper by anybody else is in no queue at all. It is not visible from the
+student's side, so check it from the adviser's.</p>
+<p>Sign in as <strong>Kris Rommel Ramos</strong> and open <strong>My Students</strong>. The student you chose
+must be on that list. If the list is empty, or your student is missing, pick a
+student that <em>is</em> on it and use that account instead.</p>
+<p>If you would rather check it in phpMyAdmin, this answers it in one line and
+writes nothing:</p>
+<pre><code class="language-sql">SELECT user_id, full_name, student_id FROM users
+ WHERE user_role = 'student' AND created_by = 384;
+</code></pre>
+<p><code>384</code> is Kris Rommel Ramos. Whatever comes back is exactly what his desk can see.
+If it comes back empty, the students were created by somebody else, and Workflow
+6 has to be demonstrated from whichever account did create them.</p>
+<p><strong>2. The student account must not have expired.</strong> All fifteen expire on
+<strong>31 July 2028</strong>, so this is not a risk tomorrow. It is still worth knowing why:
+the life of a student account is counted from the section on it, and an expired
+account cannot sign in at all. Moving a student up a year is how one is renewed.</p>
+<p><strong>3. You must actually hold five passwords.</strong> These are real accounts and the
+passwords are not in this document. Four of the five belong to other people; if
+you are borrowing them, arrange it tonight and confirm each one signs in.</p>
+<p>Do not plan to reset anybody's password in the morning. A password reset by
+somebody else holds that account on a change your password screen until it is
+replaced, and nothing else on the site opens: you would be changing a colleague's
+password in front of the panel.</p>
+<blockquote>
+<p><strong>A real desk shows real work.</strong> The Review Desk of a working adviser lists
+other students' names and the titles of papers that are not published. The
+Coordinator's desk and the support queue are the same. Decide in advance
+whether that is acceptable to project, and if it is not, use the desk's own
+filters to bring your demo paper up before you share the screen.</p>
+</blockquote>
+<h3>What you lose by not creating accounts, and what to do instead</h3>
+<p>Two things in the demo are about an account being new. With existing accounts
+they cannot be shown as they stand:</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>What to do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Workflow 2</strong>, creating an account</td>
+<td>Fill the form in and show the generated password <strong>without pressing Create</strong>, then explain what would happen. Or create one real throwaway account with an email you own, and delete it afterwards.</td>
+</tr>
+<tr>
+<td><strong>The first-sign-in password gate</strong></td>
+<td>Describe it rather than show it. It only appears for an account whose password somebody else set.</td>
+</tr>
+</tbody>
+</table>
+<h2>1.4 Prepare the PDF files</h2>
+<p>You need <strong>six different PDF files</strong> on the laptop, in one folder, named so you
+can find them under pressure:</p>
+<pre><code>demo-01-imrad.pdf        demo-04-returned.pdf
+demo-02-full.pdf         demo-05-ethics.pdf
+demo-03-duplicate.pdf    demo-06-consent.pdf
+</code></pre>
+<blockquote>
+<p><strong>They must genuinely be different files.</strong> PAPEL now refuses a PDF whose
+contents are already on file, and it knows a file by what is inside it, so
+copying one and renaming it is still the same file and will be refused. This
+is a feature you are going to demonstrate; do not let it ambush you first.</p>
+</blockquote>
+<p><code>demo-03-duplicate.pdf</code> is the exception: it is <strong>a copy of <code>demo-01-imrad.pdf</code>
+under another name</strong>, and it exists only so you can show the duplicate check
+catching it.</p>
+<h2>1.5 Stage the papers</h2>
+<p>One paper cannot be in two states at once, so the demo needs several, each parked
+where a workflow needs it. Upload them <strong>as the student from 1.3</strong>, so they land
+on Kris Rommel Ramos's desk, and give every one of them a title beginning
+<code>DEMO</code> so the reset script can find them and nothing else can be touched by it.
+Prepare them in this order, the day before.</p>
+<table>
+<thead>
+<tr>
+<th>Paper title</th>
+<th>Leave it in this state</th>
+<th>Used by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>DEMO Draft Paper</code></td>
+<td>Draft, never submitted</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>DEMO Waiting Adviser</code></td>
+<td>Submitted, with the Subject Adviser</td>
+<td>5, 6</td>
+</tr>
+<tr>
+<td><code>DEMO Waiting Coordinator</code></td>
+<td>Adviser approved, with the Coordinator</td>
+<td>7</td>
+</tr>
+<tr>
+<td><code>DEMO Returned Paper</code></td>
+<td>Returned, back in the student's Drafts with feedback</td>
+<td>8</td>
+</tr>
+<tr>
+<td><code>DEMO Published Paper</code></td>
+<td>Approved and published</td>
+<td>9, 11, 12</td>
+</tr>
+</tbody>
+</table>
+<p><strong><code>DEMO Waiting Adviser</code> must be submitted on the day, or late the night before.</strong>
+A paper can be withdrawn only in the <strong>first 24 hours</strong> with the adviser, and
+Workflow 5 is that window. Submit it too early and the button is gone.</p>
+<p><strong><code>DEMO Published Paper</code> must be filed after step 1.1</strong>, not before. A paper filed
+before the database update has no fingerprint, so it cannot be used to demonstrate
+the duplicate check.</p>
+<h2>1.6 Last checks, the morning of</h2>
+<ul>
+<li>[ ] Sign in once as <strong>every</strong> account on the list in 1.3, and out again.</li>
+<li>[ ] The demo student appears on that adviser's <strong>My Students</strong> list.</li>
+<li>[ ] <code>upload_diagnostics.php</code> still reads <strong>No gaps</strong>.</li>
+<li>[ ] Storage Folder still says connected and usable.</li>
+<li>[ ] The five demo papers are each in the right state.</li>
+<li>[ ] The six PDFs are on the laptop, in one folder.</li>
+<li>[ ] Browser zoom at 100%, one window, no other tabs signed in as another role.</li>
+<li>[ ] The passwords are written on paper, beside the laptop.</li>
+</ul>
+<blockquote>
+<p><strong>Sessions end after 30 minutes of doing nothing.</strong> If you set up in the morning
+and present in the afternoon, you will be signed out. PAPEL warns five minutes
+before with a <strong>Stay signed in</strong> button, but plan to sign in fresh.</p>
+</blockquote>
+<hr />
+<h1>Part 2 · Running order</h1>
+<p>Do not demo the workflows in numerical order. This order tells one story, and each
+step leaves the system ready for the next.</p>
+<ol>
+<li><strong>The shape of it</strong> — show the Public Repository signed out. One sentence on
+   what PAPEL is for.</li>
+<li><strong>Signing in</strong> (1) as the student.</li>
+<li><strong>Uploading</strong> (3), then the <strong>duplicate check</strong> (3b).</li>
+<li><strong>Drafts</strong> (4) and <strong>withdrawing</strong> (5).</li>
+<li><strong>Adviser review</strong> (6) → <strong>Coordinator publishes</strong> (7).</li>
+<li><strong>Returned paper</strong> (8).</li>
+<li><strong>Reading</strong> (9), <strong>manuscript request</strong> (11), <strong>guest pass</strong> (10).</li>
+<li><strong>Archiving</strong> (12).</li>
+<li><strong>Notices</strong> (13) and <strong>support</strong> (14).</li>
+<li><strong>Accounts</strong> (2) last, because it sends email and is the least visual.</li>
+</ol>
+<hr />
+<h1>Part 3 · The workflows</h1>
+<h2>Workflow 1 · Signing In</h2>
+<p><strong>Needs</strong> — the student account from 1.3, and its password in your hand.</p>
+<p><strong>Show</strong> — press <strong>Sign In</strong>, choose the <strong>Student</strong> tab, type the ID and
+password, tick the robot box, sign in.</p>
+<p><strong>They see</strong> — the student dashboard.</p>
+<p><strong>Say</strong> — "The robot check and the lock are tested <em>before</em> the password is ever
+looked at, so this form cannot be used to try passwords. Five wrong tries lock
+that account for fifteen minutes."</p>
+<p><strong>Again</strong> — sign out.</p>
+<hr />
+<h2>Workflow 2 · Creating User Accounts</h2>
+<p><strong>Needs</strong> — the Subject Adviser signed in. Decide beforehand which of the two
+ways you are doing this, because one of them makes a real account.</p>
+<p><strong>Show, without creating anything</strong> — My Students → fill the form in → press
+<strong>Generate</strong> and let it build the password from the name and the ID → stop
+there and explain what Create would do. Then show <strong>Import</strong> beside the search
+box and the spreadsheet preview, which checks every row without creating
+anything until you press Create.</p>
+<p><strong>Or, if you would rather show it end to end</strong> — use an email address you own,
+create one account, and delete it immediately afterwards. It is a real account
+on the real roll until you do.</p>
+<p><strong>They see</strong> — the generated password, and the rules answering under each box
+as it is typed in.</p>
+<p><strong>Say</strong> — "The password is generated from the name and the ID, and it is
+temporary: the first time they sign in, PAPEL holds them on one page until they
+choose their own, because a password that was emailed has been seen by somebody
+else."</p>
+<p><strong>Again</strong> — if you created one, delete it now rather than later.</p>
+<blockquote>
+<p>Mention the spreadsheet import even if you do not run it. Forty students at the
+start of a term is the real case, and the preview checks every row by the same
+rules as typing one in.</p>
+</blockquote>
+<hr />
+<h2>Workflow 3 · Uploading a Paper</h2>
+<p><strong>Needs</strong> — the student signed in; <code>demo-01-imrad.pdf</code> and <code>demo-02-full.pdf</code>;
+Drive connected.</p>
+<p><strong>Show</strong> — Upload Paper. Walk the four steps. On Step 1 tick <strong>both</strong> IMRAD and
+Full Manuscript so there are two file boxes. Attach a different PDF to each. On
+Step 2 press <strong>Extract with AI</strong>. On Step 2 also show the question that asks
+<strong>which written sections</strong> go on the paper's page. Submit.</p>
+<p><strong>They see</strong> — the paper filed, the dashboard showing <strong>ON PROCESS</strong>.</p>
+<p><strong>Say</strong> — "Both ticked is <strong>one paper with two files</strong>, not two papers. And
+nothing reaches Google Drive until every check has passed, so a refusal costs the
+student no waiting."</p>
+<p><strong>Again</strong> — the paper is now with the adviser; use it for Workflow 6, or have the
+adviser return it.</p>
+<hr />
+<h2>Workflow 3b · The duplicate check  ← <em>new, and worth showing</em></h2>
+<p><strong>Needs</strong> — step 1.1 done; <code>DEMO Published Paper</code> filed <strong>after</strong> it;
+<code>demo-03-duplicate.pdf</code>, which is a renamed copy of a PDF already filed.</p>
+<p><strong>Show</strong> — start a new upload, fill the required boxes, attach
+<code>demo-03-duplicate.pdf</code>, and submit.</p>
+<p><strong>They see</strong> — a refusal in words: the PDF is already filed, naming the student's
+own paper.</p>
+<p><strong>Say</strong> — "It compares what is <strong>inside</strong> the file, not its name, so renaming it
+changes nothing. Two students really do both call a file <em>final.pdf</em>, and a
+renamed copy of a filed paper is still that paper. Resubmitting a returned paper
+with the same file is allowed, because that is a revision, not a duplicate."</p>
+<p><strong>Again</strong> — nothing was filed, so nothing to undo. It can be run as often as you
+like.</p>
+<hr />
+<h2>Workflow 4 · Saving a Draft</h2>
+<p><strong>Needs</strong> — <code>DEMO Draft Paper</code> in Drafts.</p>
+<p><strong>Show</strong> — open the draft from the dashboard, show the typing restored, point at
+the file boxes being empty.</p>
+<p><strong>Say</strong> — "A draft keeps everything typed but <strong>no PDF</strong>, on purpose: nothing is
+stored for work nobody has handed in. Signing out also clears the copy kept in
+this browser, because on a campus machine the next person is somebody else."</p>
+<p><strong>Again</strong> — nothing changes.</p>
+<hr />
+<h2>Workflow 5 · Cancelling a Submission</h2>
+<p><strong>Needs</strong> — <code>DEMO Waiting Adviser</code>, submitted <strong>less than 24 hours ago</strong> and still
+with the adviser.</p>
+<p><strong>Show</strong> — the dashboard → <strong>Under Review</strong> → <strong>Withdraw</strong>.</p>
+<p><strong>They see</strong> — the paper back in Drafts.</p>
+<p><strong>Say</strong> — "The two stages work in opposite directions. With the adviser it is
+allowed for the first 24 hours, a grace period for second thoughts. Once the
+adviser has approved it, withdrawing <em>unlocks</em> only after the Coordinator has
+held it a day: the paper has earned an approval and is not pulled back on a whim."</p>
+<p><strong>Again</strong> — submit it again. Note it will then be a fresh 24-hour window.</p>
+<hr />
+<h2>Workflow 6 · Review by the Subject Adviser</h2>
+<p><strong>Needs</strong> — a paper waiting with the adviser; the adviser signed in.</p>
+<p><strong>Show</strong> — Review Desk → open the paper → the PDF beside the form → the
+<strong>checklist</strong> → <strong>Edit sections</strong> → Approve.</p>
+<p><strong>They see</strong> — the paper leaves the desk and reaches the Coordinator.</p>
+<p><strong>Say</strong> — "The checklist is stored as the adviser left it, so changing the
+ready-made lists in code never rewrites what a student was shown. The Coordinator
+reads this list but cannot change it."</p>
+<p><strong>Again</strong> — the Coordinator can return it, which sends it back to the student.</p>
+<hr />
+<h2>Workflow 7 · Final Review and Publishing</h2>
+<p><strong>Needs</strong> — <code>DEMO Waiting Coordinator</code>; the Coordinator signed in.</p>
+<p><strong>Show</strong> — Review Desk → open → Approve → then open the <strong>Public Repository</strong> and
+find it.</p>
+<p><strong>Say</strong> — "Approval ends here, deliberately. The Head of Academic Programs and the
+Director read what comes out; they do not approve. A fourth step was considered
+and cut."</p>
+<p><strong>Again</strong> — the Director can archive it, or you can leave it published.</p>
+<hr />
+<h2>Workflow 8 · Fixing a Returned Paper</h2>
+<p><strong>Needs</strong> — <code>DEMO Returned Paper</code> in the student's <strong>Needs Revision</strong>.</p>
+<p><strong>Show</strong> — open it, read the feedback on the card, fix something, <strong>attach the
+PDFs again</strong>, submit.</p>
+<p><strong>Say</strong> — "Its files were taken out of the storage folder when it was returned, so
+the new version needs a new upload. They are not destroyed: they are moved to a
+Trash folder inside the storage folder, because an adviser who returns a paper by
+mistake must not destroy the student's only filed copy."</p>
+<p><strong>Again</strong> — have the adviser return it once more.</p>
+<hr />
+<h2>Workflow 9 · Finding and Reading Published Papers</h2>
+<p><strong>Needs</strong> — at least one published paper. Best shown <strong>signed out</strong> first.</p>
+<p><strong>Show</strong> — the Public Repository: search, the keyword strip, the filters. Then the
+four views in the profile menu: <strong>Cards, Rows, Hardbounds, Bookshelf</strong>. Open a
+paper. Press the <strong>bookmark</strong>, then open <strong>My Library</strong>.</p>
+<p><strong>Say</strong> — "The repository is the point of the system: work that was reviewed, kept
+where the next batch can find it. The shelf views exist because a list of
+twenty-seven rows does not look like a library."</p>
+<p><strong>Again</strong> — press the bookmark again to unsave.</p>
+<hr />
+<h2>Workflow 10 · Guest Passes</h2>
+<p><strong>Needs</strong> — the Librarian account from 1.3; an email address you can open.</p>
+<p><strong>Show</strong> — Guest Passes → create one → open the email → sign in on the <strong>Guest</strong>
+tab in a private window.</p>
+<p><strong>Say</strong> — "A pass is for a visiting researcher or a panel member who has no
+account. It lasts from one to twenty-four hours and then stops working by itself."</p>
+<p><strong>Again</strong> — create another; delete the old one.</p>
+<hr />
+<h2>Workflow 11 · Asking to Open a Full Manuscript</h2>
+<p><strong>Needs</strong> — <code>DEMO Published Paper</code>; the student with <strong>no</strong> open request on it;
+the Librarian signed in in a second window.</p>
+<blockquote>
+<p>The student may hold three requests at once, and a paper with one still open
+cannot be asked about again. If you have practised this, clear it first: the
+reset SQL in the appendix does it.</p>
+</blockquote>
+<p><strong>Show</strong> — as the student, open the paper, press to request the manuscript. Switch
+to the Librarian: the request is waiting. Grant it for an hour. Switch back: the
+<strong>countdown</strong> appears in the corner. Open the PDF and point at the <strong>watermark</strong>.
+Then have the Librarian <strong>revoke</strong> it.</p>
+<p><strong>Say</strong> — "The reader's name is burnt into the page as it is drawn, so any copy,
+even a photograph of the screen, names the account it came from. We cannot stop a
+screenshot; no web page can. What we can do is make every copy traceable."</p>
+<p><strong>Again</strong> — the student may request again at once after a revoke.</p>
+<blockquote>
+<p>A student may hold <strong>three</strong> active requests at a time. Do not use up the demo
+student's allowance the day before.</p>
+</blockquote>
+<hr />
+<h2>Workflow 12 · Archiving a Paper</h2>
+<p><strong>Needs</strong> — <code>DEMO Published Paper</code>, published; the Director signed in.</p>
+<p><strong>Show</strong> — the Director's desk → Archived tab → archive the demo paper → show it
+is gone from the Public Repository → restore it.</p>
+<p><strong>Say</strong> — "Archiving is a database move, not a file one. The PDFs on Drive are not
+touched at all, the paper is still readable by its own link, and restoring puts it
+straight back. The five-year rule is written and tested; nothing schedules it yet,
+which is why we are doing it by hand."</p>
+<p><strong>Again</strong> — <strong>restore it</strong>, so the repository is as you found it.</p>
+<blockquote>
+<p>Only ever archive a <code>DEMO</code> paper. Archiving a real student's paper removes it
+from the repository for everyone.</p>
+</blockquote>
+<hr />
+<h2>Workflow 13 · Notifications and Emails</h2>
+<p><strong>Needs</strong> — any of the earlier workflows already run, so notices exist.</p>
+<p><strong>Show</strong> — the bell, the notification centre, then the matching email in the inbox.</p>
+<p><strong>Say</strong> — "Every notice is both a bell and an email, from one call, so the two can
+never disagree. The subject of the email is also the heading printed inside it."</p>
+<p><strong>Again</strong> — nothing to reset.</p>
+<hr />
+<h2>Workflow 14 · Getting Help with an Account</h2>
+<p><strong>Needs</strong> — nothing. Best shown <strong>signed out</strong>.</p>
+<p><strong>Show</strong> — Contact Support → send one → sign in as the Coordinator and show the
+queue.</p>
+<p><strong>Say</strong> — "It needs no account, which is the whole point: it is for the person who
+cannot sign in."</p>
+<p><strong>Again</strong> — close the request from the queue.</p>
+<hr />
+<h1>Part 4 · Say these before you are asked</h1>
+<p>A panel trusts a team that volunteers the limits. Each of these is a real
+boundary, and each has a reason.</p>
+<ul>
+<li><strong>A screenshot cannot be blocked.</strong> No web page can stop PrintScreen, a
+  recorder, or a phone camera; the blackout people have seen on video sites is a
+  hardware path open only to video. We mark every page with the reader's name
+  instead, so a copy can be traced. Prevention was not available; traceability was.</li>
+<li><strong>Nothing schedules the five-year archive yet.</strong> The rule works and was driven
+  by hand against a seeded six-year-old paper. Starting it is one cron entry.</li>
+<li><strong>The PDF compressor is switched off</strong> at the owner's instruction. The size
+  limit does not depend on it: a file over the limit is refused and the student
+  compresses it themselves.</li>
+<li><strong>The AI can be wrong.</strong> Extract with AI fills the metadata and copies the
+  abstract only when it can find it exactly; the student checks every field. A
+  wrong abstract is worse than none, so when it cannot find one it leaves the
+  box alone.</li>
+<li><strong>Staff papers skip the review</strong> and publish at once. That is deliberate: the
+  chain exists to review <em>students'</em> work.</li>
+<li><strong>One person may approve twice</strong> if they are both the Subject Adviser and the
+  Research Coordinator. The owner chose that; for those papers the second step
+  adds nothing.</li>
+</ul>
+<hr />
+<h1>Part 5 · Questions the panel will probably ask</h1>
+<table>
+<thead>
+<tr>
+<th>Question</th>
+<th>The short answer</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Why only two approval steps?</td>
+<td>It was shortened on purpose. The Head and the Director read what comes out; a fourth step added delay and no judgement.</td>
+</tr>
+<tr>
+<td>Where are the files actually kept?</td>
+<td>One Google Drive folder, chosen by the Director or the Coordinator. Never on the web server; the local copy is deleted as soon as Drive has it.</td>
+</tr>
+<tr>
+<td>What stops two students uploading the same paper?</td>
+<td>The contents are fingerprinted. A renamed copy is still the same file. Resubmitting your own returned paper is allowed.</td>
+</tr>
+<tr>
+<td>What if Google Drive is down?</td>
+<td>Submission is refused in words before anything is stored, rather than half-filing a paper.</td>
+</tr>
+<tr>
+<td>Is anything deleted?</td>
+<td>Almost nothing. A returned paper's files move to a Trash folder; archiving only moves a database row; a revoked grant keeps its record.</td>
+</tr>
+<tr>
+<td>How do you stop a student seeing another student's paper?</td>
+<td>A paper under review is visible only to its author and its reviewers. The full PDF of a published paper needs a Librarian's grant.</td>
+</tr>
+<tr>
+<td>What about passwords?</td>
+<td>Stored hashed, never in plain text. A password set by somebody else is temporary and the account is held until it is changed.</td>
+</tr>
+<tr>
+<td>Does it work on a phone?</td>
+<td>Yes. The layout changes at 900px and the upload form becomes one column.</td>
+</tr>
+<tr>
+<td>What happens when the account expires?</td>
+<td>A student account's life comes from the section, counted in academic years and ending 31 July. Moving a student up a year renews it.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h1>Part 6 · If something goes wrong</h1>
+<table>
+<thead>
+<tr>
+<th>It happens</th>
+<th>Do this</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A page shows <strong>Something Went Wrong</strong></td>
+<td>Do not retry in front of them. Say "that is the error page, it carries a reference and the cause is logged", and move to the next workflow.</td>
+</tr>
+<tr>
+<td>The upload fails</td>
+<td>Open Storage Folder and read the folder check. This is almost always Drive, not the paper.</td>
+</tr>
+<tr>
+<td>You are signed out mid-demo</td>
+<td>The session idles after 30 minutes. Sign in again; it takes ten seconds.</td>
+</tr>
+<tr>
+<td>The duplicate check does not fire</td>
+<td>The SQL in 1.1 was not run, or the paper you are testing against was filed before it.</td>
+</tr>
+<tr>
+<td>A paper is stuck in the wrong state</td>
+<td>Use the reset SQL in the appendix.</td>
+</tr>
+<tr>
+<td>The AI does not answer</td>
+<td>Say so plainly and fill the fields manually. The AI is a convenience, not the system.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Have a second browser window already signed in as the adviser.</strong> Switching
+roles by signing out and in again is the slowest thing in the whole demo.</p>
+<hr />
+<h1>Appendix · Resetting the demo data</h1>
+<p><code>docs/demo/demo_reset.sql</code> puts the demo papers back to their starting states so
+the whole run can be done again. Paste it into phpMyAdmin exactly as you pasted
+the files in 1.1.</p>
+<p>It only ever touches rows whose title begins with <code>DEMO</code>, and it changes no real
+student's work. Read the comments at the top before running it; it tells you what
+it will do and prints what it did.</p>
+<p>It cannot create papers, because a paper needs a real PDF on Google Drive. Papers
+are made by uploading them, as in 1.5.</p></body></html>

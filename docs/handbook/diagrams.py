@@ -721,3 +721,178 @@ def flow(label, nodes, edges, H, W=W_DEFAULT, lanes=None):
 
     # Lines, then shapes, then labels: a label must never hide under a box.
     return svg(W, H, ''.join(out) + ''.join(shapes) + ''.join(labels), label)
+
+
+# ================================================================ app flow
+# The "one picture of the whole journey" diagram: a row of stations joined by
+# dotted arrows, inside a rounded frame with a cloud over its top edge. It is
+# shaped after the service-flow pictures Google draws for its own APIs, because
+# that shape says "this is what happens, left to right" to a reader who will
+# not read a UML key first. Everything else in this file is UML and stays UML;
+# this one is the cover picture.
+
+def _icon(kind, x, cy, s=1.0):
+    """One station's mark, drawn from shapes rather than a font or an image, so
+    it prints identically everywhere and needs no asset beside the PDF."""
+    m, g, w = C['maroon'], C['gold'], '#FFFFFF'
+    o = []
+    if kind == 'upload':                       # a page with an arrow going up
+        o.append('<rect x="%.1f" y="%.1f" width="34" height="42" rx="4" fill="%s" stroke="%s" '
+                 'stroke-width="1.6"/>' % (x - 17, cy - 21, w, m))
+        # Stem and chevron drawn as two separate paths: one path carrying both
+        # with an M in the middle joins them at the corner on some renderers.
+        o.append('<path d="M%.1f %.1f V%.1f" stroke="%s" stroke-width="2.6" fill="none" '
+                 'stroke-linecap="round"/>' % (x, cy + 9, cy - 6, m))
+        o.append('<path d="M%.1f %.1f L%.1f %.1f L%.1f %.1f" stroke="%s" stroke-width="2.6" '
+                 'fill="none" stroke-linecap="round" stroke-linejoin="round"/>'
+                 % (x - 7, cy, x, cy - 7, x + 7, cy, m))
+    elif kind == 'check':                      # a shield with a tick: a review
+        o.append('<path d="M%.1f %.1f l17 -7 l17 7 v16 c0 13 -9 22 -17 26 c-8 -4 -17 -13 -17 -26 z" '
+                 'fill="%s" stroke="%s" stroke-width="1.6"/>' % (x - 17, cy - 15, w, m))
+        o.append('<path d="M%.1f %.1f l6 7 l11 -13" stroke="%s" stroke-width="3" fill="none" '
+                 'stroke-linecap="round" stroke-linejoin="round"/>' % (x - 8, cy + 2, m))
+    elif kind == 'stamp':                      # a rosette: the final approval
+        pts = []
+        for i in range(12):
+            a = math.pi * 2 * i / 12
+            r = 23 if i % 2 == 0 else 19
+            pts.append('%.1f,%.1f' % (x + r * math.cos(a), cy + r * math.sin(a)))
+        o.append('<polygon points="%s" fill="%s" stroke="%s" stroke-width="1.6"/>'
+                 % (' '.join(pts), C['goldbg'], g))
+        o.append('<circle cx="%.1f" cy="%.1f" r="13" fill="%s"/>' % (x, cy, m))
+        o.append('<path d="M%.1f %.1f l4 5 l8 -10" stroke="%s" stroke-width="2.6" fill="none" '
+                 'stroke-linecap="round" stroke-linejoin="round"/>' % (x - 6, cy, w))
+    elif kind == 'person':                     # somebody with an account
+        o.append('<circle cx="%.1f" cy="%.1f" r="9" fill="%s" stroke="%s" stroke-width="1.8"/>'
+                 % (x, cy - 11, w, m))
+        o.append('<path d="M%.1f %.1f a17 17 0 0 1 34 0 z" fill="%s" stroke="%s" stroke-width="1.8" '
+                 'stroke-linejoin="round"/>' % (x - 17, cy + 21, w, m))
+    elif kind == 'key':                        # signing in
+        o.append('<circle cx="%.1f" cy="%.1f" r="10" fill="none" stroke="%s" stroke-width="3"/>'
+                 % (x - 7, cy - 4, m))
+        o.append('<path d="M%.1f %.1f L%.1f %.1f" stroke="%s" stroke-width="3" stroke-linecap="round"/>'
+                 % (x - 1, cy + 3, x + 16, cy + 20, m))
+        o.append('<path d="M%.1f %.1f l5 -5" stroke="%s" stroke-width="3" stroke-linecap="round"/>'
+                 % (x + 7, cy + 11, m))
+        o.append('<path d="M%.1f %.1f l5 -5" stroke="%s" stroke-width="3" stroke-linecap="round"/>'
+                 % (x + 11, cy + 15, m))
+    elif kind == 'mail':                       # an email
+        o.append('<rect x="%.1f" y="%.1f" width="40" height="29" rx="3" fill="%s" stroke="%s" '
+                 'stroke-width="1.8"/>' % (x - 20, cy - 14, w, m))
+        o.append('<path d="M%.1f %.1f l20 15 l20 -15" fill="none" stroke="%s" stroke-width="1.8" '
+                 'stroke-linejoin="round"/>' % (x - 20, cy - 13, m))
+    elif kind == 'draft':                      # work kept but not sent
+        o.append('<path d="M%.1f %.1f h22 l10 10 v30 h-32 z" fill="%s" stroke="%s" stroke-width="1.8" '
+                 'stroke-linejoin="round"/>' % (x - 16, cy - 21, w, m))
+        o.append('<path d="M%.1f %.1f v10 h10" fill="none" stroke="%s" stroke-width="1.6" '
+                 'stroke-linejoin="round"/>' % (x + 6, cy - 21, m))
+        for i in range(3):
+            o.append(line(x - 9, cy - 1 + i * 7, x + 9, cy - 1 + i * 7, C['border'], 2.2))
+    elif kind == 'drive':                      # the storage folder, off in Google
+        o.append('<path d="M%.1f %.1f a14 14 0 0 1 3 -27 a18 18 0 0 1 33 -4 a12 12 0 0 1 11 14 '
+                 'a11 11 0 0 1 -4 17 z" fill="%s" stroke="%s" stroke-width="1.8" '
+                 'stroke-linejoin="round"/>' % (x - 21, cy + 14, w, m))
+        o.append('<path d="M%.1f %.1f V%.1f" stroke="%s" stroke-width="2.4" stroke-linecap="round"/>'
+                 % (x + 1, cy - 9, cy + 5, m))
+        o.append('<path d="M%.1f %.1f L%.1f %.1f L%.1f %.1f" stroke="%s" stroke-width="2.4" fill="none" '
+                 'stroke-linecap="round" stroke-linejoin="round"/>'
+                 % (x - 5, cy - 1, x + 1, cy - 8, x + 7, cy - 1, m))
+    elif kind == 'back':                       # sent back to where it came from
+        o.append('<rect x="%.1f" y="%.1f" width="34" height="42" rx="4" fill="%s" stroke="%s" '
+                 'stroke-width="1.6"/>' % (x - 17, cy - 21, w, C['border']))
+        o.append('<path d="M%.1f %.1f a15 15 0 1 1 5 11" fill="none" stroke="%s" stroke-width="2.8" '
+                 'stroke-linecap="round"/>' % (x - 10, cy + 2, m))
+        o.append('<path d="M%.1f %.1f l-4 -8 l9 -1 z" fill="%s"/>' % (x - 7, cy + 4, m))
+    elif kind == 'clock':                      # a grant, or a window, running out
+        o.append('<circle cx="%.1f" cy="%.1f" r="20" fill="%s" stroke="%s" stroke-width="2"/>'
+                 % (x, cy, w, m))
+        o.append('<path d="M%.1f %.1f V%.1f" stroke="%s" stroke-width="2.6" stroke-linecap="round"/>'
+                 % (x, cy, cy - 11, m))
+        o.append('<path d="M%.1f %.1f L%.1f %.1f" stroke="%s" stroke-width="2.6" stroke-linecap="round"/>'
+                 % (x, cy, x + 9, cy + 5, m))
+    elif kind == 'box':                        # the archive
+        o.append('<rect x="%.1f" y="%.1f" width="40" height="12" rx="2" fill="%s" stroke="%s" '
+                 'stroke-width="1.7"/>' % (x - 20, cy - 18, C['goldbg'], m))
+        o.append('<path d="M%.1f %.1f h34 v26 h-34 z" fill="%s" stroke="%s" stroke-width="1.7" '
+                 'stroke-linejoin="round"/>' % (x - 17, cy - 5, w, m))
+        o.append(line(x - 6, cy + 6, x + 6, cy + 6, m, 2.4))
+    elif kind == 'bell':                       # a notice on the site
+        o.append('<path d="M%.1f %.1f a15 15 0 0 1 30 0 c0 12 4 15 5 18 h-40 c1 -3 5 -6 5 -18 z" '
+                 'fill="%s" stroke="%s" stroke-width="1.8" stroke-linejoin="round"/>'
+                 % (x - 15, cy + 2, w, m))
+        o.append('<path d="M%.1f %.1f a5 5 0 0 0 10 0" fill="none" stroke="%s" stroke-width="2"/>'
+                 % (x - 5, cy + 20, m))
+    elif kind == 'search':                     # finding a paper
+        o.append('<circle cx="%.1f" cy="%.1f" r="14" fill="%s" stroke="%s" stroke-width="2.6"/>'
+                 % (x - 4, cy - 5, w, m))
+        o.append('<path d="M%.1f %.1f L%.1f %.1f" stroke="%s" stroke-width="3.4" stroke-linecap="round"/>'
+                 % (x + 6, cy + 5, x + 17, cy + 17, m))
+    elif kind == 'help':                       # asking somebody
+        o.append('<path d="M%.1f %.1f h40 v28 h-24 l-9 9 v-9 h-7 z" fill="%s" stroke="%s" '
+                 'stroke-width="1.8" stroke-linejoin="round"/>' % (x - 20, cy - 18, w, m))
+        o.append(T(x, cy + 2, '?', size=20, weight=800, anchor='middle', fill=m))
+    elif kind == 'shelf':                      # two pages and a green tick: published
+        o.append('<rect x="%.1f" y="%.1f" width="30" height="38" rx="3" fill="%s" stroke="%s" '
+                 'stroke-width="1.5"/>' % (x - 20, cy - 22, w, C['line']))
+        o.append('<rect x="%.1f" y="%.1f" width="30" height="38" rx="3" fill="%s" stroke="%s" '
+                 'stroke-width="1.6"/>' % (x - 10, cy - 16, w, m))
+        for i in range(3):
+            o.append(line(x - 4, cy - 7 + i * 7, x + 13, cy - 7 + i * 7, C['border'], 2))
+        o.append('<circle cx="%.1f" cy="%.1f" r="10" fill="%s"/>' % (x + 17, cy + 15, C['green']))
+        o.append('<path d="M%.1f %.1f l3 4 l6 -8" stroke="%s" stroke-width="2.2" fill="none" '
+                 'stroke-linecap="round" stroke-linejoin="round"/>' % (x + 13, cy + 15, w))
+    return ''.join(o)
+
+
+def _cloud(x, y, s=1.0):
+    """The outline cloud the frame's top-left corner tucks into.
+
+    Two paths over the same arcs: a closed one that fills white and is not
+    stroked, then an open one that strokes only the top. The flat bottom is
+    therefore filled but never drawn, so the frame's border disappears inside
+    the cloud and the two read as one shape instead of a sticker laid on top.
+    It is drawn after the frame for the same reason."""
+    arcs = ('M8 64 a26 26 0 0 1 6 -50 a30 30 0 0 1 55 -10 a24 24 0 0 1 26 28 '
+            'a22 22 0 0 1 -9 32')
+    return ('<g transform="translate(%.1f,%.1f) scale(%.2f)">'
+            '<path d="%s z" fill="#FFFFFF" stroke="none"/>'
+            '<path d="%s" fill="none" stroke="%s" stroke-width="1.8" '
+            'stroke-linejoin="round" stroke-linecap="round"/></g>'
+            % (x, y, s, arcs, arcs, C['line']))
+
+
+def appflow(label, title, stations, arrows, W=W_DEFAULT, note=None):
+    """A left-to-right picture of one journey.
+
+    stations  [(icon kind, line 1, line 2)]   icon: upload | check | stamp | shelf
+    arrows    [text, ...]                     one fewer than the stations
+    """
+    pad, top = 16, 44
+    H = 212 if not note else 236
+    cy = top + 74
+    out = ['<rect x="%s" y="%s" width="%s" height="%s" rx="14" fill="#FFFFFF" stroke="%s" '
+           'stroke-width="1.4"/>' % (pad, top, W - pad * 2, H - top - 12, C['border'])]
+    # The cloud straddles the top edge, as in the picture this is shaped after:
+    # everything inside the frame happens on a server the reader never sees.
+    out.append(_cloud(pad + 6, 6, 0.78))
+    out.append(T(pad + 92, top + 22, title, size=13, weight=800, family=HEAD, fill=C['ink']))
+
+    n = len(stations)
+    inner = W - pad * 2 - 36
+    step = inner / n
+    xs = [pad + 18 + step * (i + 0.5) for i in range(n)]
+    for i, (kind, l1, l2) in enumerate(stations):
+        out.append(_icon(kind, xs[i], cy))
+        lines = [l1] + ([l2] if l2 else [])
+        for j, ln in enumerate(lines):
+            out.append(T(xs[i], cy + 46 + j * 13, ln, size=10.5, weight=700 if j == 0 else 400,
+                         anchor='middle', fill=C['ink'] if j == 0 else C['grey']))
+    for i, text in enumerate(arrows):
+        x1, x2 = xs[i] + 30, xs[i + 1] - 30
+        out.append(line(x1, cy, x2 - 9, cy, C['grey'], 1.6, dash='2 5'))
+        out.append(head(x1, cy, x2, cy, C['grey']))
+        out.append(T((x1 + x2) / 2, cy - 14, text, size=10, weight=700, anchor='middle',
+                     fill=C['maroon']))
+    if note:
+        out.append(T(W / 2, H - 20, note, size=10, anchor='middle', fill=C['grey']))
+    return svg(W, H, ''.join(out), label)

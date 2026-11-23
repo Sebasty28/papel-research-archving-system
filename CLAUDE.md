@@ -4774,14 +4774,19 @@ describe the dev box, not the cloud checkout.
   stands or records something that happened. Thirteen files went, the two worst
   clusters being step-by-step instructions to build the five-stage approval chain
   that was deliberately shortened, and a January "improvements package" that tells
-  the reader to run three files that no longer exist. What is left is three
-  **generated** artefacts whose sources have moved on and which nobody has
-  rebuilt: `docs/handbook/` (built 23 September, `content.py` changed in October
-  and carries 50 mentions of the old "Research Adviser"),
-  `docs/diagrams/PAPEL_use_case_diagram.svg` (two mentions, though
-  `gen_usecase.php` was renamed), and `docs/field_guide.html` (one, from
-  `scripts/field_guide_content.py`). Each is one command away from correct;
+  the reader to run three files that no longer exist. What is left is
+  **generated** artefacts, and the trap is that their sources move on while the
+  built copy does not. `docs/handbook/` and `docs/field_guide.html` were rebuilt
+  on 23 November 2026; `docs/diagrams/PAPEL_use_case_diagram.svg` still carries
+  two mentions of the old "Research Adviser" though `gen_usecase.php` was
+  renamed, and has not been rebuilt. Each is one command away from correct;
   rebuild before handing any of them to a reader.
+  - **The handbook build checks itself, so run it to find out.** It compares
+    every table and column it draws against the live database and prints what
+    has drifted; `python docs/handbook/build_handbook.py` ends with "all 24
+    tables and their columns match the live database" when nothing has. That is
+    what found the three tables and four columns it was missing in November.
+    Edit `docs/handbook/content.py`, never the built HTML.
 - **Nothing schedules either script under `notifications/cron/`**, here or on
   the host, so the five-year archive rule has never fired on its own. The rule
   itself works: it was driven on 2026-11-19 against a seeded six-year-old
