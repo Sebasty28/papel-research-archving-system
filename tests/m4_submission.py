@@ -7,7 +7,7 @@ the supporting documents the paper type demands. Nothing here is judged from
 reading the source; each case is decided on what the running site did with the
 request.
 """
-import io, json, os, re, subprocess
+import io, json, os, re, subprocess, uuid
 import harness as H
 import fixtures as F
 from harness import R, check
@@ -53,6 +53,12 @@ def pdf_bytes(pages_text='AUTOTEST research paper', size_pad=0):
     for o in objs:
         offsets.append(len(out))
         out += o
+    # Every call is a different file. The upload page refuses a PDF whose content is
+    # already on file (paper_duplicate_problem()), so a suite that filed several papers
+    # from identical bytes would be refused from the second one on. A comment is legal
+    # anywhere, so this keeps the file valid; to send the same file twice, keep the
+    # bytes and send them twice.
+    out += b'%AUTOTEST-' + uuid.uuid4().hex.encode() + b'\n'
     if size_pad:
         # A comment is legal anywhere, so padding keeps the file valid.
         out += b'%' + b'A' * size_pad + b'\n'

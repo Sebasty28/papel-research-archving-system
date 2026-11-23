@@ -11,7 +11,7 @@ import harness as H
 # @example.com is reserved by RFC 2606 and cannot receive mail, so no test can
 # reach a real inbox. A probe once emailed a live user by accident; not again.
 ADVISER = {
-    'faculty_id': 'AUTOTEST-FC1',
+    'faculty_id': 'FA9901BN2026',     # the issued shape (staff_id_problem()); AUTOTEST-FC1 is refused now
     'full_name': 'Auto Test Adviser',
     'email': 'autotest.adviser@example.com',
     'password': 'Autotest1',
@@ -58,24 +58,50 @@ def uid_of(id_field, value):
                  (id_field, H.esc(value)))
 
 
+def choose_own_password(id_field, value):
+    """Let a freshly created test account past the password gate.
+
+    An account somebody else created is held at pages/change_password.php until the
+    person chooses their own password, and the gate is read from the latest
+    password_changes row rather than from the session (password_gate_record_state()
+    in config/core.php), so a minted session cannot bypass it: without this, every
+    page a new test account opens answers 302 to the gate, and creating the student
+    through the adviser's own console is refused.
+
+    This writes the row the owner's own change writes, which is the one thing that
+    releases it. It stands in for the person choosing a password exactly as a minted
+    session stands in for signing in; the password itself is not altered, so the
+    account still signs in with the fixture's own. teardown() removes these rows.
+    """
+    uid = uid_of(id_field, value)
+    if uid:
+        H.q("INSERT INTO password_changes (user_id, changed_by, changed_at) "
+            "VALUES (%d, %d, NOW())" % (int(uid), int(uid)))
+    return uid
+
+
 def make_adviser(client):
     """Create the test Research Adviser through Manage Faculty."""
-    return client.post('/app/admin/admin_manage_faculty.php', {
+    out = client.post('/app/admin/admin_manage_faculty.php', {
         'full_name': ADVISER['full_name'], 'email': ADVISER['email'],
         'password': ADVISER['password'], 'title': ADVISER['title'],
         'faculty_id': ADVISER['faculty_id'], 'birthdate': '',
     }, token_from='/app/admin/admin_manage_faculty.php')
+    choose_own_password('faculty_id', ADVISER['faculty_id'])
+    return out
 
 
 def make_student(client, who=None):
     """Create a test student through the adviser's My Students console."""
     s = who or STUDENT
-    return client.post('/app/faculty/faculty_manage_students.php', {
+    out = client.post('/app/faculty/faculty_manage_students.php', {
         'full_name': s['full_name'], 'email': s['email'],
         'password': s['password'], 'program': s['program'],
         'student_id': s['student_id'], 'academic_year': s['academic_year'],
         'section': s['section'],
     }, token_from='/app/faculty/faculty_manage_students.php')
+    choose_own_password('student_id', s['student_id'])
+    return out
 
 
 def adviser_client():

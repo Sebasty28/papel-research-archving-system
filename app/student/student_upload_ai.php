@@ -633,9 +633,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
 
     // One PDF for each format that was ticked.
     $pdfs = [];
+    $pdfLabels = [];     // what a sentence calls each file; the duplicate check names them too
     foreach ($formats as $fmt) {
         // An Other file is named in the student's own words ("your Policy Brief PDF").
         $label = $fmt === 'other' ? manuscript_type_label($manuscriptType) : manuscript_format_label($fmt);
+        $pdfLabels[$fmt] = $label;
         $f = $_FILES['pdf_' . $fmt] ?? null;
         // A page opened before this update still posts its one file as research_pdf.
         if ((!$f || ($f['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE)
@@ -831,13 +833,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
         }
     }
 
-    // 2. Duplicate Title Check
-    // $dupCheck = $conn->prepare("SELECT paper_id FROM research_papers WHERE title = ? AND current_status != 'declined' LIMIT 1");
-    // $dupCheck->bind_param('s', $title);
-    // $dupCheck->execute();
-    // if ($dupCheck->get_result()->num_rows> 0) {
-    //     throw new Exception("A paper with this title already exists.");
-    // }
+    /* 2. Is this already on file? Asked before a byte goes to Google Drive, so a
+       refusal costs nothing and leaves nothing behind. A file is compared by what
+       is in it and never by its name: "final.pdf" is a different paper on every
+       student's machine, and a renamed copy of a filed paper is still that paper.
+       The title is compared too, and the same file in both manuscript boxes.
+       paper_duplicate_problem() says what it does and does not count, among them
+       that the draft being submitted is not a duplicate of itself (a returned
+       paper keeps its fingerprints and its author may attach the same file again).
+       A server without paper_manuscripts.file_hash has nothing to compare a file
+       against and checks the title and the two boxes only. */
+    $fileHashes = [];
+    foreach ($formats as $fmt) {
+        $h = manuscript_file_hash((string)$pdfs[$fmt]['tmp_name']);
+        if ($h !== null) $fileHashes[$fmt] = $h;
+    }
+    $dupProblem = paper_duplicate_problem($fileHashes, $pdfLabels, $title, (int)$u['user_id'], (int)($_POST['draft_id'] ?? 0));
+    if ($dupProblem !== null) {
+        throw new UserFacingException($dupProblem);
+    }
 
 
     // 3. Each file is staged, then put on Google Drive in an organised structure.
@@ -888,6 +902,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
         'rel'   => "uploads/research/$programFolder/$typeFolder/$y/$m/$submissionFolder/" . basename($destPath),
         'size'  => filesize($destPath) ?: 0,
         'drive' => $gdriveId,
+        'hash'  => $fileHashes[$fmt] ?? null,   // worked out before the file moved; see "2. Is this already on file?"
       ];
 
       /* Drive is where a submitted paper lives. The local file was only ever the
@@ -1024,10 +1039,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
         $dm->execute();
         $dm->close();
 
-        $im = $conn->prepare("INSERT INTO paper_manuscripts (paper_id, format, file_path, gdrive_file_id, file_size) VALUES (?,?,?,?,?)");
-        foreach ($stored as $fmt => $info) {
-            $im->bind_param('isssi', $paper_id, $fmt, $info['rel'], $info['drive'], $info['size']);
-            if (!$im->execute()) throw new Exception('Database insert failed.');
+        /* The fingerprint rides with the row where the column exists
+           (paper_manuscripts_have_hash()); a server the SQL has not reached files
+           the paper as before and simply has nothing to compare it by. Six
+           markers, six types: i s s s i s. */
+        if (paper_manuscripts_have_hash()) {
+            $im = $conn->prepare("INSERT INTO paper_manuscripts (paper_id, format, file_path, gdrive_file_id, file_size, file_hash) VALUES (?,?,?,?,?,?)");
+            foreach ($stored as $fmt => $info) {
+                $im->bind_param('isssis', $paper_id, $fmt, $info['rel'], $info['drive'], $info['size'], $info['hash']);
+                if (!$im->execute()) throw new Exception('Database insert failed.');
+            }
+        } else {
+            $im = $conn->prepare("INSERT INTO paper_manuscripts (paper_id, format, file_path, gdrive_file_id, file_size) VALUES (?,?,?,?,?)");
+            foreach ($stored as $fmt => $info) {
+                $im->bind_param('isssi', $paper_id, $fmt, $info['rel'], $info['drive'], $info['size']);
+                if (!$im->execute()) throw new Exception('Database insert failed.');
+            }
         }
         $im->close();
     }

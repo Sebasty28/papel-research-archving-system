@@ -4609,6 +4609,201 @@ function paper_manuscripts_ready(): bool
 }
 
 /**
+ * Whether paper_manuscripts.file_hash exists yet.
+ *
+ * The same tolerance as the table's own: the code can reach a server before the
+ * SQL does, and a server without the column goes on filing papers, it just has
+ * nothing to compare a PDF against, so only the title is checked there.
+ * scripts/migrations/sql/2026-11-23_manuscript_file_hash.sql adds it.
+ */
+function paper_manuscripts_have_hash(): bool
+{
+    static $has = null;
+    if ($has === null) {
+        $has = false;
+        if (paper_manuscripts_ready()) {
+            $r = db()->query("SHOW COLUMNS FROM paper_manuscripts LIKE 'file_hash'");
+            $has = $r && $r->num_rows > 0;
+        }
+    }
+    return $has;
+}
+
+/**
+ * The SHA-256 of a file's bytes, which is what makes one PDF the same as another.
+ *
+ * A file's name is no evidence of anything: "final.pdf" is two different papers
+ * on two students' machines, and one paper renamed is still the one paper. The
+ * bytes are what is the same, so that is what is kept and compared. Null when the
+ * file cannot be read, in which case that file is simply not compared.
+ */
+function manuscript_file_hash(string $path): ?string
+{
+    if ($path === '' || !is_file($path) || !is_readable($path)) return null;
+    $h = @hash_file('sha256', $path);
+    return (is_string($h) && preg_match('/^[0-9a-f]{64}$/', $h)) ? $h : null;
+}
+
+/**
+ * Keeps a checksum Google Drive reports for a manuscript file, for a paper filed
+ * before the fingerprint was kept. It only ever fills an empty one: what was
+ * worked out from the bytes at submission is not overwritten. Best effort and
+ * silent, since it rides on a Drive call that is about something else.
+ */
+function manuscript_hash_remember(string $driveId, string $sha256): void
+{
+    $sha256 = strtolower(trim($sha256));
+    if ($driveId === '' || !preg_match('/^[0-9a-f]{64}$/', $sha256) || !paper_manuscripts_have_hash()) return;
+    try {
+        $st = db()->prepare("UPDATE paper_manuscripts SET file_hash = ? WHERE gdrive_file_id = ? AND file_hash IS NULL");
+        if ($st) {
+            $st->bind_param('ss', $sha256, $driveId);
+            $st->execute();
+            $st->close();
+        }
+    } catch (Throwable $e) {
+        error_log('Manuscript fingerprint not saved: ' . $e->getMessage());
+    }
+}
+
+/**
+ * A title as two people would agree it is the same: case, outer spaces and runs
+ * of spaces do not make a different paper. Empty means there is nothing to compare.
+ */
+function paper_title_key(string $title): string
+{
+    $t = preg_replace('/\s+/u', ' ', $title);
+    if (!is_string($t)) return '';
+    $t = trim($t);
+    return function_exists('mb_strtolower') ? mb_strtolower($t, 'UTF-8') : strtolower($t);
+}
+
+/**
+ * Whether what is being submitted is already on file: the sentence to show the
+ * student, or null when it is not.
+ *
+ * Three questions, asked in this order, before a byte goes to Google Drive:
+ *
+ *  1. Is one PDF attached twice in this very submission (the same file in the
+ *     IMRAD box and the Full Manuscript box)?
+ *  2. Does a PDF's content match one already filed, in the repository or in the
+ *     archive? Compared by SHA-256, never by name (manuscript_file_hash()).
+ *  3. Is there already a submitted paper with this title?
+ *
+ * The paper being resubmitted is never a duplicate of itself: a returned or
+ * withdrawn paper keeps its row and its fingerprints, and its author may attach
+ * the same file again. $draftId is the draft the form carries; it counts only
+ * if it is this student's own draft, as the submit handler itself decides.
+ *
+ * Something filed by somebody else is not described: the answer says that it
+ * exists, not whose it is or what it is called. Your own paper is named, since
+ * pointing at it is the useful part.
+ *
+ * For the title, a draft that was never submitted is not a paper anybody has
+ * been asked to look at (the rule analytics uses), so it is not "on file". A file
+ * is compared whichever state its paper is in, since a returned or withdrawn
+ * paper still holds one.
+ *
+ * @param array<string,string> $hashes format key => SHA-256 of the file attached for it
+ * @param array<string,string> $labels format key => what a sentence calls that file
+ */
+function paper_duplicate_problem(array $hashes, array $labels, string $title, int $userId, int $draftId = 0): ?string
+{
+    $label = static function (string $fmt) use ($labels): string {
+        return $labels[$fmt] ?? 'manuscript';
+    };
+
+    // 1. The same file twice in one submission.
+    $seen = [];
+    foreach ($hashes as $fmt => $h) {
+        if (isset($seen[$h])) {
+            return 'The ' . $label($seen[$h]) . ' and ' . $label($fmt) . ' boxes hold the same PDF. '
+                 . 'Each needs its own file: attach the right one, or untick the manuscript type you do not have.';
+        }
+        $seen[$h] = $fmt;
+    }
+
+    $conn = db();
+
+    // The draft being submitted, if it is this student's own.
+    $selfId = 0;
+    if ($draftId > 0) {
+        $st = $conn->prepare("SELECT paper_id FROM research_papers WHERE paper_id = ? AND uploaded_by = ? AND current_status = 'draft'");
+        if ($st) {
+            $st->bind_param('ii', $draftId, $userId);
+            $st->execute();
+            if ($st->get_result()->fetch_row()) $selfId = $draftId;
+            $st->close();
+        }
+    }
+
+    // 2. A PDF already filed. A row whose paper no longer exists is not matched:
+    // paper_manuscripts is not tidied when a paper is deleted.
+    if ($hashes && paper_manuscripts_have_hash()) {
+        $vals = array_values($hashes);
+        $in   = implode(',', array_fill(0, count($vals), '?'));
+        $st = $conn->prepare(
+            "SELECT m.file_hash, p.title, p.uploaded_by
+               FROM paper_manuscripts m JOIN research_papers p ON p.paper_id = m.paper_id
+              WHERE m.file_hash IN ($in) AND m.paper_id <> ?
+             UNION ALL
+             SELECT m.file_hash, a.title, a.uploaded_by
+               FROM paper_manuscripts m JOIN papers_archive a ON a.paper_id = m.paper_id
+              WHERE m.file_hash IN ($in) AND m.paper_id <> ?
+              LIMIT 1");
+        if ($st) {
+            $args = array_merge($vals, [$selfId], $vals, [$selfId]);
+            $st->bind_param(str_repeat('s', count($vals)) . 'i' . str_repeat('s', count($vals)) . 'i', ...$args);
+            $st->execute();
+            $row = $st->get_result()->fetch_assoc();
+            $st->close();
+            if ($row) {
+                /* Lower-cased before it is looked up: the column's collation matches
+                   without regard to case, so a hash Drive reported in capitals would
+                   be found by the query and missed here, and the sentence would name
+                   no box. */
+                $fmt = (string)array_search(strtolower((string)$row['file_hash']), $hashes, true);
+                if ((int)$row['uploaded_by'] === $userId) {
+                    return 'Your ' . $label($fmt) . ' PDF is already filed under your paper "' . $row['title'] . '". '
+                         . 'Open that paper from your dashboard instead of submitting it again, or attach a different file.';
+                }
+                return 'Your ' . $label($fmt) . ' PDF has already been submitted to PAPEL, so it cannot be filed a second time. '
+                     . 'If this is a revised version of the work, attach the revised file.';
+            }
+        }
+    }
+
+    // 3. A paper with this title.
+    $key = paper_title_key($title);
+    if ($key !== '') {
+        $st = $conn->prepare(
+            "SELECT p.uploaded_by
+               FROM research_papers p
+              WHERE LOWER(TRIM(p.title)) = ? AND p.paper_id <> ?
+                AND (p.current_status <> 'draft'
+                     OR EXISTS (SELECT 1 FROM approval_workflow w WHERE w.paper_id = p.paper_id))
+             UNION ALL
+             SELECT a.uploaded_by FROM papers_archive a WHERE LOWER(TRIM(a.title)) = ? AND a.paper_id <> ?
+              LIMIT 1");
+        if ($st) {
+            $st->bind_param('sisi', $key, $selfId, $key, $selfId);
+            $st->execute();
+            $row = $st->get_result()->fetch_assoc();
+            $st->close();
+            if ($row) {
+                if ((int)$row['uploaded_by'] === $userId) {
+                    return 'You have already submitted a paper with this title. Open it from your dashboard instead of submitting it again.';
+                }
+                return 'A paper with this title is already on file. If yours is a different study, give it a title of its own; '
+                     . 'if it is the same paper, it has already been submitted.';
+            }
+        }
+    }
+
+    return null;
+}
+
+/**
  * The manuscript files of any number of papers, in one query.
  *
  * @return array<int, array<string, array>>  paper_id => format key => row
@@ -6164,10 +6359,25 @@ function schema_gaps(): array
                       . "  file_path      VARCHAR(500) NOT NULL DEFAULT '',\n"
                       . "  gdrive_file_id VARCHAR(255) DEFAULT NULL,\n"
                       . "  file_size      BIGINT(20)   DEFAULT NULL,\n"
+                      /* With the column, so a copy that closes this gap does not open the
+                         file_hash one in the same breath. */
+                      . "  file_hash      CHAR(64)     DEFAULT NULL,\n"
                       . "  uploaded_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,\n"
                       . "  PRIMARY KEY (manuscript_id),\n"
-                      . "  UNIQUE KEY uq_paper_format (paper_id, format)\n"
+                      . "  UNIQUE KEY uq_paper_format (paper_id, format),\n"
+                      . "  KEY idx_file_hash (file_hash)\n"
                       . ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;",
+        ];
+    }
+
+    if (paper_manuscripts_ready() && !paper_manuscripts_have_hash()) {
+        $gaps[] = [
+            'key'    => 'manuscript_file_hash',
+            'what'   => 'paper_manuscripts.file_hash is missing',
+            'effect' => 'The same PDF can be filed twice: the upload page has nothing to compare a file against, so it '
+                      . 'checks only the title and that one file is not attached in both manuscript boxes. Everything else works as before.',
+            'sql'    => "ALTER TABLE paper_manuscripts\n  ADD COLUMN file_hash CHAR(64) NULL DEFAULT NULL AFTER file_size,\n  ADD KEY idx_file_hash (file_hash);",
+            'file'   => 'scripts/migrations/sql/2026-11-23_manuscript_file_hash.sql',
         ];
     }
 

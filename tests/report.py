@@ -18,7 +18,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 TRACKER = os.path.join(os.path.dirname(HERE), 'tracker.csv')
 
 # What the suite signs in as. Named once so every row can point at it.
-FIXTURES = ('Adviser AUTOTEST-FC1 / Autotest1; student 2099-00001-BN-0 / '
+FIXTURES = ('Adviser FA9901BN2026 / Autotest1; student 2099-00001-BN-0 / '
             'Autotest1; second student 2099-00002-BN-0; Coordinator RC-00123')
 
 

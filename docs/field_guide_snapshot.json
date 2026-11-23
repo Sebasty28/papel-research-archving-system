@@ -1,5 +1,5 @@
 {
- "built": "2026-11-23 14:12",
+ "built": "2026-11-23 15:16",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -161,7 +161,7 @@
    "lines": 435
   },
   "app/student/student_upload_ai.php": {
-   "lines": 15178
+   "lines": 15205
   },
   "app/student/upload_diagnostics.php": {
    "lines": 253
@@ -194,7 +194,7 @@
    "lines": 313
   },
   "config/core.php": {
-   "lines": 6281
+   "lines": 6491
   },
   "config/error_handler.php": {
    "lines": 228
@@ -203,7 +203,7 @@
    "lines": 1329
   },
   "config/gdrive_inventory.php": {
-   "lines": 292
+   "lines": 303
   },
   "config/groq_config.php": {
    "lines": 1007
@@ -257,7 +257,7 @@
    "lines": 17
   },
   "includes/corpus_faq.php": {
-   "lines": 189
+   "lines": 193
   },
   "includes/corpus_knowledge.php": {
    "lines": 161
@@ -475,6 +475,9 @@
   "reset_system_data.php": {
    "lines": 161
   },
+  "scripts/backfill_manuscript_hashes.php": {
+   "lines": 72
+  },
   "scripts/backup_database.php": {
    "lines": 91
   },
@@ -540,6 +543,9 @@
   },
   "scripts/migrations/run_login_throttle_migration.php": {
    "lines": 49
+  },
+  "scripts/migrations/run_manuscript_file_hash_migration.php": {
+   "lines": 65
   },
   "scripts/migrations/run_manuscript_requests_migration.php": {
    "lines": 82
@@ -628,6 +634,9 @@
   "tests/_checklist_unit.php": {
    "lines": 321
   },
+  "tests/_duplicate_unit.php": {
+   "lines": 141
+  },
   "tests/_failure_unit.php": {
    "lines": 70
   },
@@ -662,7 +671,7 @@
    "lines": 66
   },
   "tests/fixtures.py": {
-   "lines": 202
+   "lines": 228
   },
   "tests/harness.py": {
    "lines": 310
@@ -677,13 +686,16 @@
    "lines": 249
   },
   "tests/m13_old_schema.py": {
-   "lines": 644
+   "lines": 651
   },
   "tests/m14_review_checklist.py": {
    "lines": 309
   },
   "tests/m15_other_types.py": {
    "lines": 252
+  },
+  "tests/m16_duplicate_pdf.py": {
+   "lines": 210
   },
   "tests/m1_auth.py": {
    "lines": 307
@@ -692,7 +704,7 @@
    "lines": 135
   },
   "tests/m4_submission.py": {
-   "lines": 509
+   "lines": 515
   },
   "tests/m5_review.py": {
    "lines": 291

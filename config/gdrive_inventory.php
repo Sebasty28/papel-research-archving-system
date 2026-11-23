@@ -36,12 +36,23 @@ function gdrive_inventory_ready(bool $create = false): bool
 
 function gdrive_inventory_fields(): string
 {
-    return 'id,name,owners(emailAddress,displayName),driveId,parents,trashed,capabilities(canDownload)';
+    /* sha256Checksum is Drive's own fingerprint of the file's bytes. It rides on the
+       call that is already being made so that a paper filed before the upload page
+       kept one gets its fingerprint here (manuscript_hash_remember()), with no
+       download. Google leaves it out for a file with no binary content, which is
+       no harm: nothing is filled in. */
+    return 'id,name,owners(emailAddress,displayName),driveId,parents,trashed,capabilities(canDownload),sha256Checksum';
 }
 
 /** Best effort: a metadata failure must never turn a successful upload into a failure. */
 function gdrive_inventory_record_file($file, string $checkedBy = ''): bool
 {
+    // Independent of the inventory table: this fills a manuscript's fingerprint and nothing else.
+    try {
+        manuscript_hash_remember((string)$file->getId(), (string)$file->getSha256Checksum());
+    } catch (Throwable $e) {
+        error_log('Drive checksum not read: ' . $e->getMessage());
+    }
     if (!gdrive_inventory_ready()) return false;
     try {
         $owners = $file->getOwners() ?: [];

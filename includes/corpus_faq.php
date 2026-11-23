@@ -62,6 +62,10 @@ function corpus_faq_bank(): array {
          /* Compressor disabled 20 November 2026 (see student_upload_ai.php, above its script tag).
             The middle of this answer while it ran:
             "- Larger PDFs are compressed in your browser before upload; **Use original** undoes it.\n- Very large files must be compressed before you attach them.\n" */
+        ['id' => 'duplicate', 'page' => ['app/student/student_upload_ai.php'], 'who' => $any,
+         'q' => 'Why does it say my paper is already on file?',
+         'also' => ['already been submitted', 'duplicate paper', 'why was my pdf refused', 'same pdf twice'],
+         'a' => "The same paper cannot be filed twice, so a submission is refused if the **PDF has already been submitted** or the **title is already on a paper**.\n\n- A PDF is recognised by what is inside it, so renaming the file changes nothing.\n- Revising a returned paper is fine: attach the same PDF again and submit it as usual.\n- If your study really is a different one, give it a title of its own.\n- Ticking both IMRAD and Full Manuscript needs a **different** PDF in each box."],
         ['id' => 'approve', 'page' => ['app/faculty/faculty_review_dashboard.php', 'app/review_paper.php'], 'who' => $adviser,
          'q' => 'How do I approve a paper?',
          'also' => ['approve a submission', 'forward a paper to the coordinator', 'how to approve'],

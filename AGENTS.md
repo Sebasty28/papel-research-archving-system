@@ -3246,6 +3246,69 @@ attaches both again; withdrawing keeps them, and resubmitting deletes the ones
 it replaced. Extract with AI reads the IMRAD file when both are attached, since
 the form's editors are IMRAD-shaped.
 
+### The same PDF cannot be filed twice
+
+`paper_duplicate_problem()` (`config/core.php`), asked by the submit handler
+**before a byte goes to Drive**, so a refusal costs nothing and leaves nothing
+behind: it used to be a commented-out title check that had never run (added
+23 November 2026). Three questions, in this order, each answered with the
+sentence to show the student:
+
+1. **One PDF attached twice in the same submission**, the same file in the IMRAD
+   box and the Full Manuscript box. Both boxes are named in the answer.
+2. **A PDF already filed**, in `research_papers` or `papers_archive`.
+3. **A title already on a submitted paper.**
+
+- **A file is compared by its content and never by its name.** The name is no
+  evidence either way: "final.pdf" is a different paper on every student's
+  machine, and a renamed copy of a filed paper is still that paper. What is kept
+  is the SHA-256 of the bytes (`manuscript_file_hash()`), in
+  `paper_manuscripts.file_hash`, written in the same row as the file. Asking for
+  the same name instead would refuse honest work and miss the real duplicate.
+- **The paper being resubmitted is never a duplicate of itself.** A returned or
+  withdrawn paper keeps its row and its fingerprints, and its author attaches the
+  same file again, which is the ordinary way a revision arrives. The draft the
+  form carries counts only if it is **this student's own draft**, looked up here
+  rather than trusted from the post, or anybody could pass another person's
+  `draft_id` to be let through.
+- **Somebody else's paper is never described**, only reported to exist: naming it
+  would tell a student the title of unpublished work that is not theirs. Their
+  own paper *is* named, since pointing at it is the useful part.
+- **A draft nobody has been asked to read is not "on file" for the title**, which
+  is the rule analytics already uses (`current_status <> 'draft' OR EXISTS
+  (approval_workflow)`): a title sitting in somebody's unsubmitted draft must not
+  block a real submission. A *file* is compared whichever state its paper is in.
+- **A title is compared through `paper_title_key()`**: case, outer spaces and runs
+  of spaces do not make a different paper.
+- **A row whose paper no longer exists is not matched.** `paper_manuscripts` is
+  not tidied when a paper is deleted (see "Papers deleted from `research_papers`
+  leave rows behind"), so the lookup joins the papers table and an orphan row
+  cannot refuse a file for ever.
+- **A server without the column still files papers** (`paper_manuscripts_have_hash()`,
+  reported by `schema_gaps()`): it has nothing to compare a file against, so it
+  checks the title and the two boxes only. The insert has a branch for each,
+  because the bind string is `isssi` with the column and `isssis` without it.
+- **A paper filed before this has no fingerprint**, and gets one without being
+  downloaded: Drive keeps its own SHA-256 of every binary file, so
+  `gdrive_inventory_fields()` asks for `sha256Checksum` on the metadata call the
+  Storage Folder page already makes, and `manuscript_hash_remember()` fills an
+  empty one (never overwriting what was worked out from the bytes).
+  `scripts/backfill_manuscript_hashes.php` does the same from a shell. Verified
+  that Drive's figure is the same hash: two files downloaded and hashed locally
+  matched the stored value byte for byte. All 30 manuscript files on the dev box
+  are fingerprinted.
+- **Every test PDF is now unique.** `M4.pdf_bytes()` ends each file with a comment
+  carrying a fresh uuid, or the second paper any suite filed from identical bytes
+  would be refused. To send one file twice on purpose, keep the bytes and send
+  them twice, as `tests/m16_duplicate_pdf.py` does.
+
+Driven against the running site as a student: `tests/_duplicate_unit.php` (18
+cases, in a transaction that is rolled back) and `tests/m16_duplicate_pdf.py`
+(11, two real Drive submissions, removed afterwards), covering the same bytes
+under another name, somebody else's file and title, your own file on another
+paper, one file in both boxes, and a returned paper resubmitted with the same
+PDF.
+
 ### "Other", for the paper type and the manuscript type
 
 Both Step 1 lists end in **Other**, the way a Google Form does: the student picks it and
@@ -4445,7 +4508,10 @@ one row for every paper that already has a file),
 `run_checklist_items_migration.php` (adds `paper_checklist.items_json`, which the editable review
 checklist is stored in),
 `run_head_academic_programs_migration.php` (renames the stored position "Head of Academic
-Affairs" to "Head of Academic Programs"; no structure changes).
+Affairs" to "Head of Academic Programs"; no structure changes),
+`run_manuscript_file_hash_migration.php` (adds `paper_manuscripts.file_hash` and its index,
+which is how the same PDF is recognised; `scripts/backfill_manuscript_hashes.php` fills in
+the papers filed before it, from Drive's own checksum).
 
 Run the last two on any other server before it takes this code. Until
 `paper_manuscripts` exists the pages fall back to the paper's own columns and
@@ -4462,6 +4528,21 @@ behind the code" under Traps before adding the next one.
 (`run_checklist_items_migration.php`, `paper_checklist.items_json`) the same way, and
 `2026-10-27_manuscript_requests.sql` the `manuscript_requests` table and the `'manuscript'`
 notification type (`run_manuscript_requests_migration.php`), which were never in `schema.sql`.
+`2026-11-23_manuscript_file_hash.sql` does `paper_manuscripts.file_hash` and its index, which
+is what stops the same PDF being filed twice; until it is run, a copy checks the title and the
+two manuscript boxes only, and files papers exactly as before.
+
+**A file that adds a column has to ask about the table as well.** The convention is that
+each step checks `information_schema` and skips itself, and a step written to ask only
+"has it the column?" answers no on a copy that has not run the file which *creates* that
+table either: the `ALTER` then stops the whole script with `#1146 - Table ... doesn't
+exist`, which is the one thing these files are written not to do. The file-hash one did
+this on staging on 23 November 2026, `paper_manuscripts` being an October migration
+staging has still not run. Every step of it now tests `@tbl > 0` as well, and the closing
+line says which file to run first and that nothing was changed. **The dev box cannot show
+this**: the table has been there for a month, so the guard is never exercised, and
+`m13_old_schema.py` runs the catch-up file *before* this one, which is the order that
+hides it. Test a new file against an empty database as well as a current one.
 
 Two of them change no structure at all and rename what is stored instead, because a position is
 stored as written: `2026-11-12_secondary_position.sql` (the adviser) and
@@ -4583,6 +4664,22 @@ user and time) in a `finally`, with a copy kept in the system temp folder
 (`papel_folder_setting.json`) that the next run restores from if one was killed. Drive is
 only ever read. The test client's timeout is 180 seconds because a real submission is a
 dozen sequential Drive calls and a slow connection makes that over a minute.
+`tests/m16_duplicate_pdf.py` covers the duplicate rules above; its `refusals` step is
+answered before anything reaches Drive and so costs nothing, and only `submission` uploads
+(two papers, removed afterwards).
+
+**A minted session is not enough for an account the suite has just created**, and this
+broke every suite that builds the AUTOTEST accounts (m10, m13, m15) rather than only the
+new one. An account somebody else created is held at `pages/change_password.php` until
+the person chooses a password, and the gate is read from the latest `password_changes`
+row, not from the session, so a minted session cannot bypass it: the adviser was created
+and then refused by their own console, and the student was never made at all. The fixture
+writes the row the owner's own change writes (`F.choose_own_password()`, called by
+`make_adviser()` and `make_student()`), which stands in for choosing a password exactly
+as minting stands in for signing in; the password itself is untouched. The fixtures'
+adviser also had to move to a staff ID of the issued shape (`FA9901BN2026`), since
+`staff_id_problem()` refuses the old `AUTOTEST-FC1` and only an ID an account **already
+carries** is let through.
 
 `tests/m13_old_schema.py` is the companion for a database that is behind the code. It
 copies the live database into a scratch one (`papel_m13`), puts it back to its 14 October
@@ -4653,10 +4750,13 @@ describe the dev box, not the cloud checkout.
 
 ## Known gaps
 
-- **Staging's database is behind the code until the three files in `scripts/migrations/sql/`
-  (`2026-10-21_catch_up.sql`, `2026-10-23_checklist_items.sql` and `2026-10-27_manuscript_requests.sql`)
+- **Staging's database is behind the code until the four files in `scripts/migrations/sql/`
+  (`2026-10-21_catch_up.sql`, `2026-10-23_checklist_items.sql`, `2026-10-27_manuscript_requests.sql`
+  and `2026-11-23_manuscript_file_hash.sql`)
   have been run there.** The adviser's checklist is limited to three fixed lists with no editing until
-  the second one is, and students cannot ask a Librarian for a manuscript until the third one is. The pages work around the gaps (the adviser's desk no longer fails),
+  the second one is, students cannot ask a Librarian for a manuscript until the third one is, and
+  until the fourth one is the same PDF can be filed twice (only the title and the two manuscript
+  boxes are checked). The pages work around the gaps (the adviser's desk no longer fails),
   but the copyright document is filed as "Other Document", a student's name for an extra
   document is lost, and a paper cannot be handed in as both IMRAD and Full Manuscript. Open
   `app/student/upload_diagnostics.php` as staff: "Database" reads "No gaps" once it is done.

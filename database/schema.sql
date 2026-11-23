@@ -216,9 +216,11 @@ CREATE TABLE IF NOT EXISTS `paper_manuscripts` (
   `file_path` varchar(500) NOT NULL DEFAULT '',
   `gdrive_file_id` varchar(255) DEFAULT NULL,
   `file_size` bigint(20) DEFAULT NULL,
+  `file_hash` char(64) DEFAULT NULL COMMENT 'SHA-256 of the PDF, to refuse the same file filed twice; NULL for a paper filed before it was kept',
   `uploaded_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`manuscript_id`),
-  UNIQUE KEY `uq_paper_format` (`paper_id`,`format`)
+  UNIQUE KEY `uq_paper_format` (`paper_id`,`format`),
+  KEY `idx_file_hash` (`file_hash`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --

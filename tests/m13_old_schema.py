@@ -58,7 +58,14 @@ PROBE_OS = os.path.join(H.HERE, '_old_schema_probe.php')
 CATCH_UP = os.path.normpath(os.path.join(H.HERE, '..', 'scripts', 'migrations', 'sql', '2026-10-21_catch_up.sql'))
 CHECKLIST_SQL = os.path.normpath(os.path.join(H.HERE, '..', 'scripts', 'migrations', 'sql', '2026-10-23_checklist_items.sql'))
 REQUESTS_SQL = os.path.normpath(os.path.join(H.HERE, '..', 'scripts', 'migrations', 'sql', '2026-10-27_manuscript_requests.sql'))
-SQL_FILES = [CATCH_UP, CHECKLIST_SQL, REQUESTS_SQL]
+HISTORY_SQL = os.path.normpath(os.path.join(H.HERE, '..', 'scripts', 'migrations', 'sql', '2026-11-15_request_history_visibility.sql'))
+HASH_SQL = os.path.normpath(os.path.join(H.HERE, '..', 'scripts', 'migrations', 'sql', '2026-11-23_manuscript_file_hash.sql'))
+# Every SQL file a copy built from the 14 October export needs, in order. A file left
+# out here leaves a gap open, which OS-17 reads as the catch-up not having worked: the
+# request-history one was missing and manuscript_requests.student_hidden_at stayed a gap.
+# student_hidden_at and file_hash are both columns of a table an earlier file creates,
+# so these two come after it.
+SQL_FILES = [CATCH_UP, CHECKLIST_SQL, REQUESTS_SQL, HISTORY_SQL, HASH_SQL]
 T_PUBLIC = 'AUTOTEST Old Schema Published Paper'
 SERVER_LOG = os.path.join(tempfile.gettempdir(), 'papel_m13_server.log')
 COORDINATOR_ID = 151
@@ -432,7 +439,7 @@ def public_new():
 def catch_up():
     """The SQL for phpMyAdmin repairs the copy, repairs the rows, and is safe to run twice."""
     runs = [mysql(SCRATCH, stdin_path=f) for f in SQL_FILES]
-    check('OS-13', all(r[0] == 0 for r in runs), 'all three SQL files run clean',
+    check('OS-13', all(r[0] == 0 for r in runs), 'every catch-up SQL file runs clean (%d of them)' % len(SQL_FILES),
           'exit %s: %s' % ([r[0] for r in runs], ' | '.join(r[2][:120] for r in runs)))
 
     cols = dict((r[0], r[1]) for r in H.q(
