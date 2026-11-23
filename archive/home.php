@@ -76,9 +76,12 @@ $types_res = $conn->query("SELECT DISTINCT paper_type FROM research_papers WHERE
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Public Archive · <?= e(APP_NAME) ?></title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<?php /* Served from this origin: see the note in includes/site_head.php. This
+         page draws its own layout and letters it in Crimson Pro and IBM Plex
+         Sans rather than the site's two faces, so the generated stylesheet
+         carries those as well: the point was to stop contacting Google, not
+         to restyle a page nobody asked to have restyled. */ ?>
+<link rel="stylesheet" href="<?= e(asset_url('assests/fonts/papel-fonts.css')) ?>">
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
     :root {
         --paper-bg: #fcf8f7;

@@ -764,6 +764,37 @@ browser: coming back to a draft, the student attaches them again, and the
 deliberate (nothing is stored for work nobody has handed in), so do not add a
 "keep the saved file" path without asking. `save_draft` takes no `$_FILES`.
 
+**Signing out removes the device copy** (23 November 2026). It is an
+unsubmitted paper sitting in a browser, and on a campus machine that browser is
+somebody else's. `app/auth/logout.php` reads
+`upload_draft_storage_key($_SESSION['user'])` while the session can still say
+who it is, and `includes/site_footer.php` removes that key on the next page.
+
+- **`upload_draft_storage_key()` (`config/core.php`) is the one spelling of
+  the name.** Two things need it and they are in different languages: the
+  upload page writes the draft, the footer removes it. A second spelling would
+  be a draft nothing clears, or one nobody can find.
+- **It is carried in a session, not on the client.** A flag set by the
+  sign-out *click* is wrong: the upload page asks before letting anybody leave
+  with work on it, so a student who then cancels would have had their draft
+  deleted while still sitting on the page. The key is read server side and
+  acted on only once the sign-out has actually happened. logout.php starts a
+  fresh session with a new id for the one value to live in, the same idiom as
+  the idle-expiry and wrong-role paths in `core.php`; that does not undo the
+  cookie-dropping paragraph above it, which is about a page reusing the
+  *destroyed* session with no CSRF token in it.
+- **Read once and unset**, like `$_SESSION['papel_view_tour']`, so it happens
+  on the first page after the sign-out and on no other.
+- **Only a real sign-out, never an idle expiry**, and never anybody else's
+  key. An expiry that cleared this would take the draft away from somebody who
+  had done nothing but leave the page open, at the exact moment they are about
+  to sign in again and carry on; and one student signing out must not destroy
+  the draft another left on the same browser. logout.php is the only writer,
+  and it names one account.
+- Driven against the running site: the signing-out account's key is gone, a
+  second account's key and `papel_view` are untouched, and a later ordinary
+  page load clears nothing, the one-shot having been spent.
+
 ### "Upload failed. Please try again." hid its own cause
 
 That line is the submit handler's catch-all: **every** exception that is not a
@@ -1920,8 +1951,54 @@ The font originally asked for `FILL` 0 and 1 (`.mi-fill`, nine places),
 `wght` 400 and 700 (one breadcrumb chevron), `GRAD` 0 and `opsz` 24. That
 cut the download to **1,144,228 bytes**. The chevron now uses weight 400 too,
 so the request is the static-weight variant, previously measured at **464,940
-bytes**: about 650KB less on a cold visit. Check the current Google response
-if measuring a new release; the file can change upstream.
+bytes**: about 650KB less on a cold visit.
+
+**The faces are served from this origin now** (23 November 2026), so there is
+no Google response to check: `assests/fonts/papel-fonts.css` and 21 woff2
+files beside it, 1,004,924 bytes on disk of which a page fetches three
+(latin Plus Jakarta Sans, latin Inter, the 464,940-byte icon font). It was the
+one third party the site contacted without being asked - reCAPTCHA waits for a
+touch on a sign-in field and a paper's PDF is streamed server side - and it
+cost a DNS lookup and a TLS handshake to a second origin before the woff2
+could even be discovered.
+
+- **The stylesheet is generated, not written.** `scripts/fetch_fonts.py` asks
+  Google for the CSS2 response and rewrites only the `url()`, so the
+  @font-face blocks, the unicode-ranges and the variable weight ranges are
+  still Google's and a weight resolves exactly as it did when these were
+  remote. Add a family or a weight there and run it again; editing the
+  stylesheet by hand is how a self-hosted face ends up rendering at the wrong
+  weight. `scripts/**` is not deployed, which is where a build-time generator
+  belongs.
+- **Ask for a weight *range*, not a list.** These are variable fonts: one file
+  per subset serves every weight, and Google clamps the file's axis to what
+  was asked for. The URL requests Inter 400..900 and Plus Jakarta Sans
+  400..800 because the two sign-in pages and the 500 page want 800 and 900,
+  which a `wght@400;500;600;700` file renders as 700 - silently, as the axis
+  note below says. Driven in Chrome: the six weights measure 390.5, 395.4,
+  400.2, 405.1, 411.0 and 417.5px, so none of them is clamped.
+- **The woff2 URLs carry `?v=`**, because `.htaccess` gives a stamped asset a
+  year and `immutable` and everything else an hour. Google served these with
+  `max-age=31536000`; without the stamp the 464KB icon font would be
+  revalidated every hour and self-hosting would be *slower* on a second visit
+  than the thing it replaced. Measured both ways.
+- **Five families, not two.** `archive/home.php` and
+  `app/faculty/faculty_dashboard.php` letter themselves in Crimson Pro and
+  IBM Plex Sans rather than the site's own faces, so those are in the
+  stylesheet too: the point was to stop contacting Google, not to restyle two
+  pages nobody asked to have restyled. Checked on both that the heading is
+  still Crimson Pro and the body still IBM Plex Sans.
+- **`email_layout()` keeps its Google link, deliberately.** A letter is not our
+  document: it has no CSP to satisfy, and only Apple Mail and iOS honour a
+  `<link>` at all. Every stack there names the real face and then falls back,
+  so the letter is right whether the font arrives or not.
+- **`style-src` no longer lists fonts.googleapis.com and `font-src` no longer
+  lists fonts.gstatic.com.** Leaving them would permit a request nothing
+  makes. `cdn.jsdelivr.net` stays in both: the faculty dashboard still loads
+  bootstrap-icons from there.
+- The markup in `app/auth/login.php` that links fonts is inside `if (false):`
+  and labelled DEAD CODE; it was changed to match in case it is ever restored,
+  and it renders on no request.
 
 - **Check the stylesheets before changing the axes.** An axis value nobody
   asked Google for renders at the nearest one that was sent, silently, so a
@@ -2092,6 +2169,64 @@ Every page: `require_once config/core.php` then `require_role([...])`.
   whitelisted sort column in the analytics page — copy that pattern if you need
   dynamic ordering.
 - **Escape output** with `e()`.
+
+### One cookie, and why there is no cookie banner
+
+Asked for on 23 November 2026 as "an Accept and Manage cookies cache". The
+answer was no, and the reasoning is worth keeping because it will be asked
+again.
+
+**PAPEL sets exactly one cookie**: `papel_sid`, the session, `lifetime 0`,
+`HttpOnly`, `SameSite=Lax`, `Secure` on https (`config/core.php`'s
+`session_set_cookie_params`), cleared on sign-out. There is **no analytics and
+no advertising of any kind** anywhere in the app: no Google Analytics, no tag
+manager, no Facebook pixel, no Hotjar, no Clarity. Grep before believing
+otherwise, and do not add one without asking.
+
+- **A banner would have nothing to ask about.** A strictly necessary
+  authentication cookie is consent-exempt under every regime there is, the
+  EU's included, and PAPEL is governed by the Philippine Data Privacy Act (RA
+  10173), which requires a lawful basis and transparency and has no
+  cookie-banner rule of the ePrivacy sort. With nothing non-essential to
+  refuse, "Reject" either breaks sign-in or does nothing.
+- **It would cost what the optimisation work has been buying.** A consent
+  layer is one more full-window fixed element on the ladder that already
+  carries three, covering the campus photo that is the LCP element on nearly
+  every page, on every visit by a signed-out reader.
+- **The honest version of the same intent was done instead**: the faces were
+  self-hosted (see the fonts note above), so reading the repository contacts
+  nobody; the sign-out now clears the device draft; and https forces the
+  Secure flag. `pages/privacy.php` section 7 names the one cookie, every
+  preference key, the draft, reCAPTCHA and the two library CDNs.
+- **What a reader's browser does hold** is about twenty `papel_*` preference
+  keys (view, density, palette, Zen, the sidebar's side and fold, the
+  accessibility switches, panel widths) and, while a paper is being written,
+  `papel_upload_draft_<user_id>`. None of it is sent to the server;
+  `sessionStorage` is now only ever cleared.
+- **Still third parties, both flagged rather than fixed**: `cdn.jsdelivr.net`
+  and `unpkg.com` serve Bootstrap, bootstrap-icons and some viewer libraries,
+  and reCAPTCHA is fetched on the first touch of a sign-in field. Neither
+  jsDelivr nor unpkg sets a cookie; reCAPTCHA sets one of Google's own, on
+  Google's domain, and only for somebody who has started signing in.
+
+**`COOKIE_SECURE` is decided by https, and `.env` can only force it on.** It
+used to be the variable alone, defaulting to false, so a copy served over https
+whose `.env` said nothing - or still carried the `false` that `.env.example`
+ships - handed `papel_sid` to any plain-http request to the same host.
+`request_is_https()` in `config/config.php` reads BASE_URL's scheme first,
+because that is the one signal that needs no request and cannot be spoofed by a
+header, then the request itself including `X-Forwarded-Proto`, which is the only
+one of the three that sees through Cloudflare: production terminates TLS there
+and talks to the origin on port 80, so `$_SERVER['HTTPS']` is empty and the port
+says 80.
+
+- **On plain http it must stay off**, or nobody can sign in locally: a Secure
+  cookie is not sent back over http. Verified that localhost still reads false
+  and that each of the three https signals flips it to true.
+- **The CSP's own `$secure` is deliberately not this function**, and the note
+  beside it says why: that one asks whether *this request* arrived over https
+  and must answer no for an http one, or it reintroduces the framed-POST bug
+  recorded there. Do not unify them.
 
 ### Never commit
 

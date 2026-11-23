@@ -1,5 +1,5 @@
 {
- "built": "2026-11-22 23:06",
+ "built": "2026-11-23 09:33",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -59,16 +59,16 @@
    "lines": 135
   },
   "app/auth/login.php": {
-   "lines": 1184
+   "lines": 1185
   },
   "app/auth/logout.php": {
-   "lines": 36
+   "lines": 72
   },
   "app/choose_desk.php": {
    "lines": 90
   },
   "app/faculty/faculty_dashboard.php": {
-   "lines": 236
+   "lines": 238
   },
   "app/faculty/faculty_manage_students.php": {
    "lines": 1234
@@ -161,7 +161,7 @@
    "lines": 435
   },
   "app/student/student_upload_ai.php": {
-   "lines": 15175
+   "lines": 15178
   },
   "app/student/upload_diagnostics.php": {
    "lines": 253
@@ -176,13 +176,13 @@
    "lines": 38
   },
   "archive/home.php": {
-   "lines": 960
+   "lines": 963
   },
   "archive/index.php": {
    "lines": 1030
   },
   "archive/login.php": {
-   "lines": 1095
+   "lines": 1093
   },
   "archive/view_paper.php": {
    "lines": 1114
@@ -191,10 +191,10 @@
    "lines": 854
   },
   "config/config.php": {
-   "lines": 273
+   "lines": 313
   },
   "config/core.php": {
-   "lines": 6218
+   "lines": 6258
   },
   "config/error_handler.php": {
    "lines": 228
@@ -383,10 +383,10 @@
    "lines": 179
   },
   "includes/site_footer.php": {
-   "lines": 776
+   "lines": 812
   },
   "includes/site_head.php": {
-   "lines": 111
+   "lines": 126
   },
   "includes/site_header.php": {
    "lines": 788
@@ -452,7 +452,7 @@
    "lines": 849
   },
   "pages/error_page.php": {
-   "lines": 228
+   "lines": 232
   },
   "pages/gdrive_callback.php": {
    "lines": 44
@@ -464,7 +464,7 @@
    "lines": 15
   },
   "pages/privacy.php": {
-   "lines": 219
+   "lines": 222
   },
   "pages/settings.php": {
    "lines": 780
@@ -483,6 +483,9 @@
   },
   "scripts/explain_public_repository.php": {
    "lines": 45
+  },
+  "scripts/fetch_fonts.py": {
+   "lines": 126
   },
   "scripts/field_guide_content.py": {
    "lines": 872

@@ -49,9 +49,24 @@ if ($lcp_photo !== ''):
 <?php endif; ?>
 <?php endif; ?>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<?php /* **Ask for the axis values the site actually uses, not the whole
+<?php /* **The faces are served from this origin**, not from fonts.gstatic.com.
+         A signed-out reader browsing the repository used to contact Google on
+         every page for the fonts alone, which is the one third party the site
+         reached without being asked (reCAPTCHA waits for a touch on a sign-in
+         field, Drive PDFs are streamed server side). Self-hosting ends that,
+         and takes a DNS lookup and a TLS handshake off the critical path: the
+         woff2 is discovered on this connection rather than after a round trip
+         to a second origin. The woff2 files are the same bytes Google serves.
+
+         `assests/fonts/papel-fonts.css` is **generated**, not written: it is
+         Google's own CSS2 response with the url() rewritten, so the
+         @font-face blocks, the unicode-ranges and the variable weight ranges
+         are still theirs and a weight resolves exactly as it did when these
+         were remote. Add a family or a weight in
+         `scripts/fetch_fonts.py` and run it again; do not edit the
+         stylesheet by hand.
+
+         **Ask for the axis values the site actually uses, not the whole
          variable font.** `opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200`
          is every axis at its full range, and Google answers it with the
          complete variable font: **4,025,760 bytes, 3.84MB**, at VeryHigh
@@ -62,8 +77,8 @@ if ($lcp_photo !== ''):
          Grepped out of the stylesheets: FILL 0 and 1, GRAD 0, opsz 24, and
          wght 400. The breadcrumb chevron was the only icon asking for 700;
          using 400 there lets the whole site fetch the smaller static-weight
-         font. If a new icon weight is added, revisit this URL as well. */ ?>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Material+Symbols+Outlined:FILL,GRAD,opsz,wght@0..1,0,24,400&display=swap" rel="stylesheet">
+         font. If a new icon weight is added, add it in that script as well. */ ?>
+<link rel="stylesheet" href="<?= e(asset_url('assests/fonts/papel-fonts.css')) ?>">
 <link rel="stylesheet" href="<?= e(asset_url('assests/css/papel-site.css')) ?>">
 <?php /* Which side the sidebar sits on, read before anything is painted: the
          same reason the palette is read here rather than at the foot of the

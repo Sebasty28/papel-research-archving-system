@@ -44,9 +44,13 @@ $description = $descriptions[$error_http_code] ?? 'An unexpected error occurred.
          things that may not be defined by the time this page is needed. */ ?>
 <?php require_once __DIR__ . '/../includes/favicon.php'; ?>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<?php /* Served from this origin: see the note in includes/site_head.php. Built
+         from $base_url rather than asset_url(), which reads BASE_URL without
+         guarding it: this page is what answers an uncaught exception, so it
+         cannot assume core.php got far enough to define it. Hence no ?v=
+         stamp here either, and htmlspecialchars rather than e(), as every
+         other line on this page does, for the same reason. */ ?>
+<link rel="stylesheet" href="<?= htmlspecialchars($base_url) ?>/assests/fonts/papel-fonts.css">
 <style nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
   :root {
     --pup-maroon: #810403;

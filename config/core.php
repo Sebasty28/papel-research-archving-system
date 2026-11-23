@@ -67,14 +67,29 @@ function csp_nonce(): string {
            Nothing is lost by leaving it off: on an http site every request is
            already insecure and there is nothing to raise one to, and on https
            the directive is sent exactly as before. */
+        /* **Deliberately not `request_is_https()`**, which config.php defines
+           for COOKIE_SECURE. The two ask different questions. That one asks
+           whether this *copy of the site* is an https site, and answers yes
+           from BASE_URL alone, because a cookie has to be marked Secure
+           before any particular request arrives and the mark is the same on
+           every one of them. This asks whether *this request* came in over
+           https, and must not say yes for an http one: that is the bug the
+           note above records, where the directive upgraded a redirect the
+           framed POST then never received. Unifying them reintroduces it. */
         $secure = (!empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off')
                || ((string)($_SERVER['SERVER_PORT'] ?? '') === '443')
                || (strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https');
 
         $csp = "default-src 'self'; " .
                "script-src 'self' 'nonce-{$nonce}' https://cdn.jsdelivr.net https://unpkg.com{$rcScript}; " .
-               "style-src 'self' 'nonce-{$nonce}' https://cdn.jsdelivr.net https://fonts.googleapis.com; " .
-               "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; " .
+               /* No fonts.googleapis.com in style-src and no fonts.gstatic.com
+                  in font-src: the faces are served from this origin now
+                  (assests/fonts/papel-fonts.css, see includes/site_head.php),
+                  so leaving them here would permit a request nothing makes.
+                  cdn.jsdelivr.net stays in font-src for bootstrap-icons,
+                  which the faculty dashboard still loads from there. */
+               "style-src 'self' 'nonce-{$nonce}' https://cdn.jsdelivr.net; " .
+               "font-src 'self' https://cdn.jsdelivr.net; " .
                "img-src 'self' data: blob: https://lh3.googleusercontent.com; " .
                "connect-src 'self' https://api.groq.com https://www.googleapis.com{$proxyOrigin}; " .
                "frame-src 'self' https://drive.google.com{$rcFrame}; " .
@@ -2569,6 +2584,24 @@ function max_post_label(): string {
 }
 
 /**
+ * Where the upload page keeps a student's autosaved draft in localStorage.
+ *
+ * One copy of the name, because two things need it and they are in different
+ * languages: student_upload_ai.php writes and reads the draft, and
+ * includes/site_footer.php removes it after a sign-out, so that an unsubmitted
+ * paper is not left behind in a shared lab browser. A second spelling of it
+ * would be a draft nobody can find, or one nothing clears.
+ *
+ * Keyed by the account, as it always has been, so one student's browser copy
+ * is never offered to the next person to sign in on the same machine; 'anon'
+ * only arises where there is no account at all, which the upload page has no
+ * path to.
+ */
+function upload_draft_storage_key(array $u): string {
+    return 'papel_upload_draft_' . (string)($u['user_id'] ?? 'anon');
+}
+
+/**
  * The URL of one of the site's own static files, stamped with when it last
  * changed.
  *
@@ -3517,6 +3550,13 @@ function email_layout(string $bodyHtml, string $heading = '', bool $regularHeadi
        </div>'
     : '';
 
+  /* **The letter keeps Google's font link; the site no longer has one.** The
+     pages are lettered from this origin now (see includes/site_head.php), but
+     a mail client is not our document: it has no CSP to satisfy, and a
+     relative or BASE_URL font would be fetched by whichever client honours
+     <link> at all, which is Apple Mail and iOS and not Gmail or Outlook. Each
+     stack below names the real face and then falls back exactly as the site
+     does, so the letter is correct whether the font arrives or not. */
   return '<!doctype html>
 <html lang="en">
 <head>

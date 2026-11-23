@@ -32,7 +32,9 @@ $student_count = $student_stmt->get_result()->fetch_assoc()['c'] ?? 0;
 <title>Faculty Dashboard · <?= e(APP_NAME) ?></title>
 <?php require_once ROOT_PATH.'/includes/site_head.php'; ?>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<?php /* No font link of its own: site_head.php above already carries the
+         self-hosted stylesheet, and it now includes the Crimson Pro and IBM
+         Plex Sans this page letters itself in. */ ?>
 <style nonce="<?= csp_nonce() ?>">
 :root { --gold: #dca92c; --ivory: #fcf8f7; }
 * { box-sizing: border-box; }

@@ -9602,7 +9602,10 @@ document.addEventListener('visibilitychange', function () {
 });
 
 const papelDraft = (function () {
-    const KEY = 'papel_upload_draft_' + <?= json_encode((string)($u['user_id'] ?? 'anon'), JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) ?>;
+    /* upload_draft_storage_key() and not the name spelled out here: sign-out
+       removes this key (includes/site_footer.php), and two spellings of it
+       would be a draft nothing clears. */
+    const KEY = <?= json_encode(upload_draft_storage_key($u), JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) ?>;
     /* Set when the dashboard sent us here with ?draft=<id>.
 
        JSON_HEX_TAG matters here: a title is free text, and without it a title

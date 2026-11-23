@@ -206,7 +206,47 @@ define('DB_SSL_CA', $_ENV['DB_SSL_CA'] ?? '');
 
 // Security
 define('CSRF_KEY', $_ENV['CSRF_KEY'] ?? 'CHANGE_THIS_TO_A_LONG_RANDOM_SECRET');
-define('COOKIE_SECURE', filter_var($_ENV['COOKIE_SECURE'] ?? 'false', FILTER_VALIDATE_BOOLEAN));
+
+/**
+ * Whether this copy of the site is reached over https.
+ *
+ * Two signals, because neither alone covers every copy. BASE_URL is the scheme
+ * this copy was configured with, which is the one answer that does not depend
+ * on a request at all, so it is also right in a CLI script and cannot be
+ * spoofed by a header. The request itself is the fallback for a copy whose
+ * BASE_URL was left http while the host serves https, and X-Forwarded-Proto is
+ * the only one of the three that sees through a proxy: production is behind
+ * Cloudflare, which terminates TLS and talks to the origin on port 80, so
+ * $_SERVER['HTTPS'] is empty there and the port says 80.
+ */
+function request_is_https(): bool {
+    if (stripos((string)BASE_URL, 'https://') === 0) {
+        return true;
+    }
+    return (!empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off')
+        || ((string)($_SERVER['SERVER_PORT'] ?? '') === '443')
+        || (strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https');
+}
+
+/* **https decides this, and .env can only force it on.**
+ *
+ * It used to be .env alone, defaulting to false, which meant a copy served
+ * over https whose .env said nothing (or still carried the `false` that
+ * .env.example ships) sent its session cookie without the Secure flag: the
+ * browser would then hand `papel_sid` to any plain-http request to the same
+ * host, which is a session anybody watching the network can copy. Nothing
+ * reported it because the site works either way; the flag is only ever missed
+ * when it is needed.
+ *
+ * There is no copy that wants a non-Secure session cookie on https, so the
+ * variable is read as an OR rather than as the answer: https turns it on
+ * whatever .env says, and .env can still turn it on for a copy whose scheme
+ * this cannot detect. On plain http it stays off, which is what keeps
+ * localhost able to sign in at all - a Secure cookie is not sent back over
+ * http, so forcing it on here would lock everybody out rather than protect
+ * them. */
+define('COOKIE_SECURE', request_is_https()
+    || filter_var($_ENV['COOKIE_SECURE'] ?? 'false', FILTER_VALIDATE_BOOLEAN));
 
 /* The largest paper the server will take, in megabytes.
  *

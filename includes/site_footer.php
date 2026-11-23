@@ -39,6 +39,42 @@
 </footer>
 <?php require_once ROOT_PATH.'/includes/terms_modal.php'; ?>
 
+<?php
+/* **A draft does not outlive the sign-out that left it behind.**
+ *
+ * The upload page autosaves into localStorage as well as into a row, so an
+ * unsubmitted paper sits in the browser until something takes it out. On a
+ * shared campus machine that is somebody else's lab PC. app/auth/logout.php
+ * names the key of the account that signed out and this removes it.
+ *
+ * Read once and unset, so it happens on the first page after the sign-out and
+ * on no other: the same one-shot as $_SESSION['papel_view_tour'].
+ *
+ * **Only a real sign-out, never an idle expiry.** An expired session that
+ * cleared this would take the draft away from somebody who had done nothing
+ * but leave the page open, exactly when they are about to sign in again and
+ * carry on, so logout.php is the only writer. Nor is it every stale key on
+ * the browser: one person signing out must not destroy another's work.
+ *
+ * It is a page the person has already been sent to, so there is nothing to
+ * wait for: the removal runs as the script is parsed rather than on
+ * DOMContentLoaded, and localStorage is synchronous, so it is done before
+ * anything else on the page can read it. The try/catch is the same guard
+ * every other reader of localStorage here carries: private mode and blocked
+ * site data both throw rather than return nothing.
+ */
+$papel_clear_draft = '';
+if (isset($_SESSION['papel_clear_draft'])) {
+    $papel_clear_draft = (string)$_SESSION['papel_clear_draft'];
+    unset($_SESSION['papel_clear_draft']);
+}
+?>
+<?php if ($papel_clear_draft !== ''): ?>
+<script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
+try { localStorage.removeItem(<?= json_encode($papel_clear_draft, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) ?>); } catch (err) {}
+</script>
+<?php endif; ?>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 document.addEventListener('DOMContentLoaded', function () {
