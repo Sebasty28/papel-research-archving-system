@@ -11314,7 +11314,12 @@ function papelLoadPdfJs() {
 async function papelPdfText(file, maxChars) {
     await papelLoadPdfJs();
     if (pdfjsLib.GlobalWorkerOptions) { pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER; }
-    const doc = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+    /* isEvalSupported off, as in papel-pdf-view.js: this PDF.js (3.11) can be
+       made to run a script hidden in a crafted font when it compiles glyphs
+       with eval (CVE-2024-4367). The CSP already forbids eval; this stops it
+       being attempted. The file is the student's, but it may have come from
+       anybody, and it is read here in the site's own origin. */
+    const doc = await pdfjsLib.getDocument({ data: await file.arrayBuffer(), isEvalSupported: false }).promise;
     let text = '';
     for (let n = 1; n <= doc.numPages && text.length < maxChars; n++) {
         const content = await (await doc.getPage(n)).getTextContent();

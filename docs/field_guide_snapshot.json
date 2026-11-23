@@ -1,5 +1,5 @@
 {
- "built": "2026-11-23 16:48",
+ "built": "2026-11-24 05:27",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -83,7 +83,7 @@
    "lines": 68
   },
   "app/librarian/librarian_manage_guests.php": {
-   "lines": 465
+   "lines": 473
   },
   "app/librarian/manuscript_requests.php": {
    "lines": 994
@@ -161,7 +161,7 @@
    "lines": 435
   },
   "app/student/student_upload_ai.php": {
-   "lines": 15205
+   "lines": 15210
   },
   "app/student/upload_diagnostics.php": {
    "lines": 253
@@ -194,7 +194,7 @@
    "lines": 313
   },
   "config/core.php": {
-   "lines": 6491
+   "lines": 6503
   },
   "config/error_handler.php": {
    "lines": 228
@@ -488,7 +488,7 @@
    "lines": 45
   },
   "scripts/fetch_fonts.py": {
-   "lines": 126
+   "lines": 172
   },
   "scripts/field_guide_content.py": {
    "lines": 872
@@ -637,6 +637,9 @@
   "tests/_duplicate_unit.php": {
    "lines": 141
   },
+  "tests/_expiry_probe.php": {
+   "lines": 14
+  },
   "tests/_failure_unit.php": {
    "lines": 70
   },
@@ -649,6 +652,9 @@
   "tests/_mail.php": {
    "lines": 1
   },
+  "tests/_mail_probe.php": {
+   "lines": 54
+  },
   "tests/_mint.php": {
    "lines": 1
   },
@@ -660,6 +666,9 @@
   },
   "tests/_other_name_unit.php": {
    "lines": 69
+  },
+  "tests/_qa_drive_probe.php": {
+   "lines": 43
   },
   "tests/_scope_probe.php": {
    "lines": 146
@@ -674,10 +683,10 @@
    "lines": 228
   },
   "tests/harness.py": {
-   "lines": 310
+   "lines": 321
   },
   "tests/m10_section_scope.py": {
-   "lines": 785
+   "lines": 828
   },
   "tests/m11_submit_failures.py": {
    "lines": 167
@@ -689,10 +698,10 @@
    "lines": 651
   },
   "tests/m14_review_checklist.py": {
-   "lines": 309
+   "lines": 329
   },
   "tests/m15_other_types.py": {
-   "lines": 252
+   "lines": 256
   },
   "tests/m16_duplicate_pdf.py": {
    "lines": 210
@@ -726,6 +735,75 @@
   },
   "tests/pdf_compression.py": {
    "lines": 142
+  },
+  "tests/qa_staging_public.py": {
+   "lines": 19
+  },
+  "tests/qa_tracker_browser.py": {
+   "lines": 114
+  },
+  "tests/qa_tracker_cases.py": {
+   "lines": 314
+  },
+  "tests/qa_tracker_cases_m2.py": {
+   "lines": 316
+  },
+  "tests/qa_tracker_cases_m3.py": {
+   "lines": 204
+  },
+  "tests/qa_tracker_cases_m4.py": {
+   "lines": 233
+  },
+  "tests/qa_tracker_cases_m5.py": {
+   "lines": 289
+  },
+  "tests/qa_tracker_cases_m6.py": {
+   "lines": 232
+  },
+  "tests/qa_tracker_cases_m7.py": {
+   "lines": 143
+  },
+  "tests/qa_tracker_cases_m8.py": {
+   "lines": 207
+  },
+  "tests/qa_tracker_continue.py": {
+   "lines": 196
+  },
+  "tests/qa_tracker_extra.py": {
+   "lines": 112
+  },
+  "tests/qa_tracker_finish.py": {
+   "lines": 121
+  },
+  "tests/qa_tracker_finish_ai.py": {
+   "lines": 88
+  },
+  "tests/qa_tracker_finish_browser.py": {
+   "lines": 142
+  },
+  "tests/qa_tracker_finish_misc.py": {
+   "lines": 129
+  },
+  "tests/qa_tracker_finish_storage.py": {
+   "lines": 113
+  },
+  "tests/qa_tracker_followup.py": {
+   "lines": 161
+  },
+  "tests/qa_tracker_remaining.py": {
+   "lines": 191
+  },
+  "tests/qa_tracker_resume.py": {
+   "lines": 161
+  },
+  "tests/qa_tracker_run.py": {
+   "lines": 108
+  },
+  "tests/qa_tracker_storage.py": {
+   "lines": 76
+  },
+  "tests/qa_tracker_workbook.py": {
+   "lines": 365
   },
   "tests/report.py": {
    "lines": 150

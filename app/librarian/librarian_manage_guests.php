@@ -90,7 +90,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'Password'    => $password,
                 'Valid until' => date('F j, Y g:i A', strtotime($expires_at)),
             ], ['Username', 'Password']);
-            $body .= email_action('Sign in at', BASE_URL . '/archive/login.php');
+            /* login_url('guest'), not /archive/login.php: the pass is typed into
+               the sign-in panel on the Public Repository, on its own Library Pass
+               tab, which is where every other way into the site now leads
+               (require_role() sends a pass there, and so does an expired
+               session). archive/login.php is the older standalone form and still
+               works for passes already sent out; a second spelling of "where
+               signing in happens" is what login_url() exists to prevent, and
+               this email was the last caller naming its own. */
+            $body .= email_action('Sign in at', login_url('guest'));
 
             $sent = send_email($email, 'Your Library Pass to ' . APP_NAME, $body);
 

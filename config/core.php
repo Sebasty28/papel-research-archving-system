@@ -2635,12 +2635,24 @@ function upload_draft_storage_key(array $u): string {
  * background shipped and one reader went on seeing the light one. The stamp
  * moves whenever the file does, so the URL is new and the browser fetches it;
  * an unchanged file keeps its URL and stays cached.
+ *
+ * The stamp was the raw mtime, which printed a Unix timestamp into every page
+ * (ZAP's "Timestamp Disclosure", ID-019) and told anyone reading the source
+ * when each file was last deployed. It is now ten hex characters of a hash of
+ * the mtime, the size and the path: it still changes exactly when the file is
+ * replaced, and it reads as nothing. It is not a secret, only not a clock.
+ * Hex matters: .htaccess gives a stamped asset a year only when ?v= matches
+ * [0-9a-f]+, and a stamp it did not recognise would quietly cost every
+ * returning reader a revalidation per file.
  */
 function asset_url(string $path): string {
     $path = ltrim($path, '/');
     $file = ROOT_PATH . '/' . $path;
-    $stamp = is_file($file) ? (int)filemtime($file) : 0;
-    return rtrim(BASE_URL, '/') . '/' . $path . ($stamp ? '?v=' . $stamp : '');
+    $stamp = '';
+    if (is_file($file)) {
+        $stamp = substr(sha1($path . '|' . (int)filemtime($file) . '|' . (int)filesize($file)), 0, 10);
+    }
+    return rtrim(BASE_URL, '/') . '/' . $path . ($stamp !== '' ? '?v=' . $stamp : '');
 }
 
 /**

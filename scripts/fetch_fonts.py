@@ -4,11 +4,15 @@ its CSS to point at local copies.
 The @font-face blocks, their unicode-ranges and their weight ranges are left
 exactly as Google generated them: only the url() is rewritten. Hand-authoring
 font metadata is how a self-hosted face ends up rendering at the wrong weight.
+
+    python scripts/fetch_fonts.py <repo root>             fetch and rewrite
+    python scripts/fetch_fonts.py <repo root> --restamp   only rewrite the
+        ?v= stamps from the woff2 files already on disk, downloading nothing
 """
+import hashlib
 import os
 import re
 import sys
-import time
 import urllib.request
 
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -26,6 +30,45 @@ CSS_URL = (
 
 OUT_DIR = sys.argv[1]
 FONT_DIR = os.path.join(OUT_DIR, "assests", "fonts")
+CSS_PATH = os.path.join(FONT_DIR, "papel-fonts.css")
+RESTAMP = "--restamp" in sys.argv[2:]
+
+# A local url() as this script writes it, with or without a stamp.
+LOCAL_URL = re.compile(r"url\(([A-Za-z0-9._-]+\.woff2)(?:\?v=[^)]*)?\)")
+
+
+def file_stamp(path):
+    """Ten hex characters of the file's own SHA-256.
+
+    It was one int(time.time()) for the whole set, which printed a Unix
+    timestamp into the stylesheet 39 times over: ZAP's "Timestamp Disclosure"
+    (ID-019) found it there. A hash of the bytes says nothing about when, and
+    it changes only for a face whose file actually changed, so refreshing the
+    set no longer makes every reader download all 21 files again. Hex, because
+    .htaccess gives a stamped asset a year only when ?v= matches [0-9a-f]+.
+    """
+    with open(path, "rb") as fh:
+        return hashlib.sha256(fh.read()).hexdigest()[:10]
+
+
+def stamp_css(css):
+    """Give every local url() the stamp of the file it names."""
+    def swap(m):
+        name = m.group(1)
+        path = os.path.join(FONT_DIR, name)
+        if not os.path.isfile(path):
+            raise SystemExit("the css names a font that is not on disk: %s" % name)
+        return "url(%s?v=%s)" % (name, file_stamp(path))
+    return LOCAL_URL.sub(swap, css)
+
+
+def restamp():
+    with open(CSS_PATH, encoding="utf-8") as fh:
+        css = fh.read()
+    new = stamp_css(css)
+    with open(CSS_PATH, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(new)
+    print("restamped %d url()s in %s" % (len(LOCAL_URL.findall(new)), CSS_PATH))
 
 
 def get(url, binary=False):
@@ -83,13 +126,13 @@ def main():
     # and `immutable`, and anything else an hour, so without it the browser
     # would revalidate the 464KB icon font every hour where Google served it
     # with max-age=31536000: self-hosting would have been slower on a second
-    # visit than the thing it replaced. It is one stamp for the whole set,
-    # which is how the set is built, and it changes when this script is run
-    # again, so a refreshed face is fetched rather than remembered.
-    stamp = int(time.time())
+    # visit than the thing it replaced. Each file is stamped with a hash of
+    # its own bytes (file_stamp()), so a refreshed face is fetched rather than
+    # remembered, and an unchanged one keeps its URL and its cached copy.
     local_css = css
     for url, name in url_to_name.items():
-        local_css = local_css.replace("url(%s)" % url, "url(%s?v=%d)" % (name, stamp))
+        local_css = local_css.replace("url(%s)" % url, "url(%s)" % name)
+    local_css = stamp_css(local_css)
 
     left = re.findall(r"fonts\.gstatic\.com", local_css)
     if left:
@@ -111,15 +154,18 @@ def main():
         " * FILL 0..1, GRAD 0, opsz 24, wght 400, so .mi-fill still fills.\n"
         " *\n"
         " * To refresh: python scripts/fetch_fonts.py <repo root>. Add a family or a\n"
-        " * weight to CSS_URL there rather than editing this file by hand.\n"
+        " * weight to CSS_URL there rather than editing this file by hand. Each\n"
+        " * ?v= is a hash of that file's bytes; --restamp redoes only those.\n"
         " */\n\n"
     )
-    css_path = os.path.join(FONT_DIR, "papel-fonts.css")
-    with open(css_path, "w", encoding="utf-8", newline="\n") as fh:
+    with open(CSS_PATH, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(header + local_css)
 
     print("\n%d files, %d bytes of woff2" % (len(order), total))
-    print("css: %s (%d bytes)" % (css_path, os.path.getsize(css_path)))
+    print("css: %s (%d bytes)" % (CSS_PATH, os.path.getsize(CSS_PATH)))
 
 
-main()
+if RESTAMP:
+    restamp()
+else:
+    main()
