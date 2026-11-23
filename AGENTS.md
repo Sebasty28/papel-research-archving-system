@@ -3052,6 +3052,72 @@ drawn and read back from `Chart.getChart()` (the right type and axis), a table w
 chosen, the choice kept over a reload, the enlarged view, all six export pictures, both
 palettes, and 390px with no sideways scroll.
 
+### The shape of an exported document, and why nothing is cut to an ellipsis
+
+Four pages write a PDF and a Word file through `includes/pdf_writer.php` and
+`includes/docx_writer.php`: the analytics report, the four review desks
+(`includes/review_console.php`), the Storage Folder's PDF lists and the
+Librarian's manuscript requests. Two rules, both the owner's, 23 November 2026.
+
+**A Librarian and the administrators export landscape, always.** Ask
+`export_landscape()` (`config/core.php`), never a role string: it is true for a
+Librarian, the Research Coordinator and the Director, and it reads
+`user_positions()` through `can_manage_research_operations()`, so a second post
+counts. The Subject Adviser's and the Head of Academic Programs' desks stay
+portrait, which is why this cannot be a flag on the shared review console: that
+file is four desks and the answer differs between them. The head is the case a
+careless check gets wrong, being an `admin` too and differing only by
+`admin_level`.
+
+- **The sheet is the same Folio, turned**, 612x936 upright and 936x612 across,
+  not a second paper size, so a report printed either way comes off one stack.
+  Both writers take the flag in their constructor; CSV and Excel have no page
+  orientation and are untouched.
+- **A caller's table columns are proportions now, not points.**
+  `PdfWriter::table()` scales whatever widths it is given to fill the text
+  block, so the same call site fills either sheet without naming a second set of
+  numbers, and a spec that does not quite add up stops leaving a ragged strip
+  down the right-hand edge. `DocxWriter::table()` already worked this way.
+- **The analytics Word preview opens in the shape the document will be.**
+  `PapelAnalyticsWordEditor` takes an `orientation` option; its dropdown is
+  still there, and whatever it says is what the posted document carries, so the
+  edited path takes its answer from the page rather than from the helper.
+
+**Text too long for its place is shown in full, never cut to "...".**
+
+- **`PdfWriter::cell()` no longer clips.** It used to append an ellipsis to
+  anything that did not fit, and `wrap()` can only break at a space, so one long
+  unbroken token was always cut: a real address on file printed as
+  `maria.sophia.do...`. `breakWord()` cuts such a token into pieces that fit and
+  `wrap()` uses it, so every character is on the page over as many lines as it
+  takes. A cell is handed a line that already fits and only has to place it.
+- **A chart label is wrapped, not shortened.** `labelLines()` in
+  `analytics/analytics_dashboard.php` returns an array of lines, which is how
+  Chart.js draws a tick, a radar spoke or a legend entry over several rows; one
+  line comes back as a plain string so anything expecting text still reads it.
+  A wrapped radar spoke keeps its value on the last line, or the figure reads as
+  a name with a number adrift from it. "Undergraduate Thesis" used to be
+  "Undergraduat...".
+- **The spreadsheet preview's cells wrap** (`.an-sheet-grid`), and the formula
+  bar with them. `height` on a table cell is a floor and not a cap, so a short
+  row is the 1.9rem it always was and only a long value makes its row taller.
+- **A character folded to a question mark is text the document does not show.**
+  The PDF is written as WinAnsi, and the dash family above Latin-1 was not in
+  `esc()`'s fold map: a paper on file is spelled "E-Commerce" with U+2011, the
+  non-breaking hyphen, and printed as "E?Commerce" in every export. The dashes
+  and the odd spaces fold now. This is the Binan bug from the other side; check
+  a new export by reading the drawn strings out of the file, not by eye.
+
+Driven against the running site for all six roles: the Librarian's requests,
+both admin desks, the Storage Folder and analytics come out 936x612 with
+`w:orient="landscape"`, the Subject Adviser's and the head's stay 612x936, no
+cell in any of them carries an ellipsis, and Figure 4's axis reads
+"Undergraduate / Thesis" over two lines.
+
+**Still wrong, and not part of this:** `PdfWriter::closePage()` writes the
+running footer "PAPEL Analytics" on every page of all four documents, so the
+Librarian's manuscript requests say they are the analytics report.
+
 ### PDF compression before submission
 
 **Switched off for now** (the owner's request, 20 November 2026). The script tag that loads

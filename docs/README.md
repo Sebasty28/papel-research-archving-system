@@ -16,6 +16,7 @@ is not maintained). A record is not stale; a record that claims to be current is
 |---|---|
 | [WORKFLOW_DIAGRAM.md](WORKFLOW_DIAGRAM.md) | The approval chain: every status, who sets it, how a paper goes backwards, and the withdraw window. Cited to the lines that write each status. |
 | [PAPEL_System_Overview.md](PAPEL_System_Overview.md) | The long reference: what the system is, the version history, the database design. Written for Chapters 2 and 3 of the capstone paper, so it explains things the code takes for granted. |
+| [PDF_WORKFLOWS.md](PDF_WORKFLOWS.md) | Every path a PDF takes: submission, return and archiving, how `app/paper_file.php` serves a file and how the viewer draws it, the watermark and the cover, and the librarian grant. Written as the brief to hand Claude alongside the capstone paper, so it ends with a final-defence question bank and a list of limitations to volunteer before being asked. |
 | [PAPEL_Development_Iterations.md](PAPEL_Development_Iterations.md) | The owner's nine development-iteration descriptions, updated to account for the current system while holding the version at v0.12.0. |
 | [RELEASING.md](RELEASING.md) | How the version number in the footer is set and what to click to move a build to staging or production. GitHub Desktop, no commands. |
 | [DEPLOYING_PRODUCTION.md](DEPLOYING_PRODUCTION.md) | Setting up a copy of the site from nothing: hosting, secrets, database, Drive connection, storage folder. Production was built from it on 12 November 2026, so it is now also the record of that. |

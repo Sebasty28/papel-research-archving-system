@@ -334,7 +334,7 @@ if (in_array($rcExportFormat, ['csv', 'xlsx', 'docx', 'pdf'], true)) {
 
     if ($rcExportFormat === 'docx') {
         require_once ROOT_PATH . '/includes/docx_writer.php';
-        $d = new DocxWriter();
+        $d = new DocxWriter(export_landscape());
         $d->title($exportTitle, $filterLine . '  ·  ' . $when);
         $d->heading('Summary');
         $d->table([['Status', 3, 'left'], ['Papers', 1, 'right']], $summaryRows);
@@ -353,7 +353,7 @@ if (in_array($rcExportFormat, ['csv', 'xlsx', 'docx', 'pdf'], true)) {
 
     // pdf
     require_once ROOT_PATH . '/includes/pdf_writer.php';
-    $pdf = new PdfWriter($exportTitle, $filterLine . '  -  ' . $when);
+    $pdf = new PdfWriter($exportTitle, $filterLine . '  -  ' . $when, export_landscape());
     $pdf->heading('Summary');
     $pdf->table([['Status', 320, 'l'], ['Papers', 179, 'r']], $summaryRows);
     $pdf->heading('Papers');

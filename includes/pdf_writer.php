@@ -25,10 +25,18 @@
 
 class PdfWriter
 {
-    /* Folio (8.5 x 13 inches) in points. */
-    private const W = 612.0;
-    private const H = 936.0;
+    /* Folio (8.5 x 13 inches) in points, upright. Landscape is the same sheet
+       turned, so the two are one pair of numbers swapped rather than a second
+       paper size: a report printed either way comes off the same stack. */
+    private const PAGE_W = 612.0;
+    private const PAGE_H = 936.0;
     private const MARGIN = 48.0;
+
+    /* The sheet this document is written on. Instance values and not
+       constants, because one request can write a landscape report while the
+       class is also the portrait one every other caller still asks for. */
+    private float $w;
+    private float $h;
 
     private array $pages = [];        // each: ['content' => string, 'images' => [name => ref]]
     private string $buf = '';         // the page being written
@@ -39,13 +47,26 @@ class PdfWriter
     private string $title;
     private string $subtitle;
 
-    public function __construct(string $title, string $subtitle = '')
+    /**
+     * $landscape turns the sheet. Every width in this class is measured from
+     * $this->w, and table columns are scaled to the text block (see table()),
+     * so a caller that was written for the upright page needs no other change:
+     * its columns simply grow into the wider measure.
+     */
+    public function __construct(string $title, string $subtitle = '', bool $landscape = false)
     {
+        $this->w = $landscape ? self::PAGE_H : self::PAGE_W;
+        $this->h = $landscape ? self::PAGE_W : self::PAGE_H;
         $this->title = $title;
         $this->subtitle = $subtitle;
         $this->newPage();
         $this->coverBlock();
     }
+
+    /** The text block's width: what a caller's columns are scaled to fill. */
+    public function textWidth(): float { return $this->w - self::MARGIN * 2; }
+
+    public function isLandscape(): bool { return $this->w > $this->h; }
 
     // ---- public drawing API ------------------------------------------------
 
@@ -57,19 +78,19 @@ class PdfWriter
         $this->text($text, self::MARGIN, $this->y, $size, true, [0.51, 0.03, 0.03]);
         $this->y -= 5;
         // A rule under the heading, the width of the text block.
-        $this->line(self::MARGIN, $this->y, self::W - self::MARGIN, $this->y,
+        $this->line(self::MARGIN, $this->y, $this->w - self::MARGIN, $this->y,
                     0.6, [0.85, 0.78, 0.78]);
         $this->y -= 12;
     }
 
     public function paragraph(string $text, float $size = 11.0): void
     {
-        $lines = $this->wrap($text, self::W - self::MARGIN * 2, $size, false);
+        $lines = $this->wrap($text, $this->w - self::MARGIN * 2, $size, false);
         foreach ($lines as $i => $line) {
             $this->need($size + 4);
             $spaces = substr_count($line, ' ');
             $justify = $i < count($lines) - 1 && $spaces > 0 && $line !== '';
-            $wordSpace = $justify ? max(0, (self::W - self::MARGIN * 2 - $this->widthOf($line, $size, false)) / $spaces) : 0;
+            $wordSpace = $justify ? max(0, ($this->w - self::MARGIN * 2 - $this->widthOf($line, $size, false)) / $spaces) : 0;
             $this->text($line, self::MARGIN, $this->y, $size, false, [0.2, 0.2, 0.2], $wordSpace);
             $this->y -= $size + 3.5;
         }
@@ -83,12 +104,23 @@ class PdfWriter
      */
     public function table(array $columns, array $rows, float $size = 11.0): void
     {
+        /* Columns arrive as points measured for the upright page. Scaled to
+           whatever text block this document actually has, the same call site
+           fills a landscape sheet without naming a second set of numbers, and
+           a spec that does not quite add up to the measure stops leaving a
+           ragged strip down the right-hand edge. */
+        $given = 0.0;
+        foreach ($columns as $c) $given += (float)$c[1];
+        if ($given > 0) {
+            $scale = $this->textWidth() / $given;
+            foreach ($columns as $i => $c) $columns[$i][1] = (float)$c[1] * $scale;
+        }
         $rowH = $size + 9;
         $this->need($rowH * 3);
         $drawHead = function () use ($columns, $size, $rowH) {
             $x = self::MARGIN;
             $top = $this->y;
-            $this->rect(self::MARGIN, $top - $rowH + 3, self::W - self::MARGIN * 2, $rowH,
+            $this->rect(self::MARGIN, $top - $rowH + 3, $this->w - self::MARGIN * 2, $rowH,
                         [0.98, 0.94, 0.94]);
             foreach ($columns as $c) {
                 $this->cell($c[0], $x, $top, $c[1], $size, true, $c[2] ?? 'l',
@@ -96,7 +128,7 @@ class PdfWriter
                 $x += $c[1];
             }
             $this->y -= $rowH;
-            $this->line(self::MARGIN, $this->y + 3, self::W - self::MARGIN, $this->y + 3,
+            $this->line(self::MARGIN, $this->y + 3, $this->w - self::MARGIN, $this->y + 3,
                         0.7, [0.78, 0.68, 0.68]);
         };
         $drawHead();
@@ -116,7 +148,7 @@ class PdfWriter
                 $stripe = false;
             }
             if ($stripe) {
-                $this->rect(self::MARGIN, $this->y - $dataH + 3, self::W - self::MARGIN * 2,
+                $this->rect(self::MARGIN, $this->y - $dataH + 3, $this->w - self::MARGIN * 2,
                             $dataH, [0.985, 0.975, 0.975]);
             }
             $x = self::MARGIN;
@@ -128,7 +160,7 @@ class PdfWriter
                 $x += $c[1];
             }
             $this->y -= $dataH;
-            $this->line(self::MARGIN, $this->y + 3, self::W - self::MARGIN, $this->y + 3,
+            $this->line(self::MARGIN, $this->y + 3, $this->w - self::MARGIN, $this->y + 3,
                         0.35, [0.90, 0.86, 0.86]);
             $stripe = !$stripe;
         }
@@ -142,17 +174,22 @@ class PdfWriter
         if (!$size) return false;
         [$iw, $ih] = $size;
 
-        $maxW = self::W - self::MARGIN * 2;
-        $w = min($maxW, 420.0);
+        /* The cap grows with the measure, so a chart on a landscape sheet is
+           drawn at the size that page affords instead of sitting at its
+           upright width with a band of empty paper beside it. The height cap
+           comes down to match, a turned sheet being the shorter one. */
+        $maxW = $this->textWidth();
+        $w = min($maxW, 420.0 * $maxW / (self::PAGE_W - self::MARGIN * 2));
         $h = $w * ($ih / $iw);
-        if ($h > 260) { $h = 260.0; $w = $h * ($iw / $ih); }
+        $capH = $this->isLandscape() ? 240.0 : 260.0;
+        if ($h > $capH) { $h = $capH; $w = $h * ($iw / $ih); }
 
         $this->need($h + 38);
         $name = 'Im' . (++$this->imageSeq);
         $this->images[$name] = ['data' => $jpeg, 'w' => $iw, 'h' => $ih];
         $this->imagesOnPage[$name] = true;
 
-        $x = (self::W - $w) / 2;
+        $x = ($this->w - $w) / 2;
         $this->y -= $h;
         $this->buf .= sprintf("q %.2F 0 0 %.2F %.2F %.2F cm /%s Do Q\n", $w, $h, $x, $this->y, $name);
         // A hairline around the figure so it sits on the page rather than floating.
@@ -225,7 +262,7 @@ class PdfWriter
             $res .= " >>";
 
             $objects[$pageObj[$i]] = "<< /Type /Page /Parent $pagesObj 0 R "
-                . sprintf("/MediaBox [0 0 %.2F %.2F] ", self::W, self::H)
+                . sprintf("/MediaBox [0 0 %.2F %.2F] ", $this->w, $this->h)
                 . "/Resources $res /Contents {$contentObj[$i]} 0 R >>";
             $objects[$contentObj[$i]] = "<< /Length " . strlen($page['content']) . " >>\n"
                 . "stream\n" . $page['content'] . "\nendstream";
@@ -256,7 +293,7 @@ class PdfWriter
         if ($this->buf !== '') $this->closePage();
         $this->buf = '';
         $this->imagesOnPage = [];
-        $this->y = self::H - self::MARGIN;
+        $this->y = $this->h - self::MARGIN;
     }
 
     private function closePage(): void
@@ -267,7 +304,7 @@ class PdfWriter
                     [0.55, 0.55, 0.55]);
         $label = 'Page ' . $num;
         $w = $this->widthOf($label, 11, false);
-        $this->text($label, self::W - self::MARGIN - $w, self::MARGIN - 18, 11, false,
+        $this->text($label, $this->w - self::MARGIN - $w, self::MARGIN - 18, 11, false,
                     [0.55, 0.55, 0.55]);
         $this->pages[] = ['content' => $this->buf, 'images' => $this->imagesOnPage];
         $this->buf = '';
@@ -277,13 +314,13 @@ class PdfWriter
     /** The title block at the top of page one. */
     private function coverBlock(): void
     {
-        $this->rect(0, self::H - 96, self::W, 96, [0.51, 0.03, 0.03]);
-        $this->text($this->title, self::MARGIN, self::H - 52, 11, true, [1, 1, 1]);
+        $this->rect(0, $this->h - 96, $this->w, 96, [0.51, 0.03, 0.03]);
+        $this->text($this->title, self::MARGIN, $this->h - 52, 11, true, [1, 1, 1]);
         if ($this->subtitle !== '') {
-            $this->text($this->subtitle, self::MARGIN, self::H - 72, 11, false,
+            $this->text($this->subtitle, self::MARGIN, $this->h - 72, 11, false,
                         [0.93, 0.85, 0.85]);
         }
-        $this->y = self::H - 96 - 28;
+        $this->y = $this->h - 96 - 28;
     }
 
     private function need(float $space): void
@@ -298,10 +335,16 @@ class PdfWriter
             $bold ? 'F2' : 'F1', $size, $rgb[0], $rgb[1], $rgb[2], $wordSpace, $x, $y, $this->esc($s));
     }
 
+    /**
+     * One line of one cell. It does not shorten what it is given: the owner's
+     * rule (23 November 2026) is that a long value is shown in full, never cut
+     * to an ellipsis. table() has already broken the value into lines that fit
+     * the column, including inside a word with no space to break at, so what
+     * arrives here fits and the cell only has to place it.
+     */
     private function cell(string $s, float $x, float $y, float $w, float $size,
                           bool $bold, string $align, array $rgb): void
     {
-        $s = $this->clip($s, $w - 8, $size, $bold);
         $tx = $align === 'r' ? $x + $w - 6 - $this->widthOf($s, $size, $bold) : $x + 3;
         $this->text($s, $tx, $y - $size - 1, $size, $bold, $rgb);
     }
@@ -331,9 +374,23 @@ class PdfWriter
     {
         static $fold = [
             "\xE2\x80\x94" => '-', "\xE2\x80\x93" => '-',      // em and en dash
+            /* The rest of the dash family, which a title pasted out of Word
+               carries: a paper really on file is spelled "E-Commerce" with
+               U+2011, the non-breaking hyphen, and it printed as "E?Commerce"
+               in every PDF export. A character folded to a question mark is
+               text the document does not show, the fault the n of Binan was
+               once an instance of. */
+            "\xE2\x80\x90" => '-', "\xE2\x80\x91" => '-',      // hyphen, non-breaking hyphen
+            "\xE2\x80\x92" => '-', "\xE2\x80\x95" => '-',      // figure dash, horizontal bar
+            "\xE2\x88\x92" => '-',                              // minus sign
             "\xE2\x80\x98" => "'", "\xE2\x80\x99" => "'",
             "\xE2\x80\x9C" => '"', "\xE2\x80\x9D" => '"',
             "\xE2\x80\xA6" => '...', "\xC2\xA0" => ' ',
+            /* Spaces that are not the space: a word break the reader sees,
+               so it is written as one rather than lost to a question mark. */
+            "\xE2\x80\x82" => ' ', "\xE2\x80\x83" => ' ',      // en space, em space
+            "\xE2\x80\x89" => ' ', "\xE2\x80\xAF" => ' ',      // thin space, narrow no-break space
+            "\xE2\x80\x8B" => '',                              // zero width space
         ];
         /* One character at a time, as UTF-8. Latin-1 (U+00A0 to U+00FF: the n of
            Binan in either case, an accented name, the middle dot in every export
@@ -379,13 +436,32 @@ class PdfWriter
         return $total * $size / 1000;
     }
 
-    private function clip(string $s, float $w, float $size, bool $bold): string
+    /**
+     * A word with no space in it, cut into pieces that each fit the measure.
+     *
+     * An email address, a Drive file name or a hyphenless keyword is one
+     * "word" to wrap(), which can only break at a space: such a value used to
+     * overflow its column and be cut to "someone@exampl..." by clip(). Broken
+     * here instead, every character of it is on the page over as many lines as
+     * it takes. At least one character goes on a line whatever the measure,
+     * or a column narrower than a single letter would loop for ever.
+     */
+    private function breakWord(string $s, float $w, float $size, bool $bold): array
     {
-        if ($this->widthOf($s, $size, $bold) <= $w) return $s;
-        while ($s !== '' && $this->widthOf($s . '...', $size, $bold) > $w) {
-            $s = substr($s, 0, -1);
+        $out  = [];
+        $line = '';
+        $len  = strlen($s);
+        for ($i = 0; $i < $len; $i++) {
+            $try = $line . $s[$i];
+            if ($line !== '' && $this->widthOf($try, $size, $bold) > $w) {
+                $out[] = $line;
+                $line  = $s[$i];
+            } else {
+                $line = $try;
+            }
         }
-        return $s . '...';
+        if ($line !== '') $out[] = $line;
+        return $out;
     }
 
     private function wrap(string $s, float $w, float $size, bool $bold): array
@@ -394,6 +470,22 @@ class PdfWriter
         foreach (preg_split('/\R/', $s) as $para) {
             $line = '';
             foreach (explode(' ', $para) as $word) {
+                /* A word wider than the measure cannot be fitted by moving it
+                   to a line of its own, so it is cut into pieces that do fit.
+                   Nothing is dropped and nothing is replaced by an ellipsis. */
+                if ($this->widthOf($word, $size, $bold) > $w) {
+                    $pieces = $this->breakWord($word, $w, $size, $bold);
+                    foreach ($pieces as $k => $piece) {
+                        if ($k === 0 && $line !== ''
+                            && $this->widthOf($line . ' ' . $piece, $size, $bold) <= $w) {
+                            $line .= ' ' . $piece;
+                        } else {
+                            if ($line !== '') $out[] = $line;
+                            $line = $piece;
+                        }
+                    }
+                    continue;
+                }
                 $try = $line === '' ? $word : $line . ' ' . $word;
                 if ($this->widthOf($try, $size, $bold) > $w && $line !== '') {
                     $out[] = $line;

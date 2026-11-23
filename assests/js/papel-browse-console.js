@@ -1104,6 +1104,21 @@
         if (on) { window.papelLoading.start(); } else { window.papelLoading.done(); }
     }
 
+    /* The title as a reader sees it, which is not everything inside the
+       heading. A pinned result carries .paper-pin-mark at the head of its
+       title, and that is an icon ligature plus the word it stands for: read
+       as text they came out as "push_pin Manuscript requested" in front of
+       the paper's name. An icon is drawn by its font, so anything that turns
+       a piece of the page into a string has to take the glyphs out first. */
+    function titleText(row) {
+        var title = row.querySelector(".paper-title");
+        if (!title) return "";
+        var copy = title.cloneNode(true);
+        copy.querySelectorAll(".paper-pin, .material-symbols-outlined")
+            .forEach(function (el) { el.remove(); });
+        return copy.textContent.replace(/\s+/g, " ").trim();
+    }
+
     function recordUrl(row) {
         var a = row.querySelector(".paper-title a[href]");
         return a ? a.getAttribute("href") : null;
@@ -1214,8 +1229,7 @@
         var url = recordUrl(row);
         if (!url) return;                     // nothing to open: a draft, or a guest
         var p = panel();
-        var title = row.querySelector(".paper-title");
-        name.textContent = title ? title.textContent.replace(/\s+/g, " ").trim() : "Paper";
+        name.textContent = titleText(row) || "Paper";
         go.setAttribute("href", url);
         frame.style.visibility = "hidden";
         wait(true);

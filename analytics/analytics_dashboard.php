@@ -427,7 +427,11 @@ if (in_array($exportFormat, ['xlsx', 'docx', 'pdf'], true)) {
 
     if ($exportFormat === 'docx') {
         require_once ROOT_PATH . '/includes/docx_writer.php';
-        $d = new DocxWriter();
+        /* A Librarian and the administrators export landscape, always: see
+           export_landscape() in config/core.php. The edited path below is the
+           exception, since the preview's own control has said what shape the
+           reader wants and that answer is already in the posted document. */
+        $d = new DocxWriter(export_landscape());
         if (isset($_POST['word_document'])) {
             try {
                 if (!is_string($_POST['word_document']) || strlen($_POST['word_document']) > 2 * 1024 * 1024) {
@@ -503,7 +507,7 @@ if (in_array($exportFormat, ['xlsx', 'docx', 'pdf'], true)) {
 
     // pdf
     require_once ROOT_PATH . '/includes/pdf_writer.php';
-    $pdf = new PdfWriter('PAPEL Analytics', $filterLine . '  -  ' . $when);
+    $pdf = new PdfWriter('PAPEL Analytics', $filterLine . '  -  ' . $when, export_landscape());
 
     if ($aiInsight !== '' && stripos($aiInsight, 'unavailable') === false) {
         $pdf->heading('What the figures say');
@@ -722,14 +726,25 @@ html[data-mode="dark"] .an-export-preview img { filter: none !important; }
     min-height: 2.25rem; border-bottom: 1px solid #dadce0; padding: .35rem .75rem; }
 .an-sheet-reference { min-width: 3rem; border-right: 1px solid #dadce0; color: #5f6368; }
 .an-sheet-fx { color: #5f6368; font-style: italic; font-weight: 700; }
-.an-sheet-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The formula bar is the one place a cell's whole value is meant to be
+   readable, so it wraps rather than ending in an ellipsis: cutting it here
+   left no way at all to read a long title. The owner's rule, 23 November
+   2026, which the grid below follows too. */
+.an-sheet-value { overflow-wrap: anywhere; }
 .an-sheet-pages { flex: 1 1 auto; min-height: 0; overflow: auto; }
 .an-sheet-page[hidden] { display: none; }
 .an-sheet-grid { width: max-content; border-collapse: separate; border-spacing: 0;
     table-layout: fixed; background: #fff; }
+/* A cell shows everything it holds, over as many lines as that takes, so the
+   preview says what the file will contain. `height` is a floor on a table
+   cell and not a cap, so a short row is the same 1.9rem it always was and
+   only a long value makes its row taller. */
 .an-sheet-grid th, .an-sheet-grid td { height: 1.9rem; padding: .3rem .5rem;
     border-right: 1px solid #e0e3e7; border-bottom: 1px solid #e0e3e7;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+    white-space: normal; overflow-wrap: anywhere; text-align: left;
+    vertical-align: top; }
+/* The column letters and row numbers are labels, not data: one line each. */
+.an-sheet-grid thead th, .an-sheet-grid .an-sheet-row-number { white-space: nowrap; }
 .an-sheet-grid thead th { position: sticky; top: 0; z-index: 2; background: #f8f9fa;
     color: #5f6368; text-align: center; font-weight: 500; }
 .an-sheet-grid .an-sheet-corner { position: sticky; left: 0; z-index: 4; width: 3rem; }
@@ -2009,13 +2024,32 @@ document.addEventListener('DOMContentLoaded', function () {
         return c;
     }
 
+    /* A name laid out over as many lines as it takes.
+       The owner's rule (23 November 2026): text that does not fit is shown in
+       full, never cut to an ellipsis. Chart.js draws an array of strings as a
+       stack of lines wherever a label goes - a tick, a spoke, a legend entry -
+       so a long programme or paper type is wrapped instead of shortened. A
+       single word with nothing to break at is left whole, which is still the
+       whole of it; one line comes back as a plain string, so anything that
+       expects a label to be text still reads it. */
+    function labelLines(text, n) {
+        var out = [], line = '';
+        String(text).split(' ').forEach(function (word) {
+            var next = line === '' ? word : line + ' ' + word;
+            if (next.length > n && line !== '') { out.push(line); line = word; }
+            else { line = next; }
+        });
+        if (line !== '') out.push(line);
+        return out.length > 1 ? out : (out[0] || '');
+    }
+
     function config(key, kind, c) {
         var shape = SHAPE[key], rate = shape === 'rate';
         var rows = rowsOf(key);
         // A slice of nothing is not drawn; a bar of nothing is, since "none" is an answer there.
         if (kind === 'pie' || kind === 'doughnut' || kind === 'stacked') rows = rows.filter(function (r) { return r.value > 0; });
         var full = rows.map(function (r) { return r.label; });
-        var short = function (n) { return full.map(function (l) { return l.length > n ? l.slice(0, n - 2) + '…' : l; }); };
+        var wrapped = function (n) { return full.map(function (l) { return labelLines(l, n); }); };
         var vals = rows.map(function (r) { return r.value; });
         var total = vals.reduce(function (a, b) { return a + b; }, 0);
         var share = function (v) { return total ? Math.round(v / total * 1000) / 10 : 0; };
@@ -2036,7 +2070,7 @@ document.addEventListener('DOMContentLoaded', function () {
                           ticks: rate ? { color: c.grey, callback: function (v) { return v + '%'; } } : { color: c.grey, precision: 0 } };
         if (rate) valueAxis.max = 100;
         var catAxis = function (n) { return { grid: { display: false }, ticks: { color: c.grey, autoSkip: true, maxRotation: 0,
-            callback: function (value) { var l = this.getLabelForValue(value); return l.length > n ? l.slice(0, n - 2) + '…' : l; } } }; };
+            callback: function (value) { return labelLines(this.getLabelForValue(value), n); } } }; };
         var base = function (type, dataset, extra) {
             return Object.assign({ type: type, data: { labels: full, datasets: [dataset] },
                 options: { responsive: true, maintainAspectRatio: false,
@@ -2083,7 +2117,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 /* Each spoke is named with its own value, and the ring labels are
                    hidden: printed up the top spoke they sat on its point (a 100%
                    rate is drawn exactly where "100%" is written). */
-                cfgRadar.data.labels = short(16).map(function (l, i) { return l + ' · ' + (rate ? vals[i] + '%' : vals[i]); });
+                cfgRadar.data.labels = wrapped(16).map(function (l, i) {
+                    /* The value joins the last line, so a wrapped spoke reads
+                       as one label rather than a name with a figure adrift. */
+                    var tail = ' · ' + (rate ? vals[i] + '%' : vals[i]);
+                    return Array.isArray(l) ? l.slice(0, -1).concat(l[l.length - 1] + tail) : l + tail;
+                });
                 cfgRadar.options.scales = { r: { beginAtZero: true, max: rate ? 100 : undefined,
                     grid: { color: c.border }, angleLines: { color: c.border },
                     pointLabels: { color: c.ink, font: { size: 11 } },
@@ -2093,14 +2132,14 @@ document.addEventListener('DOMContentLoaded', function () {
             case 'pie': case 'doughnut': {
                 var cfgPie = base(kind, { data: vals, backgroundColor: vals.map(function (v, i) { return catColor(i); }),
                     borderColor: c.white, borderWidth: 2 });
-                cfgPie.data.labels = short(24);
+                cfgPie.data.labels = wrapped(24);
                 if (kind === 'doughnut') cfgPie.options.cutout = key === 'status' ? '62%' : '58%';
                 cfgPie.options.plugins.legend = legendBottom;
                 return cfgPie;
             }
             case 'stacked': {
                 // One bar, 100 wide, each category its share of it: the pie's question asked along a ruler.
-                var labs = short(24);
+                var labs = wrapped(24);
                 return { type: 'bar',
                     data: { labels: [''], datasets: rows.map(function (r, i) {
                         return { label: labs[i], data: [share(r.value)], count: r.value, backgroundColor: catColor(i),
@@ -2849,7 +2888,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (first) selectCell(first);
                 prepareResizablePreview();
                 if (format === 'docx' && typeof window.PapelAnalyticsWordEditor === 'function') {
-                    wordEditor = window.PapelAnalyticsWordEditor(previewBody);
+                    wordEditor = window.PapelAnalyticsWordEditor(previewBody,
+                        { orientation: <?= json_encode(export_landscape() ? 'landscape' : 'portrait') ?> });
                     setPreviewZoom(Math.min(100, Math.floor((previewBody.clientWidth - 40) / 794 * 100)));
                 } else setPreviewZoom(100);
                 previewDownload.disabled = false;

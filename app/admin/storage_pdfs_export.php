@@ -112,7 +112,7 @@ if ($format === 'xlsx') {
     header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 } elseif ($format === 'docx') {
     require_once ROOT_PATH . '/includes/docx_writer.php';
-    $d = new DocxWriter();
+    $d = new DocxWriter(export_landscape());
     $d->title($title, $subtitle);
     $d->heading('Summary');
     $d->table([['Account', 4, 'left'], ['List', 3, 'left'], ['PDFs', 1, 'right'], ['Accessible', 2, 'right'],
@@ -127,7 +127,7 @@ if ($format === 'xlsx') {
     header('Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document');
 } else {
     require_once ROOT_PATH . '/includes/pdf_writer.php';
-    $pdf = new PdfWriter($title, $subtitle);
+    $pdf = new PdfWriter($title, $subtitle, export_landscape());
     $pdf->heading('Summary');
     // 9pt: a heading cell is clipped, not wrapped, and "Not accessible" needs the room.
     $pdf->table([['Account', 140, 'l'], ['List', 74, 'l'], ['PDFs', 34, 'r'], ['Accessible', 56, 'r'],

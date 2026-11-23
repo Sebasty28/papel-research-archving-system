@@ -29,9 +29,14 @@
             tool('later', 'arrow_downward', 'Move figure later') + '<label>Figure width <input type="range" min="20" max="100" value="100" data-word-width></label></div>' +
             '<span class="an-word-status" aria-live="polite"></span>';
         toolbar.querySelector('[data-word-size]').value = '11';
+        toolbar.querySelector('[data-word-orientation]').value =
+            options.orientation === 'landscape' ? 'landscape' : 'portrait';
         container.before(toolbar);
         root.classList.add('an-word-document');
-        root.dataset.orientation = 'portrait';
+        /* The shape the server says this reader's exports take, so the preview
+           opens as the document will be and the dropdown shows it. The control
+           stays: this is the starting answer, not a lock. */
+        root.dataset.orientation = options.orientation === 'landscape' ? 'landscape' : 'portrait';
         var initial = [];
         function flatten(parent) {
             Array.from(parent.children).forEach(function (element) {

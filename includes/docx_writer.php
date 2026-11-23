@@ -15,11 +15,30 @@
 
 class DocxWriter
 {
+    /* Folio less 2cm margins, upright. Turned, the same sheet gives 16452. */
     private const USABLE_TWIPS = 9972;
+    private const USABLE_TWIPS_LANDSCAPE = 16452;
 
     private string $body = '';
     private array $images = [];        // ['data' => png, 'w' => px, 'h' => px]
     private bool $landscape = false;
+
+    /**
+     * $landscape turns the sheet, as PdfWriter's own flag does, so the two
+     * formats of one export come out the same shape. Every width below is
+     * taken from usable(), so a caller that passes it needs no other change:
+     * its table columns are proportions and simply fill the wider measure.
+     */
+    public function __construct(bool $landscape = false)
+    {
+        $this->landscape = $landscape;
+    }
+
+    /** The text measure in twips, which is what a table is laid out against. */
+    private function usable(): int
+    {
+        return $this->landscape ? self::USABLE_TWIPS_LANDSCAPE : self::USABLE_TWIPS;
+    }
 
     /** Only text, formatting and references to the request's validated figures cross this boundary. */
     public function editedDocument(array $document, array $figures): void
@@ -29,7 +48,7 @@ class DocxWriter
             throw new InvalidArgumentException('The edited document has an invalid page count.');
         }
         $this->landscape = ($document['orientation'] ?? '') === 'landscape';
-        $usable = $this->landscape ? 16452 : self::USABLE_TWIPS;
+        $usable = $this->usable();
         $blocks = 0;
         foreach ($pages as $pageIndex => $page) {
             if (!is_array($page) || !is_array($page['blocks'] ?? null)) {
@@ -180,13 +199,13 @@ class DocxWriter
         $grid = '';
         $widths = [];
         foreach ($columns as $c) {
-            $w = (int)round(self::USABLE_TWIPS * ($c[1] / $total));
+            $w = (int)round($this->usable() * ($c[1] / $total));
             $widths[] = $w;
             $grid .= '<w:gridCol w:w="' . $w . '"/>';
         }
 
         $x = '<w:tbl><w:tblPr>'
-           . '<w:tblW w:w="' . self::USABLE_TWIPS . '" w:type="dxa"/>'
+           . '<w:tblW w:w="' . $this->usable() . '" w:type="dxa"/>'
            . '<w:tblBorders>'
            . '<w:top w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
            . '<w:left w:val="none" w:sz="0" w:space="0" w:color="auto"/>'
@@ -230,8 +249,11 @@ class DocxWriter
         $this->images[] = ['data' => $png, 'w' => $w, 'h' => $h];
         $id = count($this->images);
 
-        // 600px across the page reads well; the height follows the aspect.
-        $drawW = max(48, min(972, (int)($options['width'] ?? 600)));
+        /* 600px across the upright page reads well, and the turned one is
+           wider in the same proportion; the height follows the aspect. */
+        $default = $this->landscape ? 990 : 600;
+        $drawW = max(48, min($this->landscape ? 1080 : 972,
+                             (int)($options['width'] ?? $default)));
         $drawH = (int)round($h * ($drawW / max(1, $w)));
         $cx = $drawW * 9525;
         $cy = $drawH * 9525;

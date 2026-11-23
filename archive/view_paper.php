@@ -613,7 +613,14 @@ $PAGE_SKELETON = 'reader';
                         <div class="pd-note pd-note--request">
                             <span class="material-symbols-outlined">hourglass_top</span>
                             <span>Your request is waiting for a librarian to review it.</span>
-                            <a class="btn-sm-maroon pd-note-action" href="<?= e(BASE_URL) ?>/app/my_library.php?tab=requests">
+                            <?php /* _top, because this record is also framed as the preview the
+                                     repository opens on a single click, and My Library is not a
+                                     record: followed inside that frame it hits the preview's own
+                                     "this is not a paper" rule and the window simply closes, which
+                                     reads as the button doing nothing. The destination is a page of
+                                     the reader's own, so it belongs in the window the list is in.
+                                     On the page itself _top is _self. */ ?>
+                            <a class="btn-sm-maroon pd-note-action" target="_top" href="<?= e(BASE_URL) ?>/app/my_library.php?tab=requests">
                                 View my requests <span class="material-symbols-outlined" aria-hidden="true">arrow_forward</span>
                             </a>
                         </div>

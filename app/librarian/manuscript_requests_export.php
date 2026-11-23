@@ -103,7 +103,7 @@ if ($format === 'xlsx') {
     header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 } elseif ($format === 'docx') {
     require_once ROOT_PATH . '/includes/docx_writer.php';
-    $d = new DocxWriter();
+    $d = new DocxWriter(export_landscape());
     $d->title($title, $subtitle);
     $d->heading('Summary');
     $d->table([['Status', 3, 'left'], ['Requests', 1, 'right']], $summary);
@@ -121,7 +121,7 @@ if ($format === 'xlsx') {
     header('Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document');
 } else {
     require_once ROOT_PATH . '/includes/pdf_writer.php';
-    $pdf = new PdfWriter($title, $subtitle);
+    $pdf = new PdfWriter($title, $subtitle, export_landscape());
     $pdf->heading('Summary');
     $pdf->table([['Status', 320, 'l'], ['Requests', 179, 'r']], $summary);
     // A readable portrait report keeps the primary request fields in the table.

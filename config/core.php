@@ -1481,6 +1481,29 @@ function is_research_coordinator(?array $u): bool {
     return in_array('Research Coordinator', user_positions($u), true);
 }
 
+/**
+ * Whether this account's exported documents are laid out landscape.
+ *
+ * The owner's rule (23 November 2026): a Librarian and the administrators
+ * always export landscape. It is about who is exporting rather than which
+ * page they are on, so it is one question asked in one place and every
+ * export surface asks it: the Librarian's manuscript requests, the review
+ * desks, the Storage Folder's PDF lists and the analytics report. Without
+ * that, "always" would have to be remembered separately on four pages and a
+ * fifth would be written portrait by default.
+ *
+ * user_positions() is what it reads, through the two helpers below, so a
+ * second post counts: a Librarian who also coordinates is both, and either
+ * answer alone is enough.
+ *
+ * The Subject Adviser's and the Head of Academic Programs' desks are
+ * deliberately not included. Their exports stay portrait.
+ */
+function export_landscape(?array $u = null): bool {
+    if ($u === null) $u = $_SESSION['user'] ?? null;
+    return user_has_role($u, 'librarian') || can_manage_research_operations($u);
+}
+
 /** The two accounts that run the research operation. */
 function can_manage_research_operations(?array $u): bool {
     return user_has_role($u, 'super_admin') || is_research_coordinator($u);
