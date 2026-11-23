@@ -863,8 +863,6 @@ DEAD_NOTES = {
  'includes/progress_tracker.php':
    'The real progress tracker lives in console_shell.php; this is an earlier '
    'version left behind.',
- 'config/sri_hashes.php':
-   'Security hashes for the CDN scripts, no longer referenced.',
  'config/mail_config.php':
    'Empty file. The mail settings moved into core.php and .env.',
  'includes/mail_config.php': 'Also empty, for the same reason.',
