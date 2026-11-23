@@ -2170,6 +2170,64 @@ Every page: `require_once config/core.php` then `require_role([...])`.
   dynamic ordering.
 - **Escape output** with `e()`.
 
+### Reading a ZAP report without chasing other people's alerts
+
+A scan of **production** sweeps up whatever the browser touched, so most of what
+comes back is not ours. In the 24 November 2026 report, 21 of 30 alert types
+were raised on `www.google.com` (the reCAPTCHA frame), `static.cloudflareinsights.com`,
+`clientservices.googleapis.com` and `cdn.jsdelivr.net`. Read **Alert Counts by
+Site and Risk** first and work only the rows under `pupbcpapel.com`.
+
+Three things about this host look like faults of ours and are not:
+
+- **`GET /` is the host's `__test` challenge, not PAPEL.** InfinityFree answers
+  a client with no `__test` cookie with a small `<script src="/aes.js">`
+  document, generated before PHP or `.htaccess` run, so it carries no CSP, no
+  `X-Frame-Options` and no HSTS. That one document is the whole of "CSP Header
+  Not Set" and "Missing Anti-clickjacking Header" on our site. The same address
+  **with** the cookie (`/?i=1`) is the real page and carried everything. There
+  is no fixing it from here: its inline script changes every response, so a CSP
+  that let it run would need `'unsafe-inline'`, and a CSP set for all responses
+  at Cloudflare would overwrite our per-request nonce and break every page.
+- **`/cdn-cgi/*` is Cloudflare's.** `speculation` is Speed Brain,
+  `challenge-platform` sets `cf_clearance`, which is the "Cookie with SameSite
+  Attribute None" alert. Ours is `papel_sid`, and the same report captured it
+  as `Secure; HttpOnly; SameSite=Lax`.
+- **Anti-CSRF Tokens on the repository is a false positive.** The flagged forms
+  are the GET search and filter and `kwDialogFind`, which is `method="dialog"`
+  and is never sent to the server. Every POST form carries `csrf_field()`.
+  It wants an alert filter in ZAP scoped to `/archive/`, not a token.
+
+**Check whether the scan was passive before quoting its result.** Every alert in
+that report says *raised by a passive scanner*: the active rules never ran, so
+nothing tested injection, XSS, path traversal or access control, and a clean
+report means much less than it looks like. The Insights panel also reported 97%
+memory used, which is `zap.bat` setting `-Xmx512m`; alerts can be dropped there.
+Run the active rules with a bigger heap, scoped to our host, **against localhost
+or staging and never production**: an active scan submits every form it finds,
+and on this project that means real mail from this machine, real Drive uploads
+and real rows. Exclude the AI endpoints (they spend Groq keys), the upload page,
+`contact_support`, the manuscript request (it emails every librarian), and both
+sign-in paths, where reCAPTCHA is checked before the password and the lockout
+counts per IP, so a scanner proves nothing and locks the machine out.
+
+**Headers go on every response, not just the successful ones.** `Header set`
+writes to the table Apache sends with a 2xx, so a 301, a 404 and a 500 got none
+of them; only HSTS, which was already `always set`, came out. All five are
+`Header always set` now, each paired with a plain `Header unset` so a copy sent
+by PHP (`app/paper_file.php` sends `nosniff`) cannot double it. Measure a change
+here on a redirect and an error page, not only on a page that works.
+
+**An asset stamp is a hash, not a clock.** `asset_url()` stamped `?v=` with the
+file's raw `filemtime()`, which printed a Unix timestamp into every page and
+said when each file was last deployed; `scripts/fetch_fonts.py` wrote one
+`time()` into all 39 font URLs. Both are short hex hashes now, and
+`.htaccess` grants the one-year `immutable` cache on `v=[0-9a-f]+`: **change
+the expression with the format or every returning reader silently revalidates
+every file.** `fetch_fonts.py --restamp` rewrites the stylesheet and downloads
+nothing. The timestamps left on the page are the session and manuscript
+countdowns', which print the server's own clock on purpose.
+
 ### One cookie, and why there is no cookie banner
 
 Asked for on 23 November 2026 as "an Accept and Manage cookies cache". The
