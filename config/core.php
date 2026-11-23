@@ -5,6 +5,12 @@ require_once __DIR__ . '/error_handler.php';
 require_once __DIR__ . '/workflow.php';
 require_once __DIR__ . '/../app/helpers/UploadHelper.php';
 require_once __DIR__ . '/../includes/recaptcha.php';
+/* Nothing required this, so its constants were defined nowhere and every page
+   loading a CDN file wrote its own <link> with no integrity attribute. One of
+   the four hashes in it was wrong as well, which is the worse half: a page
+   that had used it would have had the stylesheet blocked and its icons would
+   have quietly disappeared. Required here, where every page already arrives. */
+require_once __DIR__ . '/sri_hashes.php';
 
 /* A POST whose body PHP threw away before this file ran.
  *

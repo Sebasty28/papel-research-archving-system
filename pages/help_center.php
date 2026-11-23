@@ -14,7 +14,8 @@ $nonce = function_exists('csp_nonce') ? csp_nonce() : '';
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Help Center · <?= e(APP_NAME) ?></title>
 <?php require_once ROOT_PATH.'/includes/site_head.php'; ?>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.min.css" rel="stylesheet"
+      integrity="<?= SRI_BOOTSTRAP_ICONS ?>" crossorigin="anonymous">
 <?php require_once ROOT_PATH.'/includes/page_theme.php'; ?>
 <style nonce="<?= $nonce ?>">
 /* ===== Hero ===== */

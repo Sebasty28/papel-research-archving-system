@@ -1,5 +1,5 @@
 {
- "built": "2026-11-24 05:33",
+ "built": "2026-11-24 07:09",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -194,7 +194,7 @@
    "lines": 313
   },
   "config/core.php": {
-   "lines": 6503
+   "lines": 6509
   },
   "config/error_handler.php": {
    "lines": 228
@@ -212,7 +212,7 @@
    "lines": 1
   },
   "config/sri_hashes.php": {
-   "lines": 19
+   "lines": 27
   },
   "config/workflow.php": {
    "lines": 231
@@ -449,7 +449,7 @@
    "lines": 151
   },
   "pages/contact_support.php": {
-   "lines": 849
+   "lines": 850
   },
   "pages/error_page.php": {
    "lines": 232
@@ -458,19 +458,19 @@
    "lines": 44
   },
   "pages/help_center.php": {
-   "lines": 325
+   "lines": 326
   },
   "pages/index.php": {
    "lines": 15
   },
   "pages/privacy.php": {
-   "lines": 222
+   "lines": 223
   },
   "pages/settings.php": {
    "lines": 780
   },
   "pages/terms_and_conditions.php": {
-   "lines": 187
+   "lines": 188
   },
   "reset_system_data.php": {
    "lines": 161

@@ -12,7 +12,8 @@ $modalView = ($_GET['modal'] ?? '') === '1';
 <title>Terms and Conditions · <?= e(APP_NAME) ?></title>
 <?php if (!$modalView): ?>
 <?php require_once ROOT_PATH.'/includes/site_head.php'; ?>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.min.css" rel="stylesheet"
+      integrity="<?= SRI_BOOTSTRAP_ICONS ?>" crossorigin="anonymous">
 <?php require_once ROOT_PATH.'/includes/page_theme.php'; ?>
 <?php else: ?>
 <base target="_blank">

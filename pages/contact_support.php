@@ -283,7 +283,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
    something that has to be put right before it will go. */
 .form-hint.is-bad { color: var(--bad-text); }
 </style>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.min.css" rel="stylesheet"
+      integrity="<?= SRI_BOOTSTRAP_ICONS ?>" crossorigin="anonymous">
 <?php require_once ROOT_PATH.'/includes/page_theme.php'; ?>
 <style nonce="<?= $nonce ?>">
 /* ===== Hero ===== */
