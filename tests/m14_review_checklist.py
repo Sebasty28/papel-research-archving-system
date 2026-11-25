@@ -74,6 +74,27 @@ def text_of(html):
     return M10.strip(html)
 
 
+def checklist_markup(html):
+    """The Review Checklist card's own markup, by its id. See checklist_section."""
+    i = html.find('id="pd-sec-checklist"')
+    if i < 0:
+        return ''
+    j = html.find('id="pd-sec-', i + 10)
+    return html[i:j if j > 0 else len(html)]
+
+
+def checklist_section(html):
+    """The words inside the Review Checklist card, and nothing else.
+
+    Slicing the page on the phrase "Review Checklist" starts at the contents
+    list, which names every section before any of them is drawn, so a window
+    after it holds the contents and the cards above the checklist rather than
+    the checklist itself. The card carries its own id on both paper pages, and
+    the next section's id ends it.
+    """
+    return text_of(checklist_markup(html))
+
+
 def editor_config(html):
     m = re.search(r'id="rvCk" data-ck="([^"]*)"', html)
     if not m:
@@ -106,7 +127,7 @@ def pages():
           and cfg['canEdit'] is True and cfg['template'] == 'imrad',
           'the adviser gets the editor: five lists, editable, starting on IMRaD for an IMRaD paper',
           'config was %s' % (json.dumps(cfg)[:200] if cfg else None))
-    check('CK-03', not re.search(r'name="(?:imrad_|full_)', html) and 'Full Manuscript</span>' not in html.split('Review Checklist', 1)[-1][:3000],
+    check('CK-03', not re.search(r'name="(?:imrad_|full_)', html) and 'Full Manuscript</span>' not in checklist_markup(html),
           'the eleven fixed boxes and the "Full Manuscript" heading are gone from the page',
           'old boxes still on the page')
 
@@ -121,7 +142,7 @@ def pages():
     coord = M10.minted(COORDINATOR_ID)
     approve(a, imrad, 'imrad', IMRAD5, ticked=(0, 1))
     chtml = coord.get('/app/review_paper.php?id=%d' % imrad)
-    ctext = text_of(chtml.split('Review Checklist', 1)[-1][:6000])
+    ctext = checklist_section(chtml)
     check('CK-05', editor_config(chtml) is None and 'ck-select' not in chtml
           and 'recorded' in ctext and 'Indicated' in ctext and 'Not indicated' in ctext,
           'the Coordinator sees the adviser\'s list as plain rows, with no editor',
@@ -142,8 +163,7 @@ def approving():
           and [i['label'] for i in d['items']] == labels and [i['ok'] for i in d['items']] == [True, False, True, False],
           'an approval with an edited list moves the paper on and keeps the list as left, ticks and all',
           'status %s, stored %s' % (status_of(p1), d))
-    student_page = text_of(M10.student().get('/app/student/paper_details.php?id=%d' % p1)
-                           .split('Review Checklist', 1)[-1][:6000])
+    student_page = checklist_section(M10.student().get('/app/student/paper_details.php?id=%d' % p1))
     check('CK-08', 'Capstone Project Sections' in student_page and 'Appendix: user manual' in student_page
           and 'adjusted for this paper' in student_page and 'Chapter 4' not in student_page,
           'the author sees that list, named, with the added section and without the ones removed',
@@ -175,7 +195,7 @@ def old_form():
     check('CK-10', status_of(pid) == 'pending_admin' and flags and flags[0] == ['1', '0', '1', '1', '0', '1'] and stored(pid) == {},
           'a post of the old eleven fields is saved in the old columns, with no list',
           'status %s, flags %s' % (status_of(pid), flags))
-    text = text_of(M10.student().get('/app/student/paper_details.php?id=%d' % pid).split('Review Checklist', 1)[-1][:6000])
+    text = checklist_section(M10.student().get('/app/student/paper_details.php?id=%d' % pid))
     check('CK-11', 'Undergraduate Thesis Sections' in text and 'IMRaD Sections' in text and 'Full Manuscript' not in text.split('Files')[0],
           'such a row reads as before, its chapters headed by the paper\'s type and never "Full Manuscript"',
           'student page said: %s' % text[:260])

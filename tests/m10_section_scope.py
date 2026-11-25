@@ -166,6 +166,48 @@ def strip(html):
     return re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', ' ', html))
 
 
+def desk_card_for(client, title, tab='queue'):
+    """The adviser desk's card for one paper, asked for by name, on a named tab.
+
+    Neither the tab nor the page is a given. A desk opened with no tab in the
+    address shows **whichever tab holds the most papers** (review_console.php
+    reads the counts and takes the largest), so once a run has approved a few
+    papers the desk opens on Published and a paper waiting for review has no
+    card on it at all; and an actionable tab opens on 'wait' (longest waiting
+    first) twenty at a time, so the newest seeded paper is on page two. Both are
+    answered by asking for the tab and searching for the paper, which holds
+    whatever the counts, the sort and the backlog are.
+    """
+    import urllib.parse
+    html = client.get('/app/faculty/faculty_review_dashboard.php?tab=' + tab +
+                      '&q=' + urllib.parse.quote(title))
+    return desk_card(html, title)
+
+
+def chip_text(card):
+    """What a card's scope chips actually say, for a failure that has to name it."""
+    # The chip holds a nested icon span, so a non-greedy match to the first
+    # closing tag would drop the label this is meant to report. A window from
+    # each chip's start is enough for a message.
+    return '; '.join(' '.join(strip(card[m.start():m.start() + 320]).split())
+                     for m in re.finditer(r'<span class="scope-chip"', card))
+
+
+def desk_card(html, title):
+    """The one review card that holds this title, markup and all.
+
+    A fixed window after the title is not that card: the chip is drawn after the
+    title inside the same <article class="paper-card">, so a window long enough
+    to reach the chip is also long enough to reach the *next* card's chip, and a
+    desk holding two seeded papers then reports a chip on whichever of them was
+    drawn first. That is the same slicing fault as the checklist read that took
+    the table of contents' first mention instead of the section itself. The
+    cards do not nest, so splitting on the article is exact.
+    """
+    cards = html.split('<article class="paper-card">')
+    return next((c for c in cards[1:] if title in c), '')
+
+
 def blank_sections(keys):
     return dict((k, '') for k in keys)
 
@@ -434,19 +476,21 @@ def legacy():
     p = probe('paper', pid)
     check('SC-41', p.get('has_key') is False and p.get('info_kind') == 'legacy',
           'a paper filed before the choice existed has no record of one', p)
-    text = strip(a.get('/app/review_paper.php?id=%s' % pid))
-    # Only the Written Sections card is looked at. The page header carries the
-    # adviser's notifications, and by now one of those legitimately says an
-    # earlier paper's author chose to submit fewer sections.
-    card = text.split('Written Sections', 1)[1][:2500] if 'Written Sections' in text else ''
+    page = a.get('/app/review_paper.php?id=%s' % pid)
+    # Everything below the page header. The header carries the adviser's
+    # notifications, and by now one of those legitimately says an earlier
+    # paper's author chose to submit fewer sections. Slicing on the phrase
+    # "Written Sections" instead started at the contents list, which names
+    # every card before any of them is drawn, so the window was the contents
+    # and whatever followed it rather than the card being asked about.
+    card = strip(page.split('</header>', 1)[-1])
     hit = next((m for m in (re.search(re.escape(p_), card) for p_ in ('left out on purpose', 'chose to submit')) if m), None)
     check('SC-42', card != '' and hit is None,
           'and nothing is claimed for it on the review page',
           'a legacy paper is annotated: ...%s...' % (card[max(0, hit.start() - 80):hit.end() + 80] if hit else '(no card found)'))
-    desk = a.get('/app/faculty/faculty_review_dashboard.php')
-    row = desk.split(T_LEGACY)[1][:1500] if T_LEGACY in desk else ''
+    row = desk_card_for(a, T_LEGACY)
     check('SC-43', row != '' and 'scope-chip' not in row, 'or on its card on the desk',
-          'a legacy paper carries a chip')
+          'a legacy paper carries a chip: %s' % (chip_text(row) or '(its card is not on the desk)'))
     # An abstract-only paper with the stored key and nothing else, as the old readers see it.
     html = a.get('/app/review_paper.php?id=%s' % pid)
     check('SC-44', 'An older introduction.' in strip(html), 'its sections are shown exactly as before',
@@ -634,10 +678,9 @@ def custom_surfaces():
           'the approve lead names what publishing will show, theirs included',
           'approve lead does not name the sections')
 
-    desk = a.get('/app/faculty/faculty_review_dashboard.php')
-    row = desk.split(T_CSEED)[1][:2500] if T_CSEED in desk else ''
+    row = desk_card_for(a, T_CSEED)
     check('SC-64', 'scope-chip' in row and 'Custom: 4 sections' in row, 'the desk card carries the chip',
-          'no chip on the card')
+          'chip on the card: %s' % (chip_text(row) or '(none)'))
 
     own = strip(c.get('/app/student/paper_details.php?id=%s' % pid))
     check('SC-65', 'AUTOTEST body of Technical Aspect.' in own and 'You chose to submit these sections: Abstract, Executive Summary, Marketing Aspect and Technical Aspect.' in own,
@@ -693,9 +736,9 @@ def custom_surfaces():
           and 'left out on purpose' not in strip(rev2) and 'Custom:' not in strip(rev2),
           'two of their own on top of all six are a full paper: all eight shown, in order, with nothing flagged',
           'kind %s, shown %s' % (p.get('info_kind'), ids2))
-    desk = a.get('/app/faculty/faculty_review_dashboard.php')
-    row = desk.split(T_CFULL)[1][:1500] if T_CFULL in desk else ''
-    check('SC-70', row != '' and 'scope-chip' not in row, 'and its card on the desk carries no chip', 'a full paper is flagged')
+    row = desk_card_for(a, T_CFULL)
+    check('SC-70', row != '' and 'scope-chip' not in row, 'and its card on the desk carries no chip',
+          'a full paper is flagged: %s' % (chip_text(row) or '(its card is not on the desk)'))
 
 
 def custom_submit():

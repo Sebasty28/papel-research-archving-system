@@ -540,7 +540,7 @@ def checklist_old():
     check('OS-26', M14.status_of(p3) == 'pending_faculty' and 'database update' in M14.text_of(body3),
           'a custom list is refused in words, and the paper stays with the adviser',
           'status %s, page: %s' % (M14.status_of(p3), M14.text_of(body3)[:140]))
-    text = M14.text_of(student().get('/app/student/paper_details.php?id=%s' % pid).split('Review Checklist', 1)[-1][:6000])
+    text = M14.checklist_section(student().get('/app/student/paper_details.php?id=%s' % pid))
     check('OS-27', 'IMRaD Sections' in text and 'Indicated' in text,
           'the author reads it', 'student page said: %s' % text[:200])
 
@@ -563,7 +563,7 @@ def checklist_new():
           'a custom list is kept, and a second approval replaces it, in one row',
           'rows %s, first %s, second %s' % (n, first, second))
     old = STATE.get('checklist_paper')
-    text = M14.text_of(student().get('/app/student/paper_details.php?id=%s' % old).split('Review Checklist', 1)[-1][:6000]) if old else ''
+    text = M14.checklist_section(student().get('/app/student/paper_details.php?id=%s' % old)) if old else ''
     check('OS-30', 'IMRaD Sections' in text and 'Indicated' in text,
           'a checklist recorded while the column was missing still reads after it is added',
           'student page said: %s' % text[:200])

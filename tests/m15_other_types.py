@@ -185,7 +185,11 @@ def submission():
     # Below the site header: its notification list names the paper too.
     body = lambda html: html.split('</header>', 1)[-1]
     desk = a.get('/app/faculty/faculty_review_dashboard.php')
-    card = body(desk).split(T_PAPER)[1][:2500] if T_PAPER in body(desk) else ''
+    # Asked for by name, and sliced to the one card: page one of the desk is
+    # sorted longest-waiting first and holds twenty papers, so a freshly
+    # seeded one is not on it, and a fixed window after the title reaches the
+    # next card's own labels.
+    card = M10.desk_card_for(a, T_PAPER)
     check('OT-16', TYPE_NAME in M10.strip(card) and 'other:' not in card,
           'the desk card names the type', 'card: %s' % M10.strip(card)[:200])
     flt = body(a.get('/app/faculty/faculty_review_dashboard.php?type=other'))

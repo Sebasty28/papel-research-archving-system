@@ -85,7 +85,7 @@ class Client(object):
         url = path if path.startswith('http') else BASE + path
         body = raw_body
         if data is not None:
-            body = urllib.parse.urlencode(data).encode()
+            body = urllib.parse.urlencode(data, doseq=True).encode()
         req = urllib.request.Request(url, data=body)
         req.add_header('User-Agent', 'PAPEL-autotest')
         for k, v in (headers or {}).items():
@@ -119,6 +119,17 @@ class Client(object):
         m = re.search(r'name="_token"\s+value="([^"]+)"', html)
         if not m:
             m = re.search(r'name=[\'"]_token[\'"][^>]*value=[\'"]([^\'"]+)', html)
+        if not m:
+            # Not every page prints a form. The Save button
+            # (includes/save_paper.php) hands the same session token to its
+            # fetch as `var TOKEN = "..."`, and on a signed-in reader's
+            # repository, dashboard or My Library that is the only copy of it
+            # on the page: the hidden input comes from the login modal, which
+            # is not drawn for somebody already signed in. Without this,
+            # token() answered '' and every JSON endpoint refused the post
+            # with a 403, which reads as the feature being broken rather than
+            # as the test having arrived without a token.
+            m = re.search(r'var TOKEN\s*=\s*"([0-9a-f]{16,})"', html)
         return m.group(1) if m else ''
 
     def post(self, path, fields, token_from='/archive/index.php', follow=True):
