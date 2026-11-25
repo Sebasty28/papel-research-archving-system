@@ -58,3 +58,16 @@ backups/
 # Python bytecode from the field-guide build and the test suite
 __pycache__/
 *.pyc
+
+# One-off QA runs under tests/. These are scratch: each is pinned to the
+# disposable database and dated output folder of the run it was written for
+# (papel_qa_20261123, ~/Downloads/PAPEL QA 2026-11-23), so a later reader
+# cannot run one and would be misled by it. The durable suites are the
+# m*.py files, harness.py, fixtures.py and the _*_unit.php checks, which are
+# all tracked. Kept on the dev box, out of the repository.
+tests/qa_tracker_*.py
+tests/qa_staging_public.py
+tests/qa_remaining_inventory.json
+tests/_expiry_probe.php
+tests/_mail_probe.php
+tests/_qa_drive_probe.php
