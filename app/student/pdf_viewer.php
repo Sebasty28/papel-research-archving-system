@@ -235,14 +235,17 @@ body {
     <div id="viewer-status"><?= e($src ? '' : ($srcError ?? 'Waiting for the document…')) ?></div>
 </div>
 
-<script src="<?= e(asset_url('assests/js/pdfjs/pdf.min.js')) ?>"></script>
 <script src="<?= e(asset_url('assests/js/papel-pdf-view.js')) ?>"></script>
 <script nonce="<?= csp_nonce() ?>">
 (function () {
     'use strict';
 
     var ORIGIN = window.location.origin;
-    var WORKER = <?= json_encode(asset_url('assests/js/pdfjs/pdf.worker.min.js'), JSON_UNESCAPED_SLASHES) ?>;
+    /* PDF.js is an ES module from v4, so there is no <script src> for it any
+       more: papel-pdf-view.js import()s it the first time a document is
+       opened. Both files are .mjs. */
+    var PDFJS  = <?= json_encode(asset_url('assests/js/pdfjs/pdf.min.mjs'), JSON_UNESCAPED_SLASHES) ?>;
+    var WORKER = <?= json_encode(asset_url('assests/js/pdfjs/pdf.worker.min.mjs'), JSON_UNESCAPED_SLASHES) ?>;
     // Set when this tab was opened for a paper; see the header.
     var SRC       = <?= json_encode($src, JSON_UNESCAPED_SLASHES) ?>;
     var PROTECT   = <?= json_encode($pdfProtect, JSON_UNESCAPED_SLASHES) ?>;
@@ -255,6 +258,7 @@ body {
     var view = papelPdfView.create({
         scroller:  scrollEl,
         status:    statusEl,
+        pdfjsSrc:  PDFJS,
         workerSrc: WORKER,
         failMessage: SRC ? 'This file could not be shown. Please try again.' : undefined,
         loadingText: '',          // the ring says it (papel-pdf-view.css)

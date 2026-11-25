@@ -120,7 +120,7 @@ Consequences worth knowing, because they are all questions:
 | `includes/pdf_dock.php` | The viewer panel on the three paper pages. |
 | `app/student/pdf_viewer.php` | The full-window viewer. |
 | `assests/js/papel-pdf-view.js` | The renderer: pages, zoom, watermark, cover. |
-| `assests/js/pdfjs/` | A vendored copy of pdf.js (`pdf.min.js`, `pdf.worker.min.js`). |
+| `assests/js/pdfjs/` | A vendored copy of pdf.js 6.5.438 (`pdf.min.mjs`, `pdf.worker.min.mjs`). ES modules: there is no UMD build from v4 onwards. |
 | `includes/pdf_writer.php` | PAPEL writing PDFs, not reading them. |
 | `config/gdrive_inventory.php` | Which account owns which file, and can PAPEL read it. |
 
@@ -278,9 +278,15 @@ canvases.
 
 1. The reader presses a paper's file tile. The panel (`includes/pdf_dock.php`)
    or the full-window viewer (`app/student/pdf_viewer.php`) opens.
-2. **pdf.js is loaded lazily** from `assests/js/pdfjs/pdf.min.js`, and its worker
-   path is set to `pdf.worker.min.js` beside it. Both are vendored in the repo,
-   not fetched from a CDN.
+2. **pdf.js is loaded lazily** from `assests/js/pdfjs/pdf.min.mjs`, and its
+   worker path is set to `pdf.worker.min.mjs` beside it. Both are vendored in
+   the repo, not fetched from a CDN. It is an ES module, so the fetch is a
+   dynamic `import()` made by `papelPdfView.loadLib()` the first time a document
+   is opened, not a `<script src>`: a reader who never opens a PDF never pays
+   for the 1.8MB. One promise is shared, so the panel and the upload page's text
+   extraction cannot fetch it twice. `.htaccess` declares
+   `AddType text/javascript .mjs`, because a module served as `text/plain` is
+   refused outright and every PDF on the site would stop opening.
 3. The viewer calls:
 
    ```js
@@ -313,8 +319,11 @@ canvases.
    `Content-Type: application/pdf`, `Content-Disposition: inline`,
    `Cache-Control: no-store, private`, `X-Content-Type-Options: nosniff` and
    `Cross-Origin-Resource-Policy: same-origin`.
-8. The browser hands the `ArrayBuffer` to
-   `pdfjsLib.getDocument({ data, isEvalSupported: false })`.
+8. The browser hands the `ArrayBuffer` to `pdfjsLib.getDocument({ data })`.
+   That call used to carry `isEvalSupported: false` to keep pdf.js 3.11 from
+   compiling glyphs with `eval`, which is how CVE-2024-4367 ran a script hidden
+   in a crafted font. Version 6 has no eval path to switch off, so the option is
+   gone with the machinery behind it.
 9. **Pages are laid out, then drawn one at a time**, and only those near the
    window. Scrolling past a page still being drawn cancels its render task.
 10. For each page the canvas backing store is sized as

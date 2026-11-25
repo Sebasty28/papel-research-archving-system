@@ -46,6 +46,32 @@
     transform-origin: 0% 0%;
 }
 
+/* PDF.js 4 changed how a text layer is sized, and these three rules are what
+   that change needs. Taken from the stylesheet the library ships
+   (pdfjs-dist/web/pdf_viewer.css, the .textLayer block), not invented here.
+   A span is now placed in per-cent of the container and carries its own
+   --font-height, --scale-x and --rotate; the font size is that height times
+   the scale, and the transform applies the glyph stretch PDF.js measured.
+   Without them every span computes to font-size 0, so the page reads as
+   having no text at all while selection silently selects nothing. */
+.papel-pdf-textlayer {
+    --min-font-size: 1;
+    --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+    --min-font-size-inv: calc(1 / var(--min-font-size));
+}
+.papel-pdf-textlayer > :not(.markedContent),
+.papel-pdf-textlayer .markedContent span:not(.markedContent) {
+    z-index: 1;
+    --font-height: 0;
+    font-size: calc(var(--text-scale-factor) * var(--font-height));
+    --scale-x: 1;
+    --rotate: 0deg;
+    transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+/* A marked-content wrapper is structure, not a box: it must take no room and
+   leave its children laid out by the layer itself. */
+.papel-pdf-textlayer .markedContent { display: contents; }
+
 /* includes/accessibility.php applies `user-select: none` to <body> across the
    whole site, which the text layer inherits, that is why a paper could be
    selected in the standalone viewer (no footer, no such rule) but not in the
@@ -64,11 +90,10 @@
 /* Keep native one-finger scrolling, while reserving a two-finger pinch for the
    PDF's own zoom instead of the browser's whole-page zoom. */
 .papel-pdf-scroll { touch-action: pan-x pan-y; }
-/* PDF.js emits these structural spans; they must not occupy space. */
-.papel-pdf-textlayer span.markedContent {
-    top: 0;
-    height: 0;
-}
+/* PDF.js emits these structural spans; they must not occupy space. Collapsing
+   them to a zero-height box was how that was done before v4, and `display:
+   contents` above is how the library itself does it now, so this rule would
+   only be a second opinion about the same elements. */
 .papel-pdf-textlayer .endOfContent {
     display: block;
     position: absolute;

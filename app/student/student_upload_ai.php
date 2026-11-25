@@ -11239,8 +11239,8 @@ function updateReview() {
    server calls the model itself, as it does on a machine with outbound access.
    --------------------------------------------------------------------------- */
 const AI_PROXY     = <?= json_encode(AI_PROXY_URL, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) ?>;
-const PDFJS_SRC    = <?= json_encode(asset_url('assests/js/pdfjs/pdf.min.js'), JSON_UNESCAPED_SLASHES) ?>;
-const PDFJS_WORKER = <?= json_encode(asset_url('assests/js/pdfjs/pdf.worker.min.js'), JSON_UNESCAPED_SLASHES) ?>;
+const PDFJS_SRC    = <?= json_encode(asset_url('assests/js/pdfjs/pdf.min.mjs'), JSON_UNESCAPED_SLASHES) ?>;
+const PDFJS_WORKER = <?= json_encode(asset_url('assests/js/pdfjs/pdf.worker.min.mjs'), JSON_UNESCAPED_SLASHES) ?>;
 const PAPEL_JSON_HEADERS = { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
 
 /* On a copy of the site, the answer itself is shown. A body with no JSON in it
@@ -11294,16 +11294,20 @@ function papelReadJson(r) {
     });
 }
 
-// Loaded only if the page does not have it: a second copy of PDF.js replaces
-// the global the open viewer is still holding (see includes/pdf_dock.php).
+/* Loaded only if the page does not have it: a second copy of PDF.js replaces
+   the global the open viewer is still holding (see includes/pdf_dock.php).
+
+   PDF.js is an ES module from v4, so this is an import() rather than a
+   <script> element, and papelPdfView.loadLib() is asked to do it when that
+   file is present: it keeps the one promise the panel also waits on, so the
+   side panel and this extraction share a single fetch instead of racing to
+   define the same global. The import() below is the fallback for a page that
+   has the extraction but not the viewer. */
 function papelLoadPdfJs() {
-    if (typeof pdfjsLib !== 'undefined') return Promise.resolve();
-    return new Promise(function (resolve, reject) {
-        const s = document.createElement('script');
-        s.src = PDFJS_SRC;
-        s.onload = resolve;
-        s.onerror = function () { reject(new Error('The PDF reader could not be loaded.')); };
-        document.head.appendChild(s);
+    if (typeof pdfjsLib !== 'undefined' && pdfjsLib.getDocument) return Promise.resolve();
+    if (window.papelPdfView && papelPdfView.loadLib) return papelPdfView.loadLib(PDFJS_SRC);
+    return import(PDFJS_SRC).then(function (mod) { window.pdfjsLib = mod; }, function () {
+        throw new Error('The PDF reader could not be loaded.');
     });
 }
 
@@ -11314,12 +11318,9 @@ function papelLoadPdfJs() {
 async function papelPdfText(file, maxChars) {
     await papelLoadPdfJs();
     if (pdfjsLib.GlobalWorkerOptions) { pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER; }
-    /* isEvalSupported off, as in papel-pdf-view.js: this PDF.js (3.11) can be
-       made to run a script hidden in a crafted font when it compiles glyphs
-       with eval (CVE-2024-4367). The CSP already forbids eval; this stops it
-       being attempted. The file is the student's, but it may have come from
-       anybody, and it is read here in the site's own origin. */
-    const doc = await pdfjsLib.getDocument({ data: await file.arrayBuffer(), isEvalSupported: false }).promise;
+    /* No isEvalSupported here any more: PDF.js 6 has no eval path to switch
+       off, which is what closes CVE-2024-4367 rather than merely avoiding it. */
+    const doc = await pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
     let text = '';
     for (let n = 1; n <= doc.numPages && text.length < maxChars; n++) {
         const content = await (await doc.getPage(n)).getTextContent();

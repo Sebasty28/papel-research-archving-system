@@ -619,9 +619,13 @@ document.addEventListener('DOMContentLoaded', function () {
        whether the pages are covered while this window is not in front. */
     var PROTECT = <?= json_encode($pdfDockProtect, JSON_UNESCAPED_SLASHES) ?>;
 
+    /* Both PDF.js files are .mjs: it is an ES module from v4 onwards, so it is
+       no longer loaded with a <script src> here. papel-pdf-view.js import()s it
+       the first time a document is opened, which is also the first moment it is
+       needed: a reader who never opens the panel never fetches 1.8MB. */
     var ASSETS = <?= json_encode([
-        'pdfjs'  => asset_url('assests/js/pdfjs/pdf.min.js'),
-        'worker' => asset_url('assests/js/pdfjs/pdf.worker.min.js'),
+        'pdfjs'  => asset_url('assests/js/pdfjs/pdf.min.mjs'),
+        'worker' => asset_url('assests/js/pdfjs/pdf.worker.min.mjs'),
         'view'   => asset_url('assests/js/papel-pdf-view.js'),
     ], JSON_UNESCAPED_SLASHES) ?>;
     var view = null, viewReady = null, fetching = null, showingSrc = null;
@@ -652,12 +656,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function viewer() {
         if (!viewReady) {
-            viewReady = need(ASSETS.pdfjs, typeof pdfjsLib !== 'undefined').then(function () {
-                return need(ASSETS.view, typeof papelPdfView !== 'undefined');
-            }).then(function () {
+            viewReady = need(ASSETS.view, typeof papelPdfView !== 'undefined').then(function () {
                 view = papelPdfView.create(viewOptions = {
                     scroller: scroll,
                     status: status,
+                    pdfjsSrc: ASSETS.pdfjs,
                     workerSrc: ASSETS.worker,
                     failMessage: FAIL_SERVER,
                     intro: PROTECT.text_layer

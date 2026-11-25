@@ -19,7 +19,10 @@
  *   const view = papelPdfView.create({
  *       scroller: <element the pages go in>,
  *       status:   <element for messages>,
- *       workerSrc: '/path/to/pdf.worker.min.js',
+ *       pdfjsSrc:  '/path/to/pdf.min.mjs',   (optional; when given, load()
+ *                                            import()s PDF.js itself the first
+ *                                            time a document is opened)
+ *       workerSrc: '/path/to/pdf.worker.min.mjs',
  *       failMessage: 'said when a PDF cannot be drawn'    (optional)
  *       intro:       'hint shown after the first document' (optional; '' for none)
  *       loadingText: 'said while loading'                 (optional; '' for none)
@@ -430,7 +433,12 @@
                 if (textOn) {
                     layer = document.createElement('div');
                     layer.className = 'papel-pdf-textlayer';
-                    layer.style.setProperty('--scale-factor', scale);
+                    /* --total-scale-factor, not --scale-factor: PDF.js renamed it
+                       at v4. The spans are placed in per-cent of the container and
+                       sized from this, so the old name leaves every one of them at
+                       font-size 0 and the page looks text-free while selection
+                       quietly selects nothing. */
+                    layer.style.setProperty('--total-scale-factor', scale);
                 }
                 wrap.textContent = '';
                 wrap.appendChild(canvas);
@@ -452,11 +460,19 @@
                     // A usable page appears before the text layer is built.
                     return p.getTextContent().then(function (textContent) {
                         if (token !== renderToken || !wrap.isConnected) return;
-                        var divs = [];
-                        return pdfjsLib.renderTextLayer({
-                            textContentSource: textContent, container: layer,
-                            viewport: viewport, textDivs: divs
-                        }).promise.then(function () { markBold(p, textContent, divs); });
+                        /* renderTextLayer() was removed in PDF.js 4; this is the
+                           same work through the TextLayer class. It owns its own
+                           textDivs, so the array is read back off it rather than
+                           passed in, and render() returns the promise directly
+                           where the old call returned {promise}. */
+                        var textLayer = new pdfjsLib.TextLayer({
+                            textContentSource: textContent,
+                            container: layer,
+                            viewport: viewport
+                        });
+                        return textLayer.render().then(function () {
+                            markBold(p, textContent, textLayer.textDivs);
+                        });
                     });
                 });
             }).catch(function (err) {
@@ -1092,6 +1108,24 @@
 
         return {
             load: function (source) {
+                /* PDF.js is fetched here rather than by the page, because it is
+                   an ES module now and every caller would otherwise have to wait
+                   for it before it could so much as create a view. Creating one
+                   needs nothing; only this does. The promise is shared and kept,
+                   so asking twice costs one fetch. */
+                if (options.pdfjsSrc) {
+                    var self = this;
+                    return loadLib(options.pdfjsSrc).then(
+                        function () { return self._loadNow(source); },
+                        function (err) {
+                            say('The preview component could not be loaded.');
+                            busy(false);
+                            if (global.console) console.error('PDF.js failed to load', err);
+                        });
+                }
+                return this._loadNow(source);
+            },
+            _loadNow: function (source) {
                 if (!ready()) { say('The preview component could not be loaded.'); return Promise.resolve(); }
                 say(loadingText);
                 busy(true);
@@ -1111,12 +1145,14 @@
                 return asBuffer.then(function (data) {
                     if (overtaken()) return null;
                     if (pdfDoc) { try { pdfDoc.destroy(); } catch (err) {} pdfDoc = null; }
-                    /* isEvalSupported off: this PDF.js (3.11) can be made to run
-                       a script hidden in a crafted font when it compiles glyphs
-                       with eval (CVE-2024-4367). The CSP already forbids eval;
-                       this stops it being attempted. The papers are uploaded by
-                       students, so the files are not ours to trust. */
-                    return pdfjsLib.getDocument({ data: data, isEvalSupported: false }).promise;
+                    /* No isEvalSupported: PDF.js 6 has no eval path left to
+                       switch off, which is what actually closes CVE-2024-4367
+                       (a script hidden in a crafted font, run while glyphs were
+                       compiled with eval). On 3.11 this call passed the option;
+                       the upgrade removes the machinery instead of avoiding it.
+                       The papers are uploaded by students, so the files are
+                       still not ours to trust. */
+                    return pdfjsLib.getDocument({ data: data }).promise;
                 }).then(function (doc) {
                     if (!doc) return false;
                     if (overtaken()) { try { doc.destroy(); } catch (err) {} return false; }
@@ -1185,5 +1221,32 @@
         };
     }
 
-    global.papelPdfView = { create: create };
+    /* PDF.js is an ES module from v4 onwards: there is no UMD build any more,
+       so a plain <script src> no longer leaves a pdfjsLib global behind and
+       every caller would have to become a module to import it. Instead this
+       file does the one dynamic import() and publishes the namespace under the
+       name the rest of the code already uses. import() works from a classic
+       script, and 'script-src self' covers a same-origin module, so the CSP
+       needs nothing added.
+
+       One promise, kept: three surfaces can ask at once (the panel on a paper
+       page, the full-window viewer, the upload page's text extraction) and the
+       module must be fetched once. */
+    var libPromise = null;
+    function loadLib(src) {
+        if (!libPromise) {
+            libPromise = (typeof pdfjsLib !== 'undefined' && pdfjsLib.getDocument)
+                ? Promise.resolve(pdfjsLib)
+                : import(src).then(function (mod) {
+                    /* The module namespace, not a copy: pdfjsLib.GlobalWorkerOptions
+                       has to be the live object, since setting workerSrc on a clone
+                       would be setting it on nothing. */
+                    global.pdfjsLib = mod;
+                    return mod;
+                });
+        }
+        return libPromise;
+    }
+
+    global.papelPdfView = { create: create, loadLib: loadLib };
 })(window);
