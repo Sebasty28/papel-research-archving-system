@@ -2301,6 +2301,20 @@ OAST service), and nothing signed in was scanned. What it did find:
   slept under it, so its rule clock read seven hours), and still reported
   100%. A rerun of only the skipped rules took five minutes.
 
+**A directive the host does not know takes its whole folder down.**
+`uploads/.htaccess` opened with a bare `php_flag`, which exists only where PHP
+runs inside Apache. InfinityFree runs it outside, so every request under
+`uploads/` answered 500 on staging and production from the first deploy, and
+no section picture ever loaded on either. Found 26 November 2026 while checking
+a deploy, and closed by writing the file in directives the root `.htaccess`
+already proves the host accepts: `php_flag` inside `<IfModule mod_php.c>` (and
+`mod_php7.c`), the script refusal as `Require all denied` with the 2.2 spelling
+behind `<IfModule !mod_authz_core.c>`, and `Options -ExecCGI` gone, the
+scripts it guarded against being refused by name. **XAMPP cannot show this
+class of fault**: it loads mod_php and mod_access_compat, so it accepts both
+the bare `php_flag` and the bare `Deny`. Check a changed `.htaccess` on staging
+before production, by asking for a path in its folder and reading the status.
+
 **Headers go on every response, not just the successful ones.** `Header set`
 writes to the table Apache sends with a 2xx, so a 301, a 404 and a 500 got none
 of them; only HSTS, which was already `always set`, came out. All five are
