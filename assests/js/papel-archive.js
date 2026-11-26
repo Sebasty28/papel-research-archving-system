@@ -595,12 +595,6 @@ function loadResults(url, pushState) {
                 find.focus();
             });
         }
-        /* The card is a <form method="dialog">, so Enter in this field would
-           submit it and close the dialog, throwing away what had been chosen.
-           There is nothing to submit: the filtering happens as it is typed. */
-        find.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter') { e.preventDefault(); }
-        });
 
         document.addEventListener('click', function (e) {
             var btn = e.target.closest ? e.target.closest('#kwMoreBtn') : null;

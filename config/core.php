@@ -2545,11 +2545,19 @@ function paper_file_viewable(array $u, array $paper, bool $supporting): bool {
 
     $author = (int)($paper['uploaded_by'] ?? 0);
     if ($author === $uid) return true;
-    if ($role === 'admin') return true;
+    /* Every file of every paper, at every step, is the Research Coordinator's,
+       asked by position so a second post counts. It was `$role === 'admin'`,
+       and a Head of Academic Programs is an admin too, at level 2: the bare
+       role handed them papers still under review and the consent forms and
+       ethics clearances filed with them, which nothing on their desk offers. */
+    if (is_research_coordinator($u)) return true;
     if ($role === 'faculty' && $author > 0 && (int)creator_of($author) === $uid) return true;
-    if ($supporting) return false;
 
     $published = !empty($paper['_archived']) || ($paper['current_status'] ?? '') === 'approved';
+    /* The head's desk lists the published and archived record with its
+       supporting documents, so that much stays theirs, and no more. */
+    if ($role === 'admin') return $published;
+    if ($supporting) return false;
     if (!$published) return false;
     if (in_array($role, ['faculty', 'super_admin', 'head_academic', 'librarian'], true)) return true;
     return $role === 'student' && student_manuscript_access($uid, (int)$paper['paper_id']);
@@ -3441,10 +3449,7 @@ function create_notification(int $user_id, ?int $paper_id, string $type,
          the Coordinator's desk, and a Coordinator to the Head's. Level 2 is
          named by the other role that shares that desk, which role_home()
          answers without consulting the session. */
-      $toRole = (string)($recipient['user_role'] ?? '');
-      if (!$paper_id && $toRole === 'admin' && (int)($recipient['admin_level'] ?? 1) === 2) {
-          $toRole = 'head_academic';
-      }
+      $toRole = notification_role($recipient);
 
       $body  = email_para('Good day ' . trim((string)($recipient['full_name'] ?? '')) . ',');
       $body .= email_para($message);
@@ -5555,6 +5560,21 @@ function notification_parts(array $n): array
         'detail'     => implode("\n", $lines),
         'is_account' => true,
     ];
+}
+
+/**
+ * The role a notice's link is built for.
+ *
+ * A Head of Academic Programs held as an admin at level 2 is named by the other
+ * role that shares that desk. role_home() answers that one without reading the
+ * session, which matters for a letter (the session there is whoever triggered
+ * the notice), and a paper then opens on its published page: the review page is
+ * the Coordinator's and sends a head back to their own desk.
+ */
+function notification_role(?array $u): string {
+    $role = (string)($u['user_role'] ?? '');
+    if ($role === 'admin' && (int)($u['admin_level'] ?? 1) === 2) return 'head_academic';
+    return $role;
 }
 
 function notification_link(?int $paperId, string $role, string $type = ''): string {

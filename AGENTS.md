@@ -148,6 +148,21 @@ Coordinator get 200 and the navbar link, the head gets 302 to their own desk
 with their session intact and no link, and an adviser, a librarian and a student
 are refused as before. The support queue is whole for the first two and still
 scoped to their own rows for everybody else.
+
+**Reading every submission is the Coordinator's as well** (26 November 2026).
+`paper_file_viewable()` asked `$role === 'admin'` and `app/review_paper.php`
+`require_role(['faculty', 'admin'])` with nothing after it, so a head could open
+any paper still under review, and download the consent forms and ethics
+clearances filed with it, though nothing on their desk offers either. Both ask
+`is_research_coordinator()` now. The head keeps what their desk lists, the
+published and archived record with its supporting documents; opening the review
+page sends them to their own desk with their session kept. Their notification
+links go through `notification_role()`, which names a level-2 admin
+`head_academic` (as `create_notification()` already did for a letter with no
+paper), so a paper opens on its published page rather than on a page that
+refuses them. Driven with minted sessions: the head is refused the review page
+(with and without `desk=admin`) and a draft's PDF (403), and keeps their desk;
+the Coordinator and the adviser open the same paper as before.
 ### One person, two posts
 
 The constitution lets a member of staff hold two positions at once, a Research
@@ -2204,10 +2219,17 @@ Three things about this host look like faults of ours and are not:
   `challenge-platform` sets `cf_clearance`, which is the "Cookie with SameSite
   Attribute None" alert. Ours is `papel_sid`, and the same report captured it
   as `Secure; HttpOnly; SameSite=Lax`.
-- **Anti-CSRF Tokens on the repository is a false positive.** The flagged forms
-  are the GET search and filter and `kwDialogFind`, which is `method="dialog"`
-  and is never sent to the server. Every POST form carries `csrf_field()`.
-  It wants an alert filter in ZAP scoped to `/archive/`, not a token.
+- **Anti-CSRF Tokens was two dialogs, not a missing token.** ZAP reads every
+  `<form>` as one that should carry a token, `method="dialog"` included, and
+  even one with no input in it. The keyword dialog's card on the repository
+  (`kwDialogFind`) and the view chooser (`includes/view_welcome.php`, printed
+  with the footer on every page) were both `<form method="dialog">`; both are
+  `<div>`s closed from script since 26 November 2026, and the alert is gone
+  from a local scan. **Do not write a `<form method="dialog">`**: every one on
+  this site had `type="button"` controls closed by script anyway, and the form
+  only made Enter something to guard. ZAP 2.17 does not flag the GET search and
+  filter forms. Every POST form carries `csrf_field()` (`_token`, a name ZAP
+  knows).
 
 **Check whether the scan was passive before quoting its result.** Every alert in
 that report says *raised by a passive scanner*: the active rules never ran, so
@@ -2221,6 +2243,63 @@ and real rows. Exclude the AI endpoints (they spend Groq keys), the upload page,
 `contact_support`, the manuscript request (it emails every librarian), and both
 sign-in paths, where reCAPTCHA is checked before the password and the lockout
 counts per IP, so a scanner proves nothing and locks the machine out.
+
+**The 26 November 2026 report**, passive again, 12 of its 25 alert types on our
+host. What it taught:
+
+- **A fix is not in production until the workflow has run.** Its one High was
+  pdf.js 3.11.174 (CVE-2024-4367), a day after `7ce82d0` had taken the code to
+  6.5.438: production had last been deployed on 24 November at 07:07. Compare
+  `gh run list --workflow "Deploy to production"` with the commit before
+  reading a production report as a verdict on the code. The FTP action deletes
+  files removed from the repository, so the old `pdf.min.js` goes with the
+  next deploy.
+- **The challenge page at `/` now carries `X-Frame-Options`, `nosniff` and HSTS**
+  from the edge, which cleared "Missing Anti-clickjacking Header", and still no
+  CSP, for the reason above.
+- **"Timestamp Disclosure" was Cloudflare's script monitor.** Cloudflare adds a
+  `Content-Security-Policy-Report-Only` naming
+  `csp-reporting.cloudflare.com/cdn-cgi/script_monitor`, whose token carries the
+  response time. It is report-only, says nothing the `Date` header does not,
+  and goes only if the monitor is switched off in the Cloudflare dashboard.
+- **`cf_clearance` again**, from `/cdn-cgi/challenge-platform/h/g/jsd/`, which is
+  Cloudflare's JavaScript detections. Not ours to set the flags of.
+
+These four, and nothing broader, are what an alert filter is for:
+`PAPEL-production.context` in the owner's `Documents\ZAP` folder (File > Import
+Context) carries one per alert, each scoped to the URL and parameter in the
+evidence, with the challenge page's CSP lowered to Informational rather than
+called a false positive. Generate a report with only `https://pupbcpapel.com`
+ticked under Sites, and Google's and jsDelivr's alerts stay out of it.
+
+**A local active scan of the signed-out surface** (same day, ZAP daemon, the
+exclusions above, row counts identical before and after) found no injection of
+any kind: every SQL injection rule, OS command, code and template injection,
+CRLF, XXE, XPath, path traversal, file inclusion, open redirect and reflected
+and stored XSS ran clean. DOM XSS and Log4Shell did not run (no browser, no
+OAST service), and nothing signed in was scanned. What it did find:
+
+- **The stored PDFs were downloadable by anybody.** `app/student/uploads/`
+  answered a direct GET, so a student's draft came back 200 to a visitor who
+  had never signed in, past every check in `app/paper_file.php`, which reads
+  those files from disk and never needed them on the web. `.htaccess` refuses
+  the folder now, and under the root `uploads/` lets through only a section
+  picture named by core.php's own pattern (32 hex characters).
+- **`/composer.lock` was public** ("Hidden File Found"): every library's exact
+  version. A second `FilesMatch` refuses `.lock`, `.toml`, `.yml`, `.sql`,
+  `.bak`, `.ini`, `.phar`, `.sh`, `.bat`, `.dist` and the like, and the rewrite
+  rules refuse `vendor/`, `mailer/` and `workers/`, none of which a browser
+  fetches (grep for a `src` or `href` into them before adding one).
+- **`app/student/upload_diagnostics.php` is staff only.** It printed the PHP and
+  server versions, the AI proxy's address and the last four characters of every
+  Groq key to any student who opened it.
+- **"Timestamp Disclosure" in PDF.js is its hash constants**: 1732584193 is MD5's
+  `0x67452301` and 1779033703 SHA-256's `0x6a09e667`, used to open encrypted
+  PDFs. A false positive, filtered by the context file above.
+- **Read `ascan/view/scanProgress` before calling a scan clean.** The first run
+  completed 13 rules and *skipped* 40, SQL injection among them (the machine
+  slept under it, so its rule clock read seven hours), and still reported
+  100%. A rerun of only the skipped rules took five minutes.
 
 **Headers go on every response, not just the successful ones.** `Header set`
 writes to the table Apache sends with a 2xx, so a 301, a 404 and a 500 got none
@@ -4064,14 +4143,13 @@ of it are two different acts, and this desk only ever needed the first.
     there rather than carrying on into the page.
   - **A find field in the foot narrows it as it is typed**, with an X at its
     right-hand end that empties it and puts the cursor back in it (drawn only
-    while there is something to rub out, and `type="button"`, since anything
-    else in a `<form method="dialog">` submits it and closes the dialog), and
+    while there is something to rub out), and
     the two buttons pushed to the other end of that row. A chip the find has taken out of view
     is only hidden: it stays chosen and still counts, so finding one keyword,
     choosing it and then searching for the next does not quietly undo the
-    first. The card is a `<form method="dialog">`, so **Enter in that field is
-    refused**: it would submit the form, close the dialog and throw away what
-    had been chosen. The list keeps a floor as well as a ceiling, or the
+    first. The card is a `<div>`, not a `<form method="dialog">` (see "Reading
+    a ZAP report"), so **Enter in that field submits nothing** and closes
+    nothing, with no guard needed. The list keeps a floor as well as a ceiling, or the
     dialog shrinks to its buttons on a search that matches nothing and grows
     again on the next letter.
   - It took the place of the two page arrows, which had been beside the count

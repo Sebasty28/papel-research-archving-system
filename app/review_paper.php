@@ -31,6 +31,17 @@ $deskUrl   = $isAdviser
     ? BASE_URL . '/app/faculty/faculty_review_dashboard.php'
     : BASE_URL . '/app/admin/admin_review_dashboard.php';
 
+/* The admin path reads any submission at any step, and that is the Research
+   Coordinator's. require_role() above cannot say so: a Head of Academic Programs
+   is an admin too, at level 2, and reads what comes out rather than what is
+   still under review. They are sent to their own desk with their session kept,
+   being a real administrator who opened the wrong page. */
+if (!$isAdviser && !is_research_coordinator($u)) {
+    flash('error', "Papers under review are read on the Research Coordinator's desk. The published record is on yours.");
+    header('Location: ' . desk_home($u));
+    exit;
+}
+
 $sql = "SELECT rp.*, us.full_name AS author_name, us.program AS author_program, us.user_id AS author_id,
                us.section AS author_section, us.academic_year AS author_academic_year
         FROM research_papers rp JOIN users us ON us.user_id = rp.uploaded_by

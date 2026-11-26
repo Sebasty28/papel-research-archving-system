@@ -1,5 +1,5 @@
 {
- "built": "2026-11-25 15:04",
+ "built": "2026-11-26 23:40",
  "files": {
   "ai/ai_extract.php": {
    "lines": 77
@@ -20,13 +20,16 @@
    "lines": 133
   },
   "analytics/analytics_dashboard.php": {
-   "lines": 2944
+   "lines": 3543
   },
   "analytics/dashboard.php": {
    "lines": 19
   },
   "analytics/export_preview.php": {
    "lines": 76
+  },
+  "analytics/insight_cache.php": {
+   "lines": 40
   },
   "analytics/paper_analysis.php": {
    "lines": 240
@@ -38,7 +41,7 @@
    "lines": 81
   },
   "app/account_preflight.php": {
-   "lines": 151
+   "lines": 172
   },
   "app/admin/admin_manage_faculty.php": {
    "lines": 609
@@ -71,7 +74,7 @@
    "lines": 238
   },
   "app/faculty/faculty_manage_students.php": {
-   "lines": 1234
+   "lines": 1233
   },
   "app/faculty/faculty_review_dashboard.php": {
    "lines": 166
@@ -98,7 +101,7 @@
    "lines": 60
   },
   "app/models/AdminManagementService.php": {
-   "lines": 240
+   "lines": 243
   },
   "app/models/ArchiveRepository.php": {
    "lines": 140
@@ -107,7 +110,7 @@
    "lines": 60
   },
   "app/models/FacultyManagementService.php": {
-   "lines": 193
+   "lines": 194
   },
   "app/models/PaperRepository.php": {
    "lines": 99
@@ -116,7 +119,7 @@
    "lines": 84
   },
   "app/models/UserRepository.php": {
-   "lines": 184
+   "lines": 187
   },
   "app/my_library.php": {
    "lines": 1297
@@ -125,7 +128,7 @@
    "lines": 199
   },
   "app/review_paper.php": {
-   "lines": 824
+   "lines": 835
   },
   "app/save_paper.php": {
    "lines": 52
@@ -143,7 +146,7 @@
    "lines": 417
   },
   "app/student/student_assistant.php": {
-   "lines": 288
+   "lines": 293
   },
   "app/student/student_cancel_submission.php": {
    "lines": 104
@@ -164,7 +167,7 @@
    "lines": 15211
   },
   "app/student/upload_diagnostics.php": {
-   "lines": 253
+   "lines": 256
   },
   "app/support_requests.php": {
    "lines": 299
@@ -179,7 +182,7 @@
    "lines": 963
   },
   "archive/index.php": {
-   "lines": 1030
+   "lines": 1035
   },
   "archive/login.php": {
    "lines": 1093
@@ -188,13 +191,13 @@
    "lines": 1121
   },
   "config/account_import.php": {
-   "lines": 854
+   "lines": 857
   },
   "config/config.php": {
-   "lines": 313
+   "lines": 318
   },
   "config/core.php": {
-   "lines": 6509
+   "lines": 6580
   },
   "config/error_handler.php": {
    "lines": 228
@@ -206,7 +209,7 @@
    "lines": 303
   },
   "config/groq_config.php": {
-   "lines": 1007
+   "lines": 1104
   },
   "config/mail_config.php": {
    "lines": 1
@@ -383,7 +386,7 @@
    "lines": 179
   },
   "includes/site_footer.php": {
-   "lines": 812
+   "lines": 813
   },
   "includes/site_head.php": {
    "lines": 126
@@ -416,7 +419,7 @@
    "lines": 291
   },
   "includes/view_welcome.php": {
-   "lines": 325
+   "lines": 330
   },
   "includes/visited_breadcrumbs.php": {
    "lines": 95
@@ -432,6 +435,9 @@
   },
   "notifications/cron/auto_archive_papers.php": {
    "lines": 27
+  },
+  "notifications/cron/auto_delete_inactive_accounts.php": {
+   "lines": 15
   },
   "notifications/cron/send_notifications.php": {
    "lines": 39
