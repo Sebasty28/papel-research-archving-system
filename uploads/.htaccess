@@ -1,5 +1,35 @@
-php_flag engine off
-Options -ExecCGI
-<FilesMatch "\.(php|phar|phtml)$">
-  Deny from all
+# Nothing uploaded here may run.
+#
+# This folder holds the pictures pasted into a paper's sections, named
+# section_images/<user>/<32 hex>.<png|jpg|gif|webp> by student_upload_ai.php,
+# which checks each one with finfo and getimagesize first. The root .htaccess
+# already refuses anything else under uploads/ before a handler can run; this
+# file is the second lock on the same door.
+#
+# Only directives the host is known to accept. The old file opened with a bare
+# php_flag, which exists only where PHP runs inside Apache. InfinityFree runs it
+# outside, a directive the server does not know is a configuration error, and
+# every request under this folder answered 500 on staging and production, so no
+# section picture ever loaded there (found 26 November 2026). Options -ExecCGI
+# went with it: the scripts it guarded against are refused by name below.
+
+# PHP 8 and PHP 7 as Apache modules (XAMPP). Skipped where PHP is not a module.
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php7.c>
+    php_flag engine off
+</IfModule>
+
+# A script by any extension a server might hand to an interpreter. The 2.4 and
+# 2.2 spellings, each behind its own IfModule, as in the root .htaccess: the 2.2
+# one alone is unknown to a 2.4 server without mod_access_compat.
+<FilesMatch "\.(php[0-9]?|pht|phtml|phar|phps|cgi|fcgi|pl|py|rb|sh|asp|aspx|jsp|shtml)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
 </FilesMatch>
