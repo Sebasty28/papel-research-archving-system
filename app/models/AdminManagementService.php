@@ -62,10 +62,11 @@ class AdminManagementService {
             throw new InvalidArgumentException("Password must be at least 6 characters and contain at least one uppercase letter and one number.");
         }
         
-        $check = $this->conn->prepare("SELECT COUNT(*) as cnt FROM users WHERE username=? OR email=? OR faculty_id=?");
+        $check = $this->conn->prepare("SELECT full_name FROM users WHERE username=? OR email=? OR faculty_id=? LIMIT 1");
         $check->bind_param('sss', $data['username'], $data['email'], $data['faculty_id']);
         $check->execute();
-        if ($check->get_result()->fetch_assoc()['cnt']> 0) throw new InvalidArgumentException("That email or ID is already in use.");
+        $existing = $check->get_result()->fetch_assoc();
+        if ($existing) throw new InvalidArgumentException("This email or ID belongs to " . ($existing['full_name'] ?: 'another account') . ".");
 
         $title_val = trim($data['position']);
         $hash = password_hash($data['password'], PASSWORD_DEFAULT);
@@ -101,6 +102,7 @@ class AdminManagementService {
                 'ID'       => $data['faculty_id'],
                 'Password' => $data['password'],
             ], ['ID', 'Password']);
+            $emailBody .= email_activation_notice();
             $emailBody .= email_action('Sign in at', BASE_URL . '/archive/index.php');
             $emailBody .= email_para('Please change your password after signing in for the first time.');
             // Reported honestly: see the note in FacultyManagementService.
@@ -175,13 +177,14 @@ class AdminManagementService {
         }
 
         $check = $this->conn->prepare(
-            "SELECT COUNT(*) AS cnt FROM users
+            "SELECT full_name FROM users
              WHERE (email=? OR (faculty_id IS NOT NULL AND faculty_id<>'' AND faculty_id=?))
-               AND user_id<>?");
+               AND user_id<>? LIMIT 1");
         $check->bind_param('ssi', $email, $empId, $userId);
         $check->execute();
-        if ((int)$check->get_result()->fetch_assoc()['cnt'] > 0) {
-            throw new InvalidArgumentException("Another account already uses that email or ID.");
+        $existing = $check->get_result()->fetch_assoc();
+        if ($existing) {
+            throw new InvalidArgumentException("This email or ID belongs to " . ($existing['full_name'] ?: 'another account') . ".");
         }
 
         $fields = ['full_name=?', 'email=?', 'faculty_id=?', 'user_role=?', 'admin_level=?', 'title=?'];

@@ -17,6 +17,14 @@ function preflight_taken(mysqli $conn, string $sql, string $types, array $values
     $stmt->close();
     return $found;
 }
+function preflight_owner_name(mysqli $conn, string $col, string $value, int $exceptId = 0): string {
+    $stmt = $conn->prepare("SELECT full_name FROM users WHERE $col = ? AND user_id <> ? LIMIT 1");
+    $stmt->bind_param('si', $value, $exceptId);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return $row ? (string)$row['full_name'] : '';
+}
 function preflight_password_problem(string $password, bool $required): ?string {
     if (!$required && $password === '') return null;
     return strlen($password) < 6 || !preg_match('/[A-Z]/', $password) || !preg_match('/[0-9]/', $password)
@@ -75,7 +83,7 @@ if ($kind === 'profile' && $action === 'update_profile') {
     if ($why = person_name_problem($name)) preflight_answer(profile_rule_message($why), 'full_name');
     if ($why = account_email_problem($email)) preflight_answer(profile_rule_message($why), 'email');
     $owner = email_account_owner($email);
-    if ($owner && (int)$owner['user_id'] !== $id) preflight_answer('That email address is already on another account.', 'email');
+    if ($owner && (int)$owner['user_id'] !== $id) preflight_answer('This email belongs to ' . ($owner['full_name'] ?: 'another account') . '.', 'email');
     if (array_key_exists('faculty_id', $_POST)) {
         if (!profile_self_id_editable($u)) preflight_answer('You cannot change this Faculty ID.', 'faculty_id');
         $facultyId = staff_id_clean((string)$_POST['faculty_id']);
@@ -83,7 +91,8 @@ if ($kind === 'profile' && $action === 'update_profile') {
         if ($why = staff_id_problem($facultyId, 'Faculty ID', (string)($before['faculty_id'] ?? ''))) preflight_answer(profile_rule_message($why), 'faculty_id');
         if (strcasecmp(trim((string)($before['faculty_id'] ?? '')), $facultyId) !== 0 &&
             preflight_taken($conn, 'SELECT user_id FROM users WHERE user_id<>? AND (faculty_id=? OR student_id=? OR username=?) LIMIT 1', 'isss', [$id, $facultyId, $facultyId, $facultyId])) {
-            preflight_answer('That Faculty ID is already used by another account.', 'faculty_id');
+            $owner = preflight_owner_name($conn, 'faculty_id', $facultyId, $id);
+            preflight_answer('This Faculty ID belongs to ' . ($owner ?: 'another account') . '.', 'faculty_id');
         }
     }
     preflight_answer();
@@ -123,8 +132,14 @@ if ($kind === 'student') {
     if (!array_key_exists($program, programs_map())) preflight_answer('Choose an academic program from the list.', 'program');
     if (academic_year_is_future($year)) preflight_answer('That academic year has not started yet. The latest you can use is ' . academic_year_current() . '.', 'academic_year');
     if ($why = preflight_password_problem($password, !$editing)) preflight_answer($why, 'password');
-    if (preflight_taken($conn, 'SELECT user_id FROM users WHERE user_id<>? AND student_id=? LIMIT 1', 'is', [$editing ? $userId : 0, $number])) preflight_answer('Student ID already exists. Please use a different Student ID.', 'student_id');
-    if (preflight_taken($conn, 'SELECT user_id FROM users WHERE user_id<>? AND email=? LIMIT 1', 'is', [$editing ? $userId : 0, $email])) preflight_answer('Another account already uses that email.', 'email');
+    if (preflight_taken($conn, 'SELECT user_id FROM users WHERE user_id<>? AND student_id=? LIMIT 1', 'is', [$editing ? $userId : 0, $number])) {
+        $owner = preflight_owner_name($conn, 'student_id', $number, $editing ? $userId : 0);
+        preflight_answer('This Student ID belongs to ' . ($owner ?: 'another account') . '.', 'student_id');
+    }
+    if (preflight_taken($conn, 'SELECT user_id FROM users WHERE user_id<>? AND email=? LIMIT 1', 'is', [$editing ? $userId : 0, $email])) {
+        $owner = preflight_owner_name($conn, 'email', $email, $editing ? $userId : 0);
+        preflight_answer('This email belongs to ' . ($owner ?: 'another account') . '.', 'email');
+    }
     if (!$editing) {
         $username = substr(strtolower(preg_replace('/[^A-Za-z0-9_]/', '', $number)), 0, 30);
         if ($username !== '' && preflight_taken($conn, 'SELECT user_id FROM users WHERE username=? LIMIT 1', 's', [$username])) preflight_answer('Username already exists.', 'student_id');
@@ -141,8 +156,14 @@ if (!$map || ($kind === 'admin' && $map['role'] === 'faculty') ||
     ($kind === 'faculty' && !in_array($map['role'], ['faculty', 'librarian'], true))) preflight_answer('Choose a position.', $kind === 'admin' ? 'position' : 'title');
 try { secondary_position_for($u, (string)($_POST['secondary_position'] ?? ''), $position); }
 catch (InvalidArgumentException $e) { preflight_answer($e->getMessage(), 'secondary_position'); }
-if (preflight_taken($conn, 'SELECT user_id FROM users WHERE user_id<>? AND email=? LIMIT 1', 'is', [$editing ? $userId : 0, $email])) preflight_answer('That email address is already in use.', 'email');
-if (preflight_taken($conn, 'SELECT user_id FROM users WHERE user_id<>? AND faculty_id=? LIMIT 1', 'is', [$editing ? $userId : 0, $facultyId])) preflight_answer('That Faculty ID is already in use.', 'faculty_id');
+if (preflight_taken($conn, 'SELECT user_id FROM users WHERE user_id<>? AND email=? LIMIT 1', 'is', [$editing ? $userId : 0, $email])) {
+    $owner = preflight_owner_name($conn, 'email', $email, $editing ? $userId : 0);
+    preflight_answer('This email belongs to ' . ($owner ?: 'another account') . '.', 'email');
+}
+if (preflight_taken($conn, 'SELECT user_id FROM users WHERE user_id<>? AND faculty_id=? LIMIT 1', 'is', [$editing ? $userId : 0, $facultyId])) {
+    $owner = preflight_owner_name($conn, 'faculty_id', $facultyId, $editing ? $userId : 0);
+    preflight_answer('This ID belongs to ' . ($owner ?: 'another account') . '.', 'faculty_id');
+}
 if (!$editing) {
     $username = strtolower(preg_replace('/[^A-Za-z0-9_]/', '', $facultyId));
     if ($username !== '' && preflight_taken($conn, 'SELECT user_id FROM users WHERE username=? LIMIT 1', 's', [$username])) preflight_answer('This ID would create a username already in use.', 'faculty_id');

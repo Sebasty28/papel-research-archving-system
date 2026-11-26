@@ -19,6 +19,11 @@ if (!is_array($input) || !hash_equals(csrf_token(), (is_string($input['_token'] 
     exit;
 }
 $u = current_user();
+if (!$u) {
+    http_response_code(401);
+    echo json_encode(['reply' => 'Please sign in to use Corpus.']);
+    exit;
+}
 $historyOwner = corpus_history_key($u);
 if (($_SESSION['corpus_history_owner'] ?? '') !== $historyOwner) {
     $_SESSION['corpus_history'] = [];

@@ -152,7 +152,7 @@ $RC = [
          'desc' => 'Add a paper of your own. It is published straight away, with no review'],
         ['href' => 'faculty_manage_students.php', 'icon' => 'group', 'label' => 'My Students',
          'desc' => $student_count . ' student ' . ($student_count === 1 ? 'account' : 'accounts') . '. Add, edit or reset one.'],
-        ['href' => BASE_URL.'/analytics/analytics_dashboard.php', 'icon' => 'insights', 'label' => 'Analytics',
+        ['href' => BASE_URL.'/analytics/analytics_dashboard.php', 'icon' => 'insights', 'label' => 'Descriptive Data Visualization',
          'desc' => 'Submissions by program, paper type and month'],
         ['href' => BASE_URL.'/archive/index.php?browse=1', 'icon' => 'menu_book', 'label' => 'Public Repository',
          'desc' => 'Everything published so far'],

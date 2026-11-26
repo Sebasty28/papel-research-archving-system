@@ -28,12 +28,20 @@ $submitted = function (string $alias = 'research_papers') {
 /* ---------------------------------------------------------------------------
  * Filters
  *
- * Everything below answers the same question narrowed four ways: which year,
- * which program, which kind of paper, what stage it reached. They live in the
+ * Everything below answers the same question narrowed by time, program,
+ * paper type and review stage. They live in the
  * query string so a particular view can be bookmarked or sent to someone, and
  * so the browser's back button steps through them.
  * ------------------------------------------------------------------------ */
-$fYear    = trim($_GET['year']    ?? '');
+$fRange   = trim($_GET['range'] ?? 'all');
+$fFrom    = trim($_GET['from'] ?? '');
+$fTo      = trim($_GET['to'] ?? '');
+if (!in_array($fRange, ['all', 'year', 'month', 'date', 'datetime'], true)) $fRange = 'all';
+// Existing bookmarked ?year=YYYY links still open the same one-year view.
+if (!isset($_GET['range']) && preg_match('/^\d{4}$/', (string)($_GET['year'] ?? ''))) {
+    $fRange = 'year';
+    $fFrom = $fTo = (string)$_GET['year'];
+}
 $fProgram = trim($_GET['program'] ?? '');
 $fType    = trim($_GET['type']    ?? '');
 $fStatus  = trim($_GET['status']  ?? '');
@@ -45,7 +53,7 @@ $FROM  = "FROM research_papers rp LEFT JOIN users u ON u.user_id = rp.uploaded_b
    only for a paper that has none. Reading the account alone, as this page did,
    lost every paper a Librarian files for somebody else: the Librarian's account
    has no programme, so 24 of the 27 papers on file were in no programme at all,
-   and the filter, Figure 6 and the tables knew only BSIT. Written from code and
+   and the filter, Figure 5 and the tables knew only BSIT. Written from code and
    nothing posted, so it is safe to interpolate, like the whitelisted sort. */
 $PROG  = paper_program_sql('rp', 'u');   // config/core.php; shared with the review desks
 // The paper's type with retired aliases folded in ("thesis" is Undergraduate Thesis): see paper_type_sql().
@@ -57,8 +65,31 @@ $where = [$submitted('rp')];
 $args  = [];
 $types = '';
 
-if ($fYear !== '' && ctype_digit($fYear)) {
-    $where[] = "YEAR(rp.upload_date) = ?";   $args[] = (int)$fYear;  $types .= 'i';
+$rangeError = '';
+$startAt = $endBefore = null;
+$parseRangeValue = function (string $value, string $range, bool $upper): ?string {
+    if ($value === '') return null;
+    if ($range === 'year' && preg_match('/^\d{4}$/', $value) && (int)$value >= 1900 && (int)$value <= 9998) {
+        return sprintf('%04d-01-01 00:00:00', (int)$value + ($upper ? 1 : 0));
+    }
+    $formats = ['month' => 'Y-m', 'date' => 'Y-m-d', 'datetime' => 'Y-m-d\TH:i'];
+    if (!isset($formats[$range])) return null;
+    $date = DateTimeImmutable::createFromFormat('!' . $formats[$range], $value);
+    if (!$date || $date->format($formats[$range]) !== $value) return null;
+    if ($upper) $date = $date->modify($range === 'month' ? '+1 month' : ($range === 'date' ? '+1 day' : '+1 minute'));
+    return $date->format('Y-m-d H:i:s');
+};
+if ($fRange !== 'all') {
+    $startAt = $parseRangeValue($fFrom, $fRange, false);
+    $endBefore = $parseRangeValue($fTo, $fRange, true);
+    if (($fFrom !== '' && $startAt === null) || ($fTo !== '' && $endBefore === null) ||
+        ($startAt !== null && $endBefore !== null && $startAt >= $endBefore)) {
+        $rangeError = 'Choose a valid time range with the start before the end.';
+        $where[] = '1 = 0';
+    } else {
+        if ($startAt !== null) { $where[] = 'rp.upload_date >= ?'; $args[] = $startAt; $types .= 's'; }
+        if ($endBefore !== null) { $where[] = 'rp.upload_date < ?'; $args[] = $endBefore; $types .= 's'; }
+    }
 }
 if ($fProgram !== '') { $where[] = "$PROG = ?";              $args[] = $fProgram; $types .= 's'; }
 // The shared type filter: Undergraduate Thesis also finds papers stored under the retired "thesis".
@@ -70,7 +101,13 @@ if ($fQuery   !== '') {
     array_push($args, $like, $like, $like); $types .= 'sss';
 }
 $WHERE = 'WHERE ' . implode(' AND ', $where);
-$filtered = ($fYear !== '' || $fProgram !== '' || $fType !== '' || $fStatus !== '' || $fQuery !== '');
+$timeFiltered = ($fRange !== 'all' && ($fFrom !== '' || $fTo !== ''));
+$filtered = ($timeFiltered || $fProgram !== '' || $fType !== '' || $fStatus !== '' || $fQuery !== '');
+$selection = [
+    'time' => $timeFiltered ? ['unit' => $fRange, 'from' => $fFrom ?: null, 'to' => $fTo ?: null] : 'all time',
+    'program' => $fProgram ?: 'all', 'paper_type' => $fType ?: 'all',
+    'status' => $fStatus ?: 'all', 'text_search_active' => $fQuery !== '',
+];
 
 /** Run a query with the active filters bound, plus any extra parameters. */
 $run = function (string $sql, array $extra = [], string $extraTypes = '')
@@ -96,12 +133,9 @@ $one  = function ($res, $key = 'v', $default = 0) {
 };
 
 /* ---- What the filter boxes can offer -------------------------------------
-   Only values that exist, so the lists never grow stale or offer a year with
-   nothing behind it. Drawn from the whole roll, not the filtered set, so
-   changing one filter does not empty the others. */
+   The categorical choices come from the whole roll, so changing one filter
+   does not empty the others. Time bounds may also select an empty period. */
 $all = "FROM research_papers rp LEFT JOIN users u ON u.user_id = rp.uploaded_by WHERE " . $submitted('rp');
-$optYears = array_column($rows($conn->query(
-    "SELECT DISTINCT YEAR(rp.upload_date) v $all ORDER BY v DESC")), 'v');
 /* Every programme the campus offers, in the order programs_map() keeps them,
    and not only the ones somebody has submitted under: a list of one (BSIT) hid
    the other programmes as if they did not exist, and choosing one with nothing
@@ -114,6 +148,8 @@ $optTypes = array_column($rows($conn->query(
     "SELECT DISTINCT $TYPE v $all AND rp.paper_type IS NOT NULL AND rp.paper_type <> '' ORDER BY v")), 'v');
 $optStatuses = array_column($rows($conn->query(
     "SELECT DISTINCT rp.current_status v $all ORDER BY v")), 'v');
+$rangeInputType = ['all' => 'date', 'year' => 'number', 'month' => 'month',
+                   'date' => 'date', 'datetime' => 'datetime-local'][$fRange];
 
 /* ---- Headline figures ---- */
 $totalSubs = (int)$one($run("SELECT COUNT(*) v $FROM $WHERE"));
@@ -122,33 +158,47 @@ $pending   = (int)$one($run("SELECT COUNT(*) v $FROM $WHERE AND rp.current_statu
                              ('pending_faculty','pending_admin','pending_admin_l1',
                               'pending_head_academic','pending_super_admin')"));
 $returned  = (int)$one($run("SELECT COUNT(*) v $FROM $WHERE AND rp.current_status = 'draft'"));
-$avgDays   = $conn->query("SELECT ROUND(AVG(time_to_approval),1) v FROM analytics WHERE time_to_approval IS NOT NULL");
-$avgDays   = $avgDays ? ($avgDays->fetch_assoc()['v'] ?? null) : null;
+$avgDays   = $one($run("SELECT ROUND(AVG(a.avg_days),1) v $FROM
+    JOIN (SELECT paper_id, AVG(time_to_approval) avg_days FROM analytics
+          WHERE time_to_approval IS NOT NULL GROUP BY paper_id) a ON a.paper_id = rp.paper_id
+    $WHERE"), 'v', null);
 $approvalPct = $totalSubs > 0 ? round(($approved / $totalSubs) * 100) : 0;
 
 // Drafts nobody has been asked to look at yet: counted apart, never inside.
 $openDrafts = (int)$one($conn->query(
     "SELECT COUNT(*) v FROM research_papers rp WHERE NOT " . $submitted('rp')));
 
-/* ---- Timeline -------------------------------------------------------------
-   The granularity follows the data. With no year chosen the chart is one point
-   per year, which stays readable however long the repository has been running;
-   choose a year and it becomes one point per month of that year. */
-$byMonth = ($fYear !== '' && ctype_digit($fYear));
-$timelineData = $rows($run(
-    $byMonth
-        ? "SELECT DATE_FORMAT(rp.upload_date, '%Y-%m') AS bucket, COUNT(*) AS count
-           $FROM $WHERE GROUP BY bucket ORDER BY bucket"
-        : "SELECT YEAR(rp.upload_date) AS bucket, COUNT(*) AS count
-           $FROM $WHERE GROUP BY bucket ORDER BY bucket"));
+/* Keep a long span readable, and show days when a short date range is chosen. */
+$timelineUnit = 'year';
+if ($fRange === 'year' && $fFrom !== '' && $fFrom === $fTo) $timelineUnit = 'month';
+elseif ($fRange === 'month') $timelineUnit = 'month';
+elseif (in_array($fRange, ['date', 'datetime'], true)) {
+    $spanDays = $startAt && $endBefore ? (strtotime($endBefore) - strtotime($startAt)) / 86400 : null;
+    $timelineUnit = $spanDays !== null && $spanDays <= 95 ? 'day' : 'month';
+}
+$timelineBucket = [
+    'year' => 'YEAR(rp.upload_date)',
+    'month' => "DATE_FORMAT(rp.upload_date, '%Y-%m')",
+    'day' => "DATE_FORMAT(rp.upload_date, '%Y-%m-%d')",
+][$timelineUnit];
+$timelineData = $rows($run("SELECT $timelineBucket AS bucket, COUNT(*) AS count
+    $FROM $WHERE GROUP BY bucket ORDER BY bucket"));
+$timelineUnitLabel = ['year' => 'year', 'month' => 'month', 'day' => 'day'][$timelineUnit];
 
-/* ---- This month against last ---- */
-$thisMonth = (int)$one($run("SELECT COUNT(*) v $FROM $WHERE
-    AND MONTH(rp.upload_date) = MONTH(NOW()) AND YEAR(rp.upload_date) = YEAR(NOW())"));
-$lastMonth = (int)$one($run("SELECT COUNT(*) v $FROM $WHERE
-    AND MONTH(rp.upload_date) = MONTH(DATE_SUB(NOW(), INTERVAL 1 MONTH))
-    AND YEAR(rp.upload_date)  = YEAR(DATE_SUB(NOW(), INTERVAL 1 MONTH))"));
-$monthDelta = $thisMonth - $lastMonth;
+// Keep months from different years distinct and show gaps as zero submissions.
+$monthlyData = $rows($run("SELECT DATE_FORMAT(rp.upload_date, '%Y-%m') AS bucket, COUNT(*) AS count
+    $FROM $WHERE GROUP BY bucket ORDER BY bucket"));
+if ($monthlyData) {
+    $monthCounts = array_column($monthlyData, 'count', 'bucket');
+    $firstMonth = new DateTimeImmutable($monthlyData[0]['bucket'] . '-01');
+    $lastMonth = new DateTimeImmutable($monthlyData[count($monthlyData) - 1]['bucket'] . '-01');
+    $monthlyData = [];
+    for ($month = $firstMonth; $month <= $lastMonth; $month = $month->modify('+1 month')) {
+        $bucket = $month->format('Y-m');
+        $monthlyData[] = ['bucket' => $bucket, 'count' => (int)($monthCounts[$bucket] ?? 0)];
+    }
+}
+
 
 /* ---- Breakdowns ---- */
 $paperTypeStats = $rows($run(
@@ -174,12 +224,47 @@ foreach ($approvalByType as &$_r) {
 }
 unset($_r);
 
-/* Compact chart series keep long program lists readable without losing totals. */
-$programChart = array_slice($stats, 0, 7);
-$otherPrograms = array_sum(array_map('intval', array_column(array_slice($stats, 7), 'total_papers')));
-if ($otherPrograms > 0) {
-    $programChart[] = ['program' => 'Other programs', 'total_papers' => $otherPrograms];
+/* ---- Descriptive analytics -------------------------------------------------
+   Enhanced breakdowns beyond the headline figures: how long each review stage
+   takes, which research fields and methodologies are represented, submission
+   timing patterns, and how complete the supporting documentation is. */
+
+// Papers waiting longest in review (overdue)
+$overduePapers = $rows($run(
+    "SELECT rp.paper_id, rp.title, rp.current_status, rp.upload_date,
+            DATEDIFF(NOW(), rp.upload_date) AS days_waiting,
+            u.full_name AS student
+     $FROM $WHERE AND rp.current_status IN ('pending_faculty','pending_admin','pending_admin_l1',
+                                  'pending_head_academic','pending_super_admin')
+     ORDER BY rp.upload_date ASC
+     LIMIT 5"));
+
+// Review bottleneck: which stage has the most papers queued
+$stageQueue = $rows($run(
+    "SELECT CASE WHEN rp.current_status = 'pending_admin_l1' THEN 'pending_admin'
+                 ELSE rp.current_status END AS current_status, COUNT(*) AS queued
+     $FROM $WHERE AND rp.current_status IN ('pending_faculty','pending_admin','pending_admin_l1',
+                                  'pending_head_academic','pending_super_admin')
+     GROUP BY CASE WHEN rp.current_status = 'pending_admin_l1' THEN 'pending_admin' ELSE rp.current_status END
+     ORDER BY queued DESC"));
+$statusLabelsMap = [
+    'pending_faculty' => 'Subject Adviser review',
+    'pending_admin' => 'Research Coordinator review',
+    'pending_admin_l1' => 'Research Coordinator review',
+    'pending_head_academic' => 'Head of Academic Programs review',
+    'pending_super_admin' => 'Director review',
+];
+
+/* Keep each program separate so every course has its own slice. */
+$programChart = $stats;
+$unassignedPrograms = $totalSubs - array_sum(array_column($stats, 'total_papers'));
+if ($unassignedPrograms > 0) {
+    $programChart[] = ['program' => 'Unspecified program', 'total_papers' => $unassignedPrograms];
 }
+
+// Use recorded research fields; preserve specializations and identify missing values.
+$researchFields = $rows($run("SELECT COALESCE(NULLIF(TRIM(rp.ai_research_field), ''), 'Unspecified') AS field,
+    COUNT(*) AS count $FROM $WHERE GROUP BY field ORDER BY count DESC, field ASC"));
 
 /* ---- Every submission, one row each ---------------------------------------
    The part that matters once there are years of these: sortable, searchable,
@@ -211,8 +296,10 @@ $papers = $rows($run(
      LIMIT ? OFFSET ?", [$perPage, $offset], 'ii'));
 
 /* Keep the current filters when building any other link on the page. */
-$qs = function (array $changes = []) use ($fYear, $fProgram, $fType, $fStatus, $fQuery, $sort, $dir, $page) {
-    $base = ['year' => $fYear, 'program' => $fProgram, 'type' => $fType, 'status' => $fStatus,
+$qs = function (array $changes = []) use ($fRange, $fFrom, $fTo, $fProgram, $fType, $fStatus, $fQuery, $sort, $dir, $page) {
+    $base = ['range' => $fRange === 'all' ? '' : $fRange,
+             'from' => $fRange === 'all' ? '' : $fFrom, 'to' => $fRange === 'all' ? '' : $fTo,
+             'program' => $fProgram, 'type' => $fType, 'status' => $fStatus,
              'q' => $fQuery, 'sort' => $sort, 'dir' => strtolower($dir), 'page' => $page];
     $merged = array_filter(array_merge($base, $changes), function ($v) { return $v !== '' && $v !== null; });
     return $merged ? '?' . http_build_query($merged) : '?';
@@ -246,19 +333,86 @@ if (($_GET['_fragment'] ?? '') === 'submissions') {
     exit;
 }
 
-// AI reads the filtered figures, so the wording follows whatever is on screen.
-$aiInsight = '';
-if (!empty($stats)) {
+// Per-chart AI insights: one short observation beneath each of the six figures.
+$chartInsights = [];
+$chartDataSets = [
+    'fields' => ['label' => 'Submissions by recorded research field (Unspecified means no field recorded)', 'data' => $researchFields],
+    'monthly' => ['label' => 'Submissions per calendar month (month and year)', 'data' => $monthlyData],
+    'timeline'   => ['label' => 'Submissions over time (by ' . $timelineUnitLabel . ')',   'data' => $timelineData],
+    'approval'   => ['label' => 'Approval rate by paper type',                              'data' => $approvalByType],
+    'types'      => ['label' => 'Paper type distribution',                                  'data' => $paperTypeStats],
+    'programs'   => ['label' => 'Submissions by academic program',                          'data' => $programChart],
+    'stageQueue' => ['label' => 'Current review queue by stage',                            'data' => $stageQueue],
+];
+// Section summaries share the same hourly cache and independent refresh endpoint.
+$chartDataSets['overall-overview'] = ['label' => 'Overall submission insight across all overview charts', 'data' => $totalSubs ? [
+    'selection' => $selection, 'submissions' => $totalSubs, 'approved' => $approved,
+    'pending' => $pending, 'returned' => $returned, 'timeline' => $timelineData, 'monthly' => $monthlyData,
+    'paper_types' => $paperTypeStats, 'programs' => $stats, 'research_fields' => $researchFields,
+] : []];
+$chartDataSets['overall-queue'] = ['label' => 'Overall review queue insight; zero pending means there is no current backlog',
+    'data' => $totalSubs ? ['selection' => $selection, 'pending' => $pending, 'queue' => $stageQueue,
+                          'longest_waiting_papers' => $overduePapers] : []];
+require_once __DIR__ . '/insight_cache.php';
+// Scope by the actual filter values (including search), never by pagination.
+$insightScope = json_encode([$fRange, $fFrom, $fTo, $fProgram, $fType, $fStatus, $fQuery]);
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['chart_insight'])) {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    csrf_verify();
+    $key = (string)$_POST['chart_insight'];
+    if (!isset($chartDataSets[$key])) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Unknown chart.']);
+        exit;
+    }
     try {
-        /* No key of its own any more. Every AI feature draws on the one
-           key pool, so this reads the session's engine and the other keys
-           stand behind it: an insight is no longer lost because the one key
-           this page used to hold was spent. */
-        $aiInsight = generate_analytics_insight($stats);
-    } catch (Exception $e) {
-        $aiInsight = 'AI analysis temporarily unavailable.';
+        echo json_encode(analytics_chart_insight($insightScope, $key, $chartDataSets[$key], ($_POST['force'] ?? '') === '1'));
+    } catch (Throwable $e) {
+        http_response_code(503);
+        echo json_encode(['error' => 'Insight unavailable. Please try again.']);
+    }
+    exit;
+}
+$chartInsightExpiry = [];
+foreach ($chartDataSets as $key => $set) {
+    // Exports reuse the page content and should not trigger AI requests.
+    if (isset($_GET['export'])) continue;
+    try {
+        $entry = analytics_chart_insight($insightScope, $key, $set);
+        $chartInsights[$key] = $entry['text'];
+        $chartInsightExpiry[$key] = $entry['expires'];
+    } catch (Throwable $e) {
+        $chartInsights[$key] = '';
+        $chartInsightExpiry[$key] = time() + analytics_insight_interval($key);
     }
 }
+$renderChartInsight = function (string $key) use ($chartInsights, $chartInsightExpiry, $chartDataSets) {
+    if (empty($chartDataSets[$key]['data'])) return;
+    ?>
+    <div class="an-ai-body an-chart-insight" data-insight="<?= e($key) ?>" data-expires="<?= (int)($chartInsightExpiry[$key] ?? 0) ?>">
+        <div class="an-insight-heading"><span class="material-symbols-outlined" aria-hidden="true">auto_awesome</span><strong>AI insight</strong></div>
+        <div class="an-insight-content"><div class="an-ai-text" aria-live="polite"><?= e(($chartInsights[$key] ?? '') ?: 'Insight unavailable. Try New insight.') ?></div>
+        <div class="an-insight-controls"><small><?= analytics_insight_interval($key) === 86400 ? 'Updates automatically every day.' : 'Updates automatically every hour.' ?></small>
+        <button type="button" class="btn btn-sm btn-outline-secondary an-new-insight">New insight</button>
+        <small class="an-insight-status" role="status"></small></div></div>
+    </div>
+    <?php
+};
+
+$renderOverallInsight = function (string $key) use ($renderChartInsight, $chartDataSets) {
+    ?>
+    <div class="an-card an-overall-insight" data-an-card="<?= e($key) ?>">
+        <div class="an-card-head"><span class="material-symbols-outlined" aria-hidden="true">auto_awesome</span> Overall insight</div>
+        <div class="an-card-body">
+            <?php if ($chartDataSets[$key]['data']): $renderChartInsight($key); else: ?>
+                <p class="an-ai-empty">No data available for an overall insight in this selection.</p>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php
+};
+$aiInsight = $chartInsights['overall-overview'] ?? '';
 
 /* ---- CSV, of exactly what is on screen ---- */
 if (isset($_GET['export']) && $_GET['export'] === 'csv') {
@@ -269,7 +423,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     fputcsv($out, ['PAPEL Analytics, ' . date('Y-m-d H:i')]);
     if ($filtered) {
         fputcsv($out, ['Filtered by',
-            'Year: '    . ($fYear    ?: 'all'),
+            'Time: '    . ($timeFiltered ? $fRange . ' ' . ($fFrom ?: 'earliest') . ' to ' . ($fTo ?: 'latest') : 'all'),
             'Program: ' . ($fProgram ?: 'all'),
             'Type: '    . ($fType    ? paper_type_label($fType) : 'all'),
             'Status: '  . ($fStatus  ?: 'all'),
@@ -295,9 +449,17 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
             $totalPapers > 0 ? round(($r['count'] / $totalPapers) * 100, 1) : 0]);
     }
     fputcsv($out, []);
-    fputcsv($out, [$byMonth ? 'SUBMISSIONS BY MONTH' : 'SUBMISSIONS BY YEAR']);
-    fputcsv($out, [$byMonth ? 'Month' : 'Year', 'Submissions']);
+    fputcsv($out, ['SUBMISSIONS BY ' . strtoupper($timelineUnitLabel)]);
+    fputcsv($out, [ucfirst($timelineUnitLabel), 'Submissions']);
     foreach ($timelineData as $r) { fputcsv($out, [$r['bucket'], $r['count']]); }
+    fputcsv($out, []);
+    fputcsv($out, ['SUBMISSIONS PER MONTH']);
+    fputcsv($out, ['Month', 'Submissions']);
+    foreach ($monthlyData as $r) { fputcsv($out, [$r['bucket'], $r['count']]); }
+    fputcsv($out, []);
+    fputcsv($out, ['RESEARCH FIELDS']);
+    fputcsv($out, ['Research field', 'Submissions']);
+    foreach ($researchFields as $r) fputcsv($out, [$r['field'], $r['count']]);
     fputcsv($out, []);
     fputcsv($out, ['EVERY SUBMISSION']);
     fputcsv($out, ['Submitted', 'Title', 'Student', 'Program', 'Type', 'Status']);
@@ -329,7 +491,7 @@ if (in_array($exportFormat, ['xlsx', 'docx', 'pdf'], true)) {
     $filterLine = 'All submissions';
     if ($filtered) {
         $bits = [];
-        if ($fYear)    $bits[] = 'Year ' . $fYear;
+        if ($timeFiltered) $bits[] = ucfirst($fRange) . ' ' . ($fFrom ?: 'earliest') . ' to ' . ($fTo ?: 'latest');
         if ($fProgram) $bits[] = program_code($fProgram) ?: $fProgram;
         if ($fType)    $bits[] = paper_type_label($fType);
         if ($fStatus)  $bits[] = str_replace('_', ' ', $fStatus);
@@ -398,8 +560,8 @@ if (in_array($exportFormat, ['xlsx', 'docx', 'pdf'], true)) {
                      $totalPapers > 0 ? round(($r['count'] / $totalPapers) * 100, 1) : 0]);
         }
 
-        $x->section($byMonth ? 'Submissions by month' : 'Submissions by year');
-        $x->headRow([$byMonth ? 'Month' : 'Year', 'Submissions']);
+        $x->section('Submissions by ' . $timelineUnitLabel);
+        $x->headRow([ucfirst($timelineUnitLabel), 'Submissions']);
         foreach ($timelineData as $r) $x->row([$r['bucket'], (int)$r['count']], [0]);
 
         $x->section('Every submission');
@@ -472,8 +634,8 @@ if (in_array($exportFormat, ['xlsx', 'docx', 'pdf'], true)) {
                                             ? round(($r['count'] / $totalPapers) * 100, 1)
                                             : 0) . '%'], $paperTypeStats));
 
-        $d->heading($byMonth ? 'Submissions by month' : 'Submissions by year');
-        $d->table([[$byMonth ? 'Month' : 'Year', 2, 'left'], ['Submissions', 1, 'right']],
+        $d->heading('Submissions by ' . $timelineUnitLabel);
+        $d->table([[ucfirst($timelineUnitLabel), 2, 'left'], ['Submissions', 1, 'right']],
                   array_map(fn($r) => [$r['bucket'], (string)(int)$r['count']], $timelineData));
 
         if ($figures) {
@@ -533,8 +695,8 @@ if (in_array($exportFormat, ['xlsx', 'docx', 'pdf'], true)) {
                                         ? round(($r['count'] / $totalPapers) * 100, 1)
                                         : 0) . '%'], $paperTypeStats));
 
-    $pdf->heading($byMonth ? 'Submissions by month' : 'Submissions by year');
-    $pdf->table([[$byMonth ? 'Month' : 'Year', 259, 'l'], ['Submissions', 240, 'r']],
+    $pdf->heading('Submissions by ' . $timelineUnitLabel);
+    $pdf->table([[ucfirst($timelineUnitLabel), 259, 'l'], ['Submissions', 240, 'r']],
                 array_map(fn($r) => [$r['bucket'], (string)(int)$r['count']], $timelineData));
 
     if ($figures) {
@@ -562,12 +724,17 @@ if (in_array($exportFormat, ['xlsx', 'docx', 'pdf'], true)) {
     exit;
 }
 $chartData = [
-    'timeline' => array_map(function ($r) use ($byMonth) {
-        return ['label' => $byMonth ? date('M', strtotime($r['bucket'] . '-01')) : (string)$r['bucket'],
+    'fields' => array_map(function ($r) { return ['label' => $r['field'], 'value' => (int)$r['count']]; }, $researchFields),
+    'monthly' => array_map(function ($r) {
+        return ['label' => date('M Y', strtotime($r['bucket'] . '-01')), 'value' => (int)$r['count']];
+    }, $monthlyData),
+    'timeline' => array_map(function ($r) use ($timelineUnit) {
+        $label = $timelineUnit === 'year' ? (string)$r['bucket'] :
+                 ($timelineUnit === 'month' ? date('M Y', strtotime($r['bucket'] . '-01')) :
+                  date('M j, Y', strtotime($r['bucket'])));
+        return ['label' => $label,
                 'value' => (int)$r['count']];
     }, $timelineData),
-    'monthly'  => [['label' => 'Last month', 'value' => $lastMonth],
-                   ['label' => 'This month', 'value' => $thisMonth]],
     'approval' => array_map(function ($r) {
         return ['label' => paper_type_label($r['paper_type']), 'value' => (float)$r['rate']];
     }, $approvalByType),
@@ -581,10 +748,16 @@ $chartData = [
         ['label' => 'Other', 'value' => max(0, $totalSubs - $approved - $pending - $returned)],
     ],
     'programs' => array_map(function ($r) {
-        return ['label' => $r['program'] === 'Other programs' ? 'Other programs' :
+        return ['label' => $r['program'] === 'Unspecified program' ? 'Unspecified program' :
                 (function_exists('program_code') ? program_code($r['program']) : $r['program']),
                 'value' => (int)$r['total_papers']];
     }, $programChart),
+
+    // Prescriptive analytics
+    'stageQueue' => array_map(function ($r) use ($statusLabelsMap) {
+        return ['label' => $statusLabelsMap[$r['current_status']] ?? $r['current_status'],
+                'value' => (int)$r['queued']];
+    }, $stageQueue),
 ];
 ?><!doctype html>
 <html lang="en">
@@ -792,7 +965,7 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
 }
 .an-filters.is-loading { opacity: .65; }
 .an-filter-error { margin: .625rem 0 0; color: var(--maroon); font-size: .75rem; }
-.an-filter-row { display: flex; flex-wrap: wrap; gap: .625rem; align-items: flex-end; }
+.an-filter-row { display: flex; flex-wrap: wrap; gap: .625rem; align-items: flex-start; }
 .an-filter { display: flex; flex-direction: column; gap: .2rem; min-width: 0; }
 .an-filter label {
     font-size: .625rem; text-transform: uppercase; letter-spacing: .04em; color: var(--grey);
@@ -810,6 +983,10 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
 .an-filter input:focus, .an-filter select:focus { border-color: var(--maroon); outline: none; }
 .an-filter-search { flex: 1 1 14rem; }
 .an-filter-search input { box-sizing: border-box; min-width: 14rem; width: 100%; }
+.an-filter-help { color: var(--grey); font-size: .6875rem; }
+.an-range-bounds { display: flex; gap: .625rem; flex-wrap: wrap; }
+.an-range-bounds[hidden] { display: none; }
+.an-range-bounds .an-filter input { min-width: 10rem; }
 /* What is currently narrowing the page, and how to undo it. */
 .an-active {
     display: flex; flex-wrap: wrap; align-items: center; gap: .375rem;
@@ -829,7 +1006,7 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
     display: grid; gap: .75rem; margin-bottom: 1rem;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
 }
-.an-tile { min-width: 0; background: var(--white); border: 1px solid var(--border); border-radius: 5px; padding: 1rem; overflow: hidden; }
+.an-tile { min-width: 0; background: var(--white); border: 1px solid var(--border); border-radius: var(--r-card, 8px); padding: 1rem; overflow: hidden; }
 .an-tile-label {
     font-size: .6875rem; text-transform: uppercase; letter-spacing: .04em;
     color: var(--grey); display: block; margin-bottom: .25rem;
@@ -844,7 +1021,7 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
 .an-tile-note.is-down { color: var(--bad-text); }
 
 /* ---- Cards ---- */
-.an-card { min-width: 0; background: var(--white); border: 1px solid var(--border); border-radius: 5px; margin-bottom: 1rem; overflow: hidden; }
+.an-card { min-width: 0; background: var(--white); border: 1px solid var(--border); border-radius: var(--r-card, 8px); margin-bottom: 1rem; overflow: hidden; }
 .an-card-head {
     display: flex; align-items: center; gap: .5rem; min-width: 0; flex-wrap: wrap;
     padding: .8rem 1.125rem; border-bottom: 1px solid var(--border);
@@ -870,8 +1047,28 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
 
 .an-ai-body { display: flex; gap: .75rem; align-items: flex-start; }
 .an-ai-body .material-symbols-outlined { color: var(--maroon); font-size: 20px; flex: 0 0 auto; }
-.an-ai-text { font-size: .875rem; color: var(--ink); line-height: 1.7; text-align: justify; }
+.an-ai-text { max-width: 75ch; font-size: .875rem; color: var(--ink); line-height: 1.7; text-align: left; overflow-wrap: anywhere; }
+.an-insight-content { flex: 1; min-width: 0; }
+.an-chart-insight { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+.an-insight-controls { display: flex; flex-wrap: wrap; align-items: center; gap: .65rem 1rem; margin-top: 1rem; }
+.an-insight-controls small { color: var(--grey); font-size: .75rem; line-height: 1.5; }
+.an-insight-controls .an-new-insight { flex: 0 0 auto; padding: .4rem .75rem; }
+.an-insight-status:empty { display: none; }
+.an-overall-insight { margin-bottom: 1.25rem; }
+.an-overall-insight .an-chart-insight { margin: 0; padding: 0; border: 0; }
+.an-overall-insight .an-ai-text { max-width: 90ch; }
+.an-ai-text p { margin: 0; }
+.an-ai-text p + p { margin-top: .75rem; }
+.an-ai-text ol, .an-ai-text ul { margin: 0; padding-left: 1.4rem; }
+.an-ai-text li + li { margin-top: .65rem; }
 .an-ai-empty { font-size: .8125rem; color: var(--grey); }
+.an-ai-card .an-ai-loading, .an-ai-card .an-ai-result { display: flex; gap: .75rem; align-items: flex-start; }
+.an-ai-card .an-ai-loading { color: var(--grey); font-size: .8125rem; }
+.an-ai-card .an-ai-result > .material-symbols-outlined { color: var(--maroon); font-size: 20px; flex: 0 0 auto; }
+.an-ai-card [hidden] { display: none; }
+.an-ai-spin { animation: an-ai-rotate 1s linear infinite; }
+@keyframes an-ai-rotate { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .an-ai-spin { animation: none; } }
 
 /* ---- Charts ---- */
 .an-grid { display: grid; gap: 1rem; align-items: start; grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -963,7 +1160,6 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
 .an-table tbody tr:hover { background: var(--cream); }
 .an-submissions.is-loading .an-table tbody { opacity: .55; }
 .an-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.an-table--types th, .an-table--types td,
 .an-table--programs th, .an-table--programs td {
     text-align: center;
     vertical-align: middle;
@@ -1033,6 +1229,27 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
 .an-modal-panel:focus { outline: none; }
 .an-modal-body { padding: 1.25rem; overflow: auto; }
 .an-modal-body .an-chart { height: min(60vh, 26rem); }
+/* Clear reading surfaces and a distinct control footer for every AI insight. */
+.an-grid { gap: 1.5rem; }
+.an-chart-card { box-shadow: 0 5px 18px rgba(51,0,0,.055); }
+.an-card-head { padding: 1rem 1.15rem; gap: .65rem; }
+.an-card-body { padding: 1.25rem; }
+.an-chart { height: 20rem; }
+.an-figure-caption { line-height: 1.65; margin-top: 1rem; }
+.an-chart-insight.an-ai-body { display: block; padding: 0; margin-top: 1.25rem; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--white); }
+.an-insight-heading { display: flex; align-items: center; gap: .5rem; padding: .75rem 1rem; background: var(--cream); border-bottom: 1px solid var(--border); font-size: .8rem; letter-spacing: .02em; }
+.an-insight-content .an-ai-text { padding: 1rem 1.15rem; font-size: .9rem; line-height: 1.85; max-width: 85ch; }
+.an-insight-content .an-ai-text p + p { margin-top: .85rem; }
+.an-insight-controls { margin: 0; padding: .85rem 1rem; border-top: 1px solid var(--border); background: var(--cream); gap: .75rem; }
+.an-insight-controls > small:first-child { flex: 1 1 160px; }
+.an-insight-controls .an-new-insight { border: 1px solid var(--maroon); color: var(--maroon); background: var(--white); font-weight: 600; border-radius: 6px; padding: .5rem .8rem; }
+.an-insight-controls .an-new-insight:hover { background: var(--maroon); color: var(--white); }
+.an-insight-status { flex-basis: 100%; }
+.an-overall-insight .an-chart-insight { border: 1px solid var(--border); }
+.an-overall-insight .an-insight-heading { display: none; }
+.an-field-scroll { height: 20rem; overflow-y: auto; scrollbar-width: thin; }
+@media(max-width: 600px) { .an-card-body { padding: .9rem; } .an-chart { height: 18rem; } }
+
 
 /* Analytics controls share a restrained five-pixel radius. */
 .an-filters, .an-filter select, .an-filter input, .an-chip,
@@ -1071,13 +1288,160 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
     .an-card-head .an-card-toggle, .an-card-head .an-hint + .an-card-toggle { order: 2; margin-left: auto; }
     .an-card-head .an-view-btn + .an-card-toggle { margin-left: 0; }
     .an-card-body { padding: .75rem; }
-    .an-table--types { min-width: 28rem; }
     .an-table--programs { min-width: 34rem; }
     .an-table--submissions { min-width: 58rem; }
     .an-paging { padding: .75rem; }
 }
 @media (prefers-reduced-motion: reduce) {
     .an-table-glide::before, .an-table-glide::after { transition: none; }
+}
+
+/* ---- Analytics level sections ---------------------------------------------- */
+.an-tabs {
+    display: flex; align-items: flex-end; gap: .125rem;
+    height: 38px; margin: 1.25rem 0 0; padding: 0 .25rem;
+    border-radius: var(--r-card, 8px) var(--r-card, 8px) 0 0;
+    background: var(--cream); position: relative;
+}
+.an-tabs[hidden], .an-tab-panel[hidden] { display: none; }
+.an-tab {
+    flex: 0 0 auto; display: inline-flex; align-items: center; gap: .45rem;
+    min-height: 38px; margin-bottom: -2px; padding: .4rem .65rem calc(.4rem + 2px);
+    border: 1px solid transparent; border-bottom: 0;
+    border-radius: var(--r-card, 8px) var(--r-card, 8px) 0 0;
+    background: linear-gradient(to bottom, rgba(177,125,125,.08) calc(100% - 2px), transparent calc(100% - 2px));
+    color: var(--grey); cursor: pointer;
+    font: 400 .8125rem/1.3 var(--font-body); white-space: nowrap;
+}
+.an-tab .material-symbols-outlined { font-size: 1.1rem; }
+.an-tab:hover { background: linear-gradient(to bottom, rgba(177,125,125,.16) calc(100% - 2px), transparent calc(100% - 2px)); color: var(--ink); }
+.an-tab[aria-selected="true"], .an-tab[aria-selected="true"]:hover {
+    position: relative; z-index: 1; background: var(--white); color: var(--ink);
+}
+.an-tab[aria-selected="true"]::before, .an-tab[aria-selected="true"]::after {
+    content: ''; position: absolute; bottom: 0; width: 8.5px; height: 9.8px; pointer-events: none;
+}
+.an-tab[aria-selected="true"]::before { right: 100%; background: radial-gradient(circle at 0 0, transparent 7px, var(--white) 8px); }
+.an-tab[aria-selected="true"]::after { left: 100%; background: radial-gradient(circle at 100% 0, transparent 7px, var(--white) 8px); }
+.an-tab:first-child[aria-selected="true"]::before,
+.an-tab + .an-tab[aria-selected="true"]::before,
+.an-tab[aria-selected="true"]:has(+ .an-tab)::after { display: none; }
+.an-tab:focus-visible { outline: 2px solid var(--maroon); outline-offset: -2px; }
+.an-tab-panel { --an-accent: var(--maroon-surface); padding: 1rem; background: var(--white); border-radius: 0 0 var(--r-card, 8px) var(--r-card, 8px); }
+.an-tab-panel > .an-section { margin-top: 0; }
+.an-tab-panel > .an-grid:first-child { margin-top: 0; }
+#anPanelPredictive { --an-accent: #0d7377; }
+#anPanelPrescriptive { --an-accent: #2e7d32; }
+#anPanelTables { --an-accent: #315a86; }
+.an-tab-panel .an-card {
+    border-top: 3px solid var(--an-accent);
+    box-shadow: 0 2px 8px rgba(51, 0, 0, .06);
+}
+.an-tab-panel .an-card-head {
+    background: color-mix(in srgb, var(--an-accent) 9%, var(--white));
+    border-bottom-color: color-mix(in srgb, var(--an-accent) 20%, var(--border));
+}
+.an-tab-panel .an-card-head .material-symbols-outlined,
+.an-tab-panel .an-figure-number { color: color-mix(in srgb, var(--an-accent) 65%, var(--ink)); }
+.an-tab-panel .an-figure-number { border-color: color-mix(in srgb, var(--an-accent) 35%, var(--border)); }
+.an-tab-panel .an-card-toggle, .an-tab-panel .an-view-btn { color: color-mix(in srgb, var(--an-accent) 65%, var(--ink)); }
+.an-tab-panel .an-card-toggle:hover { background: color-mix(in srgb, var(--an-accent) 12%, var(--white)); }
+.an-tab-panel .an-ai-result > .material-symbols-outlined { color: color-mix(in srgb, var(--an-accent) 65%, var(--ink)); }
+.an-tab-panel .an-table th { background: color-mix(in srgb, var(--an-accent) 10%, var(--white)); color: var(--ink); }
+.an-tab-panel .an-table tbody tr:nth-child(even) { background: color-mix(in srgb, var(--an-accent) 3%, var(--white)); }
+.an-tab-panel .an-table tbody tr:hover { background: color-mix(in srgb, var(--an-accent) 10%, var(--white)); }
+.an-grid--tables { grid-template-columns: minmax(0, 1fr); }
+#anPanelOverview .an-tile { border-top: 3px solid var(--an-tile-accent, var(--maroon-surface)); box-shadow: 0 2px 8px rgba(51, 0, 0, .05); }
+#anPanelOverview .an-tile-value { color: color-mix(in srgb, var(--an-tile-accent, var(--maroon-surface)) 65%, var(--ink)); }
+#anPanelOverview .an-tile:nth-child(1) { --an-tile-accent: var(--maroon-surface); }
+#anPanelOverview .an-tile:nth-child(2) { --an-tile-accent: #2e7d32; }
+#anPanelOverview .an-tile:nth-child(3) { --an-tile-accent: #0d7377; }
+#anPanelOverview .an-tile:nth-child(4) { --an-tile-accent: #9c3e20; }
+#anPanelOverview .an-tile:nth-child(5) { --an-tile-accent: #315a86; }
+#anPanelOverview .an-tile:nth-child(6) { --an-tile-accent: #6d3d83; }
+#anPanelOverview .an-chart-card:nth-child(2) { --an-accent: #315a86; }
+#anPanelOverview .an-chart-card:nth-child(3) { --an-accent: #2e7d32; }
+#anPanelOverview .an-chart-card:nth-child(4) { --an-accent: #6d3d83; }
+#anPanelOverview .an-chart-card:nth-child(5) { --an-accent: #0d7377; }
+#anPanelOverview .an-chart-card:nth-child(6) { --an-accent: #9c3e20; }
+@media (max-width: 700px) {
+    .an-tabs { overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
+    .an-tab[aria-selected="true"]::before, .an-tab[aria-selected="true"]::after { display: none; }
+    .an-tab-panel { padding: .75rem; }
+}
+.an-section { margin: 1.5rem 0 0; }
+.an-section-head {
+    display: flex; align-items: center; gap: .75rem;
+    padding: .625rem 1rem; border-radius: .625rem .625rem 0 0;
+    font: 600 1rem/1.4 var(--font-head); color: #fff;
+}
+.an-section-head .mi { font-size: 1.25rem; }
+.an-section-head small { font-weight: 400; opacity: .85; font-size: .8125rem; margin-left: auto; }
+.an-section-body { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 1rem; padding: 1rem 0 0; }
+
+/* Descriptive — maroon */
+.an-section--desc .an-section-head { background: var(--an-accent); }
+/* Predictive — teal/blue */
+.an-section--pred .an-section-head { background: var(--an-accent); }
+/* Prescriptive — green/amber */
+.an-section--pres .an-section-head { background: var(--an-accent); }
+
+/* Metric mini-cards inside sections */
+.an-metric {
+    background: var(--white); border: 1px solid var(--border); border-radius: .5rem;
+    padding: .875rem 1rem; display: flex; flex-direction: column; gap: .25rem;
+}
+.an-metric-label { font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; color: var(--grey); font-weight: 600; }
+.an-metric-value { font-size: 1.5rem; font-weight: 700; color: var(--ink); line-height: 1.2; }
+.an-metric-sub { font-size: .75rem; color: var(--grey); }
+
+.an-desc-metrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: .75rem; margin-bottom: 1rem; }
+
+/* Colour-coded metric highlights */
+.an-metric--ok { border-left: 4px solid var(--ok-text); }
+.an-metric--ok .an-metric-value { color: var(--ok-text); }
+.an-metric--warn { border-left: 4px solid var(--warn-text); }
+.an-metric--warn .an-metric-value { color: var(--warn-text); }
+.an-metric--bad { border-left: 4px solid var(--bad-text); }
+.an-metric--bad .an-metric-value { color: var(--bad-text); }
+.an-metric--accent { border-left: 4px solid var(--maroon-surface); }
+.an-metric--accent .an-metric-value { color: var(--maroon-surface); }
+.an-metric--teal { border-left: 4px solid #0d7377; }
+.an-metric--teal .an-metric-value { color: color-mix(in srgb, #0d7377 65%, var(--ink)); }
+
+/* Recommendation cards (prescriptive) */
+.an-rec { display: flex; gap: .75rem; padding: .875rem 1rem; border-radius: .5rem;
+           background: var(--white); border: 1px solid var(--border); align-items: flex-start; }
+.an-rec + .an-rec { margin-top: .5rem; }
+.an-rec-icon { flex-shrink: 0; width: 2.25rem; height: 2.25rem; border-radius: 50%;
+               display: grid; place-items: center; }
+.an-rec-icon .mi { font-size: 1.125rem; color: #fff; }
+.an-rec--high .an-rec-icon { background: var(--bad-text); }
+.an-rec--medium .an-rec-icon { background: var(--warn-text); }
+.an-rec--low .an-rec-icon { background: var(--ok-text); }
+.an-rec-body { flex: 1; min-width: 0; }
+.an-rec-title { font-weight: 600; font-size: .875rem; color: var(--ink); margin-bottom: .125rem; }
+.an-rec-text { font-size: .8125rem; color: var(--grey); line-height: 1.5; }
+
+/* Overdue table */
+.an-overdue { width: 100%; border-collapse: collapse; font-size: .8125rem; }
+.an-overdue th { text-align: left; padding: .5rem .625rem; font-weight: 600; color: var(--grey);
+                 border-bottom: 2px solid var(--border); font-size: .75rem; text-transform: uppercase; letter-spacing: .03em; }
+.an-overdue td { padding: .5rem .625rem; border-bottom: 1px solid var(--border); color: var(--ink); }
+.an-overdue .an-days-bad { color: var(--bad-text); font-weight: 700; }
+.an-overdue .an-days-warn { color: var(--warn-text); font-weight: 600; }
+
+/* Full-width card inside a section */
+.an-section-body .an-card-full { grid-column: 1 / -1; }
+
+@media (max-width: 900px) {
+    .an-section-body { grid-template-columns: minmax(0,1fr); }
+}
+@media (max-width: 700px) {
+    .an-section-head { font-size: .875rem; padding: .5rem .75rem; }
+    .an-section-head small { display: none; }
+    .an-metric-value { font-size: 1.25rem; }
+    .an-rec { padding: .75rem; }
 }
 </style>
 <link rel="stylesheet" href="<?= BASE_URL ?>/assests/css/analytics-word-editor.css?v=3">
@@ -1152,13 +1516,27 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
     <form class="an-filters" id="anFilters" method="get">
         <div class="an-filter-row">
             <div class="an-filter">
-                <label for="fYear">Year</label>
-                <select name="year" id="fYear">
-                    <option value="">All years</option>
-                    <?php foreach ($optYears as $y): ?>
-                        <option value="<?= e($y) ?>" <?= (string)$fYear === (string)$y ? 'selected' : '' ?>><?= e($y) ?></option>
-                    <?php endforeach; ?>
+                <label for="fRange">Time range</label>
+                <select name="range" id="fRange">
+                    <option value="all" <?= $fRange === 'all' ? 'selected' : '' ?>>All time</option>
+                    <option value="year" <?= $fRange === 'year' ? 'selected' : '' ?>>Years</option>
+                    <option value="month" <?= $fRange === 'month' ? 'selected' : '' ?>>Months</option>
+                    <option value="date" <?= $fRange === 'date' ? 'selected' : '' ?>>Dates</option>
+                    <option value="datetime" <?= $fRange === 'datetime' ? 'selected' : '' ?>>Date and time</option>
                 </select>
+                <span class="an-filter-help">Based on submission time</span>
+            </div>
+            <div class="an-range-bounds" id="anRangeBounds" <?= $fRange === 'all' ? 'hidden' : '' ?>>
+                <div class="an-filter">
+                    <label for="fFrom">From</label>
+                    <input name="from" id="fFrom" type="<?= e($rangeInputType) ?>" value="<?= e($fFrom) ?>"
+                           <?= $fRange === 'year' ? 'min="1900" max="9998"' : '' ?> aria-label="Time range start">
+                </div>
+                <div class="an-filter">
+                    <label for="fTo">To</label>
+                    <input name="to" id="fTo" type="<?= e($rangeInputType) ?>" value="<?= e($fTo) ?>"
+                           <?= $fRange === 'year' ? 'min="1900" max="9998"' : '' ?> aria-label="Time range end">
+                </div>
             </div>
             <div class="an-filter">
                 <label for="fProgram">Program</label>
@@ -1197,13 +1575,14 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
                        placeholder="Title, author or student">
             </div>
         </div>
+        <?php if ($rangeError): ?><p class="an-filter-error an-range-error" role="alert"><?= e($rangeError) ?></p><?php endif; ?>
 
         <?php if ($filtered): ?>
             <div class="an-active">
                 <span>Showing</span>
                 <?php
                 $chips = [];
-                if ($fYear !== '')    { $chips['year']    = $fYear; }
+                if ($timeFiltered) { $chips['time'] = ucfirst($fRange) . ': ' . ($fFrom ?: 'earliest') . ' to ' . ($fTo ?: 'latest'); }
                 if ($fProgram !== '') { $chips['program'] = function_exists('program_code') ? program_code($fProgram) : $fProgram; }
                 if ($fType !== '')    { $chips['type']    = $fType; }
                 if ($fStatus !== '')  { $chips['status']  = ucwords(str_replace('_', ' ', $fStatus)); }
@@ -1211,7 +1590,7 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
                 ?>
                 <?php foreach ($chips as $key => $label): ?>
                     <span class="an-chip"><?= e($label) ?>
-                        <a href="<?= e($qs([$key => '', 'page' => 1])) ?>" title="Remove">&times;</a>
+                        <a href="<?= e($key === 'time' ? $qs(['range' => '', 'from' => '', 'to' => '', 'page' => 1]) : $qs([$key => '', 'page' => 1])) ?>" title="Remove">&times;</a>
                     </span>
                 <?php endforeach; ?>
                 <a class="an-clear" href="analytics_dashboard.php">Clear all</a>
@@ -1221,6 +1600,14 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
 
     <div id="anResults">
     <script type="application/json" id="anChartData"><?= json_encode($chartData, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
+
+    <div class="an-tabs" role="tablist" aria-label="Analytics statistics" hidden>
+        <button type="button" class="an-tab" role="tab" id="anTabOverview" aria-controls="anPanelOverview" aria-selected="true" tabindex="0" data-an-tab="overview"><span class="material-symbols-outlined" aria-hidden="true">dashboard</span> Overview</button>
+        <button type="button" class="an-tab" role="tab" id="anTabPrescriptive" aria-controls="anPanelPrescriptive" aria-selected="false" tabindex="-1" data-an-tab="prescriptive"><span class="material-symbols-outlined" aria-hidden="true">lightbulb</span> Review queue</button>
+        <button type="button" class="an-tab" role="tab" id="anTabTables" aria-controls="anPanelTables" aria-selected="false" tabindex="-1" data-an-tab="tables"><span class="material-symbols-outlined" aria-hidden="true">table_chart</span> Data tables</button>
+    </div>
+
+    <div class="an-tab-panel" role="tabpanel" id="anPanelOverview" aria-labelledby="anTabOverview" data-an-tab-panel="overview">
 
     <!-- ---- Headline figures ---- -->
     <div class="an-tiles">
@@ -1246,51 +1633,21 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
             <span class="an-tile-note">sent back for revision</span>
         </div>
         <div class="an-tile">
-            <span class="an-tile-label">This month</span>
-            <span class="an-tile-value"><?= number_format($thisMonth) ?></span>
-            <?php if ($lastMonth || $thisMonth): ?>
-                <span class="an-tile-note <?= $monthDelta > 0 ? 'is-up' : ($monthDelta < 0 ? 'is-down' : '') ?>">
-                    <?php if ($monthDelta > 0): ?><?= $monthDelta ?> more than last month
-                    <?php elseif ($monthDelta < 0): ?><?= abs($monthDelta) ?> fewer than last month
-                    <?php else: ?>Same as last month<?php endif; ?>
-                </span>
-            <?php endif; ?>
-        </div>
-        <div class="an-tile">
             <span class="an-tile-label">Average time to approval</span>
             <span class="an-tile-value"><?= $avgDays !== null ? e($avgDays) : 'N/A' ?></span>
             <span class="an-tile-note"><?= $avgDays !== null ? 'days' : 'not recorded yet' ?></span>
         </div>
     </div>
 
-    <!-- ---- AI interpretation of the filtered statistics ---- -->
-    <div class="an-card" data-an-card="insight">
-        <div class="an-card-head">
-            <span class="material-symbols-outlined">auto_awesome</span> AI insight
-            <span class="an-hint">Generated from the filtered program statistics</span>
-        </div>
-        <div class="an-card-body">
-            <?php if (trim((string)$aiInsight) !== ''): ?>
-                <div class="an-ai-body">
-                    <span class="material-symbols-outlined">insights</span>
-                    <div class="an-ai-text"><?= nl2br(e($aiInsight)) ?></div>
-                </div>
-            <?php else: ?>
-                <p class="an-ai-empty">
-                    There is not enough here to summarise. Once a few papers have been through
-                    review, a written summary of the figures will appear.
-                </p>
-            <?php endif; ?>
-        </div>
-    </div>
+    <?php $renderOverallInsight('overall-overview'); ?>
 
     <!-- ---- Charts ---- -->
     <div class="an-grid">
         <div class="an-card an-chart-card" data-an-card="timeline">
             <div class="an-card-head">
                 <span class="an-figure-number" aria-label="Figure 1">01</span>
-                Submissions <?= $byMonth ? 'by month' : 'by year' ?>
-                <span class="an-hint"><?= $byMonth ? e($fYear) : 'pick a year for months' ?></span>
+                Submissions by <?= e($timelineUnitLabel) ?>
+                <span class="an-hint"><?= $timeFiltered ? e(($fFrom ?: 'earliest') . ' to ' . ($fTo ?: 'latest')) : 'all time' ?></span>
             </div>
             <div class="an-card-body">
                 <?php if ($timelineData): ?>
@@ -1301,16 +1658,24 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
                     <div class="an-empty"><span class="material-symbols-outlined">show_chart</span>Nothing to plot.</div>
                 <?php endif; ?>
                 <p class="an-figure-caption">Figure 1. Submissions over time</p>
+                <?php $renderChartInsight('timeline'); ?>
             </div>
         </div>
 
         <div class="an-card an-chart-card" data-an-card="monthly">
-            <div class="an-card-head"><span class="an-figure-number" aria-label="Figure 2">02</span> This month against last</div>
+            <div class="an-card-head"><span class="an-figure-number" aria-label="Figure 2">02</span> Submissions per month
+                <span class="an-hint"><?= $timeFiltered ? 'selected period' : 'all time' ?></span>
+            </div>
             <div class="an-card-body">
-                <div class="an-chart an-expandable" data-chart="monthly" title="Click to enlarge">
-                    <canvas id="monthlyChart"></canvas>
-                </div>
-                <p class="an-figure-caption">Figure 2. Submissions this month and last month</p>
+                <?php if ($monthlyData): ?>
+                    <div class="an-chart an-expandable" data-chart="monthly" title="Click to enlarge">
+                        <canvas id="monthlyChart"></canvas>
+                    </div>
+                <?php else: ?>
+                    <div class="an-empty"><span class="material-symbols-outlined">bar_chart</span>No submissions in this selection.</div>
+                <?php endif; ?>
+                <p class="an-figure-caption">Figure 2. Submitted papers per calendar month; months include the year.</p>
+                <?php $renderChartInsight('monthly'); ?>
             </div>
         </div>
 
@@ -1325,6 +1690,7 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
                     <div class="an-empty"><span class="material-symbols-outlined">check_circle</span>Nothing to compare.</div>
                 <?php endif; ?>
                 <p class="an-figure-caption">Figure 3. Percentage approved by paper type</p>
+                <?php $renderChartInsight('approval'); ?>
             </div>
         </div>
 
@@ -1339,25 +1705,12 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
                     <div class="an-empty"><span class="material-symbols-outlined">donut_small</span>Nothing to plot.</div>
                 <?php endif; ?>
                 <p class="an-figure-caption">Figure 4. Share of submissions by paper type</p>
-            </div>
-        </div>
-
-        <div class="an-card an-chart-card" data-an-card="status">
-            <div class="an-card-head"><span class="an-figure-number" aria-label="Figure 5">05</span> Review status</div>
-            <div class="an-card-body">
-                <?php if ($totalSubs): ?>
-                    <div class="an-chart an-expandable" data-chart="status" title="Click to enlarge">
-                        <canvas id="statusChart"></canvas>
-                    </div>
-                <?php else: ?>
-                    <div class="an-empty"><span class="material-symbols-outlined">donut_small</span>Nothing to plot.</div>
-                <?php endif; ?>
-                <p class="an-figure-caption">Figure 5. Share of submissions by review status</p>
+                <?php $renderChartInsight('types'); ?>
             </div>
         </div>
 
         <div class="an-card an-chart-card" data-an-card="programs">
-            <div class="an-card-head"><span class="an-figure-number" aria-label="Figure 6">06</span> Submissions by program</div>
+            <div class="an-card-head"><span class="an-figure-number" aria-label="Figure 5">05</span> Submissions by program</div>
             <div class="an-card-body">
                 <?php if ($programChart): ?>
                     <div class="an-chart an-expandable" data-chart="programs" title="Click to enlarge">
@@ -1366,51 +1719,94 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
                 <?php else: ?>
                     <div class="an-empty"><span class="material-symbols-outlined">bar_chart</span>Nothing to compare.</div>
                 <?php endif; ?>
-                <p class="an-figure-caption">Figure 6. Submitted papers by program; remaining programs grouped</p>
+                <p class="an-figure-caption">Figure 5. Submitted papers by course: count and share of submissions</p>
+                <?php $renderChartInsight('programs'); ?>
+            </div>
+        </div>
+        <div class="an-card an-chart-card" data-an-card="fields">
+            <div class="an-card-head"><span class="an-figure-number" aria-label="Figure 6">06</span> Submissions by research field</div>
+            <div class="an-card-body">
+                <?php if ($researchFields): ?>
+                    <div class="an-field-scroll"><div class="an-chart an-expandable" data-chart="fields" title="Click to enlarge">
+                        <canvas id="fieldsChart"></canvas>
+                    </div></div>
+                <?php else: ?>
+                    <div class="an-empty">No submissions in this selection.</div>
+                <?php endif; ?>
+                <p class="an-figure-caption">Figure 6. Papers by recorded research field. Specializations are shown as recorded; missing fields are Unspecified.</p>
+                <?php $renderChartInsight('fields'); ?>
             </div>
         </div>
     </div>
 
-    <!-- ---- Summary tables. Small by nature, so these sort in the browser. ---- -->
-    <div class="an-grid">
-        <div class="an-card" data-an-card="by-type">
-            <div class="an-card-head"><span class="material-symbols-outlined">category</span> By paper type</div>
-            <div class="an-table-glide">
-            <div class="an-scroll">
-                <table class="an-table an-table--types js-sortable">
-                    <thead>
-                        <tr>
-                            <th data-sort="text" data-help="The kind of research paper, such as a thesis or undergraduate thesis." aria-description="The kind of research paper, such as a thesis or undergraduate thesis." tabindex="0">Type</th>
-                            <th class="an-num" data-sort="num" data-help="Number of submitted papers of this type in the current results." aria-description="Number of submitted papers of this type in the current results." tabindex="0">Papers</th>
-                            <th class="an-num" data-sort="num" data-help="Share of the current submissions that belong to this paper type." aria-description="Share of the current submissions that belong to this paper type." tabindex="0">Percentage</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                    <?php if (!$paperTypeStats): ?>
-                        <tr><td colspan="3"><div class="an-empty">Nothing to show.</div></td></tr>
-                    <?php endif; ?>
-                    <?php foreach ($paperTypeStats as $row): ?>
-                        <?php $pct = $totalPapers > 0 ? round(($row['count'] / $totalPapers) * 100, 1) : 0; ?>
-                        <tr>
-                            <td>
-                                <a href="<?= e($qs(['type' => $row['paper_type'] === 'Unspecified' ? '' : $row['paper_type'], 'page' => 1])) ?>"
-                                   class="an-sort"><?= e(paper_type_label($row['paper_type'])) ?></a>
-                            </td>
-                            <td class="an-num an-strong" data-value="<?= (int)$row['count'] ?>"><?= number_format((int)$row['count']) ?></td>
-                            <td class="an-num" data-value="<?= $pct ?>">
-                                <?= $pct ?>%
-                                <span class="an-bar"><span style="width: <?= min(100, $pct) ?>%"></span></span>
-                            </td>
-                        </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-            </div>
-        </div>
+    </div><!-- Overview tab -->
 
+    <!-- ==== PRESCRIPTIVE ANALYTICS =========================================== -->
+    <div class="an-tab-panel" role="tabpanel" id="anPanelPrescriptive" aria-labelledby="anTabPrescriptive" data-an-tab-panel="prescriptive">
+    <?php $renderOverallInsight('overall-queue'); ?>
+    <div class="an-section an-section--pres">
+        <div class="an-section-head">
+            <span class="material-symbols-outlined mi">lightbulb</span>
+            Review queue
+            <small>Current status of papers in the selected period</small>
+        </div>
+        <div class="an-section-body">
+
+            <!-- Papers waiting longest -->
+            <?php if (!$stageQueue): ?>
+                <div class="an-card an-card-full"><div class="an-card-body">No papers in the selected results are currently awaiting review.</div></div>
+            <?php endif; ?>
+            <?php if ($overduePapers): ?>
+            <div class="an-card an-card-full" data-an-card="pres-overdue">
+                <div class="an-card-head"><span class="material-symbols-outlined">pending_actions</span> Oldest submissions still in review</div>
+                <div class="an-card-body">
+                    <div class="an-scroll">
+                    <table class="an-overdue">
+                        <thead><tr><th>Paper</th><th>Student</th><th>Status</th><th>Days since upload</th></tr></thead>
+                        <tbody>
+                        <?php foreach ($overduePapers as $op):
+                            $dw = (int)$op['days_waiting'];
+                            $cls = ''; // Age since upload is not a review deadline.
+                        ?>
+                            <tr>
+                                <td><?= e(mb_strimwidth($op['title'], 0, 50, '...')) ?></td>
+                                <td><?= e($op['student'] ?? 'Unknown') ?></td>
+                                <td><?= e($statusLabelsMap[$op['current_status']] ?? $op['current_status']) ?></td>
+                                <td class="<?= $cls ?>"><?= $dw ?> day<?= $dw !== 1 ? 's' : '' ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <!-- Stage queue breakdown -->
+            <?php if ($stageQueue): ?>
+            <div class="an-card an-card-full" data-an-card="pres-queue">
+                <div class="an-card-head"><span class="an-figure-number" aria-label="Figure 7">07</span> Current review queue</div>
+                <div class="an-card-body">
+                    <div class="an-chart an-expandable" data-chart="stageQueue" title="Click to enlarge">
+                        <canvas id="stageQueueChart"></canvas>
+                    </div>
+                    <p class="an-figure-caption">Figure 7. Papers currently waiting at each review stage</p>
+                    <?php $renderChartInsight('stageQueue'); ?>
+                </div>
+            </div>
+            <?php endif; ?>
+
+        </div>
+    </div>
+    </div><!-- Prescriptive tab -->
+
+    <div class="an-tab-panel" role="tabpanel" id="anPanelTables" aria-labelledby="anTabTables" data-an-tab-panel="tables">
+    <!-- Program outcomes and individual records answer different questions. -->
+    <div class="an-grid an-grid--tables">
         <div class="an-card" data-an-card="by-program">
-            <div class="an-card-head"><span class="material-symbols-outlined">school</span> By program</div>
+            <div class="an-card-head"><span class="material-symbols-outlined">school</span> Program outcomes
+                <span class="an-hint">One row per program, with approval and return counts</span>
+            </div>
             <div class="an-table-glide">
             <div class="an-scroll">
                 <table class="an-table an-table--programs js-sortable">
@@ -1447,6 +1843,8 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
     </div>
 
     <?php require __DIR__ . '/submissions_table.php'; ?>
+
+    </div><!-- Data tables tab -->
 
     </div>
 
@@ -1487,16 +1885,61 @@ body.an-preview-resizing.is-row { cursor: row-resize; }
 
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
 document.addEventListener('DOMContentLoaded', function () {
+    // Delegation survives filter updates, which replace the result cards.
+    var insightToken = <?= json_encode(csrf_token()) ?>;
+    async function refreshChartInsight(box, force) {
+        if (box.dataset.busy) return;
+        box.dataset.busy = '1';
+        var button = box.querySelector('.an-new-insight');
+        var status = box.querySelector('.an-insight-status');
+        button.disabled = true;
+        status.textContent = 'Updating?';
+        var url = new URL(location.href);
+        url.searchParams.delete('export');
+        url.searchParams.delete('_fragment');
+        try {
+            var response = await fetch(url.href, {
+                method: 'POST', credentials: 'same-origin',
+                body: new URLSearchParams({_token: insightToken, chart_insight: box.dataset.insight, force: force ? '1' : '0'})
+            });
+            if (!response.ok) throw new Error('Request failed');
+            var result = await response.json();
+            if (!box.isConnected) return;
+            if (result.text) formatAiText(box.querySelector('.an-ai-text'), result.text);
+            box.dataset.expires = result.expires;
+            status.textContent = result.failed ? 'Unable to generate a new insight. Please try again.' : 'Updated.';
+        } catch (error) {
+            status.textContent = 'Unable to update. Please try again.';
+            box.dataset.expires = Math.floor(Date.now() / 1000) + (box.dataset.insight.startsWith('overall-') ? 3600 : 86400);
+        } finally {
+            delete box.dataset.busy;
+            button.disabled = false;
+        }
+    }
+    document.addEventListener('click', function (event) {
+        var button = event.target.closest('.an-new-insight');
+        if (button) refreshChartInsight(button.closest('[data-insight]'), true);
+    });
+    function refreshDueInsights() {
+        if (document.hidden) return;
+        document.querySelectorAll('[data-insight]').forEach(function (box) {
+            if (Number(box.dataset.expires) <= Date.now() / 1000) refreshChartInsight(box, false);
+        });
+    }
+    setInterval(refreshDueInsights, 60000);
+    document.addEventListener('visibilitychange', refreshDueInsights);
+
 
     /* Match the paper view's folding cards. Keep the chosen state when an
        in-place filter update replaces the result cards. */
     var cardStates = Object.create(null);
-    var cardLabels = {
+    var cardLabels = { fields: 'Submissions by research field',
         insight: 'AI insight', timeline: 'Submissions over time',
-        monthly: 'This month against last', approval: 'Approval rate by paper type',
+        monthly: 'Submissions per month', approval: 'Approval rate by paper type',
         types: 'Paper types', status: 'Review status', programs: 'Submissions by program',
-        'by-type': 'By paper type',
-        'by-program': 'By program', submissions: 'Every submission'
+        'by-program': 'Program outcomes', submissions: 'Every submission',
+        'desc-ai': 'AI descriptive summary', 'pred-ai': 'AI predictive summary',
+        'pres-ai': 'AI prescriptive summary'
     };
     function bindCardToggles() {
         document.querySelectorAll('#anResults .an-card[data-an-card]').forEach(function (card) {
@@ -1535,6 +1978,47 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     bindCardToggles();
     document.addEventListener('analytics:updated', bindCardToggles);
+
+    /* AI text is untrusted plain text. Lay out lines as short paragraphs or
+       numbered actions, and split a single dense paragraph into sentences. */
+    function formatAiText(box, raw) {
+        var lines = String(raw || '').replace(/\r\n?/g, '\n').split(/\n+/)
+            .map(function (line) { return line.trim(); }).filter(Boolean);
+        if (lines.length === 1 && 'Segmenter' in Intl) {
+            var sentences = Array.from(new Intl.Segmenter(undefined, { granularity: 'sentence' }).segment(lines[0]),
+                function (part) { return part.segment.trim(); }).filter(Boolean);
+            if (sentences.length > 1) lines = sentences;
+        }
+        var fragment = document.createDocumentFragment();
+        var list = null;
+        lines.forEach(function (line) {
+            var numbered = line.match(/^\d+[.)]\s+(.+)$/);
+            var bulleted = line.match(/^(?:[-*•])\s+(.+)$/);
+            if (numbered || bulleted) {
+                var kind = numbered ? 'OL' : 'UL';
+                if (!list || list.tagName !== kind) {
+                    list = document.createElement(kind.toLowerCase());
+                    fragment.appendChild(list);
+                }
+                var item = document.createElement('li');
+                item.textContent = (numbered || bulleted)[1];
+                list.appendChild(item);
+            } else {
+                list = null;
+                var paragraph = document.createElement('p');
+                paragraph.textContent = line;
+                fragment.appendChild(paragraph);
+            }
+        });
+        box.replaceChildren(fragment);
+    }
+    function formatVisibleAiText() {
+        document.querySelectorAll('#anResults [data-insight] .an-ai-text').forEach(function (box) {
+            formatAiText(box, box.textContent);
+        });
+    }
+    formatVisibleAiText();
+    document.addEventListener('analytics:updated', formatVisibleAiText);
 
     /* The explanation lives outside the horizontally scrolling tables, where
        overflow would otherwise cut it off. Delegation keeps newly filtered or
@@ -1611,7 +2095,25 @@ document.addEventListener('DOMContentLoaded', function () {
     if (filters && search) {
         var searchTimer = null;
         var pendingFilters = null;
-        var filterNames = ['year', 'program', 'type', 'status', 'q'];
+        var filterNames = ['range', 'from', 'to', 'program', 'type', 'status', 'q'];
+        var rangeMode = filters.elements.namedItem('range');
+        var rangeFrom = filters.elements.namedItem('from');
+        var rangeTo = filters.elements.namedItem('to');
+        var rangeBounds = document.getElementById('anRangeBounds');
+        function syncRangeInputs(clear) {
+            var mode = rangeMode.value;
+            var inputType = { year: 'number', month: 'month', date: 'date', datetime: 'datetime-local' }[mode] || 'date';
+            rangeBounds.hidden = mode === 'all';
+            [rangeFrom, rangeTo].forEach(function (input) {
+                if (input.type !== inputType) input.type = inputType;
+                if (clear || mode === 'all') input.value = '';
+                input.disabled = mode === 'all';
+                if (mode === 'year') { input.min = '1900'; input.max = '9998'; }
+                else { input.removeAttribute('min'); input.removeAttribute('max'); }
+                input.setCustomValidity('');
+            });
+        }
+        syncRangeInputs(false);
         var renderedFilters = filterKey(location.href);
         var errorBox = document.createElement('p');
         errorBox.className = 'an-filter-error';
@@ -1621,7 +2123,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         function filterKey(href) {
             var params = new URL(href, location.href).searchParams;
-            return filterNames.map(function (name) { return params.get(name) || ''; }).join('\u0000');
+            return filterNames.map(function (name) { return params.get(name) || (name === 'range' ? 'all' : ''); }).join('\u0000');
         }
         function cancelPending() {
             if (pendingFilters) pendingFilters.abort();
@@ -1652,9 +2154,15 @@ document.addEventListener('DOMContentLoaded', function () {
                     if (!nextResults || !nextFilters || !nextExport) throw new Error('Analytics response was incomplete');
 
                     document.getElementById('anResults').replaceWith(nextResults);
-                    filterNames.forEach(function (name) {
+                    rangeMode.value = nextFilters.elements.namedItem('range').value;
+                    syncRangeInputs(true);
+                    filterNames.filter(function (name) { return name !== 'range'; }).forEach(function (name) {
                         filters.elements.namedItem(name).value = nextFilters.elements.namedItem(name).value;
                     });
+                    var oldRangeError = filters.querySelector('.an-range-error');
+                    if (oldRangeError) oldRangeError.remove();
+                    var nextRangeError = nextFilters.querySelector('.an-range-error');
+                    if (nextRangeError) { errorBox.textContent = nextRangeError.textContent; errorBox.hidden = false; }
                     var active = filters.querySelector('.an-active');
                     if (active) active.remove();
                     var nextActive = nextFilters.querySelector('.an-active');
@@ -1679,8 +2187,14 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         function applyFilters() {
             clearTimeout(searchTimer);
+            rangeTo.setCustomValidity('');
+            if (rangeMode.value !== 'all' && rangeFrom.value && rangeTo.value && rangeFrom.value > rangeTo.value) {
+                rangeTo.setCustomValidity('The end must be on or after the start.');
+            }
+            if (!filters.reportValidity()) return;
             var target = new URL(location.href);
             filterNames.forEach(function (name) { target.searchParams.delete(name); });
+            target.searchParams.delete('year');
             target.searchParams.delete('page');
             var values = new FormData(filters);
             filterNames.forEach(function (name) {
@@ -1693,9 +2207,11 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             loadDashboard(target.href, true);
         }
-        filters.querySelectorAll('select').forEach(function (select) {
+        rangeMode.addEventListener('change', function () { syncRangeInputs(true); applyFilters(); });
+        filters.querySelectorAll('select:not(#fRange)').forEach(function (select) {
             select.addEventListener('change', applyFilters);
         });
+        [rangeFrom, rangeTo].forEach(function (input) { input.addEventListener('change', applyFilters); });
         search.addEventListener('input', function () {
             cancelPending();
             clearTimeout(searchTimer);
@@ -1707,7 +2223,7 @@ document.addEventListener('DOMContentLoaded', function () {
             applyFilters();
         });
         main.addEventListener('click', function (event) {
-            var link = event.target.closest('.an-active a, .an-table--types tbody a.an-sort, .an-table--programs tbody a.an-sort');
+            var link = event.target.closest('.an-active a, .an-table--programs tbody a.an-sort');
             if (!link || event.defaultPrevented || event.button !== 0 ||
                 event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
             event.preventDefault();
@@ -1720,10 +2236,8 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    /* ---- The small tables sort in the browser ----
-       They hold one row per programme or per paper type, so there is never a
-       second page for a click to be sorting only part of. The big table below
-       sorts in the database instead, for exactly that reason. */
+    /* The program summary has one row per program, so client-side sorting
+       sees the whole table. The submission list sorts in the database. */
     function bindSmallSorts() {
         document.querySelectorAll('table.js-sortable').forEach(function (table) {
             var body = table.tBodies[0];
@@ -1915,7 +2429,7 @@ document.addEventListener('DOMContentLoaded', function () {
        for every figure. What decides it is the shape of the data, not taste:
 
          time   counts in time order          (Figure 1)
-         pair   two counts set side by side   (Figure 2)
+         pair   two counts set side by side   (Figure 3)
          rate   percentages that do NOT add   (Figure 3: each type's approval
                 up to 100                      rate is out of its own papers)
          parts  counts that make one whole    (Figures 4, 5, 6)
@@ -1940,10 +2454,10 @@ document.addEventListener('DOMContentLoaded', function () {
         table:    { label: 'Table',            icon: 'table_rows' }
     };
     var ORDER = ['line', 'area', 'stepped', 'column', 'bar', 'dot', 'radar', 'doughnut', 'pie', 'stacked', 'table'];
-    var SHAPE = { timeline: 'time', monthly: 'pair', approval: 'rate', types: 'parts', status: 'parts', programs: 'parts' };
+    var SHAPE = { fields: 'parts', timeline: 'time', monthly: 'time', approval: 'rate', types: 'parts', status: 'parts', programs: 'parts' };
     // What each figure has always been drawn as, and what it opens as until someone chooses.
-    var DEFAULTS = { timeline: 'area', monthly: 'column', approval: 'bar', types: 'doughnut', status: 'doughnut', programs: 'bar' };
-    var COLUMNS = {
+    var DEFAULTS = { fields: 'bar', timeline: 'area', monthly: 'column', approval: 'bar', types: 'doughnut', status: 'doughnut', programs: 'pie' };
+    var COLUMNS = { fields: ['Research field', 'Submissions'],
         timeline: ['Period', 'Submissions'], monthly: ['Month', 'Submissions'],
         approval: ['Paper type', 'Approved'], types: ['Paper type', 'Submissions'],
         status: ['Status', 'Submissions'], programs: ['Program', 'Submissions']
@@ -1965,7 +2479,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (n < 2) ['line', 'area', 'stepped'].forEach(function (k) { why[k] = 'A line needs at least two periods; there is only one.'; });
         } else if (shape === 'pair') {
             ['line', 'area', 'stepped'].forEach(function (k) { why[k] = 'Two months are compared side by side, not followed as a trend.'; });
-            ['pie', 'doughnut', 'stacked'].forEach(function (k) { why[k] = 'Last month and this month are not parts of one whole.'; });
+            ['pie', 'doughnut', 'stacked'].forEach(function (k) { why[k] = 'The two months are not parts of one whole.'; });
             why.radar = 'A radar needs at least three things to compare.';
         } else if (shape === 'rate') {
             ['line', 'area', 'stepped'].forEach(function (k) { why[k] = noOrder; });
@@ -1974,8 +2488,8 @@ document.addEventListener('DOMContentLoaded', function () {
         } else {
             ['line', 'area', 'stepped'].forEach(function (k) { why[k] = noOrder; });
             why.radar = 'A radar is for scores on one shared scale; counts across categories read more truthfully as bars.';
-            var slice = filled < 2 ? 'Only one category has any papers, so the whole would be a single slice.'
-                      : (filled > PIE_MAX ? 'More than ' + PIE_MAX + ' slices cannot be told apart; a bar keeps every one readable.' : null);
+            var slice = filled < 2 && key !== 'programs' ? 'Only one category has any papers, so the whole would be a single slice.'
+                      : (filled > PIE_MAX && key !== 'programs' ? 'More than ' + PIE_MAX + ' slices cannot be told apart; a bar keeps every one readable.' : null);
             if (slice) ['pie', 'doughnut', 'stacked'].forEach(function (k) { why[k] = slice; });
         }
         return why;
@@ -1985,11 +2499,19 @@ document.addEventListener('DOMContentLoaded', function () {
     var chosen = {};
     try { chosen = JSON.parse(localStorage.getItem(VIEW_KEY) || '{}') || {}; } catch (e) { chosen = {}; }
     function remember() { try { localStorage.setItem(VIEW_KEY, JSON.stringify(chosen)); } catch (e) {} }
+    try {
+        if (!localStorage.getItem('papel_program_pie_v1')) {
+            chosen.programs = 'pie';
+            remember();
+            localStorage.setItem('papel_program_pie_v1', '1');
+        }
+    } catch (e) {}
+
 
     /* What a figure is drawn as now: the reader's choice if it still suits the
        data, then the figure's usual kind if that does, then the first of the
        plain ones that does. The usual kind is checked like any other: under
-       some filters Figure 5 has papers in one status only, and its doughnut is
+       some filters Figure 6 has papers in one status only, and its doughnut is
        then a single ring that says nothing. A choice the data no longer suits is
        kept, not overwritten, so it comes back when the filters change again. */
     function kindFor(key) {
@@ -2009,17 +2531,10 @@ document.addEventListener('DOMContentLoaded', function () {
             grey: color('--grey', '#9f9f9f'), border: color('--border', '#e6d4d4'),
             cream: color('--cream', '#fff5f5'), white: color('--white', '#fff')
         };
-        /* Anything filled (a bar, a slice, a segment) takes --maroon-surface, never
-           --maroon: under Old Night --maroon and --dark-maroon both lift to white,
-           which made the first and third slices of every pie the same white and a
-           bar a white block (see "--maroon is the mark" in CLAUDE.md). The third
-           slice keeps --dark-maroon where that is still dark, and a pale rose
-           where it has lifted, so seven slices stay seven colours in either palette.
-           Lines and dots are marks and keep --maroon, which reads on both grounds. */
         c.fill = color('--maroon-surface', c.maroon);
-        var third = c.dark.toLowerCase() === c.maroon.toLowerCase() ? '#f0dada' : c.dark;
-        c.series = [c.fill, c.soft, third, '#a85a5a', '#d3a3a3', '#7a3b3b', '#c98c8c'];
-        c.third = third;
+        // Bright fixed palette for chart data — independent of the page theme.
+        c.bar = '#0d7377';
+        c.series = ['#087f8c', '#d97706', '#6d28d9', '#2563eb', '#be185d', '#15803d', '#9a3412', '#475569', '#0891b2', '#7c3aed', '#a16207', '#166534'];
         c.tip = { backgroundColor: c.ink, titleColor: '#fff', bodyColor: '#fff', padding: 10, cornerRadius: 5, displayColors: false };
         return c;
     }
@@ -2059,7 +2574,7 @@ document.addEventListener('DOMContentLoaded', function () {
             return shape === 'parts' && total ? s + ' (' + share(v) + '% of ' + total + ')' : s;
         };
         var catColor = function (i) {
-            if (key === 'status') return ({ Approved: c.fill, 'In review': c.soft, Returned: '#d3a3a3', Other: c.third })[full[i]] || c.series[i % 7];
+            if (key === 'status') return ({ Approved: '#0d7377', 'In review': '#e8a838', Returned: '#e06040', Other: '#5b9bd5' })[full[i]] || c.series[i % 7];
             return c.series[i % c.series.length];
         };
         var tip = Object.assign({}, c.tip, { callbacks: {
@@ -2081,29 +2596,29 @@ document.addEventListener('DOMContentLoaded', function () {
 
         switch (kind) {
             case 'line': case 'area': case 'stepped': {
-                var cfgLine = base('line', { data: vals, borderColor: c.maroon, borderWidth: 2,
-                    backgroundColor: kind === 'area' ? c.cream : 'transparent', fill: kind === 'area',
-                    // Monotone, so the smoothed curve never dips below zero or above a peak between two counts.
+                var cfgLine = base('line', { data: vals, borderColor: c.bar, borderWidth: 2,
+                    backgroundColor: kind === 'area' ? 'rgba(13,115,119,.12)' : 'transparent', fill: kind === 'area',
                     tension: kind === 'stepped' ? 0 : .35, cubicInterpolationMode: 'monotone',
                     stepped: kind === 'stepped' ? 'middle' : false,
-                    pointBackgroundColor: c.maroon, pointRadius: 3, pointHoverRadius: 5 });
+                    pointBackgroundColor: c.bar, pointRadius: 3, pointHoverRadius: 5 });
                 cfgLine.options.scales = { x: catAxis(14), y: valueAxis };
                 return cfgLine;
             }
             case 'column': case 'bar': {
                 var flat = kind === 'bar';
                 var cfgBar = base('bar', { data: vals, borderRadius: 5,
-                    backgroundColor: key === 'monthly' ? [c.soft, c.fill] : c.fill,
+                    backgroundColor: shape === 'parts' || rate ? vals.map(function (v, i) { return catColor(i); }) : (key === 'monthly' ? '#2563eb' : c.bar),
                     maxBarThickness: flat ? (full.length > 6 ? 20 : 40) : 64 });
                 cfgBar.options.indexAxis = flat ? 'y' : 'x';
                 cfgBar.options.scales = flat ? { x: valueAxis, y: catAxis(20) } : { x: catAxis(14), y: valueAxis };
+                if (key === 'fields' && flat) cfgBar.options.scales.y.ticks.autoSkip = false;
                 return cfgBar;
             }
             case 'dot': {
                 // Points against a zero-based axis, no line between them: the comparison a bar makes, with less ink.
                 var upright = shape === 'time';
                 var cfgDot = base('line', { data: vals, showLine: false, pointRadius: 6, pointHoverRadius: 8,
-                    pointBackgroundColor: c.maroon, pointBorderColor: c.white, pointBorderWidth: 1.5 });
+                    pointBackgroundColor: c.bar, pointBorderColor: c.white, pointBorderWidth: 1.5 });
                 cfgDot.options.indexAxis = upright ? 'x' : 'y';
                 // Each point in the middle of its category's slot, as a bar would be, not on the slot's edge.
                 var dotCats = Object.assign(catAxis(upright ? 14 : 20), { offset: true });
@@ -2112,8 +2627,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 return cfgDot;
             }
             case 'radar': {
-                var cfgRadar = base('radar', { data: vals, borderColor: c.maroon, backgroundColor: c.cream, borderWidth: 2,
-                    pointBackgroundColor: c.maroon, pointRadius: 3 });
+                var cfgRadar = base('radar', { data: vals, borderColor: c.bar, backgroundColor: 'rgba(13,115,119,.12)', borderWidth: 2,
+                    pointBackgroundColor: c.bar, pointRadius: 3 });
                 /* Each spoke is named with its own value, and the ring labels are
                    hidden: printed up the top spoke they sat on its point (a 100%
                    rate is drawn exactly where "100%" is written). */
@@ -2132,7 +2647,10 @@ document.addEventListener('DOMContentLoaded', function () {
             case 'pie': case 'doughnut': {
                 var cfgPie = base(kind, { data: vals, backgroundColor: vals.map(function (v, i) { return catColor(i); }),
                     borderColor: c.white, borderWidth: 2 });
-                cfgPie.data.labels = wrapped(24);
+                cfgPie.data.labels = key === 'programs' ? rows.map(function (row) {
+                    var total = vals.reduce(function (sum, value) { return sum + value; }, 0);
+                    return labelLines(row.label + ': ' + row.value + ' (' + (total ? row.value / total * 100 : 0).toFixed(1) + '%)', 30);
+                }) : wrapped(24);
                 if (kind === 'doughnut') cfgPie.options.cutout = key === 'status' ? '62%' : '58%';
                 cfgPie.options.plugins.legend = legendBottom;
                 return cfgPie;
@@ -2177,6 +2695,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function paint(box, key, c) {
         var canvas = box.querySelector('canvas');
         var kind = kindFor(key);
+        if (key === 'fields') box.style.height = (kind === 'bar' ? Math.max(320, rowsOf(key).length * 76) : 360) + 'px';
         var tableBox = box.querySelector('.an-view-tablebox');
         if (kind === 'table') {
             if (!tableBox) { tableBox = document.createElement('div'); tableBox.className = 'an-view-tablebox'; box.appendChild(tableBox); }
@@ -2190,12 +2709,43 @@ document.addEventListener('DOMContentLoaded', function () {
         return new Chart(canvas, config(key, kind, c));
     }
 
-    var titles = { timeline: 'Figure 1. Submissions over time', monthly: 'Figure 2. This month against last',
+    var titles = { fields: 'Figure 6. Submissions by research field', timeline: 'Figure 1. Submissions over time', monthly: 'Figure 2. Submissions per month',
                    approval: 'Figure 3. Approval rate by paper type', types: 'Figure 4. Paper types',
-                   status: 'Figure 5. Review status', programs: 'Figure 6. Submissions by program' };
-    var canvases = { timeline: 'timelineChart', monthly: 'monthlyChart',
+                   status: 'Figure 6. Review status', programs: 'Figure 5. Submissions by program' };
+    var canvases = { fields: 'fieldsChart', timeline: 'timelineChart', monthly: 'monthlyChart',
                      approval: 'approvalRateChart', types: 'paperTypeChart',
                      status: 'statusChart', programs: 'programChart' };
+
+    /* ---- Descriptive / Predictive / Prescriptive charts ---- */
+    var extraCanvases = { stageQueue: 'stageQueueChart' };
+
+    function drawExtra(c) {
+        Object.keys(extraCanvases).forEach(function (key) {
+            var el = document.getElementById(extraCanvases[key]);
+            if (!el) return;
+            var existing = Chart.getChart(el);
+            if (existing) existing.destroy();
+
+            var rows = (data[key] || []);
+            if (key === 'trendLine') rows = data.trendLine || {};
+
+            var tip = { backgroundColor: c.ink, titleColor: '#fff', bodyColor: '#fff',
+                        borderColor: c.border, borderWidth: 1, cornerRadius: 6, padding: 10 };
+
+            if (key === 'stageQueue') {
+                new Chart(el, {
+                    type: 'bar', data: { labels: rows.map(function (r) { return r.label; }),
+                        datasets: [{ data: rows.map(function (r) { return r.value; }),
+                            backgroundColor: rows.map(function (r, i) { return i === 0 ? '#e8a838' : c.bar; }),
+                            borderRadius: 5, maxBarThickness: 48 }] },
+                    options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+                        plugins: { legend: { display: false }, tooltip: tip },
+                        scales: { x: { beginAtZero: true, grid: { color: c.border }, ticks: { color: c.grey, precision: 0 } },
+                                  y: { grid: { display: false }, ticks: { color: c.grey } } } }
+                });
+            }
+        });
+    }
 
     var colors = palette();
     var drawn = {};
@@ -2216,6 +2766,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     function drawAll() { Object.keys(canvases).forEach(drawOne); }
     drawAll();
+    drawExtra(colors);
 
     window.papelAnalyticsExportFigures = function (format) {
         var light = palette({
@@ -2224,11 +2775,11 @@ document.addEventListener('DOMContentLoaded', function () {
             '--grey': '#6e6a6e', '--border': '#e6d4d4',
             '--cream': '#fff5f5', '--white': '#ffffff'
         });
-        var captions = {
-            timeline: 'Figure 1. Submissions over time', monthly: 'Figure 2. Submissions this month and last month',
+        var captions = { fields: 'Figure 6. Submissions by research field',
+            timeline: 'Figure 1. Submissions over time', monthly: 'Figure 2. Submissions per month',
             approval: 'Figure 3. Percentage approved by paper type', types: 'Figure 4. Share of submissions by paper type',
-            status: 'Figure 5. Share of submissions by review status',
-            programs: 'Figure 6. Submitted papers by program; remaining programs grouped'
+            status: 'Figure 6. Share of submissions by review status',
+            programs: 'Figure 5. Submitted papers by course: count and share of submissions'
         };
         return Object.keys(canvases).map(function (key) {
             if (!document.getElementById(canvases[key])) return null;
@@ -2279,6 +2830,7 @@ document.addEventListener('DOMContentLoaded', function () {
         colors = palette();
         setFont();
         drawAll();
+        drawExtra(colors);
         if (openKey) openModalChart();
     }).observe(document.documentElement, {
         attributes: true, attributeFilter: ['data-mode', 'data-color', 'data-theme']
@@ -2463,9 +3015,56 @@ document.addEventListener('DOMContentLoaded', function () {
         drawn = {};
         data = JSON.parse(document.getElementById('anChartData').textContent);
         drawAll();
+        drawExtra(colors);
         bindExpandables();
         bindViewChoosers();
     });
+
+    /* Keep the selected statistics tab while filters replace the results.
+       Charts are drawn before panels are hidden, then resized on reveal. */
+    var activeAnalyticsTab = 'overview';
+    function bindAnalyticsTabs() {
+        var results = document.getElementById('anResults');
+        var tablist = results.querySelector('.an-tabs');
+        var tabs = Array.from(tablist.querySelectorAll('[data-an-tab]'));
+        var panels = Array.from(results.querySelectorAll('[data-an-tab-panel]'));
+        function showTab(name, focus) {
+            if (!tabs.some(function (tab) { return tab.dataset.anTab === name; })) name = 'overview';
+            activeAnalyticsTab = name;
+            tabs.forEach(function (tab) {
+                var selected = tab.dataset.anTab === name;
+                tab.setAttribute('aria-selected', selected ? 'true' : 'false');
+                tab.tabIndex = selected ? 0 : -1;
+                if (selected && focus) tab.focus();
+            });
+            panels.forEach(function (panel) { panel.hidden = panel.dataset.anTabPanel !== name; });
+            var visible = panels.find(function (panel) { return panel.dataset.anTabPanel === name; });
+            requestAnimationFrame(function () {
+                if (!visible || !visible.isConnected) return;
+                visible.querySelectorAll('canvas').forEach(function (canvas) {
+                    var chart = Chart.getChart(canvas);
+                    if (chart) chart.resize();
+                });
+            });
+        }
+        tabs.forEach(function (tab, index) {
+            tab.addEventListener('click', function () { showTab(tab.dataset.anTab, false); });
+            tab.addEventListener('keydown', function (event) {
+                var next = index;
+                if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+                else if (event.key === 'ArrowLeft') next = (index + tabs.length - 1) % tabs.length;
+                else if (event.key === 'Home') next = 0;
+                else if (event.key === 'End') next = tabs.length - 1;
+                else return;
+                event.preventDefault();
+                showTab(tabs[next].dataset.anTab, true);
+            });
+        });
+        tablist.hidden = false;
+        showTab(activeAnalyticsTab, false);
+    }
+    bindAnalyticsTabs();
+    document.addEventListener('analytics:updated', bindAnalyticsTabs);
 
     document.getElementById('chartModalClose').addEventListener('click', closeModal);
     modal.addEventListener('click', function (e) { if (e.target === modal) { closeModal(); } });

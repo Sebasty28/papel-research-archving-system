@@ -832,7 +832,7 @@ html[data-view="rows"] .paper-list .card-status .paper-action { display: none; }
             </form>
             <a class="btn-sm-outline rc-filter-action" href="<?= e(BASE_URL) ?>/analytics/analytics_dashboard.php">
                 <span class="material-symbols-outlined mi-18" aria-hidden="true">insights</span>
-                Analytics
+                Descriptive Data Visualization
             </a>
             </div>
 

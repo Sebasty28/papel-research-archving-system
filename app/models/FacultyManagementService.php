@@ -71,8 +71,8 @@ class FacultyManagementService {
                   account_email_problem($data['email'])] as $why) {
             if ($why !== null) { throw new InvalidArgumentException($why); }
         }
-        if ($this->userRepo->isEmailOrFacultyIdTaken($data['email'], $data['faculty_id'], $userId)) {
-            throw new InvalidArgumentException("Another account already uses that email or Faculty ID.");
+        if ($owner = $this->userRepo->isEmailOrFacultyIdTaken($data['email'], $data['faculty_id'], $userId)) {
+            throw new InvalidArgumentException("This email or Faculty ID belongs to " . e($owner) . ".");
         }
         $map = staff_position_map($data['title'] ?? '');
         if (!$map || !in_array($map['role'], self::MANAGES, true)) {
@@ -122,11 +122,11 @@ class FacultyManagementService {
         if (strlen($data['password']) < 6 || !preg_match('/[A-Z]/', $data['password']) || !preg_match('/[0-9]/', $data['password'])) {
             throw new InvalidArgumentException("Password must be at least 6 characters and contain at least one uppercase letter and one number.");
         }
-        if ($this->userRepo->isUsernameOrEmailExists($data['username'], $data['email'])) {
-            throw new InvalidArgumentException("Username or email already exists.");
+        if ($owner = $this->userRepo->isUsernameOrEmailExists($data['username'], $data['email'])) {
+            throw new InvalidArgumentException("This email belongs to " . e($owner) . ".");
         }
-        if ($this->userRepo->isFacultyIdExists($data['faculty_id'])) {
-            throw new InvalidArgumentException("Faculty ID already exists. Please use a different Faculty ID.");
+        if ($owner = $this->userRepo->isFacultyIdExists($data['faculty_id'])) {
+            throw new InvalidArgumentException("This Faculty ID belongs to " . e($owner) . ".");
         }
 
         /* The position chosen on the form decides the role stored. Only the two
@@ -170,6 +170,7 @@ class FacultyManagementService {
             'Faculty ID' => $userData['faculty_id'],
             'Password'   => $userData['password'],
         ], ['Faculty ID', 'Password']);
+        $emailBody .= email_activation_notice();
         $emailBody .= email_action('Sign in with your Faculty ID at', BASE_URL . '/archive/index.php');
         $emailBody .= email_para('Please change your password after signing in for the first time.');
         try {

@@ -710,16 +710,18 @@ function account_import_existing(mysqli $conn, string $kind, string $id, string 
     $idCol = $kind === 'student' ? 'student_id' : 'faculty_id';
 
     if ($id !== '') {
-        $stmt = $conn->prepare("SELECT 1 FROM users WHERE $idCol = ? LIMIT 1");
+        $stmt = $conn->prepare("SELECT full_name FROM users WHERE $idCol = ? LIMIT 1");
         $stmt->bind_param('s', $id);
         $stmt->execute();
-        if ($stmt->get_result()->fetch_row()) { return 'That ID already has an account.'; }
+        $row = $stmt->get_result()->fetch_assoc();
+        if ($row) { return 'This ID belongs to ' . ($row['full_name'] ?: 'another account') . '.'; }
     }
     if ($email !== '') {
-        $stmt = $conn->prepare("SELECT 1 FROM users WHERE email = ? LIMIT 1");
+        $stmt = $conn->prepare("SELECT full_name FROM users WHERE email = ? LIMIT 1");
         $stmt->bind_param('s', $email);
         $stmt->execute();
-        if ($stmt->get_result()->fetch_row()) { return 'That email already has an account.'; }
+        $row = $stmt->get_result()->fetch_assoc();
+        if ($row) { return 'This email belongs to ' . ($row['full_name'] ?: 'another account') . '.'; }
     }
     return '';
 }
@@ -772,6 +774,7 @@ function account_import_create_one(array $row, string $kind, array $ctx, mysqli 
                 'Section'    => $ctx['section'] . ' (A.Y. ' . $ctx['academic_year'] . ')',
                 'Password'   => $password,
             ], ['Student ID', 'Password']);
+            $body .= email_activation_notice();
             $body .= email_action('Sign in with your Student ID at', BASE_URL . '/archive/index.php');
             $body .= email_para('Please change your password after signing in for the first time. '
                    . 'If you were not expecting this message, speak to your research adviser.');

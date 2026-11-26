@@ -217,13 +217,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
   if ($student_id) {
     // Check if student_id already exists
-    $check_stmt = $conn->prepare("SELECT COUNT(*) as cnt FROM users WHERE student_id=?");
+    $check_stmt = $conn->prepare("SELECT full_name FROM users WHERE student_id=? LIMIT 1");
     $check_stmt->bind_param('s', $student_id);
     $check_stmt->execute();
-    $result = $check_stmt->get_result();
-    $row = $result->fetch_assoc();
-    if ($row['cnt']> 0) {
-      flash('error','Student ID already exists. Please use a different Student ID.');
+    $existing = $check_stmt->get_result()->fetch_assoc();
+    if ($existing) {
+      flash('error','This Student ID belongs to ' . e($existing['full_name'] ?: 'another account') . '.');
       header('Location: faculty_manage_students.php'); exit;
     }
   }
@@ -242,13 +241,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   }
   
   // Check if username or email already exists
-  $check_stmt = $conn->prepare("SELECT COUNT(*) as cnt FROM users WHERE username=? OR email=?");
+  $check_stmt = $conn->prepare("SELECT full_name FROM users WHERE username=? OR email=? LIMIT 1");
   $check_stmt->bind_param('ss', $usern, $email);
   $check_stmt->execute();
-  $result = $check_stmt->get_result();
-  $row = $result->fetch_assoc();
-  if ($row['cnt']> 0) {
-    flash('error','Username or email already exists.');
+  $existing = $check_stmt->get_result()->fetch_assoc();
+  if ($existing) {
+    flash('error','This email belongs to ' . e($existing['full_name'] ?: 'another account') . '.');
     header('Location: faculty_manage_students.php'); exit;
   }
   
@@ -277,6 +275,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'Password'   => $pass,
     ], ['Student ID', 'Password']);
     $emailBody .= email_action('Sign in with your Student ID at', BASE_URL . '/archive/index.php');
+    $emailBody .= email_activation_notice();
     $emailBody .= email_para('Please change your password after signing in for the first time. '
                 . 'If you were not expecting this message, speak to your research adviser.');
     

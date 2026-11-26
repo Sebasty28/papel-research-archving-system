@@ -129,7 +129,7 @@ $RC = [
          'desc' => 'Add a paper of your own. It is published straight away, with no review'],
         ['href' => 'admin_manage_faculty.php', 'icon' => 'diversity_3', 'label' => 'Manage Faculty',
          'desc' => $faculty_count . ' adviser ' . ($faculty_count === 1 ? 'account' : 'accounts') . '. Add, edit or reset one.'],
-        ['href' => BASE_URL.'/analytics/analytics_dashboard.php', 'icon' => 'insights', 'label' => 'Analytics',
+        ['href' => BASE_URL.'/analytics/analytics_dashboard.php', 'icon' => 'insights', 'label' => 'Descriptive Data Visualization',
          'desc' => 'Submissions, approval rates and trends'],
         ['href' => BASE_URL.'/archive/index.php?browse=1', 'icon' => 'menu_book', 'label' => 'Public Repository',
          'desc' => 'What readers see once you approve'],

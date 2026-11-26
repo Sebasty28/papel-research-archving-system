@@ -15,6 +15,17 @@ Context for anyone (human or AI) picking this project up. Read this before
 changing anything; several of the conventions below are not guessable from the
 code, and a few are traps that have already cost time once.
 
+### Project graph for coding agents
+
+Claude's existing Graphify graph is in `graphify-out/graph.json`, with a readable
+map in `graphify-out/GRAPH_REPORT.md`. Codex should use the same graph for
+codebase navigation and relationship questions when it is present: query the
+graph first, then verify any implementation decision against the current source
+and the rules in this file. The graph is a local snapshot and can lag behind
+working-tree changes; `graphify-out/` is excluded from Git locally, so a fresh
+checkout may need its own graph. Do not treat inferred edges as established
+behavior.
+
 ---
 
 ## What this is

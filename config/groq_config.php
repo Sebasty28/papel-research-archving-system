@@ -920,7 +920,7 @@ function abstract_clean(string $s): ?string {
  */
 function generate_analytics_insight($statsData, $apiKey = null) {
     // Tell the AI it's a research analytics expert
-    $systemPrompt = "You are a research analytics expert. Analyze submission statistics and provide actionable insights for academic administrators.";
+    $systemPrompt = "You are a research analytics expert. Analyze submission statistics and provide actionable insights for academic administrators. Describe only the selected data; do not generalize a filtered period to the whole repository.";
     
     // Build the request: give AI the statistics and ask for analysis
     $userPrompt = "Analyze these research paper statistics and provide insights:\n\n";
@@ -930,7 +930,7 @@ function generate_analytics_insight($statsData, $apiKey = null) {
     $userPrompt .= "2. Programs with highest/lowest approval rates\n";
     $userPrompt .= "3. Areas needing attention\n";
     $userPrompt .= "4. Recommendations for improvement\n\n";
-    $userPrompt .= "Return plain text analysis (no JSON, no markdown).";
+    $userPrompt .= "Report observed counts and proportions only. Pending papers are unresolved outcomes; a low approved share does not establish poor research quality or a need for workshops. Do not infer causes, deadlines, future demand, or staff capacity from these counts. Return one concise finding per line. Use plain text only: no JSON, markdown, or bullet symbols.";
 
     // $apiKey is passed by each dashboard (super admin / admin / faculty keys)
     $result = call_groq_api($systemPrompt, $userPrompt, 500, $apiKey);
@@ -940,6 +940,103 @@ function generate_analytics_insight($statsData, $apiKey = null) {
     }
 
     // Return the AI's analysis text
+    return trim($result['response']);
+}
+
+/**
+ * AI-powered descriptive analytics: interprets turnaround times, research fields,
+ * submission patterns and document completeness into a narrative summary.
+ */
+function generate_descriptive_insight(array $data): string {
+    $systemPrompt = "You are a research analytics expert at a university. "
+        . "You are given descriptive statistics about research paper submissions. "
+        . "Provide a clear, actionable narrative summary for academic administrators. "
+        . "Be specific with numbers and the selected period. Write 4-6 sentences in plain text, no markdown.";
+
+    $userPrompt = "Here is descriptive data about our research paper repository:\n\n";
+    $userPrompt .= json_encode($data, JSON_PRETTY_PRINT);
+    $userPrompt .= "\n\nSummarise these findings in 4-6 sentences covering:\n";
+    $userPrompt .= "1. Review turnaround: which stages are fastest/slowest and by how much\n";
+    $userPrompt .= "2. Research fields and methodologies: what dominates, what is underrepresented\n";
+    $userPrompt .= "3. Submission timing patterns: which days/times are busiest\n";
+    $userPrompt .= "4. Document completeness: how well students provide supporting documents\n";
+    $userPrompt .= "Return one concise observation per line. Use plain text only: no JSON, markdown, or bullet symbols.";
+
+    $result = call_groq_api($systemPrompt, $userPrompt, 600);
+    if (!$result['success']) return '';
+    return trim($result['response']);
+}
+
+/**
+ * AI-powered predictive analytics: interprets trend data, forecasts, approval
+ * trajectories and seasonal patterns into forward-looking insights.
+ */
+function generate_predictive_insight(array $data): string {
+    $systemPrompt = "You are a research analytics expert at a university. "
+        . "You are given trend and forecast data about research paper submissions. "
+        . "Provide forward-looking insights for academic administrators. "
+        . "Be specific with numbers and timeframes. Treat seasonal claims cautiously if the selected period is short. Write 4-6 sentences in plain text, no markdown.";
+
+    $userPrompt = "Here is predictive/trend data about our research paper repository:\n\n";
+    $userPrompt .= json_encode($data, JSON_PRETTY_PRINT);
+    $userPrompt .= "\n\nProvide a forward-looking analysis in 4-6 sentences covering:\n";
+    $userPrompt .= "1. Submission trend: is it rising, falling or stable? What does the forecast for the three months after the last observed month suggest?\n";
+    $userPrompt .= "2. Approval rate trajectory: improving or declining over time?\n";
+    $userPrompt .= "3. Seasonal patterns: when should the institution prepare for surges?\n";
+    $userPrompt .= "4. Estimated review capacity: can the pipeline handle projected volume?\n";
+    $userPrompt .= "Return one concise projection or caution per line. Use plain text only: no JSON, markdown, or bullet symbols.";
+
+    $result = call_groq_api($systemPrompt, $userPrompt, 600);
+    if (!$result['success']) return '';
+    return trim($result['response']);
+}
+
+/**
+ * AI-powered prescriptive analytics: takes the rule-based recommendations,
+ * bottleneck data and queue information to generate specific action items.
+ */
+function generate_prescriptive_insight(array $data): string {
+    $systemPrompt = "You are a research analytics expert at a university. "
+        . "You are given operational data about research paper reviews. "
+        . "Provide specific, numbered action items that administrators can take this week. "
+        . "Be direct and practical. Use only the selected data. Write 4-6 sentences in plain text, no markdown.";
+
+    $userPrompt = "Here is operational data about our research review pipeline:\n\n";
+    $userPrompt .= json_encode($data, JSON_PRETTY_PRINT);
+    $userPrompt .= "\n\nProvide 3-5 specific, actionable recommendations in 4-6 sentences covering:\n";
+    $userPrompt .= "1. Immediate actions: what should be done this week about bottlenecks or overdue papers?\n";
+    $userPrompt .= "2. Process improvements: what workflow changes would help?\n";
+    $userPrompt .= "3. Resource allocation: where should reviewer attention be directed?\n";
+    $userPrompt .= "4. Prevention: what can be done to avoid future backlogs?\n";
+    $userPrompt .= "Put each action on its own numbered line (1. ..., 2. ...). Use plain text only: no JSON or markdown.";
+
+    $result = call_groq_api($systemPrompt, $userPrompt, 600);
+    if (!$result['success']) return '';
+    return trim($result['response']);
+}
+
+/**
+ * Per-chart AI insight: a 2-3 sentence observation about one figure's data.
+ *
+ * Called once for each of the six analytics charts. Each call spends one key
+ * from the pool and up to 200 completion tokens, so the whole set costs about
+ * 1,200 tokens of output — less than the single global insight it replaced.
+ */
+function generate_chart_insight(string $chartLabel, array $data): string {
+    if (!$data) return '';
+
+    $systemPrompt = "You are a research analytics expert. "
+        . "Given one chart's data from a university research repository dashboard, "
+        . "write exactly 2-3 sentences of observation for academic administrators. "
+        . "Name the numbers you see. Do not infer causes, predict the future, or recommend workshops. "
+        . "Plain text only: no markdown, no bullets, no JSON.";
+
+    $userPrompt = "Chart: {$chartLabel}\n\nData:\n"
+        . json_encode($data, JSON_PRETTY_PRINT)
+        . "\n\nWrite 2-3 factual sentences about what this chart shows.";
+
+    $result = call_groq_api($systemPrompt, $userPrompt, 200);
+    if (!$result['success']) return '';
     return trim($result['response']);
 }
 

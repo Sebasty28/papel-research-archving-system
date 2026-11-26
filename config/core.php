@@ -2250,20 +2250,20 @@ function profile_self_update(array $u, string $name, string $email, ?string $fac
     $owner = email_account_owner($email);
     if ($owner && (int)$owner['user_id'] !== $userId) {
         return ['ok' => false, 'field' => 'email', 'message' =>
-            'That email address is already on another account. '
+            'This email belongs to ' . ($owner['full_name'] ?: 'another account') . '. '
           . 'If it is yours, contact support rather than enrolling twice.'];
     }
 
     if ($id !== null && strcasecmp(trim((string)($before['faculty_id'] ?? '')), $id) !== 0) {
         /* Sign-in accepts an ID, email or username. Refuse an ID already used
            in any of those ID columns so it cannot name two accounts. */
-        $check = db()->prepare("SELECT user_id FROM users WHERE user_id <> ? AND (faculty_id = ? OR student_id = ? OR username = ?) LIMIT 1");
+        $check = db()->prepare("SELECT full_name FROM users WHERE user_id <> ? AND (faculty_id = ? OR student_id = ? OR username = ?) LIMIT 1");
         $check->bind_param('isss', $userId, $id, $id, $id);
         $check->execute();
         $idOwner = $check->get_result()->fetch_assoc();
         $check->close();
         if ($idOwner) {
-            return ['ok' => false, 'field' => 'faculty_id', 'message' => 'That Faculty ID is already used by another account.'];
+            return ['ok' => false, 'field' => 'faculty_id', 'message' => 'This Faculty ID belongs to ' . ($idOwner['full_name'] ?: 'another account') . '.'];
         }
     }
 
@@ -3534,6 +3534,57 @@ function email_plain(string $html): string {
     $text = preg_replace('/[ \t]+\n/', "\n", $text);
     $text = preg_replace('/\n{3,}/', "\n\n", $text);
     return trim($text);
+}
+
+/** The activation-deadline notice added to every welcome email. */
+function email_activation_notice(): string {
+    $h = defined('ACCOUNT_ACTIVATION_HOURS') ? ACCOUNT_ACTIVATION_HOURS : 48;
+    return email_para('Important: Please sign in within ' . $h . ' hours of receiving this message. '
+        . 'Accounts that are not activated within that time are automatically removed.');
+}
+
+/**
+ * Delete every account that was created but never signed into within the
+ * activation window.  Returns the number of rows removed.
+ *
+ * Related rows in password_changes are removed first (the only table that
+ * holds a row for a never-signed-in account).  An account that has never
+ * signed in has no papers, no workflow, no notifications and no favourites,
+ * so there is nothing else to clean up.
+ */
+function purge_inactive_accounts(?mysqli $conn = null): int {
+    $conn = $conn ?: db();
+    $h = defined('ACCOUNT_ACTIVATION_HOURS') ? ACCOUNT_ACTIVATION_HOURS : 48;
+
+    $ids = $conn->prepare(
+        "SELECT user_id FROM users
+          WHERE last_login IS NULL
+            AND created_at < NOW() - INTERVAL ? HOUR");
+    $ids->bind_param('i', $h);
+    $ids->execute();
+    $res = $ids->get_result();
+
+    $list = [];
+    while ($row = $res->fetch_assoc()) { $list[] = (int)$row['user_id']; }
+    $ids->close();
+
+    if (!$list) { return 0; }
+
+    $ph = implode(',', array_fill(0, count($list), '?'));
+    $types = str_repeat('i', count($list));
+
+    $del1 = $conn->prepare("DELETE FROM password_changes WHERE user_id IN ($ph)");
+    $del1->bind_param($types, ...$list);
+    $del1->execute();
+    $del1->close();
+
+    $del2 = $conn->prepare("DELETE FROM users WHERE user_id IN ($ph) AND last_login IS NULL");
+    $del2->bind_param($types, ...$list);
+    $del2->execute();
+    $count = $del2->affected_rows;
+    $del2->close();
+
+    return $count;
 }
 
 /** A single call to action, set as a plain link rather than a coloured pill. */

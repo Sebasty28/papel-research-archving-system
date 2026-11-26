@@ -81,7 +81,7 @@ $RC = [
          'desc' => 'Add a paper of your own. It is published straight away, with no review'],
         ['href' => 'super_admin_manage_admins.php', 'icon' => 'admin_panel_settings', 'label' => 'Manage Admins',
          'desc' => $admin_count . ' staff ' . ($admin_count === 1 ? 'account' : 'accounts') . '. Add, edit or reset one.'],
-        ['href' => BASE_URL.'/analytics/analytics_dashboard.php', 'icon' => 'insights', 'label' => 'Analytics',
+        ['href' => BASE_URL.'/analytics/analytics_dashboard.php', 'icon' => 'insights', 'label' => 'Descriptive Data Visualization',
          'desc' => 'Submissions, approval rates and trends'],
         ['href' => BASE_URL.'/archive/index.php?browse=1', 'icon' => 'menu_book', 'label' => 'Public Repository',
          'desc' => $archived_count ? $archived_count . ' paper(s) archived out of it' : 'What readers see'],

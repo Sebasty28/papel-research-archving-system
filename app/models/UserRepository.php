@@ -55,20 +55,22 @@ class UserRepository {
             [$hash, $userId], 'si', $role);
     }
 
+    /** Returns the owner's name if taken, or '' if not. */
     public function isUsernameOrEmailExists($username, $email) {
-        $stmt = $this->conn->prepare("SELECT COUNT(*) as cnt FROM users WHERE username=? OR email=?");
+        $stmt = $this->conn->prepare("SELECT full_name FROM users WHERE username=? OR email=? LIMIT 1");
         $stmt->bind_param('ss', $username, $email);
         $stmt->execute();
-        $result = $stmt->get_result()->fetch_assoc();
-        return $result['cnt']> 0;
+        $row = $stmt->get_result()->fetch_assoc();
+        return $row ? (string)$row['full_name'] : '';
     }
 
+    /** Returns the owner's name if taken, or '' if not. */
     public function isFacultyIdExists($facultyId) {
-        $stmt = $this->conn->prepare("SELECT COUNT(*) as cnt FROM users WHERE faculty_id=?");
+        $stmt = $this->conn->prepare("SELECT full_name FROM users WHERE faculty_id=? LIMIT 1");
         $stmt->bind_param('s', $facultyId);
         $stmt->execute();
-        $result = $stmt->get_result()->fetch_assoc();
-        return $result['cnt']> 0;
+        $row = $stmt->get_result()->fetch_assoc();
+        return $row ? (string)$row['full_name'] : '';
     }
 
     public function createUser($data) {
@@ -97,15 +99,16 @@ class UserRepository {
         return $stmt->execute();
     }
 
-    /** Is this email or Faculty ID already on some other account? */
+    /** Returns the owner's name if taken, or '' if not. */
     public function isEmailOrFacultyIdTaken($email, $facultyId, $exceptUserId) {
         $stmt = $this->conn->prepare(
-            "SELECT COUNT(*) AS cnt FROM users
+            "SELECT full_name FROM users
              WHERE (email=? OR (faculty_id IS NOT NULL AND faculty_id<>'' AND faculty_id=?))
-               AND user_id<>?");
+               AND user_id<>? LIMIT 1");
         $stmt->bind_param('ssi', $email, $facultyId, $exceptUserId);
         $stmt->execute();
-        return (int)$stmt->get_result()->fetch_assoc()['cnt'] > 0;
+        $row = $stmt->get_result()->fetch_assoc();
+        return $row ? (string)$row['full_name'] : '';
     }
 
     /**

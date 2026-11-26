@@ -124,7 +124,7 @@ function quick_action_links(?array $u): array
         : ['label' => 'Manage Faculty', 'href' => BASE_URL . '/app/admin/admin_manage_faculty.php',
            'match' => ['admin_manage_faculty.php'], 'tab' => null];
     $links[] = [
-        'label' => 'Analytics',
+        'label' => 'Descriptive Data Visualization',
         'href'  => BASE_URL . '/analytics/analytics_dashboard.php',
         'match' => ['analytics_dashboard.php'],
         'tab'   => null,

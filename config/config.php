@@ -264,6 +264,11 @@ define('COOKIE_SECURE', request_is_https()
  * that uploads here uploads there, and a limit quoted in testing is the limit
  * a student meets. Measured from the live Help Center on 2026-11-20. */
 define('UPLOAD_POLICY_MAX_MB', 20);
+
+/* How long a newly created account may sit without its owner signing in.
+ * After this many hours the account is deleted by the cleanup cron, and
+ * the welcome email says so. The admin can always recreate it. */
+define('ACCOUNT_ACTIVATION_HOURS', 48);
 define('UPLOAD_MAX_MB', min(UPLOAD_POLICY_MAX_MB, (int)($_ENV['UPLOAD_MAX_MB'] ?? UPLOAD_POLICY_MAX_MB)));
 
 /* Where the browser sends a paper's text to have its metadata read.
