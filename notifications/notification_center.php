@@ -316,7 +316,7 @@ $PAGE_SKELETON = 'console';
                     <?php
                     $kind = $kinds[$n['notification_type']] ?? ['icon' => 'notifications', 'label' => 'Notice'];
                     $href = notification_link(isset($n['paper_id']) ? (int)$n['paper_id'] : null,
-                                              $u['user_role'], (string)($n['notification_type'] ?? ''));
+                                              notification_role($u), (string)($n['notification_type'] ?? ''));
                     /* Same split as the bell's list: the row shows the first
                        line, and an account notice keeps the rest for the
                        dialog rather than printing a password down the page. */

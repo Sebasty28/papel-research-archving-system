@@ -8,8 +8,11 @@
  * this page sends a series of POSTs that differ in one way each and prints what
  * came back, which is the only way to learn what the edge objects to.
  *
- * Signed-in only, and it prints no secret: a key is reported as present or
- * absent and by length, never by value.
+ * Staff only, and it prints no secret: a key is reported as present or
+ * absent and by length, never by value. It was open to students as well, and
+ * what it does print (the PHP and server versions, the AI proxy's address, the
+ * last four characters of every Groq key) is a map of the server for whoever
+ * reads it; a student whose upload fails is helped by staff running it.
  *
  * Staff also get a Database section: the server version, whether it is strict,
  * and which schema changes the code expects that this copy of the database does
@@ -18,7 +21,7 @@
  * missing column was a 500 page on the adviser's desk.
  */
 require_once '../../config/core.php';
-require_role(['student', 'faculty', 'admin', 'super_admin', 'head_academic', 'librarian']);
+require_role(['faculty', 'admin', 'super_admin', 'head_academic', 'librarian']);
 require_once '../../config/groq_config.php';
 
 /* The target for the probes below, answered before any output so a probe sees
@@ -84,8 +87,8 @@ foreach ($pool as $i => $groqKey) {
 $line('groq model', defined('GROQ_MODEL') ? GROQ_MODEL : '(undefined)');
 $line('AI_PROXY_URL', defined('AI_PROXY_URL') && AI_PROXY_URL !== '' ? AI_PROXY_URL : '(not set)');
 
-/* Staff only. A student has no use for the schema, and it is not theirs to read. */
-$isStaff = in_array((string)(current_user()['user_role'] ?? ''), ['faculty', 'admin', 'super_admin', 'head_academic', 'librarian'], true);
+/* Everybody require_role() lets in is staff, by one post or the other. */
+$isStaff = true;
 $dbRows  = [];
 $gaps    = [];
 if ($isStaff) {

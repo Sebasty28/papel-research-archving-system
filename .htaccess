@@ -13,6 +13,21 @@
     </IfModule>
 </FilesMatch>
 
+# Build and deploy files that a browser has no use for. composer.lock names the
+# exact version of every PHP library on the server, which is the list an
+# attacker would otherwise have to work out (ZAP, 26 November 2026: "Hidden
+# File Found"). A second block rather than a longer pattern above, so the old
+# one keeps matching exactly what it always matched.
+<FilesMatch "\.(lock|toml|ya?ml|sql|bak|old|orig|swp|ini|phar|sh|bat|dist)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
 <IfModule mod_headers.c>
     # These four go on every response, redirects and error pages included
     # (ID-003, ID-020). "Header set" writes only to the table Apache sends with a
@@ -117,6 +132,18 @@ ServerSignature Off
     RewriteRule (^|/)\.git(/|$)                             - [R=404,L]
     RewriteRule ^(scripts|tests|docs|database|backups)(/|$) - [R=404,L]
     RewriteRule ^reset_system_data(?:\.php)?$                - [R=404,L]
+    # Libraries and the Groq proxy's source are read from disk or deployed to
+    # Cloudflare, never fetched by a browser, and a library's own PHP files
+    # should not be runnable one at a time from outside.
+    RewriteRule ^(vendor|mailer|workers)(/|$)                - [R=404,L]
+    # A paper's PDF is handed out by app/paper_file.php, which asks who is
+    # reading and reads the file from disk. Served straight from this folder it
+    # skipped every one of those checks: a student's draft answered 200 to a
+    # visitor who had never signed in (26 November 2026).
+    RewriteRule ^app/student/uploads(/|$)                    - [R=404,L]
+    # Under uploads/ a browser fetches only the pictures pasted into a section,
+    # named by core.php's own pattern; anything else there is nobody's to read.
+    RewriteRule ^uploads/(?!section_images/[0-9]+/[a-f0-9]{32}\.(?:png|jpe?g|gif|webp)$) - [R=404,L,NC]
 
     # Keep browser page addresses free of .php. THE_REQUEST makes these rules
     # apply only to an explicit URL, never to the internal rewrite below.
@@ -143,6 +170,8 @@ ServerSignature Off
     RedirectMatch 404 /\.git(/|$)
     RedirectMatch 404 ^/(scripts|tests|docs|database|backups)(/|$)
     RedirectMatch 404 ^/reset_system_data(?:\.php)?$
+    RedirectMatch 404 ^/(vendor|mailer|workers)(/|$)
+    RedirectMatch 404 ^/app/student/uploads(/|$)
 </IfModule>
 
 # No directory listings anywhere.

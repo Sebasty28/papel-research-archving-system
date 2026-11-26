@@ -159,7 +159,11 @@ html:not([data-mode="dark"]) .vw-shot-dark { display: none; }
 
 <dialog class="vw" id="viewWelcome" aria-labelledby="vwTitle"
         <?= $PAPEL_VIEW_TOUR_OPEN ? 'data-open="1"' : '' ?>>
-    <form method="dialog" class="vw-card">
+    <?php /* A <div> and a script-closed Done, not a <form method="dialog">.
+             The form posted nothing and carried no token, so every page this
+             is printed on read to a scanner as a form without CSRF
+             protection; closing the dialog from script is the same act. */ ?>
+    <div class="vw-card">
         <div class="vw-head">
             <h2 id="vwTitle">How would you like to browse?</h2>
             <p>Four ways to show a list of papers. Pick the one you like - the page
@@ -221,9 +225,9 @@ html:not([data-mode="dark"]) .vw-shot-dark { display: none; }
 
         <div class="vw-foot">
             <span class="vw-where">You can reopen this from Settings &rsaquo; Appearance.</span>
-            <button type="submit" value="done" class="btn-sm-maroon" data-vw-done>Done</button>
+            <button type="button" class="btn-sm-maroon" data-vw-done>Done</button>
         </div>
-    </form>
+    </div>
 </dialog>
 
 <script nonce="<?= function_exists('csp_nonce') ? csp_nonce() : '' ?>">
@@ -279,6 +283,7 @@ html:not([data-mode="dark"]) .vw-shot-dark { display: none; }
     }
 
     dlg.addEventListener('click', function (e) {
+        if (e.target.closest && e.target.closest('[data-vw-done]')) { dlg.close('done'); return; }
         var opt = e.target.closest ? e.target.closest('[data-vw-view]') : null;
         if (!opt) { return; }
         choose(opt.dataset.vwView);

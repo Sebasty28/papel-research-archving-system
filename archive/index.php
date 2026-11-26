@@ -980,7 +980,14 @@ $PAGE_SKELETON = 'repository';
                  focus ring round it reads as one already chosen. The card takes the
                  focus instead. Not the search field: on a phone that would bring the
                  keyboard up over half the keywords before anybody asked for it. */ ?>
-        <form method="dialog" class="kw-dialog-card" id="kwDialogCard" tabindex="-1">
+        <?php /* A <div>, not a <form method="dialog">. Every control in it is
+                 type="button" and closes the dialog from script, so the form
+                 element did nothing but make Enter in the find field submit it
+                 (which had to be refused) and make a scanner read the find field
+                 as a form posted without a CSRF token. Nothing here is ever sent
+                 to the server: Done writes the choice into the search box, and
+                 that form is the one that runs the search. */ ?>
+        <div class="kw-dialog-card" id="kwDialogCard" tabindex="-1">
             <div class="kw-dialog-head">
                 <h2 id="kwDialogTitle">Keywords</h2>
                 <div class="kw-dialog-meta">
@@ -1004,9 +1011,7 @@ $PAGE_SKELETON = 'repository';
                     <span class="material-symbols-outlined" aria-hidden="true">search</span>
                     <input type="text" id="kwDialogFind" autocomplete="off"
                            placeholder="Find a keyword" aria-label="Find a keyword">
-                    <?php /* type="button": anything else in a <form method="dialog">
-                             submits it and closes the dialog. Drawn only while there
-                             is something to rub out. */ ?>
+                    <?php /* Drawn only while there is something to rub out. */ ?>
                     <button type="button" class="kw-find-clear" id="kwDialogFindClear"
                             aria-label="Clear" title="Clear" hidden>
                         <span class="material-symbols-outlined" aria-hidden="true">close</span>
@@ -1016,7 +1021,7 @@ $PAGE_SKELETON = 'repository';
                 <button type="button" class="btn-sm-outline" id="kwDialogCancel">Cancel</button>
                 <button type="button" class="btn-sm-maroon" id="kwDialogDone">Done</button>
             </div>
-        </form>
+        </div>
     </dialog>
 <?php endif; ?>
 

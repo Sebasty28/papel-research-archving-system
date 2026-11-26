@@ -442,7 +442,7 @@ if ($show_login_notif_popup && $u && user_has_role($u, 'librarian')) {
                                 $summary = $parts['summary'];
                                 ?>
                                 <a class="notif-item<?= $n['is_read'] ? '' : ' unread' ?>"
-                                   href="<?= e(notification_link(isset($n['paper_id']) ? (int)$n['paper_id'] : null, $u['user_role'], (string)($n['notification_type'] ?? ''))) ?>"
+                                   href="<?= e(notification_link(isset($n['paper_id']) ? (int)$n['paper_id'] : null, notification_role($u), (string)($n['notification_type'] ?? ''))) ?>"
                                    <?php if ($parts['is_account'] && $parts['detail'] !== ''): ?>
                                        data-notif-popup="<?= e($summary) ?>"
                                        data-notif-detail="<?= e($parts['detail']) ?>"
@@ -634,7 +634,7 @@ if ($show_login_notif_popup && $u && user_has_role($u, 'librarian')) {
                 <?php foreach ($login_notif_popup_items as $n): ?>
                     <?php $parts = notification_parts($n); ?>
                     <a class="notif-item unread"
-                       href="<?= e(notification_link(isset($n['paper_id']) ? (int)$n['paper_id'] : null, $u['user_role'], (string)($n['notification_type'] ?? ''))) ?>"
+                       href="<?= e(notification_link(isset($n['paper_id']) ? (int)$n['paper_id'] : null, notification_role($u), (string)($n['notification_type'] ?? ''))) ?>"
                        <?php if ($parts['is_account'] && $parts['detail'] !== ''): ?>
                            data-notif-popup="<?= e($parts['summary']) ?>"
                            data-notif-detail="<?= e($parts['detail']) ?>"
